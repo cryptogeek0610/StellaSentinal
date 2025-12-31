@@ -30,14 +30,17 @@ services:
       - sqlserver
     environment:
       - ACCEPT_EULA=Y
-      - MSSQL_SA_PASSWORD=${SQLSERVER_SA_PASSWORD:-StrongP@ssw0rd123!}
+      - MSSQL_SA_PASSWORD=${SQLSERVER_SA_PASSWORD:?SQLSERVER_SA_PASSWORD is required}
       - MSSQL_PID=Developer
     ports:
       - "${SQLSERVER_PORT:-1433}:1433"
     volumes:
       - sqlserver_data:/var/opt/mssql
-      - ./DatabaseExamples:/var/opt/mssql/backup:ro
-      - ./scripts/restore-databases.sql:/var/opt/mssql/scripts/restore-databases.sql:ro
+      # Mount your database backup files here (not included in repo)
+      # - ./DatabaseExamples:/var/opt/mssql/backup:ro
+      # Copy scripts/restore-databases.sql.template to scripts/restore-databases.sql
+      # and customize with your database names before mounting
+      # - ./scripts/restore-databases.sql:/var/opt/mssql/scripts/restore-databases.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q \"SELECT 1\" || exit 1"]
       interval: 10s

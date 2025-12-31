@@ -5,11 +5,14 @@ This module provides a client for interacting with the SOTI MobiControl REST API
 
 from __future__ import annotations
 
+import logging
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import requests
+
+logger = logging.getLogger(__name__)
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
@@ -86,7 +89,7 @@ class MobiControlClient:
                 self._authenticate_oauth()
                 return
             except Exception as e:
-                print(f"OAuth authentication failed: {e}, trying basic auth...")
+                logger.warning("OAuth authentication failed: %s, trying basic auth...", e)
 
         # Fall back to basic auth if username/password provided
         if self.username and self.password:
@@ -125,10 +128,10 @@ class MobiControlClient:
                     expires_in = token_response.get("expires_in", 3600)
                     self.token_expiry = time.time() + expires_in - 60  # Refresh 1 min early
                     self.session.headers["Authorization"] = f"Bearer {self.access_token}"
-                    print(f"OAuth authentication successful via {token_endpoint}")
+                    logger.info("OAuth authentication successful via %s", token_endpoint)
                     return
             except Exception as e:
-                print(f"OAuth password grant failed: {e}")
+                logger.warning("OAuth password grant failed: %s", e)
 
         # Fallback to client credentials if no username/password
         if self.client_id and self.client_secret:
@@ -153,10 +156,10 @@ class MobiControlClient:
                     expires_in = token_response.get("expires_in", 3600)
                     self.token_expiry = time.time() + expires_in - 60
                     self.session.headers["Authorization"] = f"Bearer {self.access_token}"
-                    print(f"OAuth client credentials successful via {token_endpoint}")
+                    logger.info("OAuth client credentials successful via %s", token_endpoint)
                     return
             except Exception as e:
-                print(f"OAuth client credentials failed: {e}")
+                logger.warning("OAuth client credentials failed: %s", e)
 
         raise MobiControlAPIError("OAuth authentication failed")
 
@@ -167,7 +170,7 @@ class MobiControlClient:
         credentials = f"{self.username}:{self.password}"
         encoded = base64.b64encode(credentials.encode()).decode()
         self.session.headers["Authorization"] = f"Basic {encoded}"
-        print("Basic authentication configured")
+        logger.info("Basic authentication configured")
 
     def _ensure_authenticated(self) -> None:
         """Ensure authentication token is valid, refresh if needed."""

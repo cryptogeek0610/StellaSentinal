@@ -1,0 +1,98 @@
+-- SQL Server Database Restore Script Template
+-- Restores customer databases from BAK files for multi-tenant training
+--
+-- Usage:
+--   1. Copy this file to restore-databases.sql
+--   2. Replace placeholders with your actual database names and backup files
+--   3. Run: sqlcmd -S localhost -U sa -P 'YourPassword' -i restore-databases.sql
+--
+-- Placeholders to replace:
+--   CUSTOMER_A, CUSTOMER_B: Your customer/tenant identifiers
+--   your_xsight_backup.bak: Your XSight backup file name
+--   your_mobicontrol_backup.bak: Your MobiControl backup file name
+
+USE master;
+GO
+
+-- ============================================================================
+-- CUSTOMER_A Databases
+-- ============================================================================
+
+-- XSight Database (CUSTOMER_A)
+IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = 'XSight_CUSTOMER_A')
+BEGIN
+    PRINT 'Restoring XSight_CUSTOMER_A...';
+
+    RESTORE DATABASE [XSight_CUSTOMER_A]
+    FROM DISK = '/var/opt/mssql/backup/CUSTOMER_A/your_xsight_backup.bak'
+    WITH
+        MOVE 'SOTI_XSight_dw' TO '/var/opt/mssql/data/XSight_CUSTOMER_A.mdf',
+        MOVE 'SOTI_XSight_dw_log' TO '/var/opt/mssql/data/XSight_CUSTOMER_A_log.ldf',
+        REPLACE,
+        STATS = 10;
+
+    PRINT 'XSight_CUSTOMER_A restored successfully.';
+END
+ELSE
+BEGIN
+    PRINT 'XSight_CUSTOMER_A already exists, skipping restore.';
+END
+GO
+
+-- MobiControl Database (CUSTOMER_A)
+IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = 'MobiControl_CUSTOMER_A')
+BEGIN
+    PRINT 'Restoring MobiControl_CUSTOMER_A...';
+
+    RESTORE DATABASE [MobiControl_CUSTOMER_A]
+    FROM DISK = '/var/opt/mssql/backup/CUSTOMER_A/your_mobicontrol_backup.bak'
+    WITH
+        MOVE 'MobiControlDB' TO '/var/opt/mssql/data/MobiControl_CUSTOMER_A.mdf',
+        MOVE 'MobiControlDB_log' TO '/var/opt/mssql/data/MobiControl_CUSTOMER_A_log.ldf',
+        REPLACE,
+        STATS = 10;
+
+    PRINT 'MobiControl_CUSTOMER_A restored successfully.';
+END
+ELSE
+BEGIN
+    PRINT 'MobiControl_CUSTOMER_A already exists, skipping restore.';
+END
+GO
+
+-- ============================================================================
+-- CUSTOMER_B Databases (Optional - duplicate above section for more customers)
+-- ============================================================================
+
+-- Uncomment and modify for additional customers:
+--
+-- IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = 'XSight_CUSTOMER_B')
+-- BEGIN
+--     RESTORE DATABASE [XSight_CUSTOMER_B]
+--     FROM DISK = '/var/opt/mssql/backup/CUSTOMER_B/your_xsight_backup.bak'
+--     WITH
+--         MOVE 'SOTI_XSight_dw' TO '/var/opt/mssql/data/XSight_CUSTOMER_B.mdf',
+--         MOVE 'SOTI_XSight_dw_log' TO '/var/opt/mssql/data/XSight_CUSTOMER_B_log.ldf',
+--         REPLACE,
+--         STATS = 10;
+-- END
+-- GO
+
+-- ============================================================================
+-- Verification
+-- ============================================================================
+
+PRINT '';
+PRINT '=== Database Restore Summary ===';
+
+SELECT
+    name AS DatabaseName,
+    state_desc AS State,
+    create_date AS CreatedDate
+FROM sys.databases
+WHERE name LIKE 'XSight_%' OR name LIKE 'MobiControl_%'
+ORDER BY name;
+
+PRINT '';
+PRINT 'All customer databases are ready for training!';
+GO

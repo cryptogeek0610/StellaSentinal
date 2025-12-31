@@ -21,31 +21,33 @@ export default function ModelStatus() {
     const alertingRef = useRef<HTMLButtonElement>(null);
     const detailViewRef = useRef<HTMLDivElement>(null);
     
-    // Log DOM paths on mount and when active stage changes
+    // Log DOM paths on mount and when active stage changes (development only)
     useEffect(() => {
-        const logPaths = () => {
-            const refs = [
-                { name: 'Data Collection', ref: dataCollectionRef },
-                { name: 'Preprocessing', ref: preprocessingRef },
-                { name: 'Isolation Forest', ref: isolationForestRef },
-                { name: 'Alerting', ref: alertingRef },
-                { name: 'Detail View', ref: detailViewRef },
-            ];
-            
-            refs.forEach(({ name, ref }) => {
-                if (ref.current) {
-                    const info = getDOMPathInfo(ref.current);
-                    if (info) {
-                        console.log(`\n=== ${name} ===`);
-                        console.log(formatDOMPathInfo(info));
+        if (import.meta.env.DEV) {
+            const logPaths = () => {
+                const refs = [
+                    { name: 'Data Collection', ref: dataCollectionRef },
+                    { name: 'Preprocessing', ref: preprocessingRef },
+                    { name: 'Isolation Forest', ref: isolationForestRef },
+                    { name: 'Alerting', ref: alertingRef },
+                    { name: 'Detail View', ref: detailViewRef },
+                ];
+
+                refs.forEach(({ name, ref }) => {
+                    if (ref.current) {
+                        const info = getDOMPathInfo(ref.current);
+                        if (info) {
+                            console.log(`\n=== ${name} ===`);
+                            console.log(formatDOMPathInfo(info));
+                        }
                     }
-                }
-            });
-        };
-        
-        // Log after a short delay to ensure DOM is rendered
-        const timeout = setTimeout(logPaths, 500);
-        return () => clearTimeout(timeout);
+                });
+            };
+
+            // Log after a short delay to ensure DOM is rendered
+            const timeout = setTimeout(logPaths, 500);
+            return () => clearTimeout(timeout);
+        }
     }, [activeStage]);
 
     const { data: modelStats } = useQuery({

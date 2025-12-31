@@ -24,7 +24,7 @@ if [ -f "$PROJECT_DIR/.env" ]; then
 fi
 
 # Set defaults
-SA_PASSWORD="${SQLSERVER_SA_PASSWORD:-StrongP@ssw0rd123!}"
+SA_PASSWORD="${SQLSERVER_SA_PASSWORD:?SQLSERVER_SA_PASSWORD must be set in .env}"
 SQL_PORT="${SQLSERVER_PORT:-1433}"
 
 echo -e "${YELLOW}Step 1: Starting SQL Server container...${NC}"
