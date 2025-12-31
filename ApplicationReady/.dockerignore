@@ -1,0 +1,47 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
+.venv
+venv/
+env/
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Environment (keep env.template, exclude .env)
+.env
+.env.local
+.env.backup
+.env.bak
+
+# Logs
+logs/
+*.log
+
+# Tests
+tests/
+.pytest_cache
+.coverage
+htmlcov/
+
+# Other
+.DS_Store
+*.tmp
+README.txt
+install.bat

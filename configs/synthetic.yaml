@@ -1,0 +1,13 @@
+n_devices: 10
+n_days: 14
+anomaly_rate: 0.05
+
+detection:
+  window: 24
+  contamination: 0.02
+
+events:
+  max_gap_hours: 3
+  top_n_devices: 5
+  min_total_points: 100
+  min_anomalies: 5

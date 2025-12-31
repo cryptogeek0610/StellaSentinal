@@ -1,0 +1,1957 @@
+/**
+ * Frontend Mock Data Provider for Stella Sentinel
+ *
+ * Provides comprehensive mock data generation for demo/testing purposes.
+ * All mock data is consistent and internally coherent (device IDs match across endpoints, etc.)
+ * This runs entirely on the frontend - no backend calls needed.
+ */
+
+import type {
+    AllConnectionsStatus,
+    Anomaly,
+    AnomalyDetail,
+    AnomalyListResponse,
+    DashboardStats,
+    DashboardTrend,
+    DeviceDetail,
+    IsolationForestStats,
+    BaselineSuggestion,
+    LocationHeatmapResponse,
+    LLMConfig,
+    LLMModelsResponse,
+    LLMTestResult,
+    BaselineAdjustmentResponse,
+    OllamaPullResponse,
+    // Investigation Panel types
+    InvestigationPanel,
+    FeatureContribution,
+    BaselineMetric,
+    EvidenceEvent,
+    AIAnalysis,
+    RootCauseHypothesis,
+    RemediationSuggestion,
+    SimilarCase,
+    HistoricalTimeline,
+    TimeSeriesDataPoint,
+} from '../types/anomaly';
+
+// Seeded random for consistent data
+class SeededRandom {
+    private seed: number;
+
+    constructor(seed: number = 42) {
+        this.seed = seed;
+    }
+
+    next(): number {
+        this.seed = (this.seed * 1103515245 + 12345) & 0x7fffffff;
+        return this.seed / 0x7fffffff;
+    }
+
+    int(min: number, max: number): number {
+        return Math.floor(this.next() * (max - min + 1)) + min;
+    }
+
+    float(min: number, max: number): number {
+        return this.next() * (max - min) + min;
+    }
+
+    choice<T>(arr: T[]): T {
+        return arr[Math.floor(this.next() * arr.length)];
+    }
+
+    // Reset seed for consistent data across calls
+    reset() {
+        this.seed = 42;
+    }
+}
+
+const rng = new SeededRandom(42);
+
+// ============================================================================
+// Mock Data Constants
+// ============================================================================
+
+const MOCK_STORES = [
+    { id: 'store-001', name: 'Downtown Flagship', region: 'Northeast' },
+    { id: 'store-002', name: 'Westside Mall', region: 'West' },
+    { id: 'store-003', name: 'Harbor Point', region: 'Southeast' },
+    { id: 'store-004', name: 'Tech Plaza', region: 'West' },
+    { id: 'store-005', name: 'Central Station', region: 'Midwest' },
+    { id: 'store-006', name: 'Riverside Center', region: 'Northeast' },
+    { id: 'store-007', name: 'Airport Terminal', region: 'Southeast' },
+    { id: 'store-008', name: 'University District', region: 'Midwest' },
+];
+
+const MOCK_DEVICE_MODELS = [
+    'Samsung Galaxy Tab A8',
+    'iPad Pro 11',
+    'Zebra TC52',
+    'Honeywell CT60',
+    'Samsung Galaxy XCover 6',
+    'Panasonic Toughbook N1',
+];
+
+const MOCK_ANOMALY_TYPES = [
+    'battery_drain',
+    'storage_critical',
+    'network_instability',
+    'offline_extended',
+    'data_spike',
+];
+
+// ============================================================================
+// Mock Device Generation
+// ============================================================================
+
+interface MockDevice {
+    device_id: number;
+    device_name: string;
+    device_model: string;
+    location: string;
+    region: string;
+    store_id: string;
+    status: string;
+    battery: number;
+    is_charging: boolean;
+    wifi_signal: number; // dBm
+    storage_used: number; // percentage
+    memory_usage: number; // percentage
+    cpu_load: number; // percentage
+    last_seen: string;
+    os_version: string;
+    agent_version: string;
+    custom_attributes: Record<string, string>;
+}
+
+function generateMockDevices(count: number = 250): MockDevice[] {
+    rng.reset();
+    const devices: MockDevice[] = [];
+
+    for (let i = 1; i <= count; i++) {
+        const store = MOCK_STORES[i % MOCK_STORES.length];
+        const model = MOCK_DEVICE_MODELS[i % MOCK_DEVICE_MODELS.length];
+
+        // Determine status with realistic distribution
+        const statusRoll = rng.next();
+        let status: string;
+        if (statusRoll < 0.75) {
+            status = 'Active';
+        } else if (statusRoll < 0.90) {
+            status = 'Idle';
+        } else if (statusRoll < 0.95) {
+            status = 'Offline';
+        } else {
+            status = 'Charging';
+        }
+
+        const minutesAgo = rng.int(0, 1440);
+        const lastSeen = new Date(Date.now() - minutesAgo * 60 * 1000);
+
+        devices.push({
+            device_id: i,
+            device_name: `Device-${String(i).padStart(4, '0')}`,
+            device_model: model,
+            location: store.name,
+            region: store.region,
+            store_id: store.id,
+            status,
+            battery: rng.int(20, 100),
+            is_charging: status === 'Charging',
+            wifi_signal: rng.int(-85, -40), // dBm realistic range
+            storage_used: rng.int(20, 95),
+            memory_usage: rng.int(30, 90),
+            cpu_load: rng.int(5, 80),
+            last_seen: lastSeen.toISOString(),
+            os_version: `Android ${rng.int(10, 14)}`,
+            agent_version: `15.${rng.int(0, 5)}.${rng.int(0, 9999)}`,
+            custom_attributes: {
+                'Department': rng.choice(['Sales', 'Warehouse', 'Logistics']),
+                'Zone': `Zone-${rng.choice(['A', 'B', 'C'])}`,
+            },
+        });
+    }
+
+
+    return devices;
+}
+
+// Helper to calculate status based on telemetry
+function calculateDeviceStatus(d: MockDevice): string {
+    if (d.battery < 15 && !d.is_charging) return 'Warning (Low Battery)';
+    if (d.storage_used > 95) return 'Critical (Storage)';
+    if (d.storage_used > 85) return 'Warning (Storage)';
+    // Add more telemetry-based status logic here if needed
+    return d.status;
+}
+
+export function getMockDevices(): DeviceDetail[] {
+    return MOCK_DEVICES.map(d => {
+        const deviceAnomalies = MOCK_ANOMALIES.filter(
+            (a) => a.device_id === d.device_id && (a.status === 'new' || a.status === 'investigating' || a.status === 'open')
+        );
+
+        let derivedStatus = calculateDeviceStatus(d);
+        if (deviceAnomalies.some(a => a.anomaly_score > 0.8)) {
+            derivedStatus = 'Critical';
+        } else if (deviceAnomalies.length > 0) {
+            derivedStatus = 'Warning';
+        }
+
+        return {
+            device_id: d.device_id,
+            device_model: d.device_model,
+            device_name: d.device_name,
+            location: d.location,
+            status: derivedStatus,
+            last_seen: d.last_seen,
+            anomaly_count: deviceAnomalies.length,
+            recent_anomalies: deviceAnomalies.slice(0, 3),
+            custom_attributes: d.custom_attributes,
+            store_id: d.store_id,
+        };
+    });
+}
+
+// Cached mock devices for consistency
+const MOCK_DEVICES = generateMockDevices(250);
+
+// ============================================================================
+// Mock Anomaly Generation
+// ============================================================================
+
+function generateMockAnomalies(count: number = 100): Anomaly[] {
+    rng.reset();
+    const anomalies: Anomaly[] = [];
+    const baseTime = new Date();
+
+    for (let i = 1; i <= count; i++) {
+        const device = rng.choice(MOCK_DEVICES);
+        const anomalyType = rng.choice(MOCK_ANOMALY_TYPES);
+
+        // Status distribution
+        const statusRoll = rng.next();
+        let status: string;
+        if (statusRoll < 0.4) {
+            status = 'new';
+        } else if (statusRoll < 0.7) {
+            status = 'investigating';
+        } else if (statusRoll < 0.9) {
+            status = 'resolved';
+        } else {
+            status = 'dismissed';
+        }
+
+        // Generate realistic score (-0.4 to -0.99 for anomalies, lower is worse)
+        // Critical: < -0.7, High: < -0.5, Medium: < -0.3
+        const score = Math.round(rng.float(-0.99, -0.4) * 1000) / 1000;
+
+        // Time offset (spread over past 14 days)
+        const daysOffset = rng.int(0, 13);
+        const hoursOffset = rng.int(0, 23);
+        const minutesOffset = rng.int(0, 59);
+        const timestamp = new Date(
+            baseTime.getTime() -
+            (daysOffset * 24 * 60 + hoursOffset * 60 + minutesOffset) * 60 * 1000
+        );
+
+        anomalies.push({
+            id: i,
+            device_id: device.device_id,
+            timestamp: timestamp.toISOString(),
+            anomaly_score: score,
+            anomaly_label: -1,
+            status,
+            assigned_to: rng.choice([null, 'Admin', 'Operator', 'System']),
+            total_battery_level_drop:
+                anomalyType === 'battery_drain' ? rng.int(10, 80) : rng.int(5, 20),
+            total_free_storage_kb:
+                anomalyType === 'storage_critical'
+                    ? rng.int(50000, 500000)
+                    : rng.int(1000000, 5000000),
+            download:
+                anomalyType === 'data_spike'
+                    ? rng.int(100000, 5000000)
+                    : rng.int(10000, 500000),
+            upload:
+                anomalyType === 'data_spike'
+                    ? rng.int(50000, 2000000)
+                    : rng.int(5000, 100000),
+            offline_time:
+                anomalyType === 'offline_extended' ? rng.int(60, 480) : rng.int(0, 30),
+            disconnect_count:
+                anomalyType === 'network_instability'
+                    ? rng.int(5, 25)
+                    : rng.int(0, 5),
+            wifi_signal_strength:
+                anomalyType === 'network_instability'
+                    ? rng.int(10, 40)
+                    : rng.int(50, 90),
+            connection_time: rng.int(30, 120),
+            feature_values_json: null,
+            created_at: timestamp.toISOString(),
+            updated_at: timestamp.toISOString(),
+        });
+    }
+
+    // Sort by timestamp descending
+    anomalies.sort(
+        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+    return anomalies;
+}
+
+const MOCK_ANOMALIES = generateMockAnomalies(100);
+
+// ============================================================================
+// Public Mock Data Functions
+// ============================================================================
+
+export function getMockDashboardStats(): DashboardStats {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const todayAnomalies = MOCK_ANOMALIES.filter((a) => {
+        const timestamp = new Date(a.timestamp);
+        timestamp.setHours(0, 0, 0, 0);
+        return timestamp.getTime() === today.getTime();
+    });
+
+    const openCases = MOCK_ANOMALIES.filter(
+        (a) => a.status === 'new' || a.status === 'investigating' || a.status === 'open'
+    ).length;
+
+    // Count critical anomalies (score <= -0.7) that are still open
+    const criticalIssues = MOCK_ANOMALIES.filter(
+        (a) => a.anomaly_score <= -0.7 && (a.status === 'new' || a.status === 'investigating' || a.status === 'open')
+    ).length;
+
+    // Count resolved anomalies from today
+    const resolvedToday = MOCK_ANOMALIES.filter((a) => {
+        const timestamp = new Date(a.timestamp);
+        timestamp.setHours(0, 0, 0, 0);
+        return timestamp.getTime() === today.getTime() && a.status === 'resolved';
+    }).length;
+
+    return {
+        anomalies_today: todayAnomalies.length || 5,
+        devices_monitored: MOCK_DEVICES.length,
+        critical_issues: criticalIssues,
+        resolved_today: resolvedToday || 3,
+        open_cases: openCases,
+    };
+}
+
+export function getMockDashboardTrends(
+    days: number = 7,
+    startDate?: string,
+    endDate?: string
+): DashboardTrend[] {
+    rng.reset();
+    const end = endDate ? new Date(endDate) : new Date();
+    const start = startDate
+        ? new Date(startDate)
+        : new Date(end.getTime() - days * 24 * 60 * 60 * 1000);
+
+    const trends: DashboardTrend[] = [];
+    const current = new Date(start);
+    current.setHours(0, 0, 0, 0);
+
+    while (current <= end) {
+        // Generate realistic daily counts with some pattern
+        const baseCount = 8;
+        const dayOfWeek = current.getDay();
+
+        // Higher on weekdays
+        let count: number;
+        if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+            count = baseCount + rng.int(2, 8);
+        } else {
+            count = baseCount + rng.int(-2, 3);
+        }
+
+        trends.push({
+            date: current.toISOString().split('T')[0],
+            anomaly_count: Math.max(0, count),
+        });
+
+        current.setDate(current.getDate() + 1);
+    }
+
+    return trends;
+}
+
+export function getMockConnectionStatus(): AllConnectionsStatus {
+    return {
+        backend_db: {
+            connected: true,
+            server: 'postgres:5432',
+            error: null,
+            status: 'connected',
+        },
+        dw_sql: {
+            connected: true,
+            server: 'mock-dw-server.local',
+            error: null,
+            status: 'connected',
+        },
+        mc_sql: {
+            connected: true,
+            server: 'mock-mc-server.local',
+            error: null,
+            status: 'connected',
+        },
+        mobicontrol_api: {
+            connected: true,
+            server: 'https://mock.mobicontrol.net/MobiControl',
+            error: null,
+            status: 'connected',
+        },
+        llm: {
+            connected: true,
+            server: 'http://localhost:11434',
+            error: null,
+            status: 'connected',
+        },
+        redis: {
+            connected: true,
+            server: 'redis://redis:6379',
+            error: null,
+            status: 'connected',
+        },
+        qdrant: {
+            connected: true,
+            server: 'qdrant:6333',
+            error: null,
+            status: 'connected',
+        },
+        last_checked: new Date().toISOString(),
+    };
+}
+
+export function getMockAnomalies(params: {
+    device_id?: number;
+    status?: string;
+    page?: number;
+    page_size?: number;
+}): AnomalyListResponse {
+    let filtered = [...MOCK_ANOMALIES];
+
+    if (params.device_id) {
+        filtered = filtered.filter((a) => a.device_id === params.device_id);
+    }
+
+    if (params.status) {
+        filtered = filtered.filter((a) => a.status === params.status);
+    }
+
+    const page = params.page || 1;
+    const pageSize = params.page_size || 50;
+    const total = filtered.length;
+    const start = (page - 1) * pageSize;
+    const end = start + pageSize;
+
+    return {
+        anomalies: filtered.slice(start, end),
+        total,
+        page,
+        page_size: pageSize,
+        total_pages: Math.ceil(total / pageSize),
+    };
+}
+
+export function getMockAnomalyDetail(anomalyId: number): AnomalyDetail | null {
+    const anomaly = MOCK_ANOMALIES.find((a) => a.id === anomalyId);
+    if (!anomaly) return null;
+
+    return {
+        ...anomaly,
+        notes: 'Mock anomaly for demonstration purposes.',
+        investigation_notes: [
+            {
+                id: 1,
+                user: 'System',
+                note: 'Anomaly detected by Isolation Forest model with high confidence.',
+                action_type: 'detection',
+                created_at: anomaly.created_at,
+            },
+            {
+                id: 2,
+                user: 'Admin',
+                note: 'Reviewing device telemetry patterns.',
+                action_type: 'investigation',
+                created_at: new Date().toISOString(),
+            },
+        ],
+    };
+}
+
+export function getMockDeviceDetail(deviceId: number): DeviceDetail | null {
+    const device = MOCK_DEVICES.find((d) => d.device_id === deviceId);
+    if (!device) return null;
+
+    const deviceAnomalies = MOCK_ANOMALIES.filter(
+        (a) => a.device_id === deviceId
+    );
+
+    return {
+        device_id: device.device_id,
+        device_model: device.device_model,
+        device_name: device.device_name,
+        location: device.location,
+        status: device.status,
+        last_seen: device.last_seen,
+        anomaly_count: deviceAnomalies.length,
+        recent_anomalies: deviceAnomalies.slice(0, 5),
+        // Telemetry
+        battery_level: device.battery,
+        is_charging: device.is_charging,
+        wifi_signal: device.wifi_signal,
+        storage_used: device.storage_used,
+        memory_usage: device.memory_usage,
+        cpu_load: device.cpu_load,
+        os_version: device.os_version,
+        agent_version: device.agent_version,
+    };
+}
+
+export function getMockIsolationForestStats(): IsolationForestStats {
+    rng.reset();
+    // Generate high-resolution score distribution (50 bins) from -1.0 to 1.0
+    const bins = [];
+    let totalNormal = 0;
+    let totalAnomalies = 0;
+    const step = 0.04; // Range 2.0 / 50 bins = 0.04
+
+    for (let i = 0; i < 50; i++) {
+        const x = -1.0 + (i * step) + (step / 2); // Center of bin
+
+        // Mixture of two Gaussians: Anomaly centered at -0.65, Normal centered at 0.4
+        const anomaly = 45 * Math.exp(-Math.pow(x - (-0.65), 2) / 0.03); // Tighter anomaly cluster
+        const normal = 250 * Math.exp(-Math.pow(x - 0.4, 2) / 0.1); // Broader normal cluster
+        const noise = rng.int(0, 5);
+
+        const count = Math.max(0, Math.round(normal + anomaly + noise));
+        const isAnomaly = x < 0; // Threshold at 0
+
+        if (isAnomaly) totalAnomalies += count;
+        else totalNormal += count;
+
+        bins.push({
+            bin_start: Number((x - step / 2).toFixed(2)),
+            bin_end: Number((x + step / 2).toFixed(2)),
+            count,
+            is_anomaly: isAnomaly,
+        });
+    }
+
+    const total = totalNormal + totalAnomalies;
+
+    return {
+        config: {
+            n_estimators: 100,
+            contamination: 0.05,
+            random_state: 42,
+            scale_features: true,
+            min_variance: 0.01,
+            feature_count: 8,
+            model_type: 'IsolationForest',
+        },
+        score_distribution: {
+            bins,
+            total_normal: totalNormal,
+            total_anomalies: totalAnomalies,
+            mean_score: 0.15,
+            median_score: 0.25,
+            min_score: -0.95,
+            max_score: 0.98,
+            std_score: 0.45,
+        },
+        total_predictions: total,
+        anomaly_rate: totalAnomalies / total,
+        feedback_stats: {
+            total_feedback: 142,
+            false_positives: 18,
+            confirmed_anomalies: 124,
+            projected_accuracy_gain: 2.15,
+            last_retrain: new Date(Date.now() - 1000 * 60 * 60 * 12).toISOString(), // 12h ago
+        }
+    };
+}
+
+export function getMockBaselineSuggestions(): BaselineSuggestion[] {
+    const features = [
+        {
+            feature: 'TotalBatteryLevelDrop',
+            level: 'Global',
+            group_key: 'global',
+            baseline: 15,
+            observed: 18,
+            proposed: 17,
+        },
+        {
+            feature: 'OfflineTime',
+            level: 'Global',
+            group_key: 'global',
+            baseline: 10,
+            observed: 14,
+            proposed: 12,
+        },
+        {
+            feature: 'Download',
+            level: 'Store: Downtown Flagship',
+            group_key: 'store-001',
+            baseline: 150000,
+            observed: 220000,
+            proposed: 180000,
+        },
+        {
+            feature: 'WiFiSignalStrength',
+            level: 'Region: Northeast',
+            group_key: 'northeast',
+            baseline: 65,
+            observed: 58,
+            proposed: 60,
+        },
+    ];
+
+    return features.map((f) => ({
+        level: f.level,
+        group_key: f.group_key,
+        feature: f.feature,
+        baseline_median: f.baseline,
+        observed_median: f.observed,
+        proposed_new_median: f.proposed,
+        rationale: `Observed ${f.feature} has drifted from baseline. Recommend adjusting threshold to reduce false positives.`,
+    }));
+}
+
+export function getMockLocationHeatmap(
+    attributeName?: string
+): LocationHeatmapResponse {
+    // rng.reset(); // Don't reset if we want consistent anomalies from the other function
+
+    // Calculate actual stats from MOCK_DEVICES and MOCK_ANOMALIES
+    const locations = MOCK_STORES.map((store) => {
+        const storeDevices = MOCK_DEVICES.filter(d => d.store_id === store.id);
+        const deviceCount = storeDevices.length;
+
+        // Count active devices
+        const activeCount = storeDevices.filter(d => d.status.toLowerCase() === 'active').length;
+        const utilization = deviceCount > 0 ? Math.round((activeCount / deviceCount) * 1000) / 10 : 0;
+        const baseline = 80; // Statistic baseline
+
+        // Count anomalies for this store
+        const storeAnomalies = MOCK_ANOMALIES.filter(a => {
+            const device = MOCK_DEVICES.find(d => d.device_id === a.device_id);
+            return device && device.store_id === store.id &&
+                (a.status === 'new' || a.status === 'investigating' || a.status === 'open');
+        });
+
+        return {
+            id: store.id,
+            name: store.name,
+            utilization,
+            baseline,
+            deviceCount,
+            activeDeviceCount: activeCount,
+            region: store.region,
+            anomalyCount: storeAnomalies.length,
+        };
+    });
+
+    return {
+        locations,
+        attributeName: attributeName || 'Store',
+        totalLocations: locations.length,
+        totalDevices: locations.reduce((sum, loc) => sum + loc.deviceCount, 0),
+    };
+}
+
+export function getMockCustomAttributes(): {
+    custom_attributes: string[];
+    error?: string;
+} {
+    return {
+        custom_attributes: [
+            'Store',
+            'Region',
+            'Department',
+            'Zone',
+            'Warehouse',
+        ],
+        error: undefined,
+    };
+}
+
+export function getMockLLMConfig(): LLMConfig {
+    return {
+        provider: 'ollama',
+        model_name: 'deepseek/deepseek-r1-0528-qwen3-8b',
+        base_url: 'http://localhost:11434',
+        api_key_set: false,
+        api_version: null,
+        is_connected: true,
+        available_models: ['deepseek/deepseek-r1-0528-qwen3-8b', 'llama2:7b', 'mistral:7b'],
+        active_model: 'deepseek/deepseek-r1-0528-qwen3-8b',
+    };
+}
+
+export function getMockLLMModels(): LLMModelsResponse {
+    return {
+        models: [
+            {
+                id: 'deepseek/deepseek-r1-0528-qwen3-8b',
+                name: 'DeepSeek R1 Qwen 8B',
+                size: '8B',
+            },
+            {
+                id: 'llama2:7b',
+                name: 'Llama 2 7B',
+                size: '7B',
+            },
+            {
+                id: 'mistral:7b',
+                name: 'Mistral 7B',
+                size: '7B',
+            },
+        ],
+        active_model: 'deepseek/deepseek-r1-0528-qwen3-8b',
+    };
+}
+
+export function getMockLLMTestResult(): LLMTestResult {
+    return {
+        success: true,
+        message: 'LLM connection successful (mock mode)',
+        response_time_ms: rng.int(50, 200),
+        model_used: 'deepseek/deepseek-r1-0528-qwen3-8b',
+    };
+}
+
+export function getMockBaselineAdjustmentResponse(): BaselineAdjustmentResponse {
+    return {
+        success: true,
+        message: 'Baseline adjustment applied successfully (mock mode)',
+        baseline_updated: true,
+        model_retrained: false,
+    };
+}
+
+export function getMockOllamaPullResponse(modelName: string): OllamaPullResponse {
+    return {
+        success: true,
+        message: `Model ${modelName} pulled successfully (mock mode)`,
+        model_name: modelName,
+    };
+}
+
+// ============================================================================
+// Data Discovery Mock Data
+// ============================================================================
+
+import type {
+    TableProfile,
+    AvailableMetric,
+    MetricDistribution,
+    DataDiscoveryStatus,
+    TemporalPattern,
+    DiscoverySummary,
+} from '../types/training';
+
+export function getMockTableProfiles(): TableProfile[] {
+    return [
+        {
+            table_name: 'cs_BatteryStat',
+            row_count: 1_250_000,
+            date_range: ['2024-01-01', '2024-12-28'],
+            device_count: 4_500,
+            column_stats: {
+                TotalBatteryLevelDrop: {
+                    column_name: 'TotalBatteryLevelDrop',
+                    dtype: 'int',
+                    null_count: 6250,
+                    null_percent: 0.5,
+                    unique_count: 100,
+                    min_val: 0,
+                    max_val: 100,
+                    mean: 35.2,
+                    std: 18.5,
+                    percentiles: { p5: 5, p25: 20, p50: 32, p75: 48, p95: 72, p99: 88 },
+                },
+                TotalDischargeTime_Sec: {
+                    column_name: 'TotalDischargeTime_Sec',
+                    dtype: 'int',
+                    null_count: 2500,
+                    null_percent: 0.2,
+                    unique_count: 5000,
+                    min_val: 0,
+                    max_val: 86400,
+                    mean: 28800,
+                    std: 12000,
+                    percentiles: { p5: 3600, p25: 18000, p50: 28800, p75: 39600, p95: 57600, p99: 72000 },
+                },
+                TotalFreeStorageKb: {
+                    column_name: 'TotalFreeStorageKb',
+                    dtype: 'bigint',
+                    null_count: 1250,
+                    null_percent: 0.1,
+                    unique_count: 100000,
+                    min_val: 0,
+                    max_val: 16_000_000,
+                    mean: 2_000_000,
+                    std: 1_500_000,
+                    percentiles: { p5: 200000, p25: 800000, p50: 1800000, p75: 3000000, p95: 5000000, p99: 8000000 },
+                },
+            },
+            profiled_at: new Date().toISOString(),
+        },
+        {
+            table_name: 'cs_AppUsage',
+            row_count: 3_500_000,
+            date_range: ['2024-01-01', '2024-12-28'],
+            device_count: 4_500,
+            column_stats: {
+                VisitCount: {
+                    column_name: 'VisitCount',
+                    dtype: 'int',
+                    null_count: 3500,
+                    null_percent: 0.1,
+                    unique_count: 500,
+                    min_val: 0,
+                    max_val: 1000,
+                    mean: 45,
+                    std: 32,
+                    percentiles: { p5: 2, p25: 18, p50: 38, p75: 65, p95: 120, p99: 200 },
+                },
+                TotalForegroundTime: {
+                    column_name: 'TotalForegroundTime',
+                    dtype: 'int',
+                    null_count: 7000,
+                    null_percent: 0.2,
+                    unique_count: 8000,
+                    min_val: 0,
+                    max_val: 28800,
+                    mean: 3600,
+                    std: 2400,
+                    percentiles: { p5: 120, p25: 1200, p50: 3000, p75: 5400, p95: 9000, p99: 14400 },
+                },
+            },
+            profiled_at: new Date().toISOString(),
+        },
+        {
+            table_name: 'cs_DataUsage',
+            row_count: 2_800_000,
+            date_range: ['2024-01-01', '2024-12-28'],
+            device_count: 4_500,
+            column_stats: {
+                Download: {
+                    column_name: 'Download',
+                    dtype: 'bigint',
+                    null_count: 2800,
+                    null_percent: 0.1,
+                    unique_count: 500000,
+                    min_val: 0,
+                    max_val: 10_000_000_000,
+                    mean: 150_000_000,
+                    std: 250_000_000,
+                    percentiles: { p5: 1000, p25: 10_000_000, p50: 80_000_000, p75: 200_000_000, p95: 600_000_000, p99: 1_500_000_000 },
+                },
+                Upload: {
+                    column_name: 'Upload',
+                    dtype: 'bigint',
+                    null_count: 2800,
+                    null_percent: 0.1,
+                    unique_count: 300000,
+                    min_val: 0,
+                    max_val: 2_000_000_000,
+                    mean: 25_000_000,
+                    std: 50_000_000,
+                    percentiles: { p5: 100, p25: 1_000_000, p50: 10_000_000, p75: 30_000_000, p95: 100_000_000, p99: 300_000_000 },
+                },
+            },
+            profiled_at: new Date().toISOString(),
+        },
+        {
+            table_name: 'cs_Heatmap',
+            row_count: 5_200_000,
+            date_range: ['2024-01-01', '2024-12-28'],
+            device_count: 4_500,
+            column_stats: {
+                SignalStrength: {
+                    column_name: 'SignalStrength',
+                    dtype: 'int',
+                    null_count: 130000,
+                    null_percent: 2.5,
+                    unique_count: 80,
+                    min_val: -120,
+                    max_val: -40,
+                    mean: -72,
+                    std: 15,
+                    percentiles: { p5: -98, p25: -82, p50: -72, p75: -62, p95: -50, p99: -44 },
+                },
+                DropCnt: {
+                    column_name: 'DropCnt',
+                    dtype: 'int',
+                    null_count: 52000,
+                    null_percent: 1.0,
+                    unique_count: 50,
+                    min_val: 0,
+                    max_val: 100,
+                    mean: 2.5,
+                    std: 5.2,
+                    percentiles: { p5: 0, p25: 0, p50: 1, p75: 3, p95: 12, p99: 25 },
+                },
+            },
+            profiled_at: new Date().toISOString(),
+        },
+    ];
+}
+
+export function getMockAvailableMetrics(): AvailableMetric[] {
+    return [
+        // Raw database metrics
+        { table: 'cs_BatteryStat', column: 'TotalBatteryLevelDrop', dtype: 'int', mean: 35.2, std: 18.5, min: 0, max: 100, category: 'raw', domain: 'battery' },
+        { table: 'cs_BatteryStat', column: 'TotalDischargeTime_Sec', dtype: 'int', mean: 28800, std: 12000, min: 0, max: 86400, category: 'raw', domain: 'battery' },
+        { table: 'cs_BatteryStat', column: 'TotalFreeStorageKb', dtype: 'bigint', mean: 2_000_000, std: 1_500_000, min: 0, max: 16_000_000, category: 'raw', domain: 'storage' },
+        { table: 'cs_AppUsage', column: 'VisitCount', dtype: 'int', mean: 45, std: 32, min: 0, max: 1000, category: 'raw', domain: 'usage' },
+        { table: 'cs_AppUsage', column: 'TotalForegroundTime', dtype: 'int', mean: 3600, std: 2400, min: 0, max: 28800, category: 'raw', domain: 'usage' },
+        { table: 'cs_DataUsage', column: 'Download', dtype: 'bigint', mean: 150_000_000, std: 250_000_000, min: 0, max: 10_000_000_000, category: 'raw', domain: 'throughput' },
+        { table: 'cs_DataUsage', column: 'Upload', dtype: 'bigint', mean: 25_000_000, std: 50_000_000, min: 0, max: 2_000_000_000, category: 'raw', domain: 'throughput' },
+        { table: 'cs_Heatmap', column: 'SignalStrength', dtype: 'int', mean: -72, std: 15, min: -120, max: -40, category: 'raw', domain: 'rf' },
+        { table: 'cs_Heatmap', column: 'DropCnt', dtype: 'int', mean: 2.5, std: 5.2, min: 0, max: 100, category: 'raw', domain: 'rf' },
+        // Engineered features
+        { table: 'feature_engineered', column: 'TotalBatteryLevelDrop_roll_mean', dtype: 'float', mean: 35.1, std: 12.3, min: 2, max: 95, category: 'rolling', domain: 'battery', description: 'Mean of TotalBatteryLevelDrop over 14 days' },
+        { table: 'feature_engineered', column: 'TotalBatteryLevelDrop_roll_std', dtype: 'float', mean: 8.2, std: 5.1, min: 0, max: 35, category: 'rolling', domain: 'battery', description: 'Std of TotalBatteryLevelDrop over 14 days' },
+        { table: 'feature_engineered', column: 'BatteryDrainPerHour', dtype: 'float', mean: 4.5, std: 2.8, min: 0, max: 25, category: 'derived', domain: 'battery', description: 'Derived: TotalBatteryLevelDrop / (TotalDischargeTime_Sec / 3600 + 1)' },
+        { table: 'feature_engineered', column: 'Download_delta', dtype: 'float', mean: 5_000_000, std: 50_000_000, min: -500_000_000, max: 500_000_000, category: 'delta', domain: 'throughput', description: 'Day-over-day change for Download' },
+        { table: 'feature_engineered', column: 'hour_of_day', dtype: 'int', mean: 12, std: 6.9, min: 0, max: 23, category: 'temporal', domain: 'temporal', description: 'Temporal feature: hour of day' },
+        { table: 'feature_engineered', column: 'day_of_week', dtype: 'int', mean: 3, std: 2, min: 0, max: 6, category: 'temporal', domain: 'temporal', description: 'Temporal feature: day of week' },
+        { table: 'feature_engineered', column: 'TotalBatteryLevelDrop_cohort_z', dtype: 'float', mean: 0, std: 1, min: -3, max: 3, category: 'cohort', domain: 'battery', description: 'Cohort-normalized z-score for TotalBatteryLevelDrop' },
+        { table: 'feature_engineered', column: 'Download_cv', dtype: 'float', mean: 1.2, std: 0.8, min: 0, max: 5, category: 'volatility', domain: 'throughput', description: 'Coefficient of variation (volatility) for Download' },
+    ];
+}
+
+export function getMockMetricDistribution(metricName: string): MetricDistribution {
+    // Generate deterministic mock distribution based on metric name
+    const seed = metricName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const mean = 50 + (seed % 30);
+    const std = 10 + (seed % 10);
+
+    // Generate 30 bins
+    const binCount = 30;
+    const minVal = Math.max(0, mean - 3 * std);
+    const maxVal = mean + 3 * std;
+    const binWidth = (maxVal - minVal) / binCount;
+
+    const bins: number[] = [];
+    const counts: number[] = [];
+
+    for (let i = 0; i <= binCount; i++) {
+        bins.push(minVal + i * binWidth);
+    }
+
+    // Generate bell-curve-ish counts
+    for (let i = 0; i < binCount; i++) {
+        const binCenter = minVal + (i + 0.5) * binWidth;
+        const zScore = (binCenter - mean) / std;
+        const density = Math.exp(-0.5 * zScore * zScore);
+        counts.push(Math.round(density * 1000 * (1 + Math.sin(seed + i) * 0.1)));
+    }
+
+    return {
+        bins,
+        counts,
+        stats: {
+            min: minVal,
+            max: maxVal,
+            mean,
+            std,
+            median: mean - 2,
+            total_samples: counts.reduce((a, b) => a + b, 0),
+        },
+    };
+}
+
+export function getMockDiscoveryStatus(): DataDiscoveryStatus {
+    return {
+        status: 'completed',
+        progress: 100,
+        message: 'Discovery completed successfully (mock mode)',
+        started_at: new Date(Date.now() - 300000).toISOString(), // 5 minutes ago
+        completed_at: new Date(Date.now() - 60000).toISOString(), // 1 minute ago
+        results_available: true,
+    };
+}
+
+export function getMockTemporalPatterns(): TemporalPattern[] {
+    const patterns: TemporalPattern[] = [];
+
+    for (const metric of ['TotalBatteryLevelDrop', 'VisitCount', 'Download']) {
+        const hourlyStats: Record<number, { mean: number; std: number; count: number }> = {};
+        const dailyStats: Record<number, { mean: number; std: number; count: number }> = {};
+
+        // Generate hourly patterns (higher during business hours)
+        for (let hour = 0; hour < 24; hour++) {
+            const isBusinessHour = hour >= 8 && hour <= 18;
+            const baseMean = isBusinessHour ? 50 : 30;
+            hourlyStats[hour] = {
+                mean: baseMean + Math.sin(hour / 3) * 10,
+                std: 8 + Math.random() * 4,
+                count: 2000 + Math.floor(Math.random() * 1000),
+            };
+        }
+
+        // Generate daily patterns (lower on weekends)
+        for (let day = 0; day < 7; day++) {
+            const isWeekend = day === 0 || day === 6;
+            const baseMean = isWeekend ? 25 : 45;
+            dailyStats[day] = {
+                mean: baseMean + Math.sin(day) * 5,
+                std: 10 + Math.random() * 5,
+                count: 10000 + Math.floor(Math.random() * 5000),
+            };
+        }
+
+        patterns.push({
+            metric_name: metric,
+            hourly_stats: hourlyStats,
+            daily_stats: dailyStats,
+        });
+    }
+
+    return patterns;
+}
+
+export function getMockDiscoverySummary(): DiscoverySummary {
+    return {
+        total_tables_profiled: 4,
+        total_rows: 12_750_000,
+        total_devices: 4_500,
+        metrics_discovered: 17,
+        patterns_analyzed: 3,
+        date_range: { start: '2024-01-01', end: '2024-12-28' },
+        discovery_completed: new Date().toISOString(),
+    };
+}
+
+// ==========================================
+// Investigation Panel Mock Data
+// ==========================================
+
+function generateFeatureContributions(): FeatureContribution[] {
+    const features = [
+        {
+            feature_name: 'total_battery_level_drop',
+            feature_display_name: 'Battery Drain',
+            contribution_percentage: 42.5,
+            contribution_direction: 'positive' as const,
+            current_value: 58.3,
+            current_value_display: '58.3%',
+            baseline_value: 12.4,
+            baseline_value_display: '12.4%',
+            deviation_sigma: 4.2,
+            percentile: 99.1,
+            plain_text_explanation: 'Battery drain is 4.2 standard deviations above normal, representing the 99th percentile. This is the primary driver of the anomaly score.',
+        },
+        {
+            feature_name: 'offline_time',
+            feature_display_name: 'Offline Duration',
+            contribution_percentage: 28.3,
+            contribution_direction: 'positive' as const,
+            current_value: 4.5,
+            current_value_display: '4.5 hours',
+            baseline_value: 0.8,
+            baseline_value_display: '0.8 hours',
+            deviation_sigma: 3.1,
+            percentile: 97.8,
+            plain_text_explanation: 'Device was offline for 4.5 hours compared to a typical 0.8 hours, suggesting network or power issues.',
+        },
+        {
+            feature_name: 'download',
+            feature_display_name: 'Download Traffic',
+            contribution_percentage: 15.2,
+            contribution_direction: 'positive' as const,
+            current_value: 2450,
+            current_value_display: '2.4 GB',
+            baseline_value: 450,
+            baseline_value_display: '450 MB',
+            deviation_sigma: 2.8,
+            percentile: 95.2,
+            plain_text_explanation: 'Download traffic is significantly higher than baseline, possibly indicating large app updates or unusual data transfer.',
+        },
+        {
+            feature_name: 'wifi_signal_strength',
+            feature_display_name: 'WiFi Signal',
+            contribution_percentage: 8.7,
+            contribution_direction: 'negative' as const,
+            current_value: -78,
+            current_value_display: '-78 dBm',
+            baseline_value: -55,
+            baseline_value_display: '-55 dBm',
+            deviation_sigma: 1.9,
+            percentile: 88.5,
+            plain_text_explanation: 'WiFi signal is weaker than normal, which may correlate with connectivity issues.',
+        },
+        {
+            feature_name: 'disconnect_count',
+            feature_display_name: 'Disconnections',
+            contribution_percentage: 5.3,
+            contribution_direction: 'positive' as const,
+            current_value: 12,
+            current_value_display: '12 disconnects',
+            baseline_value: 2,
+            baseline_value_display: '2 disconnects',
+            deviation_sigma: 1.5,
+            percentile: 82.3,
+            plain_text_explanation: 'Device experienced 12 disconnections compared to an average of 2, indicating network instability.',
+        },
+    ];
+    return features;
+}
+
+function generateBaselineMetrics(): BaselineMetric[] {
+    return [
+        {
+            metric_name: 'total_battery_level_drop',
+            metric_display_name: 'Battery Drain',
+            metric_unit: '%',
+            current_value: 58.3,
+            current_value_display: '58.3%',
+            baseline_mean: 12.4,
+            baseline_std: 8.2,
+            baseline_min: 2.1,
+            baseline_max: 35.6,
+            deviation_sigma: 4.2,
+            deviation_percentage: 370.2,
+            percentile_rank: 99.1,
+            is_anomalous: true,
+            anomaly_direction: 'above',
+        },
+        {
+            metric_name: 'offline_time',
+            metric_display_name: 'Offline Duration',
+            metric_unit: 'hours',
+            current_value: 4.5,
+            current_value_display: '4.5 hours',
+            baseline_mean: 0.8,
+            baseline_std: 0.6,
+            baseline_min: 0,
+            baseline_max: 2.1,
+            deviation_sigma: 3.1,
+            deviation_percentage: 462.5,
+            percentile_rank: 97.8,
+            is_anomalous: true,
+            anomaly_direction: 'above',
+        },
+        {
+            metric_name: 'download',
+            metric_display_name: 'Download Traffic',
+            metric_unit: 'MB',
+            current_value: 2450,
+            current_value_display: '2.4 GB',
+            baseline_mean: 450,
+            baseline_std: 280,
+            baseline_min: 50,
+            baseline_max: 1200,
+            deviation_sigma: 2.8,
+            deviation_percentage: 444.4,
+            percentile_rank: 95.2,
+            is_anomalous: true,
+            anomaly_direction: 'above',
+        },
+        {
+            metric_name: 'wifi_signal_strength',
+            metric_display_name: 'WiFi Signal',
+            metric_unit: 'dBm',
+            current_value: -78,
+            current_value_display: '-78 dBm',
+            baseline_mean: -55,
+            baseline_std: 12,
+            baseline_min: -75,
+            baseline_max: -35,
+            deviation_sigma: 1.9,
+            deviation_percentage: 41.8,
+            percentile_rank: 88.5,
+            is_anomalous: false,
+            anomaly_direction: 'below',
+        },
+        {
+            metric_name: 'total_free_storage_kb',
+            metric_display_name: 'Free Storage',
+            metric_unit: 'GB',
+            current_value: 2.1,
+            current_value_display: '2.1 GB',
+            baseline_mean: 8.5,
+            baseline_std: 3.2,
+            baseline_min: 1.5,
+            baseline_max: 24.0,
+            deviation_sigma: 2.0,
+            deviation_percentage: -75.3,
+            percentile_rank: 12.5,
+            is_anomalous: true,
+            anomaly_direction: 'below',
+        },
+    ];
+}
+
+function generateEvidenceEvents(anomalyId: number): EvidenceEvent[] {
+    const baseTime = new Date();
+    baseTime.setHours(baseTime.getHours() - 6);
+
+    return [
+        {
+            event_id: `evt-${anomalyId}-001`,
+            timestamp: new Date(baseTime.getTime() - 5 * 60 * 60 * 1000).toISOString(),
+            event_type: 'app_install',
+            event_category: 'apps',
+            severity: 'medium',
+            title: 'Large Application Installed',
+            description: 'New application "DataSync Pro v3.2" (450MB) was installed',
+            details: { app_name: 'DataSync Pro', version: '3.2', size_mb: 450 },
+            is_contributing_event: true,
+            contribution_note: 'Large app installation may explain elevated download traffic',
+        },
+        {
+            event_id: `evt-${anomalyId}-002`,
+            timestamp: new Date(baseTime.getTime() - 4 * 60 * 60 * 1000).toISOString(),
+            event_type: 'battery_drain_spike',
+            event_category: 'battery',
+            severity: 'high',
+            title: 'Rapid Battery Drain Detected',
+            description: 'Battery dropped from 85% to 42% in 2 hours (21.5%/hour)',
+            details: { start_level: 85, end_level: 42, duration_hours: 2, drain_rate: 21.5 },
+            is_contributing_event: true,
+            contribution_note: 'Primary indicator of anomalous device behavior',
+        },
+        {
+            event_id: `evt-${anomalyId}-003`,
+            timestamp: new Date(baseTime.getTime() - 3.5 * 60 * 60 * 1000).toISOString(),
+            event_type: 'wifi_disconnect',
+            event_category: 'network',
+            severity: 'medium',
+            title: 'WiFi Connection Lost',
+            description: 'Device disconnected from "Store-WiFi-5G" network',
+            details: { ssid: 'Store-WiFi-5G', signal_before: -58, reason: 'signal_lost' },
+            is_contributing_event: true,
+            contribution_note: 'Network instability correlates with offline time increase',
+        },
+        {
+            event_id: `evt-${anomalyId}-004`,
+            timestamp: new Date(baseTime.getTime() - 3 * 60 * 60 * 1000).toISOString(),
+            event_type: 'storage_warning',
+            event_category: 'storage',
+            severity: 'low',
+            title: 'Low Storage Warning',
+            description: 'Free storage dropped below 3GB threshold',
+            details: { free_storage_gb: 2.1, threshold_gb: 3.0 },
+            is_contributing_event: false,
+            contribution_note: null,
+        },
+        {
+            event_id: `evt-${anomalyId}-005`,
+            timestamp: new Date(baseTime.getTime() - 2 * 60 * 60 * 1000).toISOString(),
+            event_type: 'background_sync',
+            event_category: 'apps',
+            severity: 'info',
+            title: 'Background Sync Activity',
+            description: 'DataSync Pro performed background data synchronization',
+            details: { app_name: 'DataSync Pro', sync_size_mb: 1200, duration_minutes: 45 },
+            is_contributing_event: true,
+            contribution_note: 'Heavy background sync activity explains battery drain and data usage',
+        },
+    ];
+}
+
+function generateRootCauseHypothesis(isPrimary: boolean): RootCauseHypothesis {
+    if (isPrimary) {
+        return {
+            hypothesis_id: 'hyp-001',
+            title: 'Runaway Background Sync Process',
+            description: 'A recently installed application (DataSync Pro) is performing excessive background synchronization, causing high battery drain and network usage.',
+            likelihood: 0.82,
+            evidence_for: [
+                {
+                    statement: 'Battery drain rate correlates with background sync activity timestamps',
+                    strength: 'strong',
+                    source: 'telemetry',
+                    linked_event_id: 'evt-001-005',
+                },
+                {
+                    statement: 'App was installed within 24 hours of anomaly detection',
+                    strength: 'strong',
+                    source: 'telemetry',
+                    linked_event_id: 'evt-001-001',
+                },
+                {
+                    statement: 'Similar pattern seen in 3 other devices with same app version',
+                    strength: 'moderate',
+                    source: 'pattern_match',
+                    linked_event_id: null,
+                },
+            ],
+            evidence_against: [
+                {
+                    statement: 'WiFi signal degradation could be independent issue',
+                    strength: 'weak',
+                    source: 'inference',
+                    linked_event_id: null,
+                },
+            ],
+            recommended_actions: [
+                'Check DataSync Pro battery optimization settings',
+                'Review app sync frequency configuration',
+                'Consider updating to latest app version (3.3 available)',
+                'Monitor device for 24 hours after configuration change',
+            ],
+        };
+    }
+    return {
+        hypothesis_id: 'hyp-002',
+        title: 'Network Infrastructure Issue',
+        description: 'WiFi access point instability is causing frequent reconnections, leading to increased battery usage and incomplete data transfers.',
+        likelihood: 0.45,
+        evidence_for: [
+            {
+                statement: 'WiFi signal strength below normal range',
+                strength: 'moderate',
+                source: 'telemetry',
+                linked_event_id: 'evt-001-003',
+            },
+            {
+                statement: 'Multiple disconnection events recorded',
+                strength: 'moderate',
+                source: 'telemetry',
+                linked_event_id: null,
+            },
+        ],
+        evidence_against: [
+            {
+                statement: 'No other devices at this location showing similar network issues',
+                strength: 'strong',
+                source: 'pattern_match',
+                linked_event_id: null,
+            },
+            {
+                statement: 'Battery drain started before network issues',
+                strength: 'moderate',
+                source: 'telemetry',
+                linked_event_id: null,
+            },
+        ],
+        recommended_actions: [
+            'Check access point health and logs',
+            'Verify device is within optimal range of AP',
+            'Test network connectivity from device location',
+        ],
+    };
+}
+
+function generateRemediations(): RemediationSuggestion[] {
+    return [
+        {
+            remediation_id: 'rem-001',
+            title: 'Configure App Battery Optimization',
+            description: 'Enable battery optimization for DataSync Pro to limit background activity.',
+            detailed_steps: [
+                'Open MobiControl console',
+                'Navigate to device > Applications',
+                'Select "DataSync Pro"',
+                'Enable "Restrict background battery usage"',
+                'Apply configuration change',
+            ],
+            priority: 1,
+            confidence_score: 0.88,
+            confidence_level: 'high',
+            source: 'learned',
+            source_details: 'Resolved 12 similar cases with 91% success rate',
+            historical_success_rate: 0.91,
+            historical_sample_size: 12,
+            estimated_impact: 'Expected to reduce battery drain by 60-70%',
+            is_automated: true,
+            automation_type: 'mobicontrol_action',
+        },
+        {
+            remediation_id: 'rem-002',
+            title: 'Update DataSync Pro Application',
+            description: 'Update to version 3.3 which includes battery optimization fixes.',
+            detailed_steps: [
+                'Navigate to App Catalog in MobiControl',
+                'Find DataSync Pro in enterprise apps',
+                'Push version 3.3 update to device',
+                'Verify installation completes successfully',
+            ],
+            priority: 2,
+            confidence_score: 0.72,
+            confidence_level: 'medium',
+            source: 'ai_generated',
+            source_details: 'Suggested based on release notes mentioning battery fixes',
+            historical_success_rate: null,
+            historical_sample_size: null,
+            estimated_impact: 'May address root cause if issue is app-related bug',
+            is_automated: true,
+            automation_type: 'app_update',
+        },
+        {
+            remediation_id: 'rem-003',
+            title: 'Remote Device Restart',
+            description: 'Restart the device to clear any stuck processes or memory issues.',
+            detailed_steps: [
+                'Send remote restart command via MobiControl',
+                'Wait for device to come back online (2-5 minutes)',
+                'Verify device connectivity and app status',
+            ],
+            priority: 3,
+            confidence_score: 0.45,
+            confidence_level: 'low',
+            source: 'policy',
+            source_details: 'Standard remediation step for unresponsive devices',
+            historical_success_rate: 0.35,
+            historical_sample_size: 150,
+            estimated_impact: 'Temporary fix; may not address underlying cause',
+            is_automated: true,
+            automation_type: 'device_command',
+        },
+    ];
+}
+
+function generateSimilarCases(anomalyId: number): SimilarCase[] {
+    return [
+        {
+            case_id: 'case-2024-1205',
+            anomaly_id: anomalyId - 15,
+            device_id: 1042,
+            detected_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+            resolved_at: new Date(Date.now() - 6.5 * 24 * 60 * 60 * 1000).toISOString(),
+            similarity_score: 0.94,
+            similarity_factors: ['Battery drain pattern', 'Same app installed', 'Similar usage profile'],
+            anomaly_type: 'Battery Anomaly',
+            severity: 'high',
+            resolution_status: 'resolved',
+            resolution_summary: 'Battery optimization enabled for DataSync Pro, resolved within 12 hours',
+            successful_remediation: 'Configure App Battery Optimization',
+            time_to_resolution_hours: 12,
+        },
+        {
+            case_id: 'case-2024-1198',
+            anomaly_id: anomalyId - 28,
+            device_id: 1087,
+            detected_at: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000).toISOString(),
+            resolved_at: new Date(Date.now() - 11 * 24 * 60 * 60 * 1000).toISOString(),
+            similarity_score: 0.87,
+            similarity_factors: ['Battery drain pattern', 'Background sync activity'],
+            anomaly_type: 'Battery Anomaly',
+            severity: 'high',
+            resolution_status: 'resolved',
+            resolution_summary: 'App update pushed, issue resolved after sync completed',
+            successful_remediation: 'Update DataSync Pro Application',
+            time_to_resolution_hours: 24,
+        },
+        {
+            case_id: 'case-2024-1156',
+            anomaly_id: anomalyId - 45,
+            device_id: 1023,
+            detected_at: new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString(),
+            resolved_at: null,
+            similarity_score: 0.72,
+            similarity_factors: ['Network disconnection pattern', 'Similar store location'],
+            anomaly_type: 'Network Anomaly',
+            severity: 'medium',
+            resolution_status: 'investigating',
+            resolution_summary: null,
+            successful_remediation: null,
+            time_to_resolution_hours: null,
+        },
+    ];
+}
+
+export function getMockInvestigationPanel(anomalyId: number): InvestigationPanel {
+    const featureContributions = generateFeatureContributions();
+    const baselineMetrics = generateBaselineMetrics();
+    const evidenceEvents = generateEvidenceEvents(anomalyId);
+
+    return {
+        anomaly_id: anomalyId,
+        device_id: 1001,
+        anomaly_score: -0.73,
+        severity: 'high',
+        confidence_score: 0.85,
+        detected_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+        explanation: {
+            summary_text: 'This device shows unusual battery drain (4.2σ above baseline) combined with elevated offline time and network disruptions, indicating potential app malfunction or network infrastructure issues.',
+            detailed_explanation: 'The anomaly detection system flagged this device due to a combination of factors, primarily driven by extreme battery drain (58.3% vs baseline 12.4%). The Isolation Forest model assigned a score of -0.73 (threshold: -0.5), placing this in the top 2% of anomalous behavior. Secondary factors include extended offline periods and higher-than-normal data transfer, suggesting a background process consuming excessive resources.',
+            feature_contributions: featureContributions,
+            top_contributing_features: ['Battery Drain', 'Offline Duration', 'Download Traffic'],
+            explanation_method: 'shap_tree_explainer',
+            explanation_generated_at: new Date().toISOString(),
+        },
+        baseline_comparison: {
+            baseline_config: {
+                baseline_type: 'peer_group',
+                baseline_period_days: 14,
+                comparison_window_hours: 24,
+                statistical_method: 'z_score',
+                peer_group_name: 'Retail Store Devices - US West',
+                peer_group_size: 245,
+                baseline_calculated_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+            },
+            metrics: baselineMetrics,
+            overall_deviation_score: 3.2,
+        },
+        evidence_events: evidenceEvents,
+        evidence_event_count: evidenceEvents.length,
+        ai_analysis: {
+            analysis_id: `analysis-${anomalyId}`,
+            generated_at: new Date().toISOString(),
+            model_used: 'llama3.2',
+            primary_hypothesis: generateRootCauseHypothesis(true),
+            alternative_hypotheses: [generateRootCauseHypothesis(false)],
+            confidence_score: 0.82,
+            confidence_level: 'high',
+            confidence_explanation: 'High confidence based on strong temporal correlation between app installation and battery drain onset, supported by similar resolved cases.',
+            similar_cases_analyzed: 15,
+            feedback_received: false,
+            feedback_rating: null,
+        },
+        suggested_remediations: generateRemediations(),
+        similar_cases: generateSimilarCases(anomalyId),
+    };
+}
+
+export function getMockAIAnalysis(anomalyId: number): AIAnalysis {
+    return {
+        analysis_id: `analysis-${anomalyId}`,
+        generated_at: new Date().toISOString(),
+        model_used: 'llama3.2',
+        primary_hypothesis: generateRootCauseHypothesis(true),
+        alternative_hypotheses: [generateRootCauseHypothesis(false)],
+        confidence_score: 0.82,
+        confidence_level: 'high',
+        confidence_explanation: 'High confidence based on strong temporal correlation between app installation and battery drain onset, supported by similar resolved cases.',
+        similar_cases_analyzed: 15,
+        feedback_received: false,
+        feedback_rating: null,
+    };
+}
+
+export function getMockHistoricalTimeline(
+    _anomalyId: number,
+    metric: string,
+    days: number
+): HistoricalTimeline {
+    const dataPoints: TimeSeriesDataPoint[] = [];
+    const now = new Date();
+    const hoursToGenerate = days * 24;
+
+    // Generate baseline values
+    const baselineByMetric: Record<string, { mean: number; std: number }> = {
+        total_battery_level_drop: { mean: 12.4, std: 8.2 },
+        offline_time: { mean: 0.8, std: 0.6 },
+        download: { mean: 450, std: 280 },
+        wifi_signal_strength: { mean: -55, std: 12 },
+        total_free_storage_kb: { mean: 8500000, std: 3200000 },
+    };
+
+    const baseline = baselineByMetric[metric] || { mean: 50, std: 15 };
+
+    for (let i = hoursToGenerate; i >= 0; i--) {
+        const timestamp = new Date(now.getTime() - i * 60 * 60 * 1000);
+        let value = baseline.mean + (Math.random() - 0.5) * 2 * baseline.std;
+
+        // Add anomaly spike in recent hours for battery drain
+        if (i < 6 && metric === 'total_battery_level_drop') {
+            value = baseline.mean + (6 - i) * 10 + Math.random() * 5;
+        }
+
+        const isAnomalous = Math.abs(value - baseline.mean) > 2 * baseline.std;
+
+        dataPoints.push({
+            timestamp: timestamp.toISOString(),
+            value: Math.max(0, value),
+            is_anomalous: isAnomalous,
+        });
+    }
+
+    return {
+        metric_name: metric,
+        data_points: dataPoints,
+        baseline_mean: baseline.mean,
+        baseline_std: baseline.std,
+        baseline_upper: baseline.mean + 2 * baseline.std,
+        baseline_lower: Math.max(0, baseline.mean - 2 * baseline.std),
+    };
+}
+
+// ============================================================================
+// Automation Mock Data
+// ============================================================================
+
+import type {
+    SchedulerConfig,
+    SchedulerStatus,
+    AutomationAlert,
+    AutomationJob,
+    TriggerJobResponse,
+} from '../types/automation';
+
+export function getMockAutomationConfig(): SchedulerConfig {
+    return {
+        training_enabled: true,
+        training_interval: 'daily',
+        training_hour: 2,
+        training_day_of_week: 0,
+        training_lookback_days: 90,
+        training_validation_days: 7,
+        scoring_enabled: true,
+        scoring_interval_minutes: 15,
+        auto_retrain_enabled: true,
+        auto_retrain_fp_threshold: 0.15,
+        auto_retrain_min_feedback: 50,
+        auto_retrain_cooldown_hours: 24,
+        alerting_enabled: true,
+        alert_on_high_anomaly_rate: true,
+        high_anomaly_rate_threshold: 0.10,
+        last_training_time: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
+        last_scoring_time: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+        last_auto_retrain_time: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    };
+}
+
+export function getMockAutomationStatus(): SchedulerStatus {
+    const lastTrainingTime = new Date(Date.now() - 12 * 60 * 60 * 1000);
+    const lastScoringTime = new Date(Date.now() - 15 * 60 * 1000);
+    const nextTrainingTime = new Date(Date.now() + 12 * 60 * 60 * 1000);
+    const nextScoringTime = new Date(Date.now() + 15 * 60 * 1000);
+
+    return {
+        is_running: true,
+        training_status: 'idle',
+        scoring_status: 'idle',
+        last_training_result: {
+            success: true,
+            timestamp: lastTrainingTime.toISOString(),
+            metrics: {
+                samples_trained: 12450,
+                features_used: 8,
+                model_accuracy: 0.94,
+                contamination: 0.05,
+            },
+        },
+        last_scoring_result: {
+            success: true,
+            timestamp: lastScoringTime.toISOString(),
+            total_scored: 248,
+            anomalies_detected: 12,
+            anomaly_rate: 0.048,
+        },
+        next_training_time: nextTrainingTime.toISOString(),
+        next_scoring_time: nextScoringTime.toISOString(),
+        total_anomalies_detected: 156,
+        false_positive_rate: 0.08,
+        uptime_seconds: 86400 * 3 + 12345,
+        errors: [],
+    };
+}
+
+export function getMockAutomationAlerts(limit: number = 20): AutomationAlert[] {
+    const alerts: AutomationAlert[] = [
+        {
+            id: 'alert_001',
+            timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+            message: 'High anomaly rate detected: 12.5% of devices flagged in last scoring run (threshold: 10%)',
+            acknowledged: false,
+        },
+        {
+            id: 'alert_002',
+            timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+            message: 'Auto-retrain triggered due to false positive rate exceeding 15%',
+            acknowledged: true,
+        },
+        {
+            id: 'alert_003',
+            timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+            message: 'Model training completed successfully with 94% accuracy',
+            acknowledged: true,
+        },
+        {
+            id: 'alert_004',
+            timestamp: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
+            message: 'Scoring run completed: 248 devices scored, 8 anomalies detected',
+            acknowledged: true,
+        },
+    ];
+
+    return alerts.slice(0, limit);
+}
+
+export function getMockAutomationHistory(limit: number = 10): AutomationJob[] {
+    const jobs: AutomationJob[] = [
+        {
+            type: 'scoring',
+            timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+            triggered_by: 'schedule',
+            success: true,
+            metrics: { total_scored: 248, anomalies_detected: 12, anomaly_rate: 0.048 },
+        },
+        {
+            type: 'scoring',
+            timestamp: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+            triggered_by: 'schedule',
+            success: true,
+            metrics: { total_scored: 250, anomalies_detected: 8, anomaly_rate: 0.032 },
+        },
+        {
+            type: 'training',
+            timestamp: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
+            triggered_by: 'schedule',
+            success: true,
+            metrics: { samples_trained: 12450, model_accuracy: 0.94 },
+        },
+        {
+            type: 'scoring',
+            timestamp: new Date(Date.now() - 12.5 * 60 * 60 * 1000).toISOString(),
+            triggered_by: 'schedule',
+            success: true,
+            metrics: { total_scored: 245, anomalies_detected: 15, anomaly_rate: 0.061 },
+        },
+        {
+            type: 'auto_retrain',
+            timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+            triggered_by: 'auto',
+            success: true,
+            metrics: { reason: 'fp_threshold_exceeded', previous_fp_rate: 0.18, new_fp_rate: 0.08 },
+        },
+        {
+            type: 'training',
+            timestamp: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
+            triggered_by: 'manual',
+            success: true,
+            metrics: { samples_trained: 11200, model_accuracy: 0.91 },
+        },
+        {
+            type: 'scoring',
+            timestamp: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000 - 30 * 60 * 1000).toISOString(),
+            triggered_by: 'schedule',
+            success: false,
+            error: 'Database connection timeout',
+        },
+    ];
+
+    return jobs.slice(0, limit);
+}
+
+export function getMockTriggerJobResponse(jobType: 'training' | 'scoring'): TriggerJobResponse {
+    return {
+        success: true,
+        job_id: `job-${Date.now()}-${jobType}`,
+        message: `${jobType.charAt(0).toUpperCase() + jobType.slice(1)} job started successfully (mock mode)`,
+    };
+}
+
+// ============================================================================
+// Training Mock Data
+// ============================================================================
+
+import type {
+    TrainingRun,
+    TrainingConfigRequest,
+    TrainingMetrics,
+    TrainingHistoryResponse,
+} from '../types/training';
+
+export function getMockTrainingStatus(): TrainingRun {
+    return {
+        run_id: 'mock-run-idle',
+        status: 'idle',
+        progress: 0,
+        message: 'No training in progress',
+        stage: null,
+        started_at: null,
+        completed_at: null,
+        estimated_completion: null,
+        config: null,
+        metrics: null,
+        artifacts: null,
+        model_version: null,
+        error: null,
+        stages: null,
+    };
+}
+
+export function getMockStartTrainingResponse(config: TrainingConfigRequest): TrainingRun {
+    const runId = `mock-run-${Date.now()}`;
+    return {
+        run_id: runId,
+        status: 'pending',
+        progress: 0,
+        message: 'Training job queued (mock mode)',
+        stage: 'Initialize',
+        started_at: new Date().toISOString(),
+        completed_at: null,
+        estimated_completion: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+        config: config as unknown as Record<string, unknown>,
+        metrics: null,
+        artifacts: null,
+        model_version: null,
+        error: null,
+        stages: [
+            { name: 'Initialize', status: 'running', started_at: new Date().toISOString() },
+            { name: 'Load Data', status: 'pending' },
+            { name: 'Features', status: 'pending' },
+            { name: 'Training', status: 'pending' },
+            { name: 'Validation', status: 'pending' },
+            { name: 'Export', status: 'pending' },
+        ],
+    };
+}
+
+export function getMockTrainingHistory(limit: number = 10): TrainingHistoryResponse {
+    const runs: TrainingRun[] = [
+        {
+            run_id: 'run-20241228-142530',
+            status: 'completed',
+            progress: 100,
+            message: 'Training completed successfully',
+            stage: 'Export',
+            started_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+            completed_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 + 12 * 60 * 1000).toISOString(),
+            model_version: 'v1.2.0',
+            metrics: {
+                train_rows: 145832,
+                validation_rows: 18456,
+                feature_count: 24,
+                anomaly_rate_train: 0.032,
+                anomaly_rate_validation: 0.029,
+                validation_auc: 0.892,
+                precision_at_recall_80: 0.78,
+                feature_importance: {
+                    total_battery_level_drop: 0.18,
+                    total_free_storage_kb: 0.15,
+                    offline_time: 0.14,
+                    disconnect_count: 0.12,
+                    download: 0.10,
+                    upload: 0.09,
+                    wifi_signal_strength: 0.08,
+                    connection_time: 0.07,
+                },
+            },
+            artifacts: {
+                model_path: 'models/isolation_forest_v1.2.0.pkl',
+                onnx_path: 'models/isolation_forest_v1.2.0.onnx',
+                baselines_path: 'models/baselines_v1.2.0.json',
+            },
+            stages: [
+                { name: 'Initialize', status: 'completed' },
+                { name: 'Load Data', status: 'completed' },
+                { name: 'Features', status: 'completed' },
+                { name: 'Training', status: 'completed' },
+                { name: 'Validation', status: 'completed' },
+                { name: 'Export', status: 'completed' },
+            ],
+        },
+        {
+            run_id: 'run-20241225-093015',
+            status: 'completed',
+            progress: 100,
+            message: 'Training completed successfully',
+            stage: 'Export',
+            started_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+            completed_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000 + 14 * 60 * 1000).toISOString(),
+            model_version: 'v1.1.0',
+            metrics: {
+                train_rows: 132456,
+                validation_rows: 16245,
+                feature_count: 24,
+                anomaly_rate_train: 0.035,
+                anomaly_rate_validation: 0.031,
+                validation_auc: 0.878,
+                precision_at_recall_80: 0.74,
+                feature_importance: {
+                    total_battery_level_drop: 0.17,
+                    total_free_storage_kb: 0.16,
+                    offline_time: 0.13,
+                    disconnect_count: 0.11,
+                    download: 0.11,
+                    upload: 0.08,
+                    wifi_signal_strength: 0.09,
+                    connection_time: 0.06,
+                },
+            },
+            artifacts: {
+                model_path: 'models/isolation_forest_v1.1.0.pkl',
+                onnx_path: 'models/isolation_forest_v1.1.0.onnx',
+                baselines_path: 'models/baselines_v1.1.0.json',
+            },
+            stages: [
+                { name: 'Initialize', status: 'completed' },
+                { name: 'Load Data', status: 'completed' },
+                { name: 'Features', status: 'completed' },
+                { name: 'Training', status: 'completed' },
+                { name: 'Validation', status: 'completed' },
+                { name: 'Export', status: 'completed' },
+            ],
+        },
+        {
+            run_id: 'run-20241220-183045',
+            status: 'failed',
+            progress: 45,
+            message: 'Failed to load data: Connection timeout',
+            stage: 'Load Data',
+            started_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+            completed_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000 + 3 * 60 * 1000).toISOString(),
+            model_version: null,
+            error: 'Database connection timeout after 30 seconds',
+            metrics: null,
+            artifacts: null,
+            stages: [
+                { name: 'Initialize', status: 'completed' },
+                { name: 'Load Data', status: 'failed', message: 'Connection timeout' },
+                { name: 'Features', status: 'pending' },
+                { name: 'Training', status: 'pending' },
+                { name: 'Validation', status: 'pending' },
+                { name: 'Export', status: 'pending' },
+            ],
+        },
+    ];
+
+    return {
+        runs: runs.slice(0, limit),
+        total: runs.length,
+    };
+}
+
+export function getMockTrainingMetrics(runId: string): TrainingMetrics {
+    // Return metrics based on runId to simulate different runs
+    const baseMetrics: TrainingMetrics = {
+        train_rows: 145832,
+        validation_rows: 18456,
+        feature_count: 24,
+        anomaly_rate_train: 0.032,
+        anomaly_rate_validation: 0.029,
+        validation_auc: 0.892,
+        precision_at_recall_80: 0.78,
+        feature_importance: {
+            total_battery_level_drop: 0.18,
+            total_free_storage_kb: 0.15,
+            offline_time: 0.14,
+            disconnect_count: 0.12,
+            download: 0.10,
+            upload: 0.09,
+            wifi_signal_strength: 0.08,
+            connection_time: 0.07,
+        },
+    };
+
+    // Vary slightly based on runId hash
+    const hash = runId.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
+    const variation = (hash % 10) / 100;
+
+    return {
+        ...baseMetrics,
+        validation_auc: baseMetrics.validation_auc! - variation + 0.05,
+        precision_at_recall_80: baseMetrics.precision_at_recall_80! - variation + 0.03,
+    };
+}
+
+// Export all mock devices and anomalies for direct access if needed
+export { MOCK_DEVICES, MOCK_ANOMALIES, MOCK_STORES };

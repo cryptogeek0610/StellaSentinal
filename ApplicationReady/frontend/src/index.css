@@ -1,0 +1,779 @@
+/**
+ * SOTI Stella Sentinel - Design System
+ * "Stellar Operations" - Mission Control Aesthetic
+ * 
+ * A premium space agency mission control experience
+ * Deep space backgrounds, stellar gold accents, telemetry-inspired UI
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Core Space Palette */
+  --color-void: 8 9 13;
+  --color-space: 14 17 23;
+  --color-nebula: 22 26 35;
+  --color-cosmic: 32 38 50;
+  
+  /* Stellar Accents */
+  --color-stellar: 245 166 35;
+  --color-nova: 255 199 95;
+  --color-aurora: 0 217 192;
+  --color-plasma: 99 102 241;
+  
+  /* Status Colors */
+  --color-success: 16 185 129;
+  --color-warning: 255 107 53;
+  --color-danger: 255 71 87;
+  --color-info: 56 189 248;
+  
+  /* Text Hierarchy */
+  --color-text-primary: 240 242 245;
+  --color-text-secondary: 136 146 160;
+  --color-text-tertiary: 88 96 112;
+  
+  /* Borders & Lines */
+  --color-border: 37 42 53;
+  --color-border-subtle: 28 32 42;
+  
+  /* Chart colors (using CSS variables for consistency) */
+  --color-chart-primary: 245 166 35;
+  --color-chart-secondary: 0 217 192;
+  --color-chart-tertiary: 99 102 241;
+}
+
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(245, 166, 35, 0.3) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgb(var(--color-stellar)) 0%, rgb(var(--color-nova)) 100%);
+    border-radius: 3px;
+    opacity: 0.6;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    opacity: 1;
+  }
+
+  body {
+    @apply m-0 antialiased;
+    background-color: rgb(var(--color-void));
+    color: rgb(var(--color-text-primary));
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+    font-feature-settings: "cv11", "ss01";
+    letter-spacing: -0.01em;
+    min-height: 100vh;
+  }
+
+  /* Subtle constellation background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: 
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(245, 166, 35, 0.08), transparent),
+      radial-gradient(circle at 20% 30%, rgba(245, 166, 35, 0.02) 1px, transparent 1px),
+      radial-gradient(circle at 80% 20%, rgba(0, 217, 192, 0.015) 1px, transparent 1px),
+      radial-gradient(circle at 40% 70%, rgba(99, 102, 241, 0.015) 1px, transparent 1px),
+      linear-gradient(rgba(245, 166, 35, 0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(245, 166, 35, 0.015) 1px, transparent 1px);
+    background-size: 100% 100%, 200px 200px, 200px 200px, 200px 200px, 50px 50px, 50px 50px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Monospace for data/technical text */
+  .font-mono, code, kbd, pre {
+    font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+    font-feature-settings: "liga" 1, "calt" 1;
+  }
+
+  /* Selection styling */
+  ::selection {
+    background: rgba(245, 166, 35, 0.25);
+    color: rgb(var(--color-text-primary));
+  }
+}
+
+@layer components {
+  /* ==========================================
+     Stellar Glass Effects
+     ========================================== */
+  
+  .stellar-glass {
+    background: rgba(14, 17, 23, 0.7);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(245, 166, 35, 0.08);
+  }
+
+  .stellar-card {
+    background: linear-gradient(135deg, rgba(22, 26, 35, 0.9), rgba(14, 17, 23, 0.95));
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(37, 42, 53, 0.8);
+    box-shadow: 
+      0 4px 24px -4px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  }
+
+  .stellar-card-hover {
+    @apply stellar-card transition-all duration-300;
+  }
+
+  .stellar-card-hover:hover {
+    border-color: rgba(245, 166, 35, 0.3);
+    box-shadow: 
+      0 8px 40px -8px rgba(245, 166, 35, 0.15),
+      0 0 0 1px rgba(245, 166, 35, 0.1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    transform: translateY(-2px);
+  }
+
+  /* ==========================================
+     Stellar Glow Effects
+     ========================================== */
+  
+  .stellar-glow {
+    box-shadow: 
+      0 0 20px rgba(245, 166, 35, 0.2),
+      0 0 40px rgba(245, 166, 35, 0.1);
+  }
+
+  .stellar-glow-intense {
+    box-shadow: 
+      0 0 15px rgba(245, 166, 35, 0.4),
+      0 0 30px rgba(245, 166, 35, 0.2),
+      0 0 60px rgba(245, 166, 35, 0.1);
+  }
+
+  .aurora-glow {
+    box-shadow: 
+      0 0 20px rgba(0, 217, 192, 0.2),
+      0 0 40px rgba(0, 217, 192, 0.1);
+  }
+
+  .danger-glow {
+    box-shadow: 
+      0 0 20px rgba(255, 71, 87, 0.3),
+      0 0 40px rgba(255, 71, 87, 0.15);
+  }
+
+  /* ==========================================
+     Metric & KPI Cards
+     ========================================== */
+
+  .metric-card {
+    @apply stellar-card p-4 relative overflow-hidden rounded-xl;
+  }
+
+  .metric-card::before {
+    content: '';
+    @apply absolute inset-0 opacity-0 transition-opacity duration-300;
+    background: linear-gradient(135deg, rgba(245, 166, 35, 0.1) 0%, transparent 50%);
+  }
+
+  .metric-card:hover::before {
+    @apply opacity-100;
+  }
+
+  .kpi-card {
+    @apply transition-all duration-300;
+  }
+
+  .kpi-card:hover {
+    transform: translateY(-4px);
+  }
+
+  .kpi-card:hover .kpi-icon {
+    transform: scale(1.1) rotate(3deg);
+  }
+
+  /* ==========================================
+     Status Indicators
+     ========================================== */
+
+  .status-dot {
+    @apply w-2 h-2 rounded-full;
+  }
+
+  .status-dot-online, .status-online {
+    @apply bg-emerald-400;
+    box-shadow: 0 0 8px rgba(0, 217, 192, 0.6);
+    animation: status-blink 2s ease-in-out infinite;
+  }
+
+  .status-dot-warning, .status-warning {
+    @apply bg-amber-400;
+    box-shadow: 0 0 8px rgba(255, 107, 53, 0.6);
+    animation: status-blink 1.5s ease-in-out infinite;
+  }
+
+  .status-dot-critical, .status-critical {
+    @apply bg-red-400;
+    box-shadow: 0 0 8px rgba(255, 71, 87, 0.6);
+    animation: status-blink 1s ease-in-out infinite;
+  }
+
+  .status-dot-offline, .status-offline {
+    @apply bg-slate-500;
+  }
+
+  @keyframes status-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  /* ==========================================
+     Telemetry Data Display
+     ========================================== */
+  
+  .telemetry-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-feature-settings: "tnum" 1;
+    letter-spacing: 0.02em;
+  }
+
+  .telemetry-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.625rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: rgb(var(--color-text-tertiary));
+  }
+
+  /* ==========================================
+     Progress & Meters
+     ========================================== */
+  
+  .progress-bar {
+    @apply h-1.5 rounded-full overflow-hidden;
+    background: rgb(var(--color-space));
+  }
+
+  .progress-bar-fill {
+    @apply h-full rounded-full transition-all duration-500;
+    background: linear-gradient(90deg, rgb(var(--color-stellar)), rgb(var(--color-nova)));
+  }
+
+  .progress-bar-aurora .progress-bar-fill {
+    background: linear-gradient(90deg, rgb(var(--color-aurora)), rgb(var(--color-success)));
+  }
+
+  .progress-bar-danger .progress-bar-fill {
+    background: linear-gradient(90deg, rgb(var(--color-warning)), rgb(var(--color-danger)));
+  }
+
+  /* ==========================================
+     Buttons
+     ========================================== */
+  
+  .btn-stellar {
+    @apply px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200;
+    background: linear-gradient(135deg, rgb(var(--color-stellar)), rgb(var(--color-nova)));
+    color: rgb(var(--color-void));
+    box-shadow: 0 2px 12px rgba(245, 166, 35, 0.25);
+  }
+
+  .btn-stellar:hover {
+    box-shadow: 0 4px 20px rgba(245, 166, 35, 0.35);
+    transform: translateY(-1px);
+  }
+
+  .btn-stellar:active {
+    transform: translateY(0);
+  }
+
+  .btn-ghost {
+    @apply px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200;
+    background: transparent;
+    border: 1px solid rgb(var(--color-border));
+    color: rgb(var(--color-text-secondary));
+  }
+
+  .btn-ghost:hover {
+    background: rgb(var(--color-nebula));
+    border-color: rgb(var(--color-stellar));
+    color: rgb(var(--color-text-primary));
+  }
+
+  .btn-primary {
+    @apply px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-400 text-slate-900 font-semibold rounded-lg
+           transition-all duration-300 hover:shadow-lg hover:shadow-amber-500/25 hover:scale-105
+           active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2 bg-slate-800 text-slate-200 font-medium rounded-lg border border-slate-700
+           transition-all duration-300 hover:bg-slate-700 hover:border-slate-600
+           active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-danger {
+    @apply px-4 py-2 bg-gradient-to-r from-red-500 to-red-400 text-white font-semibold rounded-lg
+           transition-all duration-300 hover:shadow-lg hover:shadow-red-500/25 hover:scale-105
+           active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-success {
+    @apply px-4 py-2 bg-gradient-to-r from-emerald-500 to-emerald-400 text-slate-900 font-semibold rounded-lg
+           transition-all duration-300 hover:shadow-lg hover:shadow-emerald-500/25 hover:scale-105
+           active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* ==========================================
+     Badges
+     ========================================== */
+  
+  .badge {
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold;
+  }
+
+  .badge-stellar {
+    background: rgba(245, 166, 35, 0.15);
+    color: rgb(var(--color-stellar));
+    border: 1px solid rgba(245, 166, 35, 0.3);
+  }
+
+  .badge-aurora {
+    background: rgba(0, 217, 192, 0.15);
+    color: rgb(var(--color-aurora));
+    border: 1px solid rgba(0, 217, 192, 0.3);
+  }
+
+  .badge-danger {
+    background: rgba(255, 71, 87, 0.15);
+    color: rgb(var(--color-danger));
+    border: 1px solid rgba(255, 71, 87, 0.3);
+  }
+
+  .badge-warning {
+    @apply badge;
+    background: rgba(255, 107, 53, 0.15);
+    color: rgb(var(--color-warning));
+    border: 1px solid rgba(255, 107, 53, 0.3);
+  }
+
+  .badge-critical {
+    @apply badge bg-red-500/20 text-red-400 border border-red-500/30;
+  }
+
+  .badge-success {
+    @apply badge bg-emerald-500/20 text-emerald-400 border border-emerald-500/30;
+  }
+
+  .badge-info {
+    @apply badge bg-cyan-500/20 text-cyan-400 border border-cyan-500/30;
+  }
+
+  .badge-neutral {
+    @apply badge bg-slate-700/50 text-slate-400 border border-slate-600/50;
+  }
+
+  /* ==========================================
+     Input Fields
+     ========================================== */
+  
+  .input-stellar {
+    @apply w-full px-4 py-3 rounded-xl text-sm transition-all duration-200;
+    background: rgb(var(--color-space));
+    border: 1px solid rgb(var(--color-border));
+    color: rgb(var(--color-text-primary));
+    font-family: inherit;
+  }
+
+  .input-stellar::placeholder {
+    color: rgb(var(--color-text-tertiary));
+    opacity: 0.7;
+  }
+
+  .input-stellar:focus {
+    outline: none;
+    border-color: rgb(var(--color-stellar));
+    box-shadow: 0 0 0 3px rgba(245, 166, 35, 0.15);
+  }
+
+  .input-field {
+    @apply w-full px-4 py-2.5 bg-slate-800/50 border border-slate-700 rounded-lg
+           text-slate-100 placeholder-slate-500 font-mono text-sm
+           focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50
+           transition-all duration-200;
+  }
+
+  .select-field {
+    @apply input-field appearance-none cursor-pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+    background-position: right 0.75rem center;
+    background-repeat: no-repeat;
+    background-size: 1.25rem;
+    padding-right: 2.5rem;
+  }
+
+  /* ==========================================
+     Navigation
+     ========================================== */
+  
+  .nav-link {
+    @apply flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200;
+  }
+
+  .nav-link-active {
+    @apply nav-link text-amber-400 border-l-2 border-amber-400;
+    background: linear-gradient(90deg, rgba(245, 166, 35, 0.15) 0%, transparent 100%);
+  }
+
+  .nav-link-inactive {
+    @apply nav-link text-slate-400 hover:text-slate-200 hover:bg-slate-800/50;
+  }
+
+  /* ==========================================
+     Tables
+     ========================================== */
+
+  .table-row {
+    @apply border-b border-slate-800/50 transition-colors duration-150 hover:bg-slate-800/30;
+  }
+
+  .table-header {
+    @apply text-xs font-semibold text-slate-400 uppercase tracking-wider px-4 py-3 text-left;
+  }
+
+  .table-cell {
+    @apply px-4 py-3 text-sm;
+  }
+
+  /* ==========================================
+     Charts
+     ========================================== */
+  
+  .recharts-cartesian-grid line {
+    stroke: rgba(148, 163, 184, 0.1);
+  }
+
+  .recharts-text {
+    fill: #94a3b8;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+  }
+
+  .recharts-tooltip-wrapper .recharts-default-tooltip {
+    @apply stellar-card rounded-xl !important;
+    border: none !important;
+  }
+
+  /* ==========================================
+     Scan Line Animation
+     ========================================== */
+  
+  .scan-line {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .scan-line::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(245, 166, 35, 0.1),
+      transparent
+    );
+    animation: scan 3s ease-in-out infinite;
+  }
+
+  @keyframes scan {
+    0% { left: -100%; }
+    50%, 100% { left: 100%; }
+  }
+
+  /* ==========================================
+     Pulse Beacon Animation
+     ========================================== */
+  
+  .pulse-beacon {
+    position: relative;
+  }
+
+  .pulse-beacon::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    animation: beacon-pulse 2s ease-out infinite;
+  }
+
+  @keyframes beacon-pulse {
+    0% {
+      box-shadow: 0 0 0 0 rgba(245, 166, 35, 0.4);
+    }
+    70% {
+      box-shadow: 0 0 0 12px rgba(245, 166, 35, 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(245, 166, 35, 0);
+    }
+  }
+}
+
+@layer utilities {
+  /* ==========================================
+     Text Gradients
+     ========================================== */
+  
+  .text-gradient-stellar {
+    @apply bg-gradient-to-r from-amber-400 to-amber-300 bg-clip-text text-transparent;
+  }
+
+  .text-gradient-cyan {
+    @apply bg-gradient-to-r from-cyan-400 to-cyan-300 bg-clip-text text-transparent;
+  }
+
+  .text-gradient-green {
+    @apply bg-gradient-to-r from-emerald-400 to-emerald-300 bg-clip-text text-transparent;
+  }
+
+  .text-gradient-red {
+    @apply bg-gradient-to-r from-red-400 to-red-300 bg-clip-text text-transparent;
+  }
+
+  .text-gradient-orange {
+    @apply bg-gradient-to-r from-orange-400 to-orange-300 bg-clip-text text-transparent;
+  }
+
+  /* ==========================================
+     Glow Shadows
+     ========================================== */
+  
+  .shadow-glow-stellar {
+    box-shadow: 0 0 15px rgba(245, 166, 35, 0.4);
+  }
+
+  .shadow-glow-cyan {
+    box-shadow: 0 0 15px rgba(0, 217, 192, 0.4);
+  }
+
+  .shadow-glow-green {
+    box-shadow: 0 0 15px rgba(0, 255, 136, 0.4);
+  }
+
+  .shadow-glow-red {
+    box-shadow: 0 0 15px rgba(255, 71, 87, 0.4);
+  }
+
+  .shadow-glow-orange {
+    box-shadow: 0 0 15px rgba(255, 140, 0, 0.4);
+  }
+
+  /* ==========================================
+     Animation Utilities
+     ========================================== */
+  
+  .animation-delay-100 { animation-delay: 100ms; }
+  .animation-delay-200 { animation-delay: 200ms; }
+  .animation-delay-300 { animation-delay: 300ms; }
+  .animation-delay-500 { animation-delay: 500ms; }
+
+  /* Stagger animation delays */
+  .stagger-1 { animation-delay: 0.05s; }
+  .stagger-2 { animation-delay: 0.1s; }
+  .stagger-3 { animation-delay: 0.15s; }
+  .stagger-4 { animation-delay: 0.2s; }
+  .stagger-5 { animation-delay: 0.25s; }
+  .stagger-6 { animation-delay: 0.3s; }
+
+  /* ==========================================
+     Line Clamps
+     ========================================== */
+  
+  .line-clamp-1 {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* ==========================================
+     UI/UX Enhancement Utilities
+     ========================================== */
+  
+  /* Trend Background Tints */
+  .trend-positive-bg {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, transparent 100%);
+  }
+
+  .trend-negative-bg {
+    background: linear-gradient(135deg, rgba(255, 71, 87, 0.08) 0%, transparent 100%);
+  }
+
+  .trend-neutral-bg {
+    background: linear-gradient(135deg, rgba(148, 163, 184, 0.05) 0%, transparent 100%);
+  }
+
+  /* Baseline Chart Lines */
+  .chart-baseline {
+    stroke: rgba(148, 163, 184, 0.3);
+    stroke-width: 1px;
+    stroke-dasharray: 4 4;
+  }
+
+  .chart-baseline-label {
+    font-size: 10px;
+    fill: rgba(148, 163, 184, 0.6);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Info Icon Affordance */
+  .info-icon {
+    @apply w-4 h-4 text-slate-500 hover:text-amber-400 transition-colors cursor-help;
+  }
+
+  /* Kebab Menu */
+  .kebab-menu {
+    @apply w-5 h-5 text-slate-500 hover:text-slate-300 transition-colors cursor-pointer;
+  }
+
+  /* Widget Grid Standardization */
+  .widget-1x {
+    min-height: 200px;
+  }
+
+  .widget-2x {
+    min-height: 400px;
+  }
+
+  .widget-3x {
+    min-height: 600px;
+  }
+
+  /* Compact Table Rows */
+  .table-row-compact {
+    @apply py-2;
+  }
+
+  .table-row-compact .table-cell {
+    @apply py-2;
+  }
+
+  /* Filter Scope Indicator */
+  .filter-scope-label {
+    @apply text-[10px] text-slate-600 italic;
+  }
+}
+
+/* ==========================================
+   Custom Animations
+   ========================================== */
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+  }
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.4s ease-out forwards;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out forwards;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.25s ease-out forwards;
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgb(var(--color-nebula)) 0%,
+    rgb(var(--color-cosmic)) 50%,
+    rgb(var(--color-nebula)) 100%
+  );
+  background-size: 400px 100%;
+  animation: shimmer 1.5s infinite linear;
+}

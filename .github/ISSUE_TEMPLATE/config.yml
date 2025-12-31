@@ -1,0 +1,9 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://github.com/OWNER/AnomalyDetection#readme
+    about: Check the README for setup and usage instructions
+  - name: Security Issues
+    url: https://github.com/OWNER/AnomalyDetection/security/advisories/new
+    about: Report security vulnerabilities privately
+

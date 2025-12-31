@@ -1,0 +1,14 @@
+start_date: "2025-01-01"
+end_date: "2025-01-30"
+row_limit: 100000000
+device_ids: null
+
+detection:
+  window: 14
+  contamination: 0.05
+
+events:
+  max_gap_hours: 2
+  top_n_devices: 5
+  min_total_points: 10
+  min_anomalies: 2
