@@ -50,6 +50,35 @@ const statusConfig = {
   false_positive: { label: 'False Positive', color: 'text-slate-400', bg: 'bg-slate-700/30', icon: '✕' },
 };
 
+// ============================================================================
+// Data Size Formatting Utility
+// ============================================================================
+
+/**
+ * Formats a data size in MB to the most appropriate unit (MB, GB, or TB)
+ * @param megabytes - Value in megabytes
+ * @returns Object with formatted value and unit string
+ */
+function formatDataSize(megabytes: number | null | undefined): { value: string; unit: string } {
+  if (megabytes == null) {
+    return { value: '0', unit: 'MB' };
+  }
+
+  const MB_THRESHOLD = 1000;    // Show as GB if >= 1000 MB
+  const GB_THRESHOLD = 1000;    // Show as TB if >= 1000 GB
+
+  if (megabytes >= MB_THRESHOLD * GB_THRESHOLD) {
+    // Convert to TB (MB / 1,000,000)
+    return { value: (megabytes / 1_000_000).toFixed(2), unit: 'TB' };
+  } else if (megabytes >= MB_THRESHOLD) {
+    // Convert to GB (MB / 1,000)
+    return { value: (megabytes / 1_000).toFixed(2), unit: 'GB' };
+  } else {
+    // Keep as MB
+    return { value: megabytes.toFixed(1), unit: 'MB' };
+  }
+}
+
 const getSeverityKey = (score: number): keyof typeof severityConfig => {
   if (score <= -0.7) return 'critical';
   if (score <= -0.5) return 'high';
@@ -973,9 +1002,9 @@ function InvestigationDetail() {
                       </svg>
                     </div>
                     <p className="text-3xl font-bold font-mono text-emerald-400">
-                      {anomaly.download != null ? anomaly.download.toFixed(1) : '0'}
+                      {formatDataSize(anomaly.download).value}
                     </p>
-                    <p className="text-sm text-slate-500 mt-1">MB transferred</p>
+                    <p className="text-sm text-slate-500 mt-1">{formatDataSize(anomaly.download).unit} transferred</p>
                     {anomaly.download != null && anomaly.download > 100 && (
                       <div className="mt-2 px-2 py-1 rounded bg-emerald-500/10 text-xs text-emerald-400">
                         High data usage detected
@@ -992,9 +1021,9 @@ function InvestigationDetail() {
                       </svg>
                     </div>
                     <p className="text-3xl font-bold font-mono text-purple-400">
-                      {anomaly.upload != null ? anomaly.upload.toFixed(1) : '0'}
+                      {formatDataSize(anomaly.upload).value}
                     </p>
-                    <p className="text-sm text-slate-500 mt-1">MB transferred</p>
+                    <p className="text-sm text-slate-500 mt-1">{formatDataSize(anomaly.upload).unit} transferred</p>
                     {anomaly.upload != null && anomaly.upload > 50 && (
                       <div className="mt-2 px-2 py-1 rounded bg-purple-500/10 text-xs text-purple-400">
                         High upload activity
@@ -1008,7 +1037,7 @@ function InvestigationDetail() {
                   <div className="flex items-center justify-between text-xs text-slate-500 mb-2">
                     <span>Total Data Transfer</span>
                     <span className="font-mono text-slate-400">
-                      {((anomaly.download ?? 0) + (anomaly.upload ?? 0)).toFixed(1)} MB
+                      {formatDataSize((anomaly.download ?? 0) + (anomaly.upload ?? 0)).value} {formatDataSize((anomaly.download ?? 0) + (anomaly.upload ?? 0)).unit}
                     </span>
                   </div>
                   <div className="h-2 bg-slate-700/50 rounded-full overflow-hidden flex">
@@ -1215,8 +1244,8 @@ function InvestigationDetail() {
                       {[
                         { label: 'Battery Level Drop', value: anomaly.total_battery_level_drop?.toFixed(0), unit: '%', threshold: { warn: 15, crit: 30 } },
                         { label: 'Free Storage', value: anomaly.total_free_storage_kb ? (anomaly.total_free_storage_kb / 1024 / 1024).toFixed(2) : null, unit: 'GB', threshold: { warn: 5, crit: 2 }, inverse: true },
-                        { label: 'Data Download', value: anomaly.download?.toFixed(2), unit: 'MB', threshold: { warn: 100, crit: 500 } },
-                        { label: 'Data Upload', value: anomaly.upload?.toFixed(2), unit: 'MB', threshold: { warn: 50, crit: 200 } },
+                        { label: 'Data Download', value: formatDataSize(anomaly.download).value, unit: formatDataSize(anomaly.download).unit, threshold: { warn: 100, crit: 500 } },
+                        { label: 'Data Upload', value: formatDataSize(anomaly.upload).value, unit: formatDataSize(anomaly.upload).unit, threshold: { warn: 50, crit: 200 } },
                         { label: 'Offline Time', value: anomaly.offline_time?.toFixed(1), unit: 'min', threshold: { warn: 15, crit: 60 } },
                         { label: 'Disconnect Count', value: anomaly.disconnect_count?.toFixed(0), unit: '', threshold: { warn: 3, crit: 10 } },
                         { label: 'WiFi Signal Strength', value: anomaly.wifi_signal_strength?.toFixed(0), unit: 'dBm', threshold: { warn: -70, crit: -80 }, inverse: true },

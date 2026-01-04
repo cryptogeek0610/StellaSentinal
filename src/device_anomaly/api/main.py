@@ -5,12 +5,13 @@ import hmac
 import logging
 import os
 import uuid
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from device_anomaly.api.routes import anomalies, dashboard, devices, baselines, llm_settings, data_discovery, training, automation, streaming, setup, investigation, device_actions
+from device_anomaly.api.routes import anomalies, dashboard, devices, baselines, llm_settings, data_discovery, training, automation, streaming, setup, investigation, device_actions, insights
 from device_anomaly.api.request_context import clear_request_context, set_request_context
 from device_anomaly.config.logging_config import setup_logging
 from device_anomaly.observability.otel import setup_tracing
@@ -19,10 +20,32 @@ logger = logging.getLogger(__name__)
 
 setup_logging(force=True)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown events."""
+    # Startup
+    if os.getenv("ENABLE_STREAMING", "false").lower() == "true":
+        try:
+            await streaming.initialize_streaming()
+            logger.info("Streaming system initialized")
+        except Exception as e:
+            logger.warning("Streaming system initialization failed: %s", e)
+
+    yield
+
+    # Shutdown
+    try:
+        await streaming.shutdown_streaming()
+    except Exception as e:
+        logger.warning("Streaming system shutdown failed: %s", e)
+
+
 app = FastAPI(
     title="Stella Sentinel API",
     description="API for enterprise device anomaly detection and investigation",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 # Environment-based CORS configuration
@@ -189,6 +212,7 @@ app.include_router(streaming.router, prefix="/api")
 app.include_router(setup.router, prefix="/api")
 app.include_router(investigation.router, prefix="/api")
 app.include_router(device_actions.router, prefix="/api")
+app.include_router(insights.router, prefix="/api")
 
 # Versioned API prefix (v1)
 app.include_router(anomalies.router, prefix="/api/v1")
@@ -203,28 +227,7 @@ app.include_router(streaming.router, prefix="/api/v1")
 app.include_router(setup.router, prefix="/api/v1")
 app.include_router(investigation.router, prefix="/api/v1")
 app.include_router(device_actions.router, prefix="/api/v1")
-
-
-# Streaming lifecycle events
-@app.on_event("startup")
-async def startup_streaming():
-    """Initialize streaming system on startup."""
-    import os
-    if os.getenv("ENABLE_STREAMING", "false").lower() == "true":
-        try:
-            await streaming.initialize_streaming()
-            logger.info("Streaming system initialized")
-        except Exception as e:
-            logger.warning("Streaming system initialization failed: %s", e)
-
-
-@app.on_event("shutdown")
-async def shutdown_streaming():
-    """Shutdown streaming system on shutdown."""
-    try:
-        await streaming.shutdown_streaming()
-    except Exception as e:
-        logger.warning("Streaming system shutdown failed: %s", e)
+app.include_router(insights.router, prefix="/api/v1")
 
 
 @app.get("/")

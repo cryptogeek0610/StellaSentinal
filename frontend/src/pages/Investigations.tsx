@@ -368,6 +368,18 @@ function Investigations() {
                 const isExpanded = expandedDevices.has(group.device_id);
                 const hasMultiple = group.anomalies.length > 1;
 
+                // For single anomaly devices, make the whole row a Link
+                const DeviceRowWrapper = hasMultiple ? 'div' : Link;
+                const wrapperProps = hasMultiple
+                  ? {
+                      onClick: () => toggleDeviceExpanded(group.device_id),
+                      className: "flex items-center gap-6 p-5 transition-colors cursor-pointer hover:bg-slate-800/30 group"
+                    }
+                  : {
+                      to: `/investigations/${group.anomalies[0].id}`,
+                      className: "flex items-center gap-6 p-5 transition-colors cursor-pointer hover:bg-slate-800/30 group"
+                    };
+
                 return (
                   <motion.div
                     key={group.device_id}
@@ -377,17 +389,14 @@ function Investigations() {
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ delay: groupIndex * 0.02 }}
                   >
-                    {/* Device Header */}
-                    <div
-                      className={`flex items-center gap-6 p-5 transition-colors ${hasMultiple ? 'cursor-pointer hover:bg-slate-800/30' : ''}`}
-                      onClick={() => hasMultiple && toggleDeviceExpanded(group.device_id)}
-                    >
+                    {/* Device Header - clickable for all devices */}
+                    <DeviceRowWrapper {...wrapperProps as any}>
                       {/* Severity Bar */}
                       <div className={`w-1.5 h-16 rounded-full ${severity.barColor}`} />
 
-                      {/* Expand/Collapse Icon */}
-                      {hasMultiple ? (
-                        <div className="w-6 flex-shrink-0">
+                      {/* Expand/Collapse Icon or View Icon */}
+                      <div className="w-6 flex-shrink-0">
+                        {hasMultiple ? (
                           <svg
                             className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
                             fill="none"
@@ -396,15 +405,23 @@ function Investigations() {
                           >
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                           </svg>
-                        </div>
-                      ) : (
-                        <div className="w-6 flex-shrink-0" />
-                      )}
+                        ) : (
+                          <svg
+                            className="w-5 h-5 text-slate-500 group-hover:text-amber-400 transition-colors"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        )}
+                      </div>
 
                       {/* Main Content */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-3 mb-2">
-                          <span className="text-lg font-semibold text-white">
+                          <span className="text-lg font-semibold text-white group-hover:text-amber-400 transition-colors">
                             Device #{group.device_id}
                           </span>
                           <span className={`px-2 py-0.5 text-[10px] font-bold rounded ${severity.badgeBg} ${severity.badgeText}`}>
@@ -439,20 +456,16 @@ function Investigations() {
                         </div>
                       </div>
 
-                      {/* Action for single anomaly */}
-                      {!hasMultiple && (
-                        <Link
-                          to={`/investigations/${group.anomalies[0].id}`}
-                          className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity hover:text-amber-400"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <span className="text-xs text-amber-400 font-medium">Investigate</span>
-                          <svg className="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </Link>
-                      )}
-                    </div>
+                      {/* Action indicator */}
+                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span className="text-xs text-amber-400 font-medium">
+                          {hasMultiple ? (isExpanded ? 'Collapse' : 'Expand') : 'Investigate'}
+                        </span>
+                        <svg className="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </div>
+                    </DeviceRowWrapper>
 
                     {/* Expanded Anomalies List */}
                     <AnimatePresence>

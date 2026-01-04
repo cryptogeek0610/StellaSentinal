@@ -18,7 +18,7 @@ import {
 export type UserRole = 'viewer' | 'analyst' | 'admin';
 
 const STORAGE_KEY = 'userRole';
-const DEFAULT_ROLE: UserRole = 'viewer';
+const DEFAULT_ROLE: UserRole = 'admin';
 
 interface UserRoleContextValue {
   userRole: UserRole;

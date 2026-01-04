@@ -814,6 +814,335 @@ class FeatureConfig:
     }
 
     # =========================================================================
+    # CEO REQUIREMENTS: SHIFT-AWARE FEATURES (Carl's Requirements)
+    # =========================================================================
+
+    shift_aware_features: ClassVar[Dict[str, Dict]] = {
+        # Battery shift features
+        "BatteryAtShiftStart": {
+            "formula": "BatteryLevel at shift start time",
+            "dependencies": ["BatteryLevel", "ShiftStartTime"],
+            "domain": "battery",
+        },
+        "BatteryAtShiftEnd": {
+            "formula": "Projected BatteryLevel at shift end",
+            "dependencies": ["BatteryLevel", "BatteryDrainPerHour", "ShiftDurationHours"],
+            "domain": "battery",
+        },
+        "ShiftCompletionProbability": {
+            "formula": "Probability device lasts full shift",
+            "dependencies": ["BatteryLevel", "BatteryDrainPerHour", "ShiftDurationHours"],
+            "domain": "battery",
+        },
+        "HoursUntilBatteryDead": {
+            "formula": "BatteryLevel / BatteryDrainPerHour",
+            "dependencies": ["BatteryLevel", "BatteryDrainPerHour"],
+            "domain": "battery",
+        },
+        "WasFullyChargedMorning": {
+            "formula": "1 if BatteryLevel >= 90 at 6AM-8AM, else 0",
+            "dependencies": ["BatteryLevel", "Timestamp"],
+            "domain": "battery",
+        },
+        "ShiftDrainTotal": {
+            "formula": "Battery drain during shift hours",
+            "dependencies": ["BatteryLevel", "ShiftStartTime", "ShiftEndTime"],
+            "domain": "battery",
+        },
+
+        # Network pattern features (Carl: AP hopping, carrier patterns)
+        "ApChangeCount": {
+            "formula": "Number of unique APs connected in period",
+            "dependencies": ["UniqueAPsConnected"],
+            "domain": "rf",
+        },
+        "ApChangeRate": {
+            "formula": "AP changes per hour of WiFi time",
+            "dependencies": ["UniqueAPsConnected", "TimeOnWifi"],
+            "domain": "rf",
+        },
+        "ApStickinessScore": {
+            "formula": "1 - (ApChangeRate normalized), higher = more sticky",
+            "dependencies": ["ApChangeRate"],
+            "domain": "rf",
+        },
+        "CellTowerChangeCount": {
+            "formula": "Number of cell tower changes",
+            "dependencies": ["UniqueCellIds"],
+            "domain": "rf",
+        },
+        "CellTowerChangeRate": {
+            "formula": "Tower changes per hour of cellular time",
+            "dependencies": ["UniqueCellIds", "TimeOn4G", "TimeOn5G"],
+            "domain": "rf",
+        },
+        "DisconnectPredictability": {
+            "formula": "Variance in disconnect timing (lower = more predictable)",
+            "dependencies": ["DisconnectCount", "Timestamp"],
+            "domain": "rf",
+        },
+        "NetworkTypeDiversity": {
+            "formula": "Count of different network types used",
+            "dependencies": ["NetworkTypeCount"],
+            "domain": "rf",
+        },
+        "TechFallbackRate": {
+            "formula": "(TimeOn3G + TimeOn2G) / (TimeOn5G + TimeOn4G + TimeOn3G + TimeOn2G + 1)",
+            "dependencies": ["TimeOn5G", "TimeOn4G", "TimeOn3G", "TimeOn2G"],
+            "domain": "rf",
+        },
+
+        # App power features (Carl: Apps consuming too much power)
+        "AppDrainPerForegroundHour": {
+            "formula": "TotalBatteryAppDrain / (AppForegroundTime / 3600 + 1)",
+            "dependencies": ["TotalBatteryAppDrain", "AppForegroundTime"],
+            "domain": "battery",
+        },
+        "BackgroundDrainRatio": {
+            "formula": "BackgroundAppBatteryDrain / (TotalBatteryAppDrain + 1)",
+            "dependencies": ["BackgroundAppBatteryDrain", "TotalBatteryAppDrain"],
+            "domain": "battery",
+        },
+        "TopAppDrainContribution": {
+            "formula": "TopAppBatteryDrain / (TotalBatteryAppDrain + 1)",
+            "dependencies": ["TopAppBatteryDrain", "TotalBatteryAppDrain"],
+            "domain": "battery",
+        },
+        "CrashCountNormalized": {
+            "formula": "CrashCount / days_in_period",
+            "dependencies": ["CrashCount"],
+            "domain": "usage",
+        },
+        "ANRCountNormalized": {
+            "formula": "ANRCount / days_in_period",
+            "dependencies": ["ANRCount"],
+            "domain": "usage",
+        },
+
+        # Device abuse features (Carl: Excessive drops/reboots)
+        "DropCountNormalized": {
+            "formula": "TotalDropCnt / days_in_period",
+            "dependencies": ["TotalDropCnt"],
+            "domain": "rf",
+        },
+        "RebootCountNormalized": {
+            "formula": "RebootCount / days_in_period",
+            "dependencies": ["RebootCount"],
+            "domain": "usage",
+        },
+        "UserDropPattern": {
+            "formula": "Consistency of drops by user across devices",
+            "dependencies": ["TotalDropCnt", "UserId"],
+            "domain": "rf",
+        },
+        "LocationDropPattern": {
+            "formula": "Consistency of drops at location across devices",
+            "dependencies": ["TotalDropCnt", "LocationId"],
+            "domain": "rf",
+        },
+        "AbuseScore": {
+            "formula": "Composite of drops + reboots + crashes",
+            "dependencies": ["TotalDropCnt", "RebootCount", "CrashCount"],
+            "domain": "composite",
+        },
+
+        # Location comparison features (Carl: Warehouse 1 vs Warehouse 2)
+        "LocationAnomalyRate": {
+            "formula": "Anomalies at location / total devices at location",
+            "dependencies": ["AnomalyCount", "DeviceCount"],
+            "domain": "location",
+        },
+        "VsLocationBaseline": {
+            "formula": "Current metric / location baseline",
+            "dependencies": ["CurrentValue", "BaselineValue"],
+            "domain": "location",
+        },
+        "LocationRank": {
+            "formula": "Rank among all locations for key metrics",
+            "dependencies": ["MetricValue"],
+            "domain": "location",
+        },
+    }
+
+    # =========================================================================
+    # CEO REQUIREMENTS: HEURISTIC RULES (Shift-Aware)
+    # =========================================================================
+
+    heuristic_rules: ClassVar[List[Dict]] = [
+        # Battery shift failures (Carl: "Batteries not lasting a shift")
+        {
+            "name": "battery_shift_failure_risk",
+            "column": "BatteryDrainPerHour",
+            "threshold": 12.5,
+            "op": ">=",
+            "severity": 0.8,
+            "description": "Battery drain rate too high to complete 8-hour shift",
+        },
+        {
+            "name": "low_battery_at_shift_start",
+            "column": "BatteryLevel",
+            "threshold": 80,
+            "op": "<",
+            "severity": 0.6,
+            "description": "Battery not fully charged at shift start",
+        },
+        {
+            "name": "critical_battery_during_shift",
+            "column": "BatteryLevel",
+            "threshold": 20,
+            "op": "<",
+            "severity": 0.9,
+            "description": "Critical battery level during work hours",
+        },
+
+        # Charging patterns (Carl: "Batteries not fully charged in the morning")
+        {
+            "name": "morning_charge_incomplete",
+            "column": "WasFullyChargedMorning",
+            "threshold": 1,
+            "op": "<",
+            "severity": 0.5,
+            "description": "Device not fully charged at morning shift start",
+        },
+        {
+            "name": "poor_charging_patterns",
+            "column": "ChargePatternBadCount",
+            "threshold": 3,
+            "op": ">=",
+            "severity": 0.5,
+            "description": "Frequent poor charging patterns",
+        },
+
+        # AP hopping (Carl: "AP hopping/stickiness")
+        {
+            "name": "excessive_ap_roaming",
+            "column": "UniqueAPsConnected",
+            "threshold": 10,
+            "op": ">=",
+            "severity": 0.6,
+            "description": "Excessive WiFi AP switching",
+        },
+        {
+            "name": "wifi_stickiness_weak_signal",
+            "column": "WifiSignalStrength",
+            "threshold": -75,
+            "op": "<",
+            "severity": 0.5,
+            "description": "Device stuck on weak WiFi AP",
+        },
+
+        # Tower hopping (Carl: "Tower hopping/stickiness")
+        {
+            "name": "excessive_tower_hopping",
+            "column": "UniqueCellIds",
+            "threshold": 5,
+            "op": ">=",
+            "severity": 0.5,
+            "description": "Excessive cell tower switching",
+        },
+
+        # Disconnects (Carl: "Server disconnection patterns")
+        {
+            "name": "high_disconnect_rate",
+            "column": "WifiDisconnectCount",
+            "threshold": 10,
+            "op": ">=",
+            "severity": 0.7,
+            "description": "High WiFi disconnection rate",
+        },
+        {
+            "name": "excessive_offline_time",
+            "column": "TimeOnNoNetwork",
+            "threshold": 120,
+            "op": ">=",
+            "severity": 0.6,
+            "description": "Excessive time without network connectivity",
+        },
+
+        # Drops (Carl: "Devices with excessive drops")
+        {
+            "name": "excessive_drops",
+            "column": "TotalDropCnt",
+            "threshold": 5,
+            "op": ">=",
+            "severity": 0.7,
+            "description": "Excessive physical device drops",
+        },
+        {
+            "name": "high_drop_rate",
+            "column": "DropRate",
+            "threshold": 0.1,
+            "op": ">=",
+            "severity": 0.6,
+            "description": "High drop rate relative to usage",
+        },
+
+        # Reboots (Carl: "Devices with excessive reboots")
+        {
+            "name": "excessive_reboots",
+            "column": "RebootCount",
+            "threshold": 3,
+            "op": ">=",
+            "severity": 0.7,
+            "description": "Excessive device reboots",
+        },
+
+        # App crashes (Carl: "Crashes")
+        {
+            "name": "high_crash_rate",
+            "column": "CrashCount",
+            "threshold": 5,
+            "op": ">=",
+            "severity": 0.7,
+            "description": "High application crash rate",
+        },
+        {
+            "name": "anr_issues",
+            "column": "ANRCount",
+            "threshold": 3,
+            "op": ">=",
+            "severity": 0.6,
+            "description": "Frequent App Not Responding events",
+        },
+
+        # App power drain (Carl: "Apps consuming too much power")
+        {
+            "name": "high_app_battery_drain",
+            "column": "TotalBatteryAppDrain",
+            "threshold": 50,
+            "op": ">=",
+            "severity": 0.6,
+            "description": "Apps consuming excessive battery",
+        },
+        {
+            "name": "single_app_drain_spike",
+            "column": "TopAppBatteryDrain",
+            "threshold": 30,
+            "op": ">=",
+            "severity": 0.7,
+            "description": "Single app consuming too much battery",
+        },
+
+        # Cohort issues (Carl: "Performance by manufacturer/model/OS")
+        {
+            "name": "storage_pressure",
+            "column": "StorageUtilization",
+            "threshold": 0.9,
+            "op": ">=",
+            "severity": 0.6,
+            "description": "Storage almost full",
+        },
+        {
+            "name": "memory_pressure",
+            "column": "RAMPressure",
+            "threshold": 0.85,
+            "op": ">=",
+            "severity": 0.6,
+            "description": "High memory pressure",
+        },
+    ]
+
+    # =========================================================================
     # HELPER METHODS
     # =========================================================================
 
@@ -869,3 +1198,27 @@ class FeatureConfig:
     def get_features_for_domain(cls, domain: str) -> List[str]:
         """Get all features belonging to a specific domain."""
         return [f for f, d in cls.feature_domains.items() if d == domain]
+
+    @classmethod
+    def get_shift_aware_features(cls) -> List[str]:
+        """Get all shift-aware feature names."""
+        return list(cls.shift_aware_features.keys())
+
+    @classmethod
+    def get_heuristic_rules(cls) -> List[Dict]:
+        """Get all heuristic rule configurations."""
+        return cls.heuristic_rules
+
+    @classmethod
+    def get_heuristic_rules_for_domain(cls, domain: str) -> List[Dict]:
+        """Get heuristic rules for a specific domain."""
+        domain_columns = cls.get_features_for_domain(domain)
+        return [r for r in cls.heuristic_rules if r.get("column") in domain_columns]
+
+    @classmethod
+    def get_all_insight_features(cls) -> List[str]:
+        """Get all features relevant for CEO insight requirements."""
+        features = []
+        features.extend(cls.get_derived_feature_names())
+        features.extend(cls.get_shift_aware_features())
+        return list(set(features))

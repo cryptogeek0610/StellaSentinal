@@ -87,6 +87,16 @@ import {
   getMockTrainingHistory,
   getMockStartTrainingResponse,
   getMockTrainingMetrics,
+  // Insights mock data
+  getMockDailyDigest,
+  getMockLocationInsights,
+  getMockShiftReadiness,
+  getMockTrendingInsights,
+  getMockNetworkAnalysis,
+  getMockDeviceAbuseAnalysis,
+  getMockAppAnalysis,
+  getMockInsightsByCategory,
+  getMockLocationComparison,
 } from './mockData';
 
 // Environment-based API URL configuration
@@ -1211,6 +1221,16 @@ export const api = {
   // =========================================================================
 
   lockDevice: (deviceId: number, reason?: string): Promise<DeviceActionResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve({
+        success: true,
+        action: 'lock',
+        device_id: deviceId,
+        message: `Device ${deviceId} locked successfully (mock mode)`,
+        action_id: `mock-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+      });
+    }
     return fetchAPI<DeviceActionResponse>(`/devices/${deviceId}/actions/lock`, {
       method: 'POST',
       body: JSON.stringify({ reason }),
@@ -1218,6 +1238,16 @@ export const api = {
   },
 
   restartDevice: (deviceId: number, reason?: string): Promise<DeviceActionResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve({
+        success: true,
+        action: 'restart',
+        device_id: deviceId,
+        message: `Device ${deviceId} restart initiated (mock mode)`,
+        action_id: `mock-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+      });
+    }
     return fetchAPI<DeviceActionResponse>(`/devices/${deviceId}/actions/restart`, {
       method: 'POST',
       body: JSON.stringify({ reason }),
@@ -1230,6 +1260,16 @@ export const api = {
     confirm: boolean = false,
     reason?: string
   ): Promise<DeviceActionResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve({
+        success: true,
+        action: factoryReset ? 'factory_reset' : 'wipe',
+        device_id: deviceId,
+        message: `Device ${deviceId} wipe ${confirm ? 'confirmed' : 'initiated'} (mock mode)`,
+        action_id: `mock-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+      });
+    }
     return fetchAPI<DeviceActionResponse>(`/devices/${deviceId}/actions/wipe`, {
       method: 'POST',
       body: JSON.stringify({ factory_reset: factoryReset, confirm, reason }),
@@ -1241,6 +1281,16 @@ export const api = {
     message: string,
     title?: string
   ): Promise<DeviceActionResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve({
+        success: true,
+        action: 'message',
+        device_id: deviceId,
+        message: `Message sent to device ${deviceId} (mock mode)`,
+        action_id: `mock-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+      });
+    }
     return fetchAPI<DeviceActionResponse>(`/devices/${deviceId}/actions/message`, {
       method: 'POST',
       body: JSON.stringify({ message, title: title || 'Message from Admin' }),
@@ -1248,12 +1298,33 @@ export const api = {
   },
 
   locateDevice: (deviceId: number): Promise<DeviceLocationResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve({
+        success: true,
+        device_id: deviceId,
+        latitude: 52.3676 + (Math.random() - 0.5) * 0.1,
+        longitude: 4.9041 + (Math.random() - 0.5) * 0.1,
+        accuracy: Math.floor(Math.random() * 50) + 10,
+        timestamp: new Date().toISOString(),
+        message: `Device ${deviceId} located (mock mode)`,
+      });
+    }
     return fetchAPI<DeviceLocationResponse>(`/devices/${deviceId}/actions/locate`, {
       method: 'POST',
     });
   },
 
   syncDevice: (deviceId: number, reason?: string): Promise<DeviceActionResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve({
+        success: true,
+        action: 'sync',
+        device_id: deviceId,
+        message: `Device ${deviceId} sync initiated (mock mode)`,
+        action_id: `mock-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+      });
+    }
     return fetchAPI<DeviceActionResponse>(`/devices/${deviceId}/actions/sync`, {
       method: 'POST',
       body: JSON.stringify({ reason }),
@@ -1264,6 +1335,16 @@ export const api = {
     deviceId: number,
     packageName?: string
   ): Promise<DeviceActionResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve({
+        success: true,
+        action: 'clear_cache',
+        device_id: deviceId,
+        message: `Cache cleared for device ${deviceId}${packageName ? ` (${packageName})` : ''} (mock mode)`,
+        action_id: `mock-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+      });
+    }
     return fetchAPI<DeviceActionResponse>(`/devices/${deviceId}/actions/clear-cache`, {
       method: 'POST',
       body: packageName ? JSON.stringify({ package_name: packageName }) : undefined,
@@ -1274,8 +1355,149 @@ export const api = {
     deviceId: number,
     limit?: number
   ): Promise<DeviceActionHistoryResponse> => {
+    if (getMockModeFromStorage()) {
+      const actions = [
+        { id: 1, action_type: 'sync', initiated_by: 'admin@company.com', success: true, timestamp: new Date(Date.now() - 3600000).toISOString() },
+        { id: 2, action_type: 'lock', initiated_by: 'system', reason: 'Security policy', success: true, timestamp: new Date(Date.now() - 7200000).toISOString() },
+        { id: 3, action_type: 'message', initiated_by: 'admin@company.com', success: true, timestamp: new Date(Date.now() - 86400000).toISOString() },
+      ].slice(0, limit || 10);
+      return Promise.resolve({
+        device_id: deviceId,
+        total: actions.length,
+        actions,
+      });
+    }
     const params = limit ? `?limit=${limit}` : '';
     return fetchAPI<DeviceActionHistoryResponse>(`/devices/${deviceId}/actions/history${params}`);
+  },
+
+  // ============================================================================
+  // INSIGHTS API
+  // Customer-facing insights aligned with Carl's vision:
+  // "XSight has the data. XSight needs the story."
+  // ============================================================================
+
+  getDailyDigest: (params?: {
+    digest_date?: string;
+    period_days?: number;
+  }): Promise<DailyDigestResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockDailyDigest());
+    }
+    const queryParams = new URLSearchParams();
+    if (params?.digest_date) queryParams.append('digest_date', params.digest_date);
+    if (params?.period_days) queryParams.append('period_days', params.period_days.toString());
+    const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return fetchAPI<DailyDigestResponse>(`/insights/daily-digest${query}`);
+  },
+
+  getLocationInsights: (
+    locationId: string,
+    periodDays?: number
+  ): Promise<LocationInsightResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockLocationInsights(locationId));
+    }
+    const params = periodDays ? `?period_days=${periodDays}` : '';
+    return fetchAPI<LocationInsightResponse>(`/insights/location/${locationId}${params}`);
+  },
+
+  getShiftReadiness: (
+    locationId: string,
+    shiftDate?: string,
+    shiftName?: string
+  ): Promise<ShiftReadinessResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockShiftReadiness(locationId));
+    }
+    const queryParams = new URLSearchParams();
+    if (shiftDate) queryParams.append('shift_date', shiftDate);
+    if (shiftName) queryParams.append('shift_name', shiftName);
+    const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return fetchAPI<ShiftReadinessResponse>(`/insights/location/${locationId}/shift-readiness${query}`);
+  },
+
+  getTrendingInsights: (
+    lookbackDays?: number,
+    limit?: number
+  ): Promise<CustomerInsightResponse[]> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockTrendingInsights());
+    }
+    const queryParams = new URLSearchParams();
+    if (lookbackDays) queryParams.append('lookback_days', lookbackDays.toString());
+    if (limit) queryParams.append('limit', limit.toString());
+    const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return fetchAPI<CustomerInsightResponse[]>(`/insights/trending${query}`);
+  },
+
+  getNetworkAnalysis: (
+    locationId?: string,
+    periodDays?: number
+  ): Promise<NetworkAnalysisResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockNetworkAnalysis());
+    }
+    const queryParams = new URLSearchParams();
+    if (locationId) queryParams.append('location_id', locationId);
+    if (periodDays) queryParams.append('period_days', periodDays.toString());
+    const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return fetchAPI<NetworkAnalysisResponse>(`/insights/network/analysis${query}`);
+  },
+
+  getDeviceAbuseAnalysis: (periodDays?: number): Promise<DeviceAbuseResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockDeviceAbuseAnalysis());
+    }
+    const params = periodDays ? `?period_days=${periodDays}` : '';
+    return fetchAPI<DeviceAbuseResponse>(`/insights/device-abuse${params}`);
+  },
+
+  getAppAnalysis: (periodDays?: number): Promise<AppAnalysisResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockAppAnalysis());
+    }
+    const params = periodDays ? `?period_days=${periodDays}` : '';
+    return fetchAPI<AppAnalysisResponse>(`/insights/apps/power-hungry${params}`);
+  },
+
+  getInsightsByCategory: (
+    category: string,
+    periodDays?: number,
+    severity?: string,
+    limit?: number
+  ): Promise<CustomerInsightResponse[]> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockInsightsByCategory(category));
+    }
+    const queryParams = new URLSearchParams();
+    if (periodDays) queryParams.append('period_days', periodDays.toString());
+    if (severity) queryParams.append('severity', severity);
+    if (limit) queryParams.append('limit', limit.toString());
+    const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return fetchAPI<CustomerInsightResponse[]>(`/insights/by-category/${category}${query}`);
+  },
+
+  compareLocations: (
+    locationAId: string,
+    locationBId: string,
+    metrics?: string[],
+    periodDays?: number
+  ): Promise<LocationCompareResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockLocationComparison(locationAId, locationBId));
+    }
+    const queryParams = new URLSearchParams();
+    if (periodDays) queryParams.append('period_days', periodDays.toString());
+    const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return fetchAPI<LocationCompareResponse>(`/insights/compare/locations${query}`, {
+      method: 'POST',
+      body: JSON.stringify({
+        location_a_id: locationAId,
+        location_b_id: locationBId,
+        metrics,
+      }),
+    });
   },
 };
 
@@ -1311,4 +1533,188 @@ export interface DeviceActionHistoryResponse {
     error_message?: string;
     timestamp?: string;
   }>;
+}
+
+// ============================================================================
+// INSIGHTS API Response Types
+// ============================================================================
+
+export interface CustomerInsightResponse {
+  insight_id: string;
+  category: string;
+  severity: string;
+  headline: string;
+  impact_statement: string;
+  comparison_context: string;
+  recommended_actions: string[];
+  entity_type: string;
+  entity_id: string;
+  entity_name: string;
+  affected_device_count: number;
+  primary_metric: string;
+  primary_value: number;
+  trend_direction: string;
+  trend_change_percent: number | null;
+  detected_at: string;
+  confidence_score: number;
+}
+
+export interface DailyDigestResponse {
+  tenant_id: string;
+  digest_date: string;
+  generated_at: string;
+  total_insights: number;
+  critical_count: number;
+  high_count: number;
+  medium_count: number;
+  top_insights: CustomerInsightResponse[];
+  executive_summary: string;
+  trending_issues: CustomerInsightResponse[];
+  new_issues: CustomerInsightResponse[];
+}
+
+export interface LocationInsightResponse {
+  location_id: string;
+  location_name: string;
+  report_date: string;
+  total_devices: number;
+  devices_with_issues: number;
+  issue_rate: number;
+  shift_readiness: ShiftReadinessResponse | null;
+  insights: CustomerInsightResponse[];
+  top_issues: Array<{ category: string; count: number }>;
+  rank_among_locations: number;
+  better_than_percent: number;
+  recommendations: string[];
+}
+
+export interface ShiftReadinessResponse {
+  location_id: string;
+  location_name: string;
+  shift_name: string;
+  shift_date: string;
+  readiness_percentage: number;
+  total_devices: number;
+  devices_ready: number;
+  devices_at_risk: number;
+  devices_critical: number;
+  avg_battery_at_start: number;
+  avg_drain_rate: number;
+  devices_not_fully_charged: number;
+  vs_last_week_readiness: number | null;
+  device_details: Array<{
+    device_id: number;
+    device_name: string;
+    current_battery: number;
+    drain_rate_per_hour: number;
+    projected_end_battery: number;
+    will_complete_shift: boolean;
+    estimated_dead_time: string | null;
+    was_fully_charged: boolean;
+    readiness_score: number;
+    recommendations: string[];
+  }>;
+  recommendations: string[];
+}
+
+export interface NetworkAnalysisResponse {
+  tenant_id: string;
+  analysis_period_days: number;
+  wifi_summary: {
+    total_devices: number;
+    devices_with_roaming_issues: number;
+    devices_with_stickiness: number;
+    avg_aps_per_device: number;
+    potential_dead_zones: number;
+  };
+  cellular_summary: {
+    total_devices: number;
+    devices_with_tower_hopping: number;
+    devices_with_tech_fallback: number;
+    best_carrier: string;
+    worst_carrier: string;
+    network_type_distribution: Record<string, number>;
+  } | null;
+  disconnect_summary: {
+    total_disconnects: number;
+    avg_disconnects_per_device: number;
+    total_offline_hours: number;
+    has_predictable_pattern: boolean;
+    pattern_description: string;
+  };
+  hidden_devices_count: number;
+  recommendations: string[];
+}
+
+export interface DeviceAbuseResponse {
+  tenant_id: string;
+  analysis_period_days: number;
+  total_devices: number;
+  total_drops: number;
+  total_reboots: number;
+  devices_with_excessive_drops: number;
+  devices_with_excessive_reboots: number;
+  worst_locations: Array<{
+    location_id: string;
+    drops: number;
+    rate_per_device: number;
+  }>;
+  worst_cohorts: Array<{
+    cohort_id: string;
+    reboots: number;
+    rate_per_device: number;
+  }>;
+  problem_combinations: Array<{
+    cohort_id: string;
+    manufacturer: string;
+    model: string;
+    os_version: string;
+    device_count: number;
+    vs_fleet_multiplier: number;
+    primary_issue: string;
+    severity: string;
+  }>;
+  recommendations: string[];
+}
+
+export interface AppAnalysisResponse {
+  tenant_id: string;
+  analysis_period_days: number;
+  total_apps_analyzed: number;
+  apps_with_issues: number;
+  total_crashes: number;
+  total_anrs: number;
+  top_power_consumers: Array<{
+    package_name: string;
+    app_name: string;
+    battery_drain_percent: number;
+    drain_per_hour: number;
+    foreground_hours: number;
+    efficiency_score: number;
+  }>;
+  top_crashers: Array<{
+    package_name: string;
+    app_name: string;
+    crash_count: number;
+    anr_count: number;
+    devices_affected: number;
+    severity: string;
+  }>;
+  recommendations: string[];
+}
+
+export interface LocationCompareResponse {
+  location_a_id: string;
+  location_a_name: string;
+  location_b_id: string;
+  location_b_name: string;
+  device_count_a: number;
+  device_count_b: number;
+  metric_comparisons: Record<string, {
+    location_a_value: number;
+    location_b_value: number;
+    difference_percent: number;
+  }>;
+  overall_winner: string | null;
+  key_differences: string[];
 }

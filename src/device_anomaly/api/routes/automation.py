@@ -62,10 +62,23 @@ class SchedulerConfigResponse(BaseModel):
     alert_on_high_anomaly_rate: bool = True
     high_anomaly_rate_threshold: float = Field(0.10, ge=0.01, le=0.50)
 
+    # Insight generation settings
+    insights_enabled: bool = True
+    daily_digest_hour: int = Field(5, ge=0, le=23, description="Hour for daily digest (0-23)")
+    shift_readiness_enabled: bool = True
+    shift_readiness_lead_minutes: int = Field(60, ge=15, le=180, description="Minutes before shift to generate readiness report")
+    shift_schedules: List[str] = Field(default_factory=lambda: ["morning", "afternoon", "day"])
+    location_baseline_enabled: bool = True
+    location_baseline_day_of_week: int = Field(0, ge=0, le=6, description="Day of week for baseline computation (0=Mon)")
+    location_baseline_hour: int = Field(3, ge=0, le=23, description="Hour for baseline computation (0-23)")
+
     # Timestamps
     last_training_time: Optional[str] = None
     last_scoring_time: Optional[str] = None
     last_auto_retrain_time: Optional[str] = None
+    last_daily_digest_time: Optional[str] = None
+    last_shift_readiness_time: Optional[str] = None
+    last_location_baseline_time: Optional[str] = None
 
 
 class SchedulerConfigUpdate(BaseModel):
@@ -85,6 +98,15 @@ class SchedulerConfigUpdate(BaseModel):
     alerting_enabled: Optional[bool] = None
     alert_on_high_anomaly_rate: Optional[bool] = None
     high_anomaly_rate_threshold: Optional[float] = Field(None, ge=0.01, le=0.50)
+    # Insight generation settings
+    insights_enabled: Optional[bool] = None
+    daily_digest_hour: Optional[int] = Field(None, ge=0, le=23)
+    shift_readiness_enabled: Optional[bool] = None
+    shift_readiness_lead_minutes: Optional[int] = Field(None, ge=15, le=180)
+    shift_schedules: Optional[List[str]] = None
+    location_baseline_enabled: Optional[bool] = None
+    location_baseline_day_of_week: Optional[int] = Field(None, ge=0, le=6)
+    location_baseline_hour: Optional[int] = Field(None, ge=0, le=23)
 
 
 class SchedulerStatusResponse(BaseModel):
@@ -92,14 +114,18 @@ class SchedulerStatusResponse(BaseModel):
     is_running: bool = False
     training_status: str = "idle"
     scoring_status: str = "idle"
+    insights_status: str = "idle"
     last_training_result: Optional[Dict[str, Any]] = None
     last_scoring_result: Optional[Dict[str, Any]] = None
+    last_insight_result: Optional[Dict[str, Any]] = None
     next_training_time: Optional[str] = None
     next_scoring_time: Optional[str] = None
+    next_insight_time: Optional[str] = None
     total_anomalies_detected: int = 0
+    total_insights_generated: int = 0
     false_positive_rate: float = 0.0
     uptime_seconds: int = 0
-    errors: List[str] = []
+    errors: List[str] = Field(default_factory=list)
 
 
 class AlertResponse(BaseModel):
@@ -112,11 +138,13 @@ class AlertResponse(BaseModel):
 
 class ManualJobRequest(BaseModel):
     """Request to trigger a manual job."""
-    job_type: str = Field(..., description="Job type: 'training' or 'scoring'")
+    job_type: str = Field(..., description="Job type: 'training', 'scoring', 'daily_digest', 'shift_readiness', or 'location_baseline'")
     # Training-specific
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     validation_days: Optional[int] = 7
+    # Shift readiness-specific
+    shift_name: Optional[str] = Field(None, description="Shift name for shift_readiness job: 'morning', 'afternoon', 'night', or 'day'")
 
 
 class ManualJobResponse(BaseModel):
@@ -369,10 +397,59 @@ async def trigger_manual_job(request: ManualJobRequest):
                 message="Scoring job queued successfully",
             )
 
+        elif request.job_type == "daily_digest":
+            # Queue daily digest insight generation
+            job_data = {
+                "type": "daily_digest",
+                "triggered_by": "manual",
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+            client.rpush("scheduler:insights:queue", json.dumps(job_data))
+            return ManualJobResponse(
+                success=True,
+                job_id=f"digest_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}",
+                message="Daily digest job queued successfully",
+            )
+
+        elif request.job_type == "shift_readiness":
+            # Queue shift readiness analysis
+            shift_name = request.shift_name or "morning"
+            if shift_name not in ["morning", "afternoon", "night", "day"]:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid shift name: {shift_name}. Use 'morning', 'afternoon', 'night', or 'day'",
+                )
+            job_data = {
+                "type": "shift_readiness",
+                "shift_name": shift_name,
+                "triggered_by": "manual",
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+            client.rpush("scheduler:insights:queue", json.dumps(job_data))
+            return ManualJobResponse(
+                success=True,
+                job_id=f"shift_{shift_name}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}",
+                message=f"Shift readiness job for {shift_name} shift queued successfully",
+            )
+
+        elif request.job_type == "location_baseline":
+            # Queue location baseline computation
+            job_data = {
+                "type": "location_baseline",
+                "triggered_by": "manual",
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+            client.rpush("scheduler:insights:queue", json.dumps(job_data))
+            return ManualJobResponse(
+                success=True,
+                job_id=f"baseline_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}",
+                message="Location baseline job queued successfully",
+            )
+
         else:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid job type: {request.job_type}. Use 'training' or 'scoring'",
+                detail=f"Invalid job type: {request.job_type}. Use 'training', 'scoring', 'daily_digest', 'shift_readiness', or 'location_baseline'",
             )
 
     except HTTPException:
@@ -645,8 +722,14 @@ async def health_check():
         "training_enabled": config.get("training_enabled", True),
         "scoring_enabled": config.get("scoring_enabled", True),
         "auto_retrain_enabled": config.get("auto_retrain_enabled", True),
+        "insights_enabled": config.get("insights_enabled", True),
+        "shift_readiness_enabled": config.get("shift_readiness_enabled", True),
         "last_training": config.get("last_training_time"),
         "last_scoring": config.get("last_scoring_time"),
+        "last_daily_digest": config.get("last_daily_digest_time"),
+        "last_shift_readiness": config.get("last_shift_readiness_time"),
+        "last_location_baseline": config.get("last_location_baseline_time"),
+        "total_insights_generated": status.get("total_insights_generated", 0),
         "uptime_seconds": status.get("uptime_seconds", 0),
         "error_count": len(status.get("errors", [])),
     }

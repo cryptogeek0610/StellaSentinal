@@ -546,9 +546,32 @@
 
 @layer utilities {
   /* ==========================================
+     Scrollbar Utilities
+     ========================================== */
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(245, 166, 35, 0.2) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: rgba(245, 166, 35, 0.3);
+    border-radius: 2px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: rgba(245, 166, 35, 0.5);
+  }
+
+  /* ==========================================
      Text Gradients
      ========================================== */
-  
+
   .text-gradient-stellar {
     @apply bg-gradient-to-r from-amber-400 to-amber-300 bg-clip-text text-transparent;
   }

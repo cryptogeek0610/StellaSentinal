@@ -414,6 +414,236 @@ class RemediationOutcome(Base):
         return f"<RemediationOutcome(id={self.id}, anomaly_id={self.anomaly_id}, outcome={self.outcome})>"
 
 
+# ============================================================================
+# CEO Requirements: Location-Based Insights Tables
+# ============================================================================
+
+
+class LocationMappingType(str, Enum):
+    """How devices are mapped to locations."""
+
+    CUSTOM_ATTRIBUTE = "custom_attribute"  # Match device CustomAttributes[attribute_name] == value
+    LABEL = "label"  # Match LabelDevice entries
+    DEVICE_GROUP = "device_group"  # Match DeviceGroupId
+    GEO_FENCE = "geo_fence"  # Match lat/lon within radius
+
+
+class InsightSeverity(str, Enum):
+    """Severity level for customer-facing insights."""
+
+    CRITICAL = "critical"  # Immediate action required
+    WARNING = "warning"  # Should address soon
+    INFO = "info"  # FYI / monitoring
+
+
+class TrendDirection(str, Enum):
+    """Trend direction for metrics."""
+
+    IMPROVING = "improving"
+    STABLE = "stable"
+    WORSENING = "worsening"
+
+
+class LocationMetadata(Base):
+    """Location configuration for aggregation and shift schedules.
+
+    Enables Carl's requirement: "Relate any anomalies to location (warehouse 1 vs warehouse 2)"
+    """
+
+    __tablename__ = "location_metadata"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(String(50), nullable=False, index=True)
+    location_id = Column(String(100), nullable=False)  # e.g., "warehouse-1", "store-a101"
+    location_name = Column(String(255), nullable=False)
+    parent_region = Column(String(100), nullable=True)  # e.g., "Northeast", "Region-1"
+    timezone = Column(String(50), default="UTC")
+
+    # Mapping configuration - how to identify devices at this location
+    mapping_type = Column(String(50), nullable=False)  # LocationMappingType value
+    mapping_attribute = Column(String(100), nullable=True)  # e.g., "Store", "Warehouse"
+    mapping_value = Column(String(255), nullable=True)  # e.g., "A101", "WH-North"
+    device_group_id = Column(Integer, nullable=True)  # For device_group mapping
+    geo_fence_json = Column(Text, nullable=True)  # For geo_fence: {"lat": 0, "lon": 0, "radius_m": 100}
+
+    # Shift schedules (JSON array)
+    # Example: [{"name": "Morning", "start": "06:00", "end": "14:00"}, {"name": "Afternoon", ...}]
+    shift_schedules_json = Column(Text, nullable=True)
+
+    # Location baselines (computed periodically)
+    baseline_battery_drain_per_hour = Column(Float, nullable=True)
+    baseline_disconnect_rate = Column(Float, nullable=True)
+    baseline_drop_rate = Column(Float, nullable=True)
+    baseline_computed_at = Column(DateTime, nullable=True)
+
+    # Metadata
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        Index("idx_location_tenant_id", "tenant_id", "location_id", unique=True),
+        Index("idx_location_active", "tenant_id", "is_active"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<LocationMetadata(id={self.id}, location_id={self.location_id}, name={self.location_name})>"
+
+
+class AggregatedInsight(Base):
+    """Pre-computed insights aggregated by entity (location, user, cohort).
+
+    Stores customer-facing insights in plain language with business impact.
+    Enables Carl's requirement for insights that "make sense customers could understand".
+    """
+
+    __tablename__ = "aggregated_insights"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(String(50), nullable=False, index=True)
+
+    # Entity identification (what/who is this insight about)
+    entity_type = Column(String(50), nullable=False)  # "location", "user", "cohort", "device_model", "app"
+    entity_id = Column(String(100), nullable=False)
+    entity_name = Column(String(255), nullable=True)
+
+    # Insight classification (from InsightCategory enum)
+    insight_category = Column(String(100), nullable=False, index=True)
+    severity = Column(String(20), nullable=False)  # InsightSeverity value
+
+    # Insight content (customer-facing)
+    headline = Column(Text, nullable=False)  # e.g., "5 devices in Warehouse 1 won't last a full shift"
+    impact_statement = Column(Text, nullable=True)  # e.g., "Workers may experience 2 hours of downtime"
+    comparison_context = Column(Text, nullable=True)  # e.g., "30% worse than Warehouse 2"
+    recommended_actions_json = Column(Text, nullable=True)  # JSON array of action strings
+
+    # Full structured payload for detailed views
+    insight_data_json = Column(Text, nullable=False)
+
+    # Affected entities
+    affected_device_count = Column(Integer, default=0)
+    affected_devices_json = Column(Text, nullable=True)  # JSON array of device_ids
+
+    # Trend tracking
+    trend_direction = Column(String(20), nullable=True)  # TrendDirection value
+    previous_value = Column(Float, nullable=True)
+    current_value = Column(Float, nullable=True)
+    change_percent = Column(Float, nullable=True)
+
+    # Confidence and quality
+    confidence_score = Column(Float, nullable=True)  # 0.0 to 1.0
+    data_quality_score = Column(Float, nullable=True)  # 0.0 to 1.0
+
+    # Validity window
+    computed_at = Column(DateTime, nullable=False)
+    valid_until = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    # Acknowledgement tracking
+    acknowledged_at = Column(DateTime, nullable=True)
+    acknowledged_by = Column(String(100), nullable=True)
+
+    __table_args__ = (
+        Index("idx_insight_entity", "tenant_id", "entity_type", "entity_id"),
+        Index("idx_insight_category", "tenant_id", "insight_category", "is_active"),
+        Index("idx_insight_severity", "tenant_id", "severity", "is_active"),
+        Index("idx_insight_active", "tenant_id", "is_active", "computed_at"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<AggregatedInsight(id={self.id}, category={self.insight_category}, entity={self.entity_type}:{self.entity_id})>"
+
+
+class DeviceFeature(Base):
+    """Computed device features for insight generation and ML analysis.
+
+    Stores per-device feature snapshots used by insight analyzers
+    and the anomaly detection pipeline.
+    """
+
+    __tablename__ = "device_features"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(String(50), nullable=False, index=True)
+    device_id = Column(Integer, nullable=False, index=True)
+
+    # Feature data
+    feature_values_json = Column(Text, nullable=True)  # JSON of computed features
+    metadata_json = Column(Text, nullable=True)  # JSON of device metadata (location_id, device_name, etc.)
+
+    # Timestamps
+    computed_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        Index("idx_device_feature_tenant_device", "tenant_id", "device_id"),
+        Index("idx_device_feature_computed", "tenant_id", "computed_at"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<DeviceFeature(id={self.id}, device_id={self.device_id}, computed_at={self.computed_at})>"
+
+
+class ShiftPerformance(Base):
+    """Per-shift performance tracking for battery and productivity analysis.
+
+    Enables Carl's requirement: "Batteries that don't last a shift"
+    """
+
+    __tablename__ = "shift_performance"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(String(50), nullable=False, index=True)
+    device_id = Column(Integer, nullable=False, index=True)
+    location_id = Column(String(100), nullable=True, index=True)
+
+    # Shift identification
+    shift_date = Column(DateTime, nullable=False)
+    shift_name = Column(String(50), nullable=False)  # "Morning", "Afternoon", "Night"
+    shift_start = Column(DateTime, nullable=False)
+    shift_end = Column(DateTime, nullable=False)
+    shift_duration_hours = Column(Float, nullable=False)
+
+    # Battery metrics
+    battery_start = Column(Float, nullable=True)
+    battery_end = Column(Float, nullable=True)
+    battery_drain_total = Column(Float, nullable=True)
+    battery_drain_rate_per_hour = Column(Float, nullable=True)
+
+    # Shift completion prediction
+    will_complete_shift = Column(Boolean, nullable=True)  # Predicted at shift start
+    estimated_dead_time = Column(DateTime, nullable=True)  # If predicted to die
+    actual_completed_shift = Column(Boolean, nullable=True)  # Did it actually complete
+
+    # Charging metrics
+    was_fully_charged_at_start = Column(Boolean, nullable=True)
+    charge_events_count = Column(Integer, default=0)
+    total_charge_time_minutes = Column(Float, default=0)
+    charge_received_during_shift = Column(Float, nullable=True)  # Battery % gained
+
+    # Usage metrics
+    screen_on_time_minutes = Column(Float, nullable=True)
+    app_foreground_time_minutes = Column(Float, nullable=True)
+    total_drops = Column(Integer, default=0)
+    total_disconnects = Column(Integer, default=0)
+
+    # Comparison to baselines
+    drain_vs_location_baseline = Column(Float, nullable=True)  # % difference
+    drain_vs_device_baseline = Column(Float, nullable=True)  # % difference
+
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        Index("idx_shift_device_date", "device_id", "shift_date"),
+        Index("idx_shift_location_date", "location_id", "shift_date"),
+        Index("idx_shift_completion", "tenant_id", "will_complete_shift", "shift_date"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<ShiftPerformance(id={self.id}, device_id={self.device_id}, shift={self.shift_name}, date={self.shift_date})>"
+
+
 def create_tables(engine):
     """Create all tables in the database."""
     Base.metadata.create_all(engine)

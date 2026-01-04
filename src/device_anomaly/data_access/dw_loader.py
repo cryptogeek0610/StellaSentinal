@@ -196,6 +196,7 @@ battery_drain AS (
 
 -- =========================================================================
 -- RF / SIGNAL HEATMAP (cs_Heatmap)
+-- Carl's requirement: "AP hopping/stickiness" and "Tower hopping"
 -- =========================================================================
 heatmap AS (
     SELECT
@@ -217,12 +218,20 @@ heatmap AS (
         SUM(CASE WHEN NetworkType = 'WIFI' THEN ConnectionTime ELSE 0 END)     AS WifiConnectionTime,
         SUM(CASE WHEN NetworkType = 'WIFI' THEN DisconnectCnt ELSE 0 END)      AS WifiDisconnectCount,
 
+        -- WiFi AP hopping metrics (Carl's requirement)
+        COUNT(DISTINCT CASE WHEN NetworkType = 'WIFI' THEN BSSID END)          AS UniqueAPsConnected,
+        COUNT(DISTINCT CASE WHEN NetworkType = 'WIFI' THEN WifiSSID END)       AS UniqueSSIDsConnected,
+
         -- Cellular specific
         AVG(CASE WHEN NetworkType != 'WIFI' THEN SignalStrength ELSE NULL END) AS CellSignalStrength,
         SUM(CASE WHEN NetworkType != 'WIFI' THEN DropCnt ELSE 0 END)           AS CellDropCount,
         SUM(CASE WHEN NetworkType != 'WIFI' THEN ConnectionTime ELSE 0 END)    AS CellConnectionTime,
         COUNT(DISTINCT CellTowerId)                                             AS CellTowerChanges,
         SUM(HandoffCount)                                                       AS HandoffCount,
+
+        -- Cellular tower hopping metrics (Carl's requirement)
+        COUNT(DISTINCT CASE WHEN NetworkType != 'WIFI' THEN CellId END)        AS UniqueCellIds,
+        COUNT(DISTINCT CASE WHEN NetworkType != 'WIFI' THEN LAC END)           AS UniqueLACs,
 
         -- Time on network types
         SUM(CASE WHEN NetworkType = '2G' THEN Duration ELSE 0 END)             AS TimeOn2G,
@@ -231,6 +240,9 @@ heatmap AS (
         SUM(CASE WHEN NetworkType = '5G' THEN Duration ELSE 0 END)             AS TimeOn5G,
         SUM(CASE WHEN NetworkType = 'WIFI' THEN Duration ELSE 0 END)           AS TimeOnWifi,
         SUM(CASE WHEN NetworkType = 'NONE' OR NetworkType IS NULL THEN Duration ELSE 0 END) AS TimeOnNoNetwork,
+
+        -- Network type transitions (for detecting 5G->4G->3G degradation)
+        COUNT(DISTINCT NetworkType)                                             AS NetworkTypeCount,
 
         -- Roaming
         SUM(CASE WHEN IsRoaming = 1 THEN Duration ELSE 0 END)                  AS RoamingTime,
@@ -372,17 +384,31 @@ SELECT {top_clause}
     ISNULL(hm.WifiDropCount, 0)                AS WifiDropCount,
     ISNULL(hm.WifiConnectionTime, 0)           AS WifiConnectionTime,
     ISNULL(hm.WifiDisconnectCount, 0)          AS WifiDisconnectCount,
+
+    -- WiFi AP hopping (Carl's requirement)
+    ISNULL(hm.UniqueAPsConnected, 0)           AS UniqueAPsConnected,
+    ISNULL(hm.UniqueSSIDsConnected, 0)         AS UniqueSSIDsConnected,
+
     hm.CellSignalStrength,
     ISNULL(hm.CellDropCount, 0)                AS CellDropCount,
     ISNULL(hm.CellConnectionTime, 0)           AS CellConnectionTime,
     ISNULL(hm.CellTowerChanges, 0)             AS CellTowerChanges,
     ISNULL(hm.HandoffCount, 0)                 AS HandoffCount,
+
+    -- Cellular tower hopping (Carl's requirement)
+    ISNULL(hm.UniqueCellIds, 0)                AS UniqueCellIds,
+    ISNULL(hm.UniqueLACs, 0)                   AS UniqueLACs,
+
     ISNULL(hm.TimeOn2G, 0)                     AS TimeOn2G,
     ISNULL(hm.TimeOn3G, 0)                     AS TimeOn3G,
     ISNULL(hm.TimeOn4G, 0)                     AS TimeOn4G,
     ISNULL(hm.TimeOn5G, 0)                     AS TimeOn5G,
     ISNULL(hm.TimeOnWifi, 0)                   AS TimeOnWifi,
     ISNULL(hm.TimeOnNoNetwork, 0)              AS TimeOnNoNetwork,
+
+    -- Network type diversity (for 5G->4G->3G degradation detection)
+    ISNULL(hm.NetworkTypeCount, 0)             AS NetworkTypeCount,
+
     ISNULL(hm.RoamingTime, 0)                  AS RoamingTime,
     ISNULL(hm.RoamingDataUsage, 0)             AS RoamingDataUsage
 

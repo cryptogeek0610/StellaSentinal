@@ -20,7 +20,7 @@ import signal
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import redis
 
@@ -60,6 +60,14 @@ class ScheduleInterval(str, Enum):
     MANUAL = "manual"  # Disabled, only manual triggers
 
 
+class ShiftSchedule(str, Enum):
+    """Pre-defined shift schedules for shift readiness analysis."""
+    MORNING = "morning"  # 06:00 - 14:00
+    AFTERNOON = "afternoon"  # 14:00 - 22:00
+    NIGHT = "night"  # 22:00 - 06:00
+    DAY = "day"  # 08:00 - 17:00 (standard day shift)
+
+
 @dataclass
 class SchedulerConfig:
     """Configuration for the automation scheduler."""
@@ -87,11 +95,24 @@ class SchedulerConfig:
     alert_on_high_anomaly_rate: bool = True
     high_anomaly_rate_threshold: float = 0.10  # Alert if >10% anomalies
 
+    # Insight generation
+    insights_enabled: bool = True
+    daily_digest_hour: int = 5  # Hour to generate daily digest (5 AM)
+    shift_readiness_enabled: bool = True
+    shift_readiness_lead_minutes: int = 60  # Generate readiness report N minutes before shift
+    shift_schedules: List[str] = field(default_factory=lambda: ["morning", "afternoon", "day"])
+    location_baseline_enabled: bool = True
+    location_baseline_day_of_week: int = 0  # Monday for weekly baseline computation
+    location_baseline_hour: int = 3  # 3 AM for baseline computation
+
     # General
     timezone: str = "UTC"
     last_training_time: Optional[str] = None
     last_scoring_time: Optional[str] = None
     last_auto_retrain_time: Optional[str] = None
+    last_daily_digest_time: Optional[str] = None
+    last_shift_readiness_time: Optional[str] = None
+    last_location_baseline_time: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON storage."""
@@ -113,11 +134,15 @@ class SchedulerStatus:
     is_running: bool = False
     training_status: str = "idle"  # idle, running, completed, failed
     scoring_status: str = "idle"
+    insights_status: str = "idle"  # idle, running, completed, failed
     last_training_result: Optional[Dict] = None
     last_scoring_result: Optional[Dict] = None
+    last_insight_result: Optional[Dict] = None
     next_training_time: Optional[str] = None
     next_scoring_time: Optional[str] = None
+    next_insight_time: Optional[str] = None
     total_anomalies_detected: int = 0
+    total_insights_generated: int = 0
     false_positive_rate: float = 0.0
     uptime_seconds: int = 0
     errors: List[str] = field(default_factory=list)
@@ -142,6 +167,9 @@ class AutomationScheduler:
         """Initialize the scheduler."""
         self.redis_url = redis_url or os.getenv("REDIS_URL", "redis://localhost:6379/0")
         self._redis: Optional[redis.Redis] = None
+        self._redis_available = False
+        self._redis_max_retries = 3
+        self._redis_retry_delay = 2  # seconds, doubles each retry
         self._running = False
         self._start_time: Optional[datetime] = None
         self._config: Optional[SchedulerConfig] = None
@@ -150,11 +178,44 @@ class AutomationScheduler:
         self._status = SchedulerStatus()
         self._tasks: List[asyncio.Task] = []
 
+    def _connect_redis(self) -> Optional[redis.Redis]:
+        """Attempt to connect to Redis with retry and backoff.
+
+        Returns the Redis client if successful, None otherwise.
+        """
+        delay = self._redis_retry_delay
+        for attempt in range(self._redis_max_retries):
+            try:
+                client = redis.from_url(self.redis_url, decode_responses=True)
+                # Test connection
+                client.ping()
+                self._redis_available = True
+                logger.info("Redis connection established")
+                return client
+            except redis.ConnectionError as e:
+                logger.warning(
+                    f"Redis connection attempt {attempt + 1}/{self._redis_max_retries} failed: {e}"
+                )
+                if attempt < self._redis_max_retries - 1:
+                    import time
+                    time.sleep(delay)
+                    delay *= 2  # Exponential backoff
+            except Exception as e:
+                logger.error(f"Unexpected Redis error: {e}")
+                break
+
+        logger.error("Redis unavailable after all retries. Scheduler will run with limited functionality.")
+        self._redis_available = False
+        return None
+
     @property
-    def redis(self) -> redis.Redis:
-        """Get Redis connection."""
+    def redis(self) -> Optional[redis.Redis]:
+        """Get Redis connection with lazy initialization and retry.
+
+        Returns None if Redis is unavailable, allowing graceful degradation.
+        """
         if self._redis is None:
-            self._redis = redis.from_url(self.redis_url, decode_responses=True)
+            self._redis = self._connect_redis()
         return self._redis
 
     def _config_from_env(self) -> SchedulerConfig:
@@ -169,6 +230,18 @@ class AutomationScheduler:
         }
         interval_str = os.getenv("SCHEDULER_TRAINING_INTERVAL", "daily").lower()
 
+        # Parse shift schedules from comma-separated string with validation
+        valid_shifts = {"morning", "afternoon", "night", "day"}
+        shift_schedules_str = os.getenv("SCHEDULER_SHIFT_SCHEDULES", "morning,afternoon,day")
+        shift_schedules = [
+            s.strip().lower()
+            for s in shift_schedules_str.split(",")
+            if s.strip().lower() in valid_shifts
+        ]
+        # Fallback to default if no valid shifts
+        if not shift_schedules:
+            shift_schedules = ["morning", "afternoon", "day"]
+
         return SchedulerConfig(
             training_enabled=os.getenv("SCHEDULER_TRAINING_ENABLED", "true").lower() == "true",
             training_interval=interval_map.get(interval_str, ScheduleInterval.DAILY),
@@ -181,6 +254,15 @@ class AutomationScheduler:
             auto_retrain_min_feedback=int(os.getenv("SCHEDULER_AUTO_RETRAIN_MIN_FEEDBACK", "50")),
             alerting_enabled=os.getenv("SCHEDULER_ALERTING_ENABLED", "true").lower() == "true",
             high_anomaly_rate_threshold=float(os.getenv("SCHEDULER_HIGH_ANOMALY_THRESHOLD", "0.10")),
+            # Insight generation settings
+            insights_enabled=os.getenv("SCHEDULER_INSIGHTS_ENABLED", "true").lower() == "true",
+            daily_digest_hour=int(os.getenv("SCHEDULER_DAILY_DIGEST_HOUR", "5")),
+            shift_readiness_enabled=os.getenv("SCHEDULER_SHIFT_READINESS_ENABLED", "true").lower() == "true",
+            shift_readiness_lead_minutes=int(os.getenv("SCHEDULER_SHIFT_READINESS_LEAD_MINUTES", "60")),
+            shift_schedules=shift_schedules,
+            location_baseline_enabled=os.getenv("SCHEDULER_LOCATION_BASELINE_ENABLED", "true").lower() == "true",
+            location_baseline_day_of_week=int(os.getenv("SCHEDULER_LOCATION_BASELINE_DAY", "0")),
+            location_baseline_hour=int(os.getenv("SCHEDULER_LOCATION_BASELINE_HOUR", "3")),
         )
 
     def load_config(self, force: bool = False) -> SchedulerConfig:
@@ -201,14 +283,16 @@ class AutomationScheduler:
         ):
             return self._config
 
-        try:
-            data = self.redis.get(self.REDIS_CONFIG_KEY)
-            if data:
-                self._config = SchedulerConfig.from_dict(json.loads(data))
-                self._config_last_loaded = now
-                return self._config
-        except Exception as e:
-            logger.warning(f"Failed to load config from Redis: {e}")
+        # Try to load from Redis if available
+        if self.redis is not None:
+            try:
+                data = self.redis.get(self.REDIS_CONFIG_KEY)
+                if data:
+                    self._config = SchedulerConfig.from_dict(json.loads(data))
+                    self._config_last_loaded = now
+                    return self._config
+            except Exception as e:
+                logger.warning(f"Failed to load config from Redis: {e}")
 
         # Use environment-based defaults
         self._config = self._config_from_env()
@@ -217,12 +301,15 @@ class AutomationScheduler:
 
     def save_config(self, config: SchedulerConfig) -> None:
         """Save configuration to Redis."""
+        self._config = config  # Always update local cache
+        if self.redis is None:
+            logger.warning("Redis unavailable, config saved locally only")
+            return
         try:
             self.redis.set(self.REDIS_CONFIG_KEY, json.dumps(config.to_dict()))
-            self._config = config
             logger.info("Scheduler configuration saved")
         except Exception as e:
-            logger.error(f"Failed to save config: {e}")
+            logger.error(f"Failed to save config to Redis: {e}")
 
     def update_status(self, **kwargs) -> None:
         """Update scheduler status."""
@@ -236,7 +323,9 @@ class AutomationScheduler:
                 (datetime.utcnow() - self._start_time).total_seconds()
             )
 
-        # Persist to Redis
+        # Persist to Redis if available
+        if self.redis is None:
+            return  # Status updated locally only
         try:
             status_dict = asdict(self._status)
             self.redis.set(self.REDIS_STATUS_KEY, json.dumps(status_dict))
@@ -245,6 +334,9 @@ class AutomationScheduler:
 
     def get_status(self) -> SchedulerStatus:
         """Get current scheduler status."""
+        if self.redis is None:
+            return self._status  # Return local status if Redis unavailable
+
         try:
             data = self.redis.get(self.REDIS_STATUS_KEY)
             if data:
@@ -379,15 +471,20 @@ class AutomationScheduler:
 
         except Exception as e:
             logger.error(f"Training job failed: {e}")
-            self.update_status(
-                training_status="failed",
-                last_training_result={
-                    "success": False,
-                    "timestamp": datetime.utcnow().isoformat(),
-                    "error": str(e),
-                },
-                errors=self._status.errors[-9:] + [f"Training failed: {e}"],
-            )
+            try:
+                self.update_status(
+                    training_status="failed",
+                    last_training_result={
+                        "success": False,
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "error": str(e),
+                    },
+                    errors=self._status.errors[-9:] + [f"Training failed: {e}"],
+                )
+            except Exception as status_err:
+                # Ensure we always record the failure, even if Redis is down
+                logger.error(f"Failed to update status after training failure: {status_err}")
+                self._status.training_status = "failed"
             return {"success": False, "error": str(e)}
 
     async def run_scoring_job(self) -> Dict[str, Any]:
@@ -507,10 +604,15 @@ class AutomationScheduler:
 
         except Exception as e:
             logger.error(f"Scoring job failed: {e}")
-            self.update_status(
-                scoring_status="failed",
-                errors=self._status.errors[-9:] + [f"Scoring failed: {e}"],
-            )
+            try:
+                self.update_status(
+                    scoring_status="failed",
+                    errors=self._status.errors[-9:] + [f"Scoring failed: {e}"],
+                )
+            except Exception as status_err:
+                # Ensure we always record the failure, even if Redis is down
+                logger.error(f"Failed to update status after scoring failure: {status_err}")
+                self._status.scoring_status = "failed"
             return {"success": False, "error": str(e)}
 
     async def check_auto_retrain(self) -> bool:
@@ -551,6 +653,342 @@ class AutomationScheduler:
 
         return False
 
+    async def run_daily_digest_job(self) -> Dict[str, Any]:
+        """Generate daily insight digest for all locations."""
+        logger.info("Starting daily insight digest generation...")
+        self.update_status(insights_status="running")
+
+        # In mock mode, skip real insight generation
+        if is_mock_mode():
+            logger.info("Mock mode enabled - skipping real insight generation")
+            self._config.last_daily_digest_time = datetime.utcnow().isoformat()
+            self.save_config(self._config)
+
+            self.update_status(
+                insights_status="completed",
+                last_insight_result={
+                    "success": True,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "type": "daily_digest",
+                    "insights_generated": 10,
+                    "mock_mode": True,
+                },
+                total_insights_generated=self._status.total_insights_generated + 10,
+            )
+            logger.info("Mock daily digest completed")
+            return {"success": True, "insights_generated": 10, "mock_mode": True}
+
+        try:
+            from device_anomaly.insights.generator import InsightGenerator
+            from device_anomaly.database.connection import get_results_db_session
+
+            # Use historical end date if configured
+            historical_end = get_historical_end_date()
+            if historical_end:
+                insight_date = historical_end.date()
+                logger.info(f"Using historical date for insights: {insight_date}")
+            else:
+                insight_date = datetime.utcnow().date()
+
+            # Get tenant_id from environment or use default
+            tenant_id = os.getenv("TENANT_ID", "default")
+
+            db_session = get_results_db_session()
+            try:
+                generator = InsightGenerator(db_session, tenant_id)
+
+                # Generate daily digest
+                digest = generator.generate_daily_insights(insight_date=insight_date)
+
+                # Save insights to database
+                saved_count = generator.save_insights_to_db(digest.all_insights)
+            finally:
+                db_session.close()
+
+            # Update config
+            self._config.last_daily_digest_time = datetime.utcnow().isoformat()
+            self.save_config(self._config)
+
+            self.update_status(
+                insights_status="completed",
+                last_insight_result={
+                    "success": True,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "type": "daily_digest",
+                    "insights_generated": saved_count,
+                    "critical_count": digest.critical_count,
+                    "high_count": digest.high_count,
+                },
+                total_insights_generated=self._status.total_insights_generated + saved_count,
+            )
+
+            logger.info(f"Daily digest completed: {saved_count} insights generated")
+            return {"success": True, "insights_generated": saved_count}
+
+        except Exception as e:
+            logger.error(f"Daily digest generation failed: {e}")
+            try:
+                self.update_status(
+                    insights_status="failed",
+                    last_insight_result={
+                        "success": False,
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "type": "daily_digest",
+                        "error": str(e),
+                    },
+                    errors=self._status.errors[-9:] + [f"Daily digest failed: {e}"],
+                )
+            except Exception as status_err:
+                logger.error(f"Failed to update status after insights failure: {status_err}")
+                self._status.insights_status = "failed"
+            return {"success": False, "error": str(e)}
+
+    async def run_shift_readiness_job(self, shift_name: str) -> Dict[str, Any]:
+        """Generate shift readiness reports for all locations."""
+        logger.info(f"Starting shift readiness analysis for {shift_name} shift...")
+        self.update_status(insights_status="running")
+
+        # In mock mode, skip real analysis
+        if is_mock_mode():
+            logger.info("Mock mode enabled - skipping real shift readiness analysis")
+            self._config.last_shift_readiness_time = datetime.utcnow().isoformat()
+            self.save_config(self._config)
+
+            self.update_status(
+                insights_status="completed",
+                last_insight_result={
+                    "success": True,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "type": "shift_readiness",
+                    "shift_name": shift_name,
+                    "locations_analyzed": 5,
+                    "devices_at_risk": 3,
+                    "mock_mode": True,
+                },
+            )
+            logger.info(f"Mock shift readiness for {shift_name} completed")
+            return {"success": True, "shift_name": shift_name, "mock_mode": True}
+
+        try:
+            from device_anomaly.insights.battery_shift import BatteryShiftAnalyzer
+            from device_anomaly.database.schema import LocationMetadata
+            from device_anomaly.database.connection import get_results_db_session
+
+            # Use historical end date if configured
+            historical_end = get_historical_end_date()
+            if historical_end:
+                shift_date = historical_end.date()
+            else:
+                shift_date = datetime.utcnow().date()
+
+            # Get tenant_id from environment or use default
+            tenant_id = os.getenv("TENANT_ID", "default")
+
+            # Get all configured locations and analyze shift readiness
+            session = get_results_db_session()
+            try:
+                analyzer = BatteryShiftAnalyzer(session, tenant_id)
+
+                locations = session.query(LocationMetadata).filter(
+                    LocationMetadata.is_active == True
+                ).all()
+
+                total_at_risk = 0
+                reports_generated = 0
+
+                for location in locations:
+                    try:
+                        report = analyzer.analyze_shift_readiness(
+                            location_id=location.location_id,
+                            shift_date=shift_date,
+                            shift_name=shift_name,
+                        )
+                        if report:
+                            analyzer.save_shift_performance(report)
+                            total_at_risk += report.devices_at_risk
+                            reports_generated += 1
+                    except Exception as loc_error:
+                        logger.warning(f"Shift readiness failed for location {location.location_id}: {loc_error}")
+            finally:
+                session.close()
+
+            self._config.last_shift_readiness_time = datetime.utcnow().isoformat()
+            self.save_config(self._config)
+
+            self.update_status(
+                insights_status="completed",
+                last_insight_result={
+                    "success": True,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "type": "shift_readiness",
+                    "shift_name": shift_name,
+                    "locations_analyzed": reports_generated,
+                    "devices_at_risk": total_at_risk,
+                },
+            )
+
+            # Alert if many devices at risk
+            if total_at_risk > 10:
+                await self._send_alert(
+                    f"Shift readiness warning: {total_at_risk} devices may not last {shift_name} shift"
+                )
+
+            logger.info(f"Shift readiness completed: {reports_generated} locations, {total_at_risk} devices at risk")
+            return {"success": True, "locations_analyzed": reports_generated, "devices_at_risk": total_at_risk}
+
+        except Exception as e:
+            logger.error(f"Shift readiness analysis failed: {e}")
+            self.update_status(
+                insights_status="failed",
+                last_insight_result={
+                    "success": False,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "type": "shift_readiness",
+                    "error": str(e),
+                },
+                errors=self._status.errors[-9:] + [f"Shift readiness failed: {e}"],
+            )
+            return {"success": False, "error": str(e)}
+
+    async def run_location_baseline_job(self) -> Dict[str, Any]:
+        """Compute weekly location baselines for comparison."""
+        logger.info("Starting weekly location baseline computation...")
+        self.update_status(insights_status="running")
+
+        # In mock mode, skip real computation
+        if is_mock_mode():
+            logger.info("Mock mode enabled - skipping real baseline computation")
+            self._config.last_location_baseline_time = datetime.utcnow().isoformat()
+            self.save_config(self._config)
+
+            self.update_status(
+                insights_status="completed",
+                last_insight_result={
+                    "success": True,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "type": "location_baseline",
+                    "locations_updated": 5,
+                    "mock_mode": True,
+                },
+            )
+            logger.info("Mock location baseline completed")
+            return {"success": True, "locations_updated": 5, "mock_mode": True}
+
+        try:
+            from device_anomaly.insights.entities import EntityAggregator
+            from device_anomaly.database.schema import LocationMetadata
+            from device_anomaly.database.connection import get_results_db_session
+
+            # Calculate baselines over the past 4 weeks
+            baseline_period_days = 28
+
+            # Get tenant_id from environment or use default
+            tenant_id = os.getenv("TENANT_ID", "default")
+
+            session = get_results_db_session()
+            try:
+                aggregator = EntityAggregator(session, tenant_id)
+
+                locations = session.query(LocationMetadata).filter(
+                    LocationMetadata.is_active == True
+                ).all()
+
+                updated_count = 0
+
+                for location in locations:
+                    try:
+                        # Get location aggregates
+                        location_data = aggregator.aggregate_by_location(
+                            anomalies=None,  # Will fetch from DB
+                            period_days=baseline_period_days,
+                        )
+
+                        if location.location_id in location_data:
+                            agg = location_data[location.location_id]
+
+                            # Update location baselines
+                            location.baseline_battery_drain_per_hour = agg.get("avg_battery_drain_per_hour")
+                            location.baseline_disconnect_rate = agg.get("avg_disconnect_rate")
+                            location.baseline_drop_rate = agg.get("avg_drop_rate")
+                            location.baseline_computed_at = datetime.utcnow()
+
+                            updated_count += 1
+
+                    except Exception as loc_error:
+                        logger.warning(f"Baseline computation failed for location {location.location_id}: {loc_error}")
+
+                session.commit()
+            finally:
+                session.close()
+
+            self._config.last_location_baseline_time = datetime.utcnow().isoformat()
+            self.save_config(self._config)
+
+            self.update_status(
+                insights_status="completed",
+                last_insight_result={
+                    "success": True,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "type": "location_baseline",
+                    "locations_updated": updated_count,
+                },
+            )
+
+            logger.info(f"Location baseline computation completed: {updated_count} locations updated")
+            return {"success": True, "locations_updated": updated_count}
+
+        except Exception as e:
+            logger.error(f"Location baseline computation failed: {e}")
+            self.update_status(
+                insights_status="failed",
+                last_insight_result={
+                    "success": False,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "type": "location_baseline",
+                    "error": str(e),
+                },
+                errors=self._status.errors[-9:] + [f"Location baseline failed: {e}"],
+            )
+            return {"success": False, "error": str(e)}
+
+    def _get_shift_times(self, shift_name: str) -> Tuple[int, int]:
+        """Get start hour and end hour for a shift."""
+        shift_times = {
+            "morning": (6, 14),
+            "afternoon": (14, 22),
+            "night": (22, 6),
+            "day": (8, 17),
+        }
+        return shift_times.get(shift_name, (8, 17))
+
+    def calculate_next_shift_readiness_time(self) -> Optional[Tuple[datetime, str]]:
+        """Calculate next time shift readiness should run and which shift."""
+        if not self._config or not self._config.shift_readiness_enabled:
+            return None
+
+        now = datetime.utcnow()
+        lead_minutes = self._config.shift_readiness_lead_minutes
+        next_times = []
+
+        for shift_name in self._config.shift_schedules:
+            start_hour, _ = self._get_shift_times(shift_name)
+
+            # Calculate when to run (lead_minutes before shift start)
+            run_time = now.replace(hour=start_hour, minute=0, second=0, microsecond=0)
+            run_time -= timedelta(minutes=lead_minutes)
+
+            # If run time has passed today, schedule for tomorrow
+            if run_time <= now:
+                run_time += timedelta(days=1)
+
+            next_times.append((run_time, shift_name))
+
+        if not next_times:
+            return None
+
+        # Return the soonest shift readiness time
+        return min(next_times, key=lambda x: x[0])
+
     async def _send_alert(self, message: str) -> None:
         """Send an alert notification."""
         logger.warning(f"ALERT: {message}")
@@ -575,6 +1013,21 @@ class AutomationScheduler:
             try:
                 # Reload config from Redis to pick up any changes from API
                 self._config = self.load_config()
+
+                # Check for manual training jobs in the queue first (if Redis available)
+                if self.redis is not None:
+                    try:
+                        manual_job = self.redis.lpop("ml:training:queue")
+                        if manual_job:
+                            try:
+                                job_data = json.loads(manual_job)
+                                logger.info(f"Processing manual training job: {job_data.get('job_id', 'unknown')}")
+                                await self.run_training_job()
+                                continue  # Check for more queued jobs immediately
+                            except json.JSONDecodeError:
+                                logger.error(f"Invalid training job data in queue: {manual_job}")
+                    except Exception as e:
+                        logger.warning(f"Failed to check training queue: {e}")
 
                 if not self._config.training_enabled:
                     self.update_status(next_training_time=None)
@@ -688,6 +1141,146 @@ class AutomationScheduler:
             except Exception as e:
                 logger.error(f"Auto-retrain loop error: {e}")
 
+    async def _insights_loop(self) -> None:
+        """Background loop for insight generation (daily digest, shift readiness, baselines)."""
+        # Short delay on startup to let other loops initialize
+        await asyncio.sleep(10)
+
+        while self._running:
+            try:
+                # Reload config from Redis
+                self._config = self.load_config()
+
+                # Check for manually queued insight jobs first
+                manual_job = self.redis.lpop("scheduler:insights:queue")
+                if manual_job:
+                    try:
+                        job_data = json.loads(manual_job)
+                        job_type = job_data.get("type")
+                        logger.info(f"Processing manual insight job: {job_type}")
+
+                        if job_type == "daily_digest":
+                            await self.run_daily_digest_job()
+                        elif job_type == "shift_readiness":
+                            shift_name = job_data.get("shift_name", "morning")
+                            await self.run_shift_readiness_job(shift_name)
+                        elif job_type == "location_baseline":
+                            await self.run_location_baseline_job()
+                        else:
+                            logger.warning(f"Unknown insight job type: {job_type}")
+
+                        continue  # Check for more queued jobs immediately
+                    except json.JSONDecodeError:
+                        logger.error(f"Invalid insight job data in queue: {manual_job}")
+
+                if not self._config.insights_enabled:
+                    self.update_status(next_insight_time=None)
+                    await asyncio.sleep(60)
+                    continue
+
+                now = datetime.utcnow()
+                next_jobs = []
+
+                # 1. Daily digest scheduling
+                target_digest_time = now.replace(
+                    hour=self._config.daily_digest_hour,
+                    minute=0,
+                    second=0,
+                    microsecond=0,
+                )
+                if target_digest_time <= now:
+                    target_digest_time += timedelta(days=1)
+
+                # Check if we should run daily digest now
+                if self._config.last_daily_digest_time:
+                    last_digest = datetime.fromisoformat(self._config.last_daily_digest_time)
+                    # Run if we're within the target hour and haven't run today
+                    if (
+                        now.hour == self._config.daily_digest_hour
+                        and last_digest.date() < now.date()
+                    ):
+                        logger.info("Running scheduled daily digest...")
+                        await self.run_daily_digest_job()
+                        continue
+                else:
+                    # Never run before - run if we're in the target hour
+                    if now.hour == self._config.daily_digest_hour:
+                        logger.info("Running initial daily digest...")
+                        await self.run_daily_digest_job()
+                        continue
+
+                next_jobs.append(("daily_digest", target_digest_time))
+
+                # 2. Shift readiness scheduling
+                if self._config.shift_readiness_enabled:
+                    next_shift = self.calculate_next_shift_readiness_time()
+                    if next_shift:
+                        shift_time, shift_name = next_shift
+                        next_jobs.append(("shift_readiness", shift_time, shift_name))
+
+                        # Check if we should run shift readiness now
+                        if shift_time <= now + timedelta(seconds=60):
+                            logger.info(f"Running scheduled shift readiness for {shift_name}...")
+                            await self.run_shift_readiness_job(shift_name)
+                            continue
+
+                # 3. Weekly location baseline scheduling
+                if self._config.location_baseline_enabled:
+                    target_baseline_time = now.replace(
+                        hour=self._config.location_baseline_hour,
+                        minute=0,
+                        second=0,
+                        microsecond=0,
+                    )
+
+                    # Calculate next baseline day (specific day of week)
+                    days_until_baseline = (
+                        self._config.location_baseline_day_of_week - now.weekday()
+                    ) % 7
+                    if days_until_baseline == 0 and target_baseline_time <= now:
+                        days_until_baseline = 7
+                    target_baseline_time += timedelta(days=days_until_baseline)
+
+                    next_jobs.append(("location_baseline", target_baseline_time))
+
+                    # Check if we should run baseline now
+                    if self._config.last_location_baseline_time:
+                        last_baseline = datetime.fromisoformat(
+                            self._config.last_location_baseline_time
+                        )
+                        # Run if we're on the right day/hour and haven't run this week
+                        if (
+                            now.weekday() == self._config.location_baseline_day_of_week
+                            and now.hour == self._config.location_baseline_hour
+                            and (now - last_baseline).days >= 6
+                        ):
+                            logger.info("Running scheduled weekly baseline computation...")
+                            await self.run_location_baseline_job()
+                            continue
+                    else:
+                        # Never run before - run if we're on the right day/hour
+                        if (
+                            now.weekday() == self._config.location_baseline_day_of_week
+                            and now.hour == self._config.location_baseline_hour
+                        ):
+                            logger.info("Running initial location baseline computation...")
+                            await self.run_location_baseline_job()
+                            continue
+
+                # Update status with next scheduled insight job
+                if next_jobs:
+                    next_job = min(next_jobs, key=lambda x: x[1])
+                    self.update_status(next_insight_time=next_job[1].isoformat())
+
+                # Sleep for a minute before checking again
+                await asyncio.sleep(60)
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Insights loop error: {e}")
+                await asyncio.sleep(60)
+
     async def start(self) -> None:
         """Start the scheduler service."""
         logger.info("Starting Automation Scheduler...")
@@ -700,7 +1293,9 @@ class AutomationScheduler:
             f"Scheduler config: training_enabled={self._config.training_enabled}, "
             f"training_interval={self._config.training_interval.value}, "
             f"scoring_enabled={self._config.scoring_enabled}, "
-            f"scoring_interval_minutes={self._config.scoring_interval_minutes}"
+            f"scoring_interval_minutes={self._config.scoring_interval_minutes}, "
+            f"insights_enabled={self._config.insights_enabled}, "
+            f"shift_readiness_enabled={self._config.shift_readiness_enabled}"
         )
 
         # Update initial status
@@ -708,6 +1303,7 @@ class AutomationScheduler:
             is_running=True,
             training_status="idle",
             scoring_status="idle",
+            insights_status="idle",
         )
 
         # Start background loops
@@ -715,9 +1311,10 @@ class AutomationScheduler:
             asyncio.create_task(self._training_loop()),
             asyncio.create_task(self._scoring_loop()),
             asyncio.create_task(self._auto_retrain_loop()),
+            asyncio.create_task(self._insights_loop()),
         ]
 
-        logger.info("Scheduler started successfully")
+        logger.info("Scheduler started successfully with insight generation enabled")
 
     async def stop(self) -> None:
         """Stop the scheduler service."""
@@ -734,6 +1331,24 @@ class AutomationScheduler:
         self.update_status(is_running=False)
         logger.info("Scheduler stopped")
 
+    def _check_redis_command(self) -> Optional[str]:
+        """Check for and consume any pending command from Redis.
+
+        Returns the command if one was found, or None.
+        """
+        if self.redis is None:
+            return None  # Can't check commands without Redis
+
+        try:
+            command = self.redis.get("scheduler:command")
+            if command:
+                # Clear the command after reading
+                self.redis.delete("scheduler:command")
+                return command.lower()
+        except Exception as e:
+            logger.warning(f"Failed to check Redis command: {e}")
+        return None
+
     async def run_forever(self) -> None:
         """Run the scheduler until interrupted."""
         await self.start()
@@ -747,8 +1362,16 @@ class AutomationScheduler:
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, signal_handler)
 
-        # Wait until stopped
+        # Wait until stopped, checking for Redis commands
         while self._running:
+            # Check for stop command from API
+            command = self._check_redis_command()
+            if command == "stop":
+                logger.info("Received stop command from API")
+                await self.stop()
+                break
+            # Note: "start" command is ignored while running; scheduler must be restarted externally
+
             await asyncio.sleep(1)
 
 

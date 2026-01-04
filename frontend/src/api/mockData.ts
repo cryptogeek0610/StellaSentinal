@@ -1953,5 +1953,307 @@ export function getMockTrainingMetrics(runId: string): TrainingMetrics {
     };
 }
 
+// ============================================================================
+// INSIGHTS Mock Data
+// Carl's vision: "XSight has the data. XSight needs the story."
+// ============================================================================
+
+import type {
+    CustomerInsightResponse,
+    DailyDigestResponse,
+    LocationInsightResponse,
+    ShiftReadinessResponse,
+    NetworkAnalysisResponse,
+    DeviceAbuseResponse,
+    AppAnalysisResponse,
+    LocationCompareResponse,
+} from './client';
+
+function generateMockInsight(index: number, category: string, severity: string): CustomerInsightResponse {
+    const categories: Record<string, { headline: string; impact: string; comparison: string }> = {
+        battery_shift_failure: {
+            headline: `${5 + index} devices in Warehouse A won't last the morning shift`,
+            impact: 'At current drain rate (8.5%/hr), battery will die by 11:30 AM. Workers may experience 2.5 hours of unplanned downtime.',
+            comparison: '42% faster drain than peer devices',
+        },
+        excessive_drops: {
+            headline: `Location "Distribution Center" has ${12 + index} device drops this week`,
+            impact: 'Estimated repair costs: $2,400. Device downtime: approximately 8 hours.',
+            comparison: 'This ranks #2 worst out of 8 locations',
+        },
+        wifi_ap_hopping: {
+            headline: `Excessive WiFi roaming in Loading Dock: ${8 + index} access points per day`,
+            impact: 'Frequent AP switching causes 45 minutes of connection gaps per day.',
+            comparison: 'Other locations average 3 APs/day - 167% more switching',
+        },
+        app_crash_pattern: {
+            headline: `App "InventoryPro" crashing repeatedly: ${15 + index} crashes today`,
+            impact: 'Each crash causes 3 minutes of downtime. Total productivity loss: 45 minutes.',
+            comparison: 'Normal crash rate is 0.5/day - this is 30x higher',
+        },
+    };
+
+    const catData = categories[category] || categories.battery_shift_failure;
+
+    return {
+        insight_id: `insight-${category}-${index}`,
+        category,
+        severity,
+        headline: catData.headline,
+        impact_statement: catData.impact,
+        comparison_context: catData.comparison,
+        recommended_actions: [
+            'Investigate root cause',
+            'Review device configuration',
+            'Consider hardware replacement if issue persists',
+        ],
+        entity_type: 'location',
+        entity_id: `loc-${index}`,
+        entity_name: MOCK_STORES[index % MOCK_STORES.length].name,
+        affected_device_count: 5 + index * 2,
+        primary_metric: 'battery_drain_rate',
+        primary_value: 8.5 + index * 0.5,
+        trend_direction: index % 2 === 0 ? 'degrading' : 'stable',
+        trend_change_percent: index % 2 === 0 ? 15.5 : null,
+        detected_at: new Date(Date.now() - index * 60 * 60 * 1000).toISOString(),
+        confidence_score: 0.85 - index * 0.02,
+    };
+}
+
+export function getMockDailyDigest(): DailyDigestResponse {
+    const insights = [
+        generateMockInsight(0, 'battery_shift_failure', 'critical'),
+        generateMockInsight(1, 'excessive_drops', 'high'),
+        generateMockInsight(2, 'wifi_ap_hopping', 'medium'),
+        generateMockInsight(3, 'app_crash_pattern', 'high'),
+        generateMockInsight(4, 'battery_shift_failure', 'medium'),
+    ];
+
+    return {
+        tenant_id: 'default',
+        digest_date: new Date().toISOString().split('T')[0],
+        generated_at: new Date().toISOString(),
+        total_insights: 23,
+        critical_count: 3,
+        high_count: 8,
+        medium_count: 12,
+        top_insights: insights,
+        executive_summary: `Today's analysis identified 23 actionable insights across your fleet. 3 critical issues require immediate attention, primarily related to battery performance at warehouse locations. Battery drain rates are 42% higher than baseline in Distribution Center locations. WiFi roaming issues are affecting productivity in 2 locations. Recommend prioritizing battery charging infrastructure review at affected sites.`,
+        trending_issues: insights.slice(0, 3),
+        new_issues: insights.slice(3, 5),
+    };
+}
+
+export function getMockLocationInsights(locationId: string): LocationInsightResponse {
+    const store = MOCK_STORES.find(s => s.id === locationId) || MOCK_STORES[0];
+
+    return {
+        location_id: locationId,
+        location_name: store.name,
+        report_date: new Date().toISOString().split('T')[0],
+        total_devices: 45,
+        devices_with_issues: 8,
+        issue_rate: 0.178,
+        shift_readiness: null,
+        insights: [
+            generateMockInsight(0, 'battery_shift_failure', 'high'),
+            generateMockInsight(1, 'wifi_ap_hopping', 'medium'),
+        ],
+        top_issues: [
+            { category: 'battery_shift_failure', count: 5 },
+            { category: 'wifi_ap_hopping', count: 3 },
+            { category: 'excessive_drops', count: 2 },
+        ],
+        rank_among_locations: 3,
+        better_than_percent: 62.5,
+        recommendations: [
+            'Review charging infrastructure - 5 devices started shift below 80%',
+            'Investigate WiFi coverage in loading dock area',
+            'Consider deploying protective cases for high-drop-rate devices',
+        ],
+    };
+}
+
+export function getMockShiftReadiness(locationId: string): ShiftReadinessResponse {
+    const store = MOCK_STORES.find(s => s.id === locationId) || MOCK_STORES[0];
+
+    const deviceDetails = Array.from({ length: 12 }, (_, i) => ({
+        device_id: 1001 + i,
+        device_name: `Scanner-${String(i + 1).padStart(3, '0')}`,
+        current_battery: 45 + Math.floor(Math.random() * 55),
+        drain_rate_per_hour: 5 + Math.random() * 8,
+        projected_end_battery: 15 + Math.floor(Math.random() * 30),
+        will_complete_shift: i < 8,
+        estimated_dead_time: i >= 8 ? '11:30 AM' : null,
+        was_fully_charged: i < 6,
+        readiness_score: 0.6 + Math.random() * 0.4,
+        recommendations: i >= 8 ? ['Charge before shift starts'] : [],
+    }));
+
+    return {
+        location_id: locationId,
+        location_name: store.name,
+        shift_name: 'Morning Shift',
+        shift_date: new Date().toISOString().split('T')[0],
+        readiness_percentage: 66.7,
+        total_devices: 12,
+        devices_ready: 8,
+        devices_at_risk: 3,
+        devices_critical: 1,
+        avg_battery_at_start: 72.5,
+        avg_drain_rate: 8.3,
+        devices_not_fully_charged: 6,
+        vs_last_week_readiness: -5.2,
+        device_details: deviceDetails,
+        recommendations: [
+            'Ensure all devices are fully charged before shift start',
+            'Investigate devices with high drain rates (>10%/hr)',
+            'Review charging infrastructure at this location',
+        ],
+    };
+}
+
+export function getMockTrendingInsights(): CustomerInsightResponse[] {
+    return [
+        generateMockInsight(0, 'battery_shift_failure', 'critical'),
+        generateMockInsight(1, 'excessive_drops', 'high'),
+        generateMockInsight(2, 'wifi_ap_hopping', 'high'),
+    ];
+}
+
+export function getMockNetworkAnalysis(): NetworkAnalysisResponse {
+    return {
+        tenant_id: 'default',
+        analysis_period_days: 7,
+        wifi_summary: {
+            total_devices: 248,
+            devices_with_roaming_issues: 23,
+            devices_with_stickiness: 12,
+            avg_aps_per_device: 4.2,
+            potential_dead_zones: 3,
+        },
+        cellular_summary: {
+            total_devices: 156,
+            devices_with_tower_hopping: 18,
+            devices_with_tech_fallback: 8,
+            best_carrier: 'Verizon',
+            worst_carrier: 'T-Mobile',
+            network_type_distribution: { '5G': 45, 'LTE': 89, '3G': 22 },
+        },
+        disconnect_summary: {
+            total_disconnects: 342,
+            avg_disconnects_per_device: 1.38,
+            total_offline_hours: 156.5,
+            has_predictable_pattern: true,
+            pattern_description: 'Most disconnects occur between 2-4 PM in warehouse zones',
+        },
+        hidden_devices_count: 4,
+        recommendations: [
+            'Add AP coverage to loading dock dead zone',
+            'Review WiFi roaming thresholds (-70dBm recommended)',
+            'Investigate T-Mobile coverage issues in Zone B',
+            'Review devices with suspicious offline patterns',
+        ],
+    };
+}
+
+export function getMockDeviceAbuseAnalysis(): DeviceAbuseResponse {
+    return {
+        tenant_id: 'default',
+        analysis_period_days: 7,
+        total_devices: 248,
+        total_drops: 156,
+        total_reboots: 89,
+        devices_with_excessive_drops: 12,
+        devices_with_excessive_reboots: 8,
+        worst_locations: [
+            { location_id: 'store-003', drops: 45, rate_per_device: 3.2 },
+            { location_id: 'store-001', drops: 32, rate_per_device: 2.1 },
+            { location_id: 'store-005', drops: 28, rate_per_device: 1.8 },
+        ],
+        worst_cohorts: [
+            { cohort_id: 'Zebra_TC52_12', reboots: 23, rate_per_device: 2.3 },
+            { cohort_id: 'Samsung_XCover_13', reboots: 18, rate_per_device: 1.8 },
+        ],
+        problem_combinations: [
+            {
+                cohort_id: 'Zebra_TC52_Android12_fw1.2',
+                manufacturer: 'Zebra',
+                model: 'TC52',
+                os_version: 'Android 12',
+                device_count: 15,
+                vs_fleet_multiplier: 2.8,
+                primary_issue: 'excessive_reboots',
+                severity: 'high',
+            },
+        ],
+        recommendations: [
+            'Deploy protective cases at Harbor Point (highest drop rate)',
+            'Update firmware on Zebra TC52 devices (known reboot bug)',
+            'Conduct device handling training at top 3 locations',
+        ],
+    };
+}
+
+export function getMockAppAnalysis(): AppAnalysisResponse {
+    return {
+        tenant_id: 'default',
+        analysis_period_days: 7,
+        total_apps_analyzed: 45,
+        apps_with_issues: 8,
+        total_crashes: 156,
+        total_anrs: 34,
+        top_power_consumers: [
+            { package_name: 'com.inventory.pro', app_name: 'InventoryPro', battery_drain_percent: 28.5, drain_per_hour: 4.2, foreground_hours: 6.8, efficiency_score: 0.42 },
+            { package_name: 'com.shipping.tracker', app_name: 'ShipTrack', battery_drain_percent: 18.2, drain_per_hour: 3.1, foreground_hours: 5.9, efficiency_score: 0.58 },
+            { package_name: 'com.scanner.barcode', app_name: 'BarcodePlus', battery_drain_percent: 12.4, drain_per_hour: 2.8, foreground_hours: 4.4, efficiency_score: 0.65 },
+        ],
+        top_crashers: [
+            { package_name: 'com.inventory.pro', app_name: 'InventoryPro', crash_count: 45, anr_count: 12, devices_affected: 23, severity: 'high' },
+            { package_name: 'com.legacy.wms', app_name: 'WMS Legacy', crash_count: 28, anr_count: 8, devices_affected: 15, severity: 'medium' },
+        ],
+        recommendations: [
+            'Update InventoryPro to version 3.2.1 (fixes memory leak)',
+            'Consider replacing WMS Legacy - high crash rate, no recent updates',
+            'Restrict BarcodePlus background activity to reduce battery drain',
+        ],
+    };
+}
+
+export function getMockInsightsByCategory(category: string): CustomerInsightResponse[] {
+    return [
+        generateMockInsight(0, category, 'critical'),
+        generateMockInsight(1, category, 'high'),
+        generateMockInsight(2, category, 'medium'),
+        generateMockInsight(3, category, 'low'),
+    ];
+}
+
+export function getMockLocationComparison(locationAId: string, locationBId: string): LocationCompareResponse {
+    const storeA = MOCK_STORES.find(s => s.id === locationAId) || MOCK_STORES[0];
+    const storeB = MOCK_STORES.find(s => s.id === locationBId) || MOCK_STORES[1];
+
+    return {
+        location_a_id: locationAId,
+        location_a_name: storeA.name,
+        location_b_id: locationBId,
+        location_b_name: storeB.name,
+        device_count_a: 45,
+        device_count_b: 38,
+        metric_comparisons: {
+            battery_drain_rate: { location_a_value: 8.5, location_b_value: 6.2, difference_percent: 37.1 },
+            drop_rate: { location_a_value: 2.3, location_b_value: 0.8, difference_percent: 187.5 },
+            wifi_disconnects: { location_a_value: 12, location_b_value: 5, difference_percent: 140 },
+            shift_readiness: { location_a_value: 72, location_b_value: 89, difference_percent: -19.1 },
+        },
+        overall_winner: locationBId,
+        key_differences: [
+            `${storeA.name} has 37% higher battery drain than ${storeB.name}`,
+            `${storeA.name} has 2.9x more device drops per week`,
+            `${storeB.name} achieves 89% shift readiness vs 72% at ${storeA.name}`,
+        ],
+    };
+}
+
 // Export all mock devices and anomalies for direct access if needed
 export { MOCK_DEVICES, MOCK_ANOMALIES, MOCK_STORES };

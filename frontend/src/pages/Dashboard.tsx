@@ -501,9 +501,12 @@ function Dashboard() {
               </div>
             }
             noPadding
+            className="min-h-[160px]"
           >
-            <div className="max-h-[200px] overflow-y-auto">
-              {activityFeed.length > 0 ? (
+            <div className="max-h-[200px] overflow-y-auto scrollbar-thin">
+              {!anomalies && !recentResolved ? (
+                <SkeletonList count={5} variant="activity" />
+              ) : activityFeed.length > 0 ? (
                 <div className="divide-y divide-slate-800/50">
                   {activityFeed.map((event, index) => (
                     <ActivityItem key={event.id} event={event} index={index} />
@@ -535,9 +538,12 @@ function Dashboard() {
               </div>
             }
             noPadding
+            className="min-h-[220px]"
           >
-            {anomalies?.anomalies && anomalies.anomalies.length > 0 ? (
-              <div className="divide-y divide-slate-800/50 max-h-[280px] overflow-y-auto">
+            {!anomalies ? (
+              <SkeletonList count={5} variant="anomaly" />
+            ) : anomalies?.anomalies && anomalies.anomalies.length > 0 ? (
+              <div className="divide-y divide-slate-800/50 max-h-[280px] overflow-y-auto scrollbar-thin">
                 {anomalies.anomalies.slice(0, 8).map((anomaly, index) => (
                   <AnomalyRow key={anomaly.id} anomaly={anomaly} index={index} />
                 ))}
@@ -556,7 +562,7 @@ function Dashboard() {
         {/* ---- CENTER COLUMN: Trends + Model Performance ---- */}
         <div className="xl:col-span-5 space-y-4">
           {/* 7-Day Trend Chart with Annotations */}
-          <Card title={<span className="text-sm font-semibold text-slate-200">Detection Trend</span>}>
+          <Card title={<span className="text-sm font-semibold text-slate-200">Detection Trend</span>} className="min-h-[200px]">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-4">
                 <div className="text-center">
@@ -590,7 +596,7 @@ function Dashboard() {
           </Card>
 
           {/* ML Model Performance */}
-          <Card title={<span className="text-sm font-semibold text-slate-200">Model Performance</span>}>
+          <Card title={<span className="text-sm font-semibold text-slate-200">Model Performance</span>} className="min-h-[220px]">
             <div className="grid grid-cols-3 gap-4 mb-4">
               <div className="text-center p-3 rounded-lg bg-slate-800/50">
                 <p className="text-xl font-bold font-mono text-white">
@@ -650,7 +656,7 @@ function Dashboard() {
           </Card>
 
           {/* ML Pipeline Status */}
-          <Card title={<span className="text-sm font-semibold text-slate-200">Pipeline Status</span>}>
+          <Card title={<span className="text-sm font-semibold text-slate-200">Pipeline Status</span>} className="min-h-[200px]">
             <div className="grid grid-cols-2 gap-3">
               {/* Last Detection Run */}
               {automationStatus?.last_scoring_result && (
@@ -730,7 +736,7 @@ function Dashboard() {
         </div>
 
         {/* ---- RIGHT COLUMN: Locations + Services + AI Insights ---- */}
-        <div className="xl:col-span-3 space-y-4">
+        <div className="xl:col-span-3 flex flex-col gap-4">
           {/* Top Locations */}
           <Card
             title={
@@ -741,9 +747,12 @@ function Dashboard() {
                 </Link>
               </div>
             }
+            className="min-h-[200px]"
           >
-            {topLocations.length > 0 ? (
-              <div className="space-y-2">
+            {!locationHeatmap ? (
+              <SkeletonList count={4} />
+            ) : topLocations.length > 0 ? (
+              <div className="space-y-1.5 max-h-[240px] overflow-y-auto pr-1 scrollbar-thin">
                 {topLocations.map((location, index) => (
                   <LocationRow key={location.id} location={location} rank={index + 1} />
                 ))}
@@ -760,14 +769,35 @@ function Dashboard() {
           </Card>
 
           {/* Service Health */}
-          <Card title={<span className="text-sm font-semibold text-slate-200">Services</span>}>
-            <ServiceHealthGrid connections={connections} />
+          <Card
+            title={<span className="text-sm font-semibold text-slate-200">Services</span>}
+            className="min-h-[120px]"
+          >
+            {!connections ? (
+              <div className="flex flex-wrap gap-1.5">
+                {[...Array(7)].map((_, i) => (
+                  <div key={i} className="flex-1 min-w-[60px] max-w-[80px] h-[52px] rounded-lg bg-slate-800/50 animate-pulse" />
+                ))}
+              </div>
+            ) : (
+              <ServiceHealthGrid connections={connections} />
+            )}
           </Card>
 
           {/* AI Insights */}
-          <Card title={<span className="text-sm font-semibold text-slate-200">AI Insights</span>}>
+          <Card
+            title={
+              <div className="flex items-center justify-between w-full">
+                <span className="text-sm font-semibold text-slate-200">AI Insights</span>
+                <Link to="/insights" className="text-xs text-amber-400 hover:text-amber-300">
+                  View all →
+                </Link>
+              </div>
+            }
+            className="min-h-[160px]"
+          >
             {aiInsights.length > 0 ? (
-              <div className="space-y-2 max-h-[240px] overflow-y-auto">
+              <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1 scrollbar-thin">
                 {aiInsights.map((insight) => (
                   <InsightCard key={insight.id} insight={insight} navigate={navigate} />
                 ))}
@@ -1049,8 +1079,11 @@ function LocationRow({ location, rank }: { location: { id: string; name: string;
   const percentage = location.deviceCount > 0 ? Math.round((anomalyCount / location.deviceCount) * 100) : 0;
 
   return (
-    <div className="flex items-center gap-3 p-2 rounded-lg bg-slate-800/30 hover:bg-slate-800/50 transition-colors">
-      <span className={`w-5 h-5 rounded text-[10px] font-bold flex items-center justify-center ${
+    <Link
+      to={`/locations?location=${location.id}`}
+      className="flex items-center gap-2.5 p-2.5 rounded-lg bg-slate-800/30 hover:bg-slate-800/50 transition-colors border border-transparent hover:border-slate-700/50 group"
+    >
+      <span className={`w-5 h-5 rounded text-[10px] font-bold flex items-center justify-center flex-shrink-0 ${
         rank === 1 && anomalyCount > 0 ? 'bg-red-500/20 text-red-400' :
         rank <= 3 && anomalyCount > 0 ? 'bg-orange-500/20 text-orange-400' :
         'bg-slate-700/50 text-slate-500'
@@ -1058,25 +1091,28 @@ function LocationRow({ location, rank }: { location: { id: string; name: string;
         {rank}
       </span>
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium text-slate-300 truncate">{location.name}</p>
-        <div className="flex items-center gap-2 mt-0.5">
-          <p className="text-[10px] text-slate-500">{location.deviceCount} devices</p>
-          {anomalyCount > 0 && (
-            <div className="flex-1 h-1 bg-slate-700 rounded-full overflow-hidden max-w-[60px]">
-              <div
-                className="h-full bg-red-500 rounded-full"
-                style={{ width: `${Math.min(percentage, 100)}%` }}
-              />
-            </div>
-          )}
+        <p className="text-xs font-medium text-slate-300 truncate group-hover:text-white transition-colors">{location.name}</p>
+        <div className="flex items-center gap-2 mt-1">
+          <p className="text-[10px] text-slate-500 flex-shrink-0">{location.deviceCount} devices</p>
+          {/* Progress bar showing anomaly ratio */}
+          <div className="flex-1 h-1.5 bg-slate-700/50 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${
+                anomalyCount > 0 ? 'bg-gradient-to-r from-red-500 to-orange-500' : 'bg-emerald-500/50'
+              }`}
+              style={{ width: anomalyCount > 0 ? `${Math.max(Math.min(percentage, 100), 5)}%` : '100%' }}
+            />
+          </div>
         </div>
       </div>
-      {anomalyCount > 0 && (
-        <span className="px-1.5 py-0.5 text-[10px] font-bold bg-red-500/20 text-red-400 rounded">
+      {anomalyCount > 0 ? (
+        <span className="px-2 py-0.5 text-[10px] font-bold bg-red-500/20 text-red-400 rounded-full border border-red-500/30 flex-shrink-0">
           {anomalyCount}
         </span>
+      ) : (
+        <span className="text-[10px] text-emerald-400 flex-shrink-0">✓</span>
       )}
-    </div>
+    </Link>
   );
 }
 
@@ -1085,7 +1121,7 @@ function ServiceHealthGrid({ connections }: { connections: any }) {
     { key: 'backend_db', label: 'PostgreSQL', icon: '🗄️' },
     { key: 'redis', label: 'Redis', icon: '⚡' },
     { key: 'qdrant', label: 'Qdrant', icon: '🔍' },
-    { key: 'dw_sql', label: 'XSight DB', icon: '📊' },
+    { key: 'dw_sql', label: 'XSight', icon: '📊' },
     { key: 'mc_sql', label: 'MC SQL', icon: '📱' },
     { key: 'mobicontrol_api', label: 'MC API', icon: '🔌' },
     { key: 'llm', label: 'LLM', icon: '🤖' },
@@ -1099,21 +1135,22 @@ function ServiceHealthGrid({ connections }: { connections: any }) {
         <span className="text-xs text-slate-500">{connectedCount}/{services.length} online</span>
         <Link to="/system" className="text-[10px] text-amber-400 hover:text-amber-300">Configure →</Link>
       </div>
-      <div className="grid grid-cols-4 gap-1.5">
+      {/* Use flex wrap for even distribution of 7 items */}
+      <div className="flex flex-wrap gap-1.5">
         {services.map((service) => {
           const isConnected = connections?.[service.key]?.connected;
           return (
             <div
               key={service.key}
-              className={`p-1.5 rounded text-center transition-colors ${
-                isConnected ? 'bg-emerald-500/10' : 'bg-red-500/10'
+              className={`flex-1 min-w-[60px] max-w-[80px] p-2 rounded-lg text-center transition-colors ${
+                isConnected ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-red-500/10 border border-red-500/20'
               }`}
               title={`${service.label}: ${isConnected ? 'Connected' : 'Disconnected'}`}
             >
-              <div className={`w-2 h-2 mx-auto rounded-full ${
-                isConnected ? 'bg-emerald-400' : 'bg-red-400'
+              <div className={`w-2.5 h-2.5 mx-auto rounded-full ${
+                isConnected ? 'bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.5)]' : 'bg-red-400 shadow-[0_0_6px_rgba(248,113,113,0.5)]'
               }`} />
-              <p className="text-[8px] text-slate-500 mt-1 truncate">{service.label}</p>
+              <p className="text-[9px] text-slate-400 mt-1.5 truncate font-medium">{service.label}</p>
             </div>
           );
         })}
@@ -1168,6 +1205,62 @@ function EmptyState({
           {action.label} →
         </Link>
       )}
+    </div>
+  );
+}
+
+// Loading skeleton for lists
+function SkeletonList({ count = 4, variant = 'location' }: { count?: number; variant?: 'location' | 'activity' | 'anomaly' }) {
+  if (variant === 'activity') {
+    return (
+      <div className="divide-y divide-slate-800/50">
+        {[...Array(count)].map((_, i) => (
+          <div key={i} className="flex items-center gap-3 px-3 py-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-slate-700 animate-pulse" />
+            <div className="flex-1 h-3 bg-slate-800/50 rounded animate-pulse" />
+            <div className="w-10 h-3 bg-slate-800/50 rounded animate-pulse" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (variant === 'anomaly') {
+    return (
+      <div className="divide-y divide-slate-800/50">
+        {[...Array(count)].map((_, i) => (
+          <div key={i} className="flex items-center gap-3 p-3">
+            <div className="w-1.5 h-10 rounded-full bg-slate-700 animate-pulse" />
+            <div className="flex-1 space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="w-20 h-4 bg-slate-800/50 rounded animate-pulse" />
+                <div className="w-12 h-4 bg-slate-800/50 rounded animate-pulse" />
+              </div>
+              <div className="w-16 h-3 bg-slate-800/50 rounded animate-pulse" />
+            </div>
+            <div className="w-12 h-4 bg-slate-800/50 rounded animate-pulse" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // Default: location variant
+  return (
+    <div className="space-y-1.5">
+      {[...Array(count)].map((_, i) => (
+        <div key={i} className="flex items-center gap-2.5 p-2.5 rounded-lg bg-slate-800/30">
+          <div className="w-5 h-5 rounded bg-slate-700/50 animate-pulse" />
+          <div className="flex-1 space-y-1.5">
+            <div className="w-3/4 h-3 bg-slate-800/50 rounded animate-pulse" />
+            <div className="flex items-center gap-2">
+              <div className="w-16 h-2 bg-slate-800/50 rounded animate-pulse" />
+              <div className="flex-1 h-1.5 bg-slate-700/50 rounded-full animate-pulse" />
+            </div>
+          </div>
+          <div className="w-6 h-4 bg-slate-800/50 rounded-full animate-pulse" />
+        </div>
+      ))}
     </div>
   );
 }

@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import List, Optional
 from urllib.parse import quote_plus
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # Load environment variables from .env file if it exists
 try:
@@ -166,7 +166,7 @@ class AppSettings(BaseModel):
     # JSON array of training data sources, e.g.:
     # [{"name": "BENELUX", "xsight_db": "XSight_BENELUX", "mc_db": "MobiControl_BENELUX"},
     #  {"name": "PIBLIC", "xsight_db": "XSight_PIBLIC", "mc_db": "MobiControl_PIBLIC"}]
-    training_data_sources: List[TrainingDataSource] = []
+    training_data_sources: List[TrainingDataSource] = Field(default_factory=list)
 
     def __init__(self, **data):
         super().__init__(**data)

@@ -158,6 +158,30 @@ def get_tenant_id(allow_default: bool = True) -> str:
     return "default"
 
 
+def get_tenant_id_or_400() -> str:
+    """FastAPI dependency that returns tenant_id or raises HTTPException.
+
+    Use this as a dependency in routes: tenant_id: str = Depends(get_tenant_id_or_400)
+
+    Returns:
+        The current tenant ID.
+
+    Raises:
+        HTTPException: 400 if no tenant context is established.
+    """
+    tenant_id = TenantContext.get()
+    if not tenant_id:
+        # Fall back to default for development, but log a warning
+        if _app_env in ("local", "development"):
+            logger.debug("No tenant context, using default for development")
+            return "default"
+        raise HTTPException(
+            status_code=400,
+            detail="X-Tenant-Id header is required",
+        )
+    return tenant_id
+
+
 def get_current_user() -> RequestUser:
     """Return the current request user context."""
     return get_user_context()

@@ -635,6 +635,174 @@ def discover_all_mc_columns() -> dict[str, list[str]]:
     return result
 
 
+def load_device_custom_attributes(
+    device_ids: Iterable[int] | None = None,
+    limit: int | None = 100_000,
+) -> pd.DataFrame:
+    """
+    Load custom attributes for devices.
+
+    Custom attributes are used for location mapping (Carl's requirement).
+    Returns a DataFrame with DeviceId, AttributeName, AttributeValue columns
+    that can be pivoted for use with LocationMapper.
+
+    Example custom attributes for location:
+        - "Store": "A101"
+        - "Warehouse": "WH-North"
+        - "Region": "Northeast"
+    """
+    engine = create_mc_engine()
+    top_clause = f"TOP ({int(limit)})" if limit is not None else ""
+
+    device_filter_clause = ""
+    params: dict[str, object] = {}
+    if device_ids:
+        device_filter_clause = "WHERE d.DeviceId IN :device_ids"
+        params["device_ids"] = [int(x) for x in device_ids]
+
+    # Query CustomAttributes table if it exists, otherwise return empty
+    # Different MobiControl versions may have different schema
+    sql = f"""
+SELECT {top_clause}
+    d.DeviceId,
+    ca.Name AS AttributeName,
+    ca.Value AS AttributeValue
+FROM dbo.DevInfo d
+INNER JOIN dbo.CustomAttribute ca
+    ON ca.DeviceId = d.DeviceId
+{device_filter_clause}
+ORDER BY d.DeviceId, ca.Name;
+"""
+
+    query = text(sql)
+    if device_ids:
+        query = query.bindparams(bindparam("device_ids", expanding=True))
+
+    try:
+        with engine.connect() as conn:
+            df = pd.read_sql(query, conn, params=params)
+        logger.info(f"Loaded {len(df):,} custom attribute records")
+        return df
+    except Exception as e:
+        logger.warning(f"Could not load custom attributes: {e}")
+        # Return empty DataFrame with expected schema
+        return pd.DataFrame(columns=["DeviceId", "AttributeName", "AttributeValue"])
+
+
+def get_device_custom_attributes_dict(device_ids: Iterable[int] | None = None) -> dict[int, dict[str, str]]:
+    """
+    Get custom attributes as a dictionary for easy lookup.
+
+    Returns:
+        Dict mapping device_id -> {attribute_name: attribute_value, ...}
+
+    Usage with LocationMapper:
+        attrs = get_device_custom_attributes_dict([123, 456])
+        device_data = {"CustomAttributes": attrs.get(123, {})}
+        location = mapper.get_device_location(123, device_data)
+    """
+    df = load_device_custom_attributes(device_ids)
+
+    if df.empty:
+        return {}
+
+    result: dict[int, dict[str, str]] = {}
+    for _, row in df.iterrows():
+        device_id = row["DeviceId"]
+        if device_id not in result:
+            result[device_id] = {}
+        result[device_id][row["AttributeName"]] = str(row["AttributeValue"])
+
+    return result
+
+
+def load_device_labels_dict(
+    device_ids: Iterable[int] | None = None,
+) -> dict[int, list[str]]:
+    """
+    Get device labels as a dictionary for easy lookup.
+
+    Returns:
+        Dict mapping device_id -> [label_value1, label_value2, ...]
+
+    Labels can be used for location mapping with LocationMapper.
+    """
+    engine = create_mc_engine()
+
+    device_filter_clause = ""
+    params: dict[str, object] = {}
+    if device_ids:
+        device_filter_clause = "WHERE ld.DeviceId IN :device_ids"
+        params["device_ids"] = [int(x) for x in device_ids]
+
+    sql = f"""
+SELECT
+    ld.DeviceId,
+    CONVERT(nvarchar(4000), ld.Value) AS LabelValue
+FROM dbo.LabelDevice ld
+{device_filter_clause}
+ORDER BY ld.DeviceId;
+"""
+
+    query = text(sql)
+    if device_ids:
+        query = query.bindparams(bindparam("device_ids", expanding=True))
+
+    try:
+        with engine.connect() as conn:
+            df = pd.read_sql(query, conn, params=params)
+
+        result: dict[int, list[str]] = {}
+        for _, row in df.iterrows():
+            device_id = row["DeviceId"]
+            if device_id not in result:
+                result[device_id] = []
+            result[device_id].append(str(row["LabelValue"]))
+
+        logger.info(f"Loaded labels for {len(result)} devices")
+        return result
+    except Exception as e:
+        logger.warning(f"Could not load device labels: {e}")
+        return {}
+
+
+def enrich_devices_for_location_mapping(
+    devices_df: pd.DataFrame,
+    include_custom_attributes: bool = True,
+    include_labels: bool = True,
+) -> pd.DataFrame:
+    """
+    Enrich a devices DataFrame with data needed for LocationMapper.
+
+    Adds columns:
+        - CustomAttributes: dict of custom attribute key-values
+        - LabelDevice: list of label strings
+
+    The enriched DataFrame can be passed directly to LocationMapper.bulk_map_devices().
+    """
+    if devices_df.empty:
+        return devices_df
+
+    df = devices_df.copy()
+    device_ids = df["DeviceId"].unique().tolist() if "DeviceId" in df.columns else None
+
+    # Add CustomAttributes column
+    if include_custom_attributes:
+        attrs_dict = get_device_custom_attributes_dict(device_ids)
+        df["CustomAttributes"] = df["DeviceId"].apply(lambda x: attrs_dict.get(x, {}))
+    else:
+        df["CustomAttributes"] = [{}] * len(df)
+
+    # Add LabelDevice column
+    if include_labels:
+        labels_dict = load_device_labels_dict(device_ids)
+        df["LabelDevice"] = df["DeviceId"].apply(lambda x: labels_dict.get(x, []))
+    else:
+        df["LabelDevice"] = [[]] * len(df)
+
+    return df
+
+
 def get_device_security_summary(device_ids: Iterable[int] | None = None) -> pd.DataFrame:
     """
     Get a security-focused summary for devices.

@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
+import UnifiedDashboard from './pages/UnifiedDashboard'
 import Dashboard from './pages/Dashboard'
 import Investigations from './pages/Investigations'
 import InvestigationDetail from './pages/InvestigationDetail'
@@ -57,9 +58,12 @@ function App() {
           />
           <Layout>
             <Routes>
-              {/* Command Center */}
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/dashboard" element={<Dashboard />} />
+              {/* Unified Command Center - Primary Entry Point */}
+              <Route path="/" element={<UnifiedDashboard />} />
+              <Route path="/dashboard" element={<UnifiedDashboard />} />
+
+              {/* Detailed Operations Dashboard (formerly Command Center) */}
+              <Route path="/dashboard/detailed" element={<Dashboard />} />
 
               {/* Investigations */}
               <Route path="/investigations" element={<Investigations />} />
