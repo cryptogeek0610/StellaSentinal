@@ -277,3 +277,214 @@ def generate_and_save_row_explanation(engine, result_id: int) -> str:
         )
 
     return explanation
+
+
+# =============================================================================
+# COST-AWARE EXPLANATION FUNCTIONS
+# =============================================================================
+
+def explain_anomaly_with_cost(
+    metrics: dict,
+    stats: dict,
+    device_id: int,
+    timestamp: str,
+    anomaly_score: float,
+    cost_context: "CostContext",
+    cost_calculator: "CostCalculator",
+) -> Dict[str, any]:
+    """Generate a cost-aware explanation for an anomaly.
+
+    This function combines technical anomaly explanation with pre-calculated
+    financial impact data. The LLM never calculates costs - all figures are
+    pre-computed and injected into the prompt.
+
+    Args:
+        metrics: Dictionary of metric values.
+        stats: Reference statistics for comparison.
+        device_id: Device identifier.
+        timestamp: Anomaly timestamp.
+        anomaly_score: Anomaly score from detection model.
+        cost_context: Full cost context for the anomaly.
+        cost_calculator: Cost calculator service instance.
+
+    Returns:
+        Dictionary containing:
+        - 'explanation': LLM-generated text with financial context
+        - 'prompt': The prompt sent to the LLM
+        - 'financial_impact': The FinancialImpactSummary object
+        - 'validation_result': Result of anti-hallucination validation
+    """
+    from device_anomaly.costs.calculator import CostCalculator
+    from device_anomaly.costs.models import CostContext
+    from device_anomaly.llm.cost_prompts import build_cost_aware_anomaly_prompt
+    from device_anomaly.llm.cost_validator import validate_financial_output
+
+    # Build technical payload
+    payload = _build_anomaly_payload_from_stats(
+        metrics=metrics,
+        stats=stats,
+        device_id=device_id,
+        timestamp=timestamp,
+        anomaly_score=anomaly_score,
+    )
+
+    # Calculate financial impact
+    cost_result = cost_calculator.calculate_anomaly_impact(cost_context)
+
+    # Build cost-aware prompt
+    anomaly_json = json.dumps(payload, indent=2)
+    prompt = build_cost_aware_anomaly_prompt(
+        anomaly_json=anomaly_json,
+        financial_data=cost_result.financial_data,
+    )
+
+    # Generate explanation via LLM
+    llm = get_default_llm_client()
+    raw_explanation = llm.generate(prompt)
+    explanation = strip_thinking_tags(raw_explanation)
+
+    # Validate financial output (anti-hallucination)
+    allowed_amounts = cost_calculator.get_allowed_amounts(cost_result)
+    sanitized_text, validation_result = validate_financial_output(
+        explanation,
+        allowed_amounts,
+        auto_sanitize=True,
+    )
+
+    return {
+        "explanation": sanitized_text,
+        "prompt": prompt,
+        "financial_impact": cost_result.impact,
+        "financial_data": cost_result.financial_data,
+        "validation_result": validation_result,
+    }
+
+
+def generate_cost_aware_explanation(
+    engine,
+    result_id: int,
+    tenant_id: str,
+    device_model: str = None,
+    device_value_usd: float = None,
+) -> Dict[str, any]:
+    """Generate and save a cost-aware explanation for an anomaly result.
+
+    Loads the anomaly result, calculates financial impact based on tenant
+    cost configuration, and generates an explanation that includes business
+    impact context.
+
+    Args:
+        engine: SQLAlchemy engine.
+        result_id: Anomaly result ID.
+        tenant_id: Tenant identifier for cost lookup.
+        device_model: Optional device model for cost lookup.
+        device_value_usd: Optional device value override.
+
+    Returns:
+        Dictionary with explanation and financial data.
+    """
+    from decimal import Decimal
+    from device_anomaly.costs.calculator import CostCalculator
+    from device_anomaly.costs.config import get_cost_config
+    from device_anomaly.costs.models import CostContext, DeviceCostContext
+
+    with engine.begin() as conn:
+        df = pd.read_sql(
+            text(
+                """
+                SELECT *
+                FROM dbo.ml_AnomalyResults
+                WHERE Id = :result_id
+                """
+            ),
+            conn,
+            params={"result_id": result_id},
+        )
+
+        if df.empty:
+            raise ValueError(f"No anomaly result found with Id={result_id}")
+
+        row = df.iloc[0]
+
+        # Load stats
+        source = str(row.get("Source") or "dw").lower()
+        stats_path = Path("artifacts/synthetic_stats.json" if source == "synthetic" else "artifacts/dw_stats.json")
+        stats = load_stats(stats_path) or {}
+
+        # Parse metrics
+        metrics = {}
+        metrics_json = row.get("MetricsJson")
+        if isinstance(metrics_json, str) and metrics_json.strip():
+            try:
+                metrics = json.loads(metrics_json)
+            except json.JSONDecodeError:
+                metrics = {}
+
+        # Build cost context
+        config = get_cost_config()
+        device_value = Decimal(str(device_value_usd)) if device_value_usd else config.average_device_cost_usd
+
+        device_context = DeviceCostContext(
+            device_id=int(row.get("DeviceId", -1)),
+            device_model=device_model,
+            purchase_cost_usd=device_value,
+            current_value_usd=device_value,  # Simplified - could calculate depreciation
+        )
+
+        cost_context = CostContext(
+            tenant_id=tenant_id,
+            device_context=device_context,
+            anomaly_id=result_id,
+            anomaly_severity=_score_to_severity(float(row.get("AnomalyScore", 0.0))),
+            estimated_resolution_hours=0.5,  # Default 30 min investigation
+            worker_hourly_rate_usd=config.worker_hourly_rate_usd,
+            it_support_hourly_rate_usd=config.it_support_hourly_rate_usd,
+            downtime_cost_per_hour_usd=config.downtime_cost_per_hour_usd,
+        )
+
+        calculator = CostCalculator(config)
+
+        # Generate cost-aware explanation
+        result = explain_anomaly_with_cost(
+            metrics=metrics,
+            stats=stats,
+            device_id=int(row.get("DeviceId", -1)),
+            timestamp=str(row.get("Timestamp", "")),
+            anomaly_score=float(row.get("AnomalyScore", row.get("anomaly_score", 0.0))),
+            cost_context=cost_context,
+            cost_calculator=calculator,
+        )
+
+        # Optionally save explanation back to database
+        # (keeping original field for backward compatibility)
+        conn.execute(
+            text(
+                """
+                UPDATE dbo.ml_AnomalyResults
+                SET Explanation = :exp
+                WHERE Id = :result_id
+                """
+            ),
+            {"exp": result["explanation"], "result_id": result_id},
+        )
+
+    return result
+
+
+def _score_to_severity(anomaly_score: float) -> str:
+    """Convert anomaly score to severity level.
+
+    Args:
+        anomaly_score: Anomaly score (typically -1 to 0 for Isolation Forest).
+
+    Returns:
+        Severity level: 'critical', 'high', 'medium', or 'low'.
+    """
+    # Isolation Forest: more negative = more anomalous
+    if anomaly_score < -0.5:
+        return "critical"
+    elif anomaly_score < -0.3:
+        return "high"
+    elif anomaly_score < -0.1:
+        return "medium"
+    return "low"

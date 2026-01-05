@@ -32,6 +32,12 @@ from device_anomaly.insights.location_mapper import LocationMapper
 from device_anomaly.insights.network_patterns import NetworkPatternAnalyzer
 from device_anomaly.insights.templates import get_template, render_headline, render_impact
 
+# Import for optional financial impact (avoid circular imports)
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from device_anomaly.costs.models import FinancialImpactSummary
+
 logger = logging.getLogger(__name__)
 
 
@@ -77,6 +83,10 @@ class CustomerInsight:
     ticket_summary: Optional[str] = None
     ticket_description: Optional[str] = None
 
+    # Financial impact (optional, populated by cost calculator)
+    financial_impact: Optional["FinancialImpactSummary"] = None
+    financial_impact_usd: Optional[float] = None  # Quick access to total impact
+
 
 @dataclass
 class DailyInsightDigest:
@@ -113,6 +123,11 @@ class DailyInsightDigest:
 
     # All insights combined (required for save_insights_to_db)
     all_insights: List[CustomerInsight] = field(default_factory=list)
+
+    # Financial summary (if cost data available)
+    total_financial_impact_usd: Optional[float] = None
+    high_impact_count: int = 0
+    potential_savings_usd: Optional[float] = None
 
 
 @dataclass

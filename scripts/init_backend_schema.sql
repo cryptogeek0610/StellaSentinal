@@ -34,6 +34,10 @@ GO
 IF OBJECT_ID('alert_notifications', 'U') IS NOT NULL DROP TABLE alert_notifications;
 IF OBJECT_ID('alerts', 'U') IS NOT NULL DROP TABLE alerts;
 IF OBJECT_ID('alert_rules', 'U') IS NOT NULL DROP TABLE alert_rules;
+IF OBJECT_ID('cost_calculation_cache', 'U') IS NOT NULL DROP TABLE cost_calculation_cache;
+IF OBJECT_ID('cost_audit_logs', 'U') IS NOT NULL DROP TABLE cost_audit_logs;
+IF OBJECT_ID('operational_costs', 'U') IS NOT NULL DROP TABLE operational_costs;
+IF OBJECT_ID('device_type_costs', 'U') IS NOT NULL DROP TABLE device_type_costs;
 IF OBJECT_ID('model_metrics', 'U') IS NOT NULL DROP TABLE model_metrics;
 IF OBJECT_ID('model_deployments', 'U') IS NOT NULL DROP TABLE model_deployments;
 IF OBJECT_ID('ml_models', 'U') IS NOT NULL DROP TABLE ml_models;
@@ -439,6 +443,128 @@ CREATE INDEX idx_notif_channel ON alert_notifications(channel);
 PRINT 'Table alert_notifications created.';
 GO
 
+-- ============================================================================
+-- Cost Intelligence Module Tables
+-- ============================================================================
+
+-- Device Type Costs (Hardware asset costs by device model)
+CREATE TABLE device_type_costs (
+    id BIGINT IDENTITY(1,1) PRIMARY KEY,
+    tenant_id VARCHAR(50) NOT NULL,
+    device_model NVARCHAR(255) NOT NULL,  -- Device model string
+    currency_code VARCHAR(3) DEFAULT 'USD' NOT NULL,
+    purchase_cost BIGINT NOT NULL,  -- Cost in cents
+    replacement_cost BIGINT,  -- Cost in cents
+    repair_cost_avg BIGINT,  -- Cost in cents
+    depreciation_months INT DEFAULT 36,
+    residual_value_percent INT DEFAULT 0,
+    warranty_months INT,
+    valid_from DATETIME2 DEFAULT GETUTCDATE() NOT NULL,
+    valid_to DATETIME2,  -- NULL = currently active
+    notes NVARCHAR(MAX),
+    created_by NVARCHAR(100),
+    created_at DATETIME2 DEFAULT GETUTCDATE() NOT NULL,
+    updated_at DATETIME2 DEFAULT GETUTCDATE() NOT NULL,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(tenant_id)
+);
+CREATE INDEX idx_dtc_tenant_model ON device_type_costs(tenant_id, device_model);
+CREATE INDEX idx_dtc_tenant_valid ON device_type_costs(tenant_id, valid_from, valid_to);
+CREATE INDEX idx_dtc_active ON device_type_costs(tenant_id, valid_to);
+CREATE INDEX idx_dtc_currency ON device_type_costs(tenant_id, currency_code);
+PRINT 'Table device_type_costs created.';
+GO
+
+-- Operational Costs (Custom operational cost entries per tenant)
+CREATE TABLE operational_costs (
+    id BIGINT IDENTITY(1,1) PRIMARY KEY,
+    tenant_id VARCHAR(50) NOT NULL,
+    name NVARCHAR(255) NOT NULL,
+    description NVARCHAR(MAX),
+    category VARCHAR(50) NOT NULL,  -- labor, downtime, support, infrastructure, maintenance, other
+    currency_code VARCHAR(3) DEFAULT 'USD' NOT NULL,
+    amount BIGINT NOT NULL,  -- Cost in cents
+    cost_type VARCHAR(50) NOT NULL,  -- hourly, daily, per_incident, fixed_monthly, per_device
+    unit NVARCHAR(50),  -- hour, day, incident, month, device
+    scope_type VARCHAR(50) DEFAULT 'tenant',  -- tenant, location, device_group, device_model
+    scope_id NVARCHAR(100),  -- ID of the scope entity (null for tenant-wide)
+    is_active BIT DEFAULT 1 NOT NULL,
+    valid_from DATETIME2 DEFAULT GETUTCDATE() NOT NULL,
+    valid_to DATETIME2,  -- NULL = currently active
+    notes NVARCHAR(MAX),
+    created_by NVARCHAR(100),
+    created_at DATETIME2 DEFAULT GETUTCDATE() NOT NULL,
+    updated_at DATETIME2 DEFAULT GETUTCDATE() NOT NULL,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(tenant_id)
+);
+CREATE INDEX idx_oc_tenant_name ON operational_costs(tenant_id, name);
+CREATE INDEX idx_oc_tenant_category ON operational_costs(tenant_id, category);
+CREATE INDEX idx_oc_tenant_valid ON operational_costs(tenant_id, valid_from, valid_to);
+CREATE INDEX idx_oc_active ON operational_costs(tenant_id, is_active);
+CREATE INDEX idx_oc_scope ON operational_costs(tenant_id, scope_type, scope_id);
+PRINT 'Table operational_costs created.';
+GO
+
+-- Cost Audit Logs (Change tracking for compliance)
+CREATE TABLE cost_audit_logs (
+    id BIGINT IDENTITY(1,1) PRIMARY KEY,
+    tenant_id VARCHAR(50) NOT NULL,
+    entity_type VARCHAR(50) NOT NULL,  -- device_type_cost, operational_cost
+    entity_id BIGINT NOT NULL,
+    action VARCHAR(20) NOT NULL,  -- create, update, delete
+    old_values_json NVARCHAR(MAX),  -- JSON: Previous values
+    new_values_json NVARCHAR(MAX),  -- JSON: New values
+    changed_fields_json NVARCHAR(MAX),  -- JSON array of changed field names
+    user_id NVARCHAR(100),
+    user_email NVARCHAR(255),
+    change_reason NVARCHAR(MAX),
+    source VARCHAR(50) DEFAULT 'manual',  -- manual, api, import, system
+    ip_address VARCHAR(45),
+    user_agent NVARCHAR(500),
+    request_id NVARCHAR(100),
+    timestamp DATETIME2 DEFAULT GETUTCDATE() NOT NULL,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(tenant_id)
+);
+CREATE INDEX idx_cal_tenant_time ON cost_audit_logs(tenant_id, timestamp);
+CREATE INDEX idx_cal_entity ON cost_audit_logs(entity_type, entity_id, timestamp);
+CREATE INDEX idx_cal_user ON cost_audit_logs(user_id, timestamp);
+CREATE INDEX idx_cal_action ON cost_audit_logs(tenant_id, action, timestamp);
+PRINT 'Table cost_audit_logs created.';
+GO
+
+-- Cost Calculation Cache (Pre-computed cost impacts)
+CREATE TABLE cost_calculation_cache (
+    id BIGINT IDENTITY(1,1) PRIMARY KEY,
+    tenant_id VARCHAR(50) NOT NULL,
+    entity_type VARCHAR(50) NOT NULL,  -- anomaly, anomaly_event, insight, device
+    entity_id NVARCHAR(100) NOT NULL,
+    device_id VARCHAR(50),
+    device_model NVARCHAR(255),
+    currency_code VARCHAR(3) DEFAULT 'USD' NOT NULL,
+    hardware_cost BIGINT DEFAULT 0,  -- Cost in cents
+    downtime_cost BIGINT DEFAULT 0,
+    labor_cost BIGINT DEFAULT 0,
+    other_cost BIGINT DEFAULT 0,
+    total_cost BIGINT DEFAULT 0,
+    potential_savings BIGINT DEFAULT 0,
+    investment_required BIGINT DEFAULT 0,
+    payback_months FLOAT,
+    breakdown_json NVARCHAR(MAX),  -- JSON: Detailed breakdown
+    impact_level VARCHAR(20),  -- high, medium, low
+    confidence_score FLOAT DEFAULT 0.7,
+    confidence_explanation NVARCHAR(MAX),
+    calculation_version VARCHAR(20) DEFAULT 'v1',
+    cost_config_snapshot_json NVARCHAR(MAX),
+    calculated_at DATETIME2 DEFAULT GETUTCDATE() NOT NULL,
+    expires_at DATETIME2,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(tenant_id)
+);
+CREATE INDEX idx_ccc_tenant_entity ON cost_calculation_cache(tenant_id, entity_type, entity_id);
+CREATE INDEX idx_ccc_device ON cost_calculation_cache(tenant_id, device_id);
+CREATE INDEX idx_ccc_calculated ON cost_calculation_cache(tenant_id, calculated_at);
+CREATE INDEX idx_ccc_impact ON cost_calculation_cache(tenant_id, impact_level);
+PRINT 'Table cost_calculation_cache created.';
+GO
+
 -- Add foreign key constraints (Must be done after all tables are created)
 -- Foreign key for anomaly_events in anomalies table
 ALTER TABLE anomalies
@@ -514,12 +640,13 @@ PRINT '=========================================================================
 PRINT 'Backend database schema created successfully!';
 PRINT '';
 PRINT 'Database: SOTI_AnomalyDetection';
-PRINT 'Tables created: 18';
+PRINT 'Tables created: 22';
 PRINT '  Core: tenants, users, devices';
 PRINT '  Data: metric_definitions, telemetry_points';
 PRINT '  Analysis: baselines, anomalies, anomaly_events, device_patterns';
 PRINT '  ML: ml_models, model_deployments, model_metrics';
 PRINT '  Alerting: alert_rules, alerts, alert_notifications';
+PRINT '  Cost Intelligence: device_type_costs, operational_costs, cost_audit_logs, cost_calculation_cache';
 PRINT '  System: change_log, explanations, audit_logs';
 PRINT '';
 PRINT 'Default tenant created: default';
@@ -532,5 +659,6 @@ PRINT '  2. Register devices from XSight/MobiControl';
 PRINT '  3. Start ingesting telemetry data';
 PRINT '  4. Train and deploy ML models';
 PRINT '  5. Configure alert rules and recipients';
+PRINT '  6. Configure cost data in Cost Intelligence module';
 PRINT '============================================================================';
 GO

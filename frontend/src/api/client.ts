@@ -54,6 +54,26 @@ import type {
   TriggerJobRequest,
   TriggerJobResponse,
 } from '../types/automation';
+import type {
+  HardwareCostCreate,
+  HardwareCostUpdate,
+  HardwareCostResponse,
+  HardwareCostListResponse,
+  DeviceModelsResponse,
+  OperationalCostCreate,
+  OperationalCostUpdate,
+  OperationalCostResponse,
+  OperationalCostListResponse,
+  CostSummaryResponse,
+  AnomalyImpactResponse,
+  DeviceImpactResponse,
+  CostHistoryResponse,
+  BatteryForecastResponse,
+  CostAlert,
+  CostAlertCreate,
+  CostAlertListResponse,
+  NFFSummary,
+} from '../types/cost';
 import { getMockModeFromStorage } from '../hooks/useMockMode';
 import {
   getMockDashboardStats,
@@ -1499,6 +1519,654 @@ export const api = {
       }),
     });
   },
+
+  // ============================================================================
+  // COST INTELLIGENCE API
+  // Enables financial impact analysis for device anomalies and fleet insights.
+  // ============================================================================
+
+  // Hardware Costs
+  getHardwareCosts: (params?: {
+    page?: number;
+    page_size?: number;
+    search?: string;
+  }): Promise<HardwareCostListResponse> => {
+    if (getMockModeFromStorage()) {
+      const mockHardwareCosts: HardwareCostResponse[] = [
+        {
+          id: 1, tenant_id: 'demo', device_model: 'Zebra TC52', purchase_cost: 599,
+          replacement_cost: 649, repair_cost_avg: 125, depreciation_months: 36,
+          battery_replacement_cost: 45, battery_lifespan_months: 18,
+          residual_value_percent: 15, warranty_months: 12, currency_code: 'USD',
+          notes: 'Enterprise-grade Android device for warehouse operations',
+          device_count: 120, total_fleet_value: 71880, valid_from: '2024-01-15T00:00:00Z',
+          created_at: '2024-01-15T10:30:00Z', updated_at: '2024-06-20T14:15:00Z',
+        },
+        {
+          id: 2, tenant_id: 'demo', device_model: 'Zebra TC75x', purchase_cost: 899,
+          replacement_cost: 949, repair_cost_avg: 175, depreciation_months: 36,
+          battery_replacement_cost: 55, battery_lifespan_months: 24,
+          residual_value_percent: 10, warranty_months: 24, currency_code: 'USD',
+          notes: 'Rugged touchscreen scanner for logistics',
+          device_count: 85, total_fleet_value: 76415, valid_from: '2024-02-01T00:00:00Z',
+          created_at: '2024-02-01T09:00:00Z', updated_at: '2024-05-15T11:30:00Z',
+        },
+        {
+          id: 3, tenant_id: 'demo', device_model: 'Honeywell CK65', purchase_cost: 549,
+          replacement_cost: 599, repair_cost_avg: 110, depreciation_months: 48,
+          battery_replacement_cost: 65, battery_lifespan_months: 24,
+          residual_value_percent: 20, warranty_months: 12, currency_code: 'USD',
+          notes: 'Cold storage rated mobile computer',
+          device_count: 45, total_fleet_value: 24705, valid_from: '2024-03-10T00:00:00Z',
+          created_at: '2024-03-10T08:45:00Z', updated_at: '2024-07-01T16:00:00Z',
+        },
+        {
+          id: 4, tenant_id: 'demo', device_model: 'Samsung Galaxy XCover 6', purchase_cost: 449,
+          replacement_cost: 479, repair_cost_avg: 89, depreciation_months: 24,
+          battery_replacement_cost: 35, battery_lifespan_months: 18,
+          residual_value_percent: 25, warranty_months: 12, currency_code: 'USD',
+          notes: 'Rugged smartphone for field workers',
+          device_count: 62, total_fleet_value: 27838, valid_from: '2024-04-01T00:00:00Z',
+          created_at: '2024-04-01T14:00:00Z', updated_at: '2024-08-10T09:30:00Z',
+        },
+        {
+          id: 5, tenant_id: 'demo', device_model: 'iPad Pro 11', purchase_cost: 799,
+          replacement_cost: 849, repair_cost_avg: 250, depreciation_months: 36,
+          battery_replacement_cost: 129, battery_lifespan_months: 24,
+          residual_value_percent: 30, warranty_months: 12, currency_code: 'USD',
+          notes: 'Customer-facing kiosk and POS device (non-removable battery)',
+          device_count: 28, total_fleet_value: 22372, valid_from: '2024-01-20T00:00:00Z',
+          created_at: '2024-01-20T11:00:00Z', updated_at: '2024-06-05T13:45:00Z',
+        },
+        {
+          id: 6, tenant_id: 'demo', device_model: 'Panasonic Toughbook N1', purchase_cost: 1299,
+          replacement_cost: 1399, repair_cost_avg: 320, depreciation_months: 48,
+          battery_replacement_cost: 89, battery_lifespan_months: 30,
+          residual_value_percent: 15, warranty_months: 36, currency_code: 'USD',
+          notes: 'Extreme environment handheld for outdoor use',
+          device_count: 18, total_fleet_value: 23382, valid_from: '2024-05-15T00:00:00Z',
+          created_at: '2024-05-15T10:00:00Z', updated_at: '2024-09-01T08:00:00Z',
+        },
+      ];
+      return Promise.resolve({
+        costs: mockHardwareCosts,
+        total: mockHardwareCosts.length,
+        page: 1,
+        page_size: 50,
+        total_pages: 1,
+        total_fleet_value: mockHardwareCosts.reduce((sum, c) => sum + c.total_fleet_value, 0),
+      });
+    }
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.page_size) queryParams.append('page_size', params.page_size.toString());
+    if (params?.search) queryParams.append('search', params.search);
+    const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return fetchAPI<HardwareCostListResponse>(`/costs/hardware${query}`);
+  },
+
+  getDeviceModelTypes: (): Promise<DeviceModelsResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve({
+        models: [
+          { device_model: 'Zebra TC52', device_count: 120, has_cost_entry: true },
+          { device_model: 'Zebra TC75x', device_count: 85, has_cost_entry: true },
+          { device_model: 'Honeywell CK65', device_count: 45, has_cost_entry: true },
+          { device_model: 'Samsung Galaxy XCover 6', device_count: 62, has_cost_entry: true },
+          { device_model: 'iPad Pro 11', device_count: 28, has_cost_entry: true },
+          { device_model: 'Panasonic Toughbook N1', device_count: 18, has_cost_entry: true },
+          { device_model: 'Zebra ET51', device_count: 12, has_cost_entry: false },
+        ],
+        total: 7,
+      });
+    }
+    return fetchAPI<DeviceModelsResponse>('/costs/hardware/types');
+  },
+
+  createHardwareCost: (cost: HardwareCostCreate): Promise<HardwareCostResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve({
+        ...cost,
+        id: Math.floor(Math.random() * 1000),
+        tenant_id: 'mock',
+        device_count: 0,
+        total_fleet_value: 0,
+        valid_from: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+    }
+    return fetchAPI<HardwareCostResponse>('/costs/hardware', {
+      method: 'POST',
+      body: JSON.stringify(cost),
+    });
+  },
+
+  updateHardwareCost: (id: number, cost: HardwareCostUpdate): Promise<HardwareCostResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.reject(new Error('Update not available in mock mode'));
+    }
+    return fetchAPI<HardwareCostResponse>(`/costs/hardware/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(cost),
+    });
+  },
+
+  deleteHardwareCost: (id: number): Promise<void> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve();
+    }
+    return fetchAPI<void>(`/costs/hardware/${id}`, { method: 'DELETE' });
+  },
+
+  // Operational Costs
+  getOperationalCosts: (params?: {
+    page?: number;
+    page_size?: number;
+    category?: string;
+    is_active?: boolean;
+  }): Promise<OperationalCostListResponse> => {
+    if (getMockModeFromStorage()) {
+      const mockOperationalCosts: OperationalCostResponse[] = [
+        {
+          id: 1, tenant_id: 'demo', name: 'Warehouse Worker Hourly Rate', category: 'labor',
+          amount: 2500, cost_type: 'hourly', unit: 'hour', scope_type: 'tenant',
+          description: 'Average hourly cost including benefits for warehouse staff',
+          currency_code: 'USD', is_active: true, valid_from: '2024-01-01T00:00:00Z',
+          monthly_equivalent: 4333, annual_equivalent: 52000,
+          created_at: '2024-01-01T00:00:00Z', updated_at: '2024-06-01T00:00:00Z',
+        },
+        {
+          id: 2, tenant_id: 'demo', name: 'IT Support Hourly Rate', category: 'support',
+          amount: 7500, cost_type: 'hourly', unit: 'hour', scope_type: 'tenant',
+          description: 'IT helpdesk and device support labor rate',
+          currency_code: 'USD', is_active: true, valid_from: '2024-01-01T00:00:00Z',
+          monthly_equivalent: 13000, annual_equivalent: 156000,
+          created_at: '2024-01-01T00:00:00Z', updated_at: '2024-03-15T00:00:00Z',
+        },
+        {
+          id: 3, tenant_id: 'demo', name: 'Device Downtime Cost', category: 'downtime',
+          amount: 15000, cost_type: 'hourly', unit: 'hour', scope_type: 'tenant',
+          description: 'Lost productivity cost per hour of device downtime',
+          currency_code: 'USD', is_active: true, valid_from: '2024-01-01T00:00:00Z',
+          monthly_equivalent: 26000, annual_equivalent: 312000,
+          created_at: '2024-01-01T00:00:00Z', updated_at: '2024-02-20T00:00:00Z',
+        },
+        {
+          id: 4, tenant_id: 'demo', name: 'MDM Software License', category: 'infrastructure',
+          amount: 800, cost_type: 'per_device', unit: 'device/year', scope_type: 'tenant',
+          description: 'SOTI MobiControl annual license per device',
+          currency_code: 'USD', is_active: true, valid_from: '2024-01-01T00:00:00Z',
+          monthly_equivalent: 2400, annual_equivalent: 28800,
+          created_at: '2024-01-01T00:00:00Z', updated_at: '2024-04-10T00:00:00Z',
+        },
+        {
+          id: 5, tenant_id: 'demo', name: 'Quarterly Device Maintenance', category: 'maintenance',
+          amount: 2500, cost_type: 'per_device', unit: 'device/quarter', scope_type: 'tenant',
+          description: 'Preventive maintenance including cleaning, battery check, and updates',
+          currency_code: 'USD', is_active: true, valid_from: '2024-01-01T00:00:00Z',
+          monthly_equivalent: 3000, annual_equivalent: 36000,
+          created_at: '2024-01-01T00:00:00Z', updated_at: '2024-05-05T00:00:00Z',
+        },
+        {
+          id: 6, tenant_id: 'demo', name: 'Battery Replacement Cost', category: 'maintenance',
+          amount: 4500, cost_type: 'per_incident', unit: 'replacement', scope_type: 'tenant',
+          description: 'Average cost to replace device battery including labor',
+          currency_code: 'USD', is_active: true, valid_from: '2024-01-01T00:00:00Z',
+          monthly_equivalent: 1350, annual_equivalent: 16200,
+          created_at: '2024-01-01T00:00:00Z', updated_at: '2024-07-20T00:00:00Z',
+        },
+        {
+          id: 7, tenant_id: 'demo', name: 'Device Replacement Labor', category: 'labor',
+          amount: 3500, cost_type: 'per_incident', unit: 'replacement', scope_type: 'tenant',
+          description: 'IT labor cost to provision and deploy replacement device',
+          currency_code: 'USD', is_active: true, valid_from: '2024-02-01T00:00:00Z',
+          monthly_equivalent: 1050, annual_equivalent: 12600,
+          created_at: '2024-02-01T00:00:00Z', updated_at: '2024-08-01T00:00:00Z',
+        },
+        {
+          id: 8, tenant_id: 'demo', name: 'Network Infrastructure', category: 'infrastructure',
+          amount: 250000, cost_type: 'fixed_monthly', unit: 'month', scope_type: 'tenant',
+          description: 'WiFi access points, switches, and network management',
+          currency_code: 'USD', is_active: true, valid_from: '2024-01-01T00:00:00Z',
+          monthly_equivalent: 2500, annual_equivalent: 30000,
+          created_at: '2024-01-01T00:00:00Z', updated_at: '2024-06-15T00:00:00Z',
+        },
+      ];
+      return Promise.resolve({
+        costs: mockOperationalCosts,
+        total: mockOperationalCosts.length,
+        page: 1,
+        page_size: 50,
+        total_pages: 1,
+        total_monthly_cost: mockOperationalCosts.reduce((sum, c) => sum + c.monthly_equivalent, 0),
+        total_annual_cost: mockOperationalCosts.reduce((sum, c) => sum + c.annual_equivalent, 0),
+      });
+    }
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.page_size) queryParams.append('page_size', params.page_size.toString());
+    if (params?.category) queryParams.append('category', params.category);
+    if (params?.is_active !== undefined) queryParams.append('is_active', params.is_active.toString());
+    const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return fetchAPI<OperationalCostListResponse>(`/costs/operational${query}`);
+  },
+
+  createOperationalCost: (cost: OperationalCostCreate): Promise<OperationalCostResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve({
+        ...cost,
+        id: Math.floor(Math.random() * 1000),
+        tenant_id: 'mock',
+        valid_from: new Date().toISOString(),
+        monthly_equivalent: cost.amount,
+        annual_equivalent: cost.amount * 12,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+    }
+    return fetchAPI<OperationalCostResponse>('/costs/operational', {
+      method: 'POST',
+      body: JSON.stringify(cost),
+    });
+  },
+
+  updateOperationalCost: (id: number, cost: OperationalCostUpdate): Promise<OperationalCostResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.reject(new Error('Update not available in mock mode'));
+    }
+    return fetchAPI<OperationalCostResponse>(`/costs/operational/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(cost),
+    });
+  },
+
+  deleteOperationalCost: (id: number): Promise<void> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve();
+    }
+    return fetchAPI<void>(`/costs/operational/${id}`, { method: 'DELETE' });
+  },
+
+  // Cost Summary & Impact
+  getCostSummary: (period?: string): Promise<CostSummaryResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve({
+        tenant_id: 'mock',
+        summary_period: period || 'current_month',
+        total_hardware_value: 125000,
+        total_operational_monthly: 4500,
+        total_operational_annual: 54000,
+        total_anomaly_impact_mtd: 2340,
+        total_anomaly_impact_ytd: 28500,
+        by_category: [
+          { category: 'labor', total_cost: 2000, item_count: 3, percentage_of_total: 44.4 },
+          { category: 'downtime', total_cost: 1500, item_count: 2, percentage_of_total: 33.3 },
+          { category: 'support', total_cost: 1000, item_count: 2, percentage_of_total: 22.2 },
+        ],
+        by_device_model: [
+          { device_model: 'Zebra TC52', device_count: 120, unit_cost: 500, total_value: 60000 },
+          { device_model: 'Zebra TC75x', device_count: 80, unit_cost: 650, total_value: 52000 },
+          { device_model: 'Honeywell CK65', device_count: 25, unit_cost: 520, total_value: 13000 },
+        ],
+        cost_trend_30d: -5.2,
+        anomaly_cost_trend_30d: 12.5,
+        calculated_at: new Date().toISOString(),
+        device_count: 225,
+        anomaly_count_period: 47,
+      });
+    }
+    const params = period ? `?period=${period}` : '';
+    return fetchAPI<CostSummaryResponse>(`/costs/summary${params}`);
+  },
+
+  getAnomalyImpact: (anomalyId: number): Promise<AnomalyImpactResponse> => {
+    if (getMockModeFromStorage()) {
+      // Generate varied impact scenarios based on anomaly ID for demo variety
+      const scenarios = [
+        {
+          // High impact: Battery failure causing shift disruption
+          severity: 'high' as const,
+          total: 2850,
+          components: [
+            { type: 'Worker Productivity Loss', description: 'Picker unable to fulfill orders for 4.5 hours', amount: 1125, calculation_method: '4.5 hours x $250/hr avg order value', confidence: 0.92 },
+            { type: 'Emergency Battery Replacement', description: 'Rush replacement including expedited shipping', amount: 95, calculation_method: '$45 battery + $50 overnight shipping', confidence: 0.95 },
+            { type: 'IT Support Time', description: 'Device troubleshooting, battery swap, reconfiguration', amount: 225, calculation_method: '3 hours x $75/hr IT rate', confidence: 0.88 },
+            { type: 'Missed SLA Penalties', description: 'Late shipments due to scanning delays', amount: 1405, calculation_method: '5 orders x $281 avg penalty', confidence: 0.75 },
+          ],
+          deviceCost: 599,
+          replacementCost: 649,
+          depreciatedValue: 425,
+          confidence: 0.85,
+          explanation: 'High confidence based on historical battery failures, worker productivity metrics, and SLA penalty data from this location',
+          level: 'high' as const,
+        },
+        {
+          // Medium impact: Excessive reboots affecting operations
+          severity: 'medium' as const,
+          total: 1680,
+          components: [
+            { type: 'Cumulative Downtime', description: '23 reboots averaging 4 min each, device offline 92 min', amount: 575, calculation_method: '1.53 hours x $375/hr warehouse throughput', confidence: 0.88 },
+            { type: 'Worker Frustration', description: 'Extended task completion times from interruptions', amount: 380, calculation_method: '15% efficiency loss x 8 hours x $32/hr', confidence: 0.72 },
+            { type: 'IT Investigation', description: 'Root cause analysis of firmware issue', amount: 375, calculation_method: '5 hours x $75/hr IT rate', confidence: 0.90 },
+            { type: 'Potential Hardware Damage', description: 'Accelerated wear from repeated cold boots', amount: 350, calculation_method: '5% increased failure probability x $599 device cost + labor', confidence: 0.65 },
+          ],
+          deviceCost: 599,
+          replacementCost: 649,
+          depreciatedValue: 380,
+          confidence: 0.78,
+          explanation: 'Medium confidence; reboot patterns match known firmware bug affecting TC52 devices running OS build 13.2.1',
+          level: 'medium' as const,
+        },
+        {
+          // High impact: Device damage from excessive drops
+          severity: 'critical' as const,
+          total: 3420,
+          components: [
+            { type: 'Screen Replacement', description: 'Cracked display from drop #47 (1.8m onto concrete)', amount: 285, calculation_method: 'OEM screen + labor from repair partner', confidence: 0.95 },
+            { type: 'Device Out of Service', description: 'Worker without device for 2 business days', amount: 1600, calculation_method: '16 hours x $100/hr productivity', confidence: 0.85 },
+            { type: 'Loaner Device Logistics', description: 'Provisioning, shipping, and recovery of loaner', amount: 185, calculation_method: '$35 shipping + 2 hours IT time', confidence: 0.92 },
+            { type: 'Accelerated Depreciation', description: 'Internal damage reducing device lifespan by ~8 months', amount: 1350, calculation_method: '($599 / 36 months) x 8 months remaining value loss', confidence: 0.70 },
+          ],
+          deviceCost: 599,
+          replacementCost: 649,
+          depreciatedValue: 220,
+          confidence: 0.82,
+          explanation: 'Device has 47 recorded drops in 6 months (fleet avg: 8). Location Harbor Point has 3.2x higher drop rate - consider protective cases',
+          level: 'high' as const,
+        },
+      ];
+
+      const scenario = scenarios[anomalyId % scenarios.length];
+
+      return Promise.resolve({
+        anomaly_id: anomalyId,
+        device_id: 1001 + (anomalyId % 100),
+        device_model: 'Zebra TC52',
+        anomaly_severity: scenario.severity,
+        total_estimated_impact: scenario.total,
+        impact_components: scenario.components,
+        device_unit_cost: scenario.deviceCost,
+        device_replacement_cost: scenario.replacementCost,
+        device_age_months: 18,
+        device_depreciated_value: scenario.depreciatedValue,
+        estimated_downtime_hours: 4.5,
+        productivity_cost_per_hour: 100,
+        productivity_impact: 450,
+        average_resolution_time_hours: 3,
+        support_cost_per_hour: 75,
+        estimated_support_cost: 225,
+        similar_cases_count: 12,
+        similar_cases_avg_cost: scenario.total * 0.95,
+        overall_confidence: scenario.confidence,
+        confidence_explanation: scenario.explanation,
+        impact_level: scenario.level,
+        calculated_at: new Date().toISOString(),
+      });
+    }
+    return fetchAPI<AnomalyImpactResponse>(`/costs/impact/${anomalyId}`);
+  },
+
+  getDeviceImpact: (deviceId: number): Promise<DeviceImpactResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve({
+        device_id: deviceId,
+        device_model: 'Zebra TC52',
+        device_name: `Device ${deviceId}`,
+        summary: {
+          device_id: deviceId,
+          device_model: 'Zebra TC52',
+          device_name: `Device ${deviceId}`,
+          location: 'Warehouse A',
+          unit_cost: 500,
+          current_value: 350,
+          total_anomalies: 5,
+          open_anomalies: 1,
+          resolved_anomalies: 4,
+          total_estimated_impact: 1250,
+          impact_mtd: 450,
+          impact_ytd: 1250,
+          risk_score: 0.65,
+          risk_level: 'medium',
+        },
+        recent_anomalies: [],
+        monthly_impact_trend: {},
+        cost_saving_recommendations: [
+          'Consider replacing battery if health is below 80%',
+          'Schedule preventive maintenance to reduce downtime',
+        ],
+      });
+    }
+    return fetchAPI<DeviceImpactResponse>(`/costs/device/${deviceId}/impact`);
+  },
+
+  // Cost History / Audit
+  getCostHistory: (params?: {
+    page?: number;
+    page_size?: number;
+    entity_type?: string;
+    action?: string;
+  }): Promise<CostHistoryResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve({
+        changes: [],
+        total: 0,
+        page: 1,
+        page_size: 50,
+        total_pages: 0,
+        total_creates: 0,
+        total_updates: 0,
+        total_deletes: 0,
+        unique_users: 0,
+      });
+    }
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.page_size) queryParams.append('page_size', params.page_size.toString());
+    if (params?.entity_type) queryParams.append('entity_type', params.entity_type);
+    if (params?.action) queryParams.append('action', params.action);
+    const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return fetchAPI<CostHistoryResponse>(`/costs/history${query}`);
+  },
+
+  // ============================================================================
+  // BATTERY FORECASTING API
+  // Predicts upcoming battery replacements based on lifespan data
+  // ============================================================================
+
+  getBatteryForecast: (): Promise<BatteryForecastResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve({
+        forecasts: [
+          {
+            device_model: 'Zebra TC52',
+            device_count: 120,
+            battery_replacement_cost: 45,
+            battery_lifespan_months: 18,
+            devices_due_this_month: 12,
+            devices_due_next_month: 8,
+            devices_due_in_90_days: 28,
+            estimated_cost_30_days: 540,
+            estimated_cost_90_days: 1260,
+            avg_battery_age_months: 14,
+            oldest_battery_months: 22,
+          },
+          {
+            device_model: 'Zebra TC75x',
+            device_count: 85,
+            battery_replacement_cost: 55,
+            battery_lifespan_months: 24,
+            devices_due_this_month: 5,
+            devices_due_next_month: 7,
+            devices_due_in_90_days: 18,
+            estimated_cost_30_days: 275,
+            estimated_cost_90_days: 990,
+            avg_battery_age_months: 18,
+            oldest_battery_months: 28,
+          },
+          {
+            device_model: 'Honeywell CK65',
+            device_count: 45,
+            battery_replacement_cost: 65,
+            battery_lifespan_months: 24,
+            devices_due_this_month: 3,
+            devices_due_next_month: 4,
+            devices_due_in_90_days: 11,
+            estimated_cost_30_days: 195,
+            estimated_cost_90_days: 715,
+            avg_battery_age_months: 16,
+            oldest_battery_months: 26,
+          },
+          {
+            device_model: 'Samsung Galaxy XCover 6',
+            device_count: 62,
+            battery_replacement_cost: 35,
+            battery_lifespan_months: 18,
+            devices_due_this_month: 8,
+            devices_due_next_month: 6,
+            devices_due_in_90_days: 20,
+            estimated_cost_30_days: 280,
+            estimated_cost_90_days: 700,
+            avg_battery_age_months: 12,
+            oldest_battery_months: 20,
+          },
+          {
+            device_model: 'Panasonic Toughbook N1',
+            device_count: 18,
+            battery_replacement_cost: 89,
+            battery_lifespan_months: 30,
+            devices_due_this_month: 1,
+            devices_due_next_month: 2,
+            devices_due_in_90_days: 4,
+            estimated_cost_30_days: 89,
+            estimated_cost_90_days: 356,
+            avg_battery_age_months: 20,
+            oldest_battery_months: 32,
+          },
+        ],
+        total_devices_with_battery_data: 330,
+        total_estimated_cost_30_days: 1379,
+        total_estimated_cost_90_days: 4021,
+        total_replacements_due_30_days: 29,
+        total_replacements_due_90_days: 81,
+        forecast_generated_at: new Date().toISOString(),
+      });
+    }
+    return fetchAPI<BatteryForecastResponse>('/costs/battery-forecast');
+  },
+
+  // ============================================================================
+  // COST ALERTS API
+  // Configure thresholds for cost-based alerting
+  // ============================================================================
+
+  getCostAlerts: (): Promise<CostAlertListResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve({
+        alerts: [
+          {
+            id: 1,
+            name: 'Daily Anomaly Cost Threshold',
+            threshold_type: 'anomaly_cost_daily',
+            threshold_value: 5000,
+            is_active: true,
+            notify_email: 'ops@company.com',
+            last_triggered: '2025-12-28T14:30:00Z',
+            trigger_count: 3,
+            created_at: '2024-01-15T10:00:00Z',
+            updated_at: '2024-06-20T14:00:00Z',
+          },
+          {
+            id: 2,
+            name: 'Monthly Cost Budget Alert',
+            threshold_type: 'anomaly_cost_monthly',
+            threshold_value: 50000,
+            is_active: true,
+            notify_email: 'finance@company.com',
+            trigger_count: 1,
+            created_at: '2024-02-01T09:00:00Z',
+            updated_at: '2024-02-01T09:00:00Z',
+          },
+          {
+            id: 3,
+            name: 'Battery Replacement Budget',
+            threshold_type: 'battery_forecast',
+            threshold_value: 2000,
+            is_active: true,
+            last_triggered: '2025-12-15T09:00:00Z',
+            trigger_count: 5,
+            created_at: '2024-03-10T11:00:00Z',
+            updated_at: '2024-09-01T16:00:00Z',
+          },
+        ],
+        total: 3,
+      });
+    }
+    return fetchAPI<CostAlertListResponse>('/costs/alerts');
+  },
+
+  createCostAlert: (alert: CostAlertCreate): Promise<CostAlert> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve({
+        ...alert,
+        id: Math.floor(Math.random() * 1000),
+        trigger_count: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+    }
+    return fetchAPI<CostAlert>('/costs/alerts', {
+      method: 'POST',
+      body: JSON.stringify(alert),
+    });
+  },
+
+  updateCostAlert: (id: number, alert: Partial<CostAlertCreate>): Promise<CostAlert> => {
+    if (getMockModeFromStorage()) {
+      return Promise.reject(new Error('Update not available in mock mode'));
+    }
+    return fetchAPI<CostAlert>(`/costs/alerts/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(alert),
+    });
+  },
+
+  deleteCostAlert: (id: number): Promise<void> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve();
+    }
+    return fetchAPI<void>(`/costs/alerts/${id}`, { method: 'DELETE' });
+  },
+
+  // ============================================================================
+  // NFF (NO FAULT FOUND) TRACKING API
+  // Track unnecessary repair/investigation costs
+  // ============================================================================
+
+  getNFFSummary: (): Promise<NFFSummary> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve({
+        total_nff_count: 47,
+        total_nff_cost: 3525,
+        avg_cost_per_nff: 75,
+        nff_rate_percent: 23.5,
+        by_device_model: [
+          { device_model: 'Zebra TC52', count: 18, total_cost: 1350 },
+          { device_model: 'Zebra TC75x', count: 12, total_cost: 900 },
+          { device_model: 'Honeywell CK65', count: 9, total_cost: 675 },
+          { device_model: 'Samsung Galaxy XCover 6', count: 8, total_cost: 600 },
+        ],
+        by_resolution: [
+          { resolution: 'no_fault_found', count: 22, total_cost: 1650 },
+          { resolution: 'user_error', count: 15, total_cost: 1125 },
+          { resolution: 'intermittent', count: 7, total_cost: 525 },
+          { resolution: 'software_issue', count: 3, total_cost: 225 },
+        ],
+        trend_30_days: -8.5,
+      });
+    }
+    return fetchAPI<NFFSummary>('/costs/nff/summary');
+  },
 };
 
 // Device action response types
@@ -1617,6 +2285,15 @@ export interface ShiftReadinessResponse {
   recommendations: string[];
 }
 
+// Financial Impact Summary for Analysis Reports
+export interface AnalysisFinancialImpact {
+  total_estimated_cost: number;
+  cost_breakdown: Array<{ category: string; amount: number; description: string }>;
+  potential_savings: number;
+  cost_per_incident?: number;
+  monthly_trend?: number; // percentage change
+}
+
 export interface NetworkAnalysisResponse {
   tenant_id: string;
   analysis_period_days: number;
@@ -1644,6 +2321,7 @@ export interface NetworkAnalysisResponse {
   };
   hidden_devices_count: number;
   recommendations: string[];
+  financial_impact?: AnalysisFinancialImpact;
 }
 
 export interface DeviceAbuseResponse {
@@ -1675,6 +2353,7 @@ export interface DeviceAbuseResponse {
     severity: string;
   }>;
   recommendations: string[];
+  financial_impact?: AnalysisFinancialImpact;
 }
 
 export interface AppAnalysisResponse {
@@ -1701,6 +2380,7 @@ export interface AppAnalysisResponse {
     severity: string;
   }>;
   recommendations: string[];
+  financial_impact?: AnalysisFinancialImpact;
 }
 
 export interface LocationCompareResponse {

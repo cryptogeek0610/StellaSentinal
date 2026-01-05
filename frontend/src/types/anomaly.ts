@@ -205,6 +205,29 @@ export interface AIInsightImpact {
   deviceCount?: number;
 }
 
+// Financial impact data from Cost Intelligence
+export interface FinancialImpact {
+  total_impact_usd: number;
+  monthly_recurring_usd?: number;
+  potential_savings_usd?: number;
+  impact_level: 'high' | 'medium' | 'low';
+  breakdown?: FinancialBreakdownItem[];
+  recommendations?: string[];
+  investment_required_usd?: number;
+  payback_months?: number;
+  confidence_score?: number;
+  calculated_at?: string;
+}
+
+export interface FinancialBreakdownItem {
+  category: string;
+  description: string;
+  amount: number;
+  is_recurring: boolean;
+  period?: string;
+  confidence?: number;
+}
+
 export interface AIInsight {
   id: string;
   type: AIInsightType;
@@ -216,6 +239,7 @@ export interface AIInsight {
   whatToDo?: string;
   recommendation?: string;
   impact?: AIInsightImpact;
+  financialImpact?: FinancialImpact;
   affectedStores?: string[];
   affectedDevices?: string[];
   affectedItems?: string[];

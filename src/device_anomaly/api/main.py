@@ -11,7 +11,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from device_anomaly.api.routes import anomalies, dashboard, devices, baselines, llm_settings, data_discovery, training, automation, streaming, setup, investigation, device_actions, insights
+from device_anomaly.api.routes import anomalies, dashboard, devices, baselines, llm_settings, data_discovery, training, automation, streaming, setup, investigation, device_actions, insights, costs
 from device_anomaly.api.request_context import clear_request_context, set_request_context
 from device_anomaly.config.logging_config import setup_logging
 from device_anomaly.observability.otel import setup_tracing
@@ -213,6 +213,7 @@ app.include_router(setup.router, prefix="/api")
 app.include_router(investigation.router, prefix="/api")
 app.include_router(device_actions.router, prefix="/api")
 app.include_router(insights.router, prefix="/api")
+app.include_router(costs.router, prefix="/api")
 
 # Versioned API prefix (v1)
 app.include_router(anomalies.router, prefix="/api/v1")
@@ -228,6 +229,7 @@ app.include_router(setup.router, prefix="/api/v1")
 app.include_router(investigation.router, prefix="/api/v1")
 app.include_router(device_actions.router, prefix="/api/v1")
 app.include_router(insights.router, prefix="/api/v1")
+app.include_router(costs.router, prefix="/api/v1")
 
 
 @app.get("/")

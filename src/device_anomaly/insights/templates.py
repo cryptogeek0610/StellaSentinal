@@ -41,6 +41,12 @@ class InsightTemplate:
     actions: List[str] = field(default_factory=list)
     ticket_description: Optional[str] = None  # For ServiceNow integration
 
+    # Financial impact templates (for cost-aware insights)
+    financial_impact_template: Optional[str] = None  # Template for financial summary
+    financial_breakdown_template: Optional[str] = None  # Template for cost breakdown
+    roi_template: Optional[str] = None  # Template for ROI messaging
+    cost_category: Optional[str] = None  # hardware, labor, downtime, opportunity
+
 
 # ============================================================================
 # BATTERY INSIGHT TEMPLATES
@@ -86,6 +92,10 @@ Recommended Actions:
 2. Check battery health on affected devices
 3. Review power-hungry app usage
 """,
+    financial_impact_template="Estimated downtime cost: ${downtime_impact_usd:,.0f}. "
+                              "Worker productivity loss: ${labor_impact_usd:,.0f}.",
+    roi_template="Proper charging procedures could save ${potential_savings_usd:,.0f}/month.",
+    cost_category="downtime",
 )
 
 BATTERY_RAPID_DRAIN_TEMPLATE = InsightTemplate(
@@ -218,6 +228,14 @@ Recommended Actions:
 2. Conduct handling training
 3. Investigate work area hazards
 """,
+    financial_impact_template="Estimated repair costs: ${hardware_impact_usd:,.0f}. "
+                              "Productivity loss: ${labor_impact_usd:,.0f}. "
+                              "Total impact: ${total_impact_usd:,.0f}.",
+    financial_breakdown_template="Hardware: ${hardware_impact_usd:,.0f} | "
+                                 "Labor: ${labor_impact_usd:,.0f}",
+    roi_template="Investing ${investment_required_usd:,.0f} in protective cases could save "
+                 "${potential_savings_usd:,.0f}/month.",
+    cost_category="hardware",
 )
 
 EXCESSIVE_REBOOTS_TEMPLATE = InsightTemplate(
@@ -737,3 +755,59 @@ def render_ticket_description(category: InsightCategory, data: Dict[str, Any]) -
         return template.ticket_description.format(**data)
     except KeyError:
         return None
+
+
+def render_financial_impact(
+    category: InsightCategory,
+    data: Dict[str, Any],
+    include_breakdown: bool = True,
+    include_roi: bool = False,
+) -> Optional[str]:
+    """Render the financial impact statement for an insight.
+
+    Args:
+        category: The insight category
+        data: Data dict with financial values to substitute (from CostCalculator)
+        include_breakdown: Whether to include cost breakdown
+        include_roi: Whether to include ROI messaging
+
+    Returns:
+        Rendered financial impact string or None if no template
+    """
+    template = get_template(category)
+    if not template or not template.financial_impact_template:
+        return None
+
+    parts = []
+
+    # Main financial impact
+    try:
+        parts.append(template.financial_impact_template.format(**data))
+    except KeyError:
+        return None
+
+    # Optional breakdown
+    if include_breakdown and template.financial_breakdown_template:
+        try:
+            parts.append(template.financial_breakdown_template.format(**data))
+        except KeyError:
+            pass  # Skip breakdown if data missing
+
+    # Optional ROI
+    if include_roi and template.roi_template:
+        try:
+            parts.append(template.roi_template.format(**data))
+        except KeyError:
+            pass  # Skip ROI if data missing
+
+    return " ".join(parts) if parts else None
+
+
+def get_cost_category(category: InsightCategory) -> Optional[str]:
+    """Get the cost category for an insight type.
+
+    Returns the primary cost category (hardware, labor, downtime, opportunity)
+    for an insight, used to determine which cost calculator to use.
+    """
+    template = get_template(category)
+    return template.cost_category if template else None

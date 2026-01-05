@@ -15,7 +15,6 @@ import { api } from '../api/client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../components/Card';
 import { ToggleSwitch } from '../components/ui';
-import { useUserRole } from '../hooks/useUserRole';
 import type {
   SchedulerStatus,
   SchedulerConfig,
@@ -695,7 +694,6 @@ function JobHistory({ jobs }: { jobs: AutomationJob[] }) {
 // Main component
 export default function Automation() {
   const queryClient = useQueryClient();
-  const { canManage } = useUserRole();
   const [showConfigSuccess, setShowConfigSuccess] = useState(false);
   const [showTriggerSuccess, setShowTriggerSuccess] = useState(false);
 
@@ -824,7 +822,7 @@ export default function Automation() {
         config={config}
         onUpdate={(configUpdate) => updateConfigMutation.mutate(configUpdate)}
         isUpdating={updateConfigMutation.isPending}
-        disabled={!canManage}
+        disabled={false}
       />
 
       {/* Alerts and History */}

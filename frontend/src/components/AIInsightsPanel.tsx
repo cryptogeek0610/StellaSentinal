@@ -7,7 +7,153 @@
 
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AIInsight, AIInsightSeverity } from '../types/anomaly';
+import { AIInsight, AIInsightSeverity, FinancialImpact } from '../types/anomaly';
+
+// ============================================================================
+// Financial Impact Helpers
+// ============================================================================
+
+const formatCurrency = (amount: number, includeCents = false): string => {
+  if (includeCents) {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    }).format(amount);
+  }
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
+};
+
+const getFinancialImpactColor = (level: string) => {
+  switch (level) {
+    case 'high':
+      return {
+        bg: 'bg-red-500/10',
+        border: 'border-red-500/30',
+        text: 'text-red-400',
+        badge: 'bg-red-500/20 text-red-300',
+      };
+    case 'medium':
+      return {
+        bg: 'bg-amber-500/10',
+        border: 'border-amber-500/30',
+        text: 'text-amber-400',
+        badge: 'bg-amber-500/20 text-amber-300',
+      };
+    case 'low':
+    default:
+      return {
+        bg: 'bg-emerald-500/10',
+        border: 'border-emerald-500/30',
+        text: 'text-emerald-400',
+        badge: 'bg-emerald-500/20 text-emerald-300',
+      };
+  }
+};
+
+// Financial Impact Section Component
+const FinancialImpactSection: React.FC<{ impact: FinancialImpact }> = ({ impact }) => {
+  const colors = getFinancialImpactColor(impact.impact_level);
+
+  return (
+    <div className={`p-3 rounded-lg ${colors.bg} border ${colors.border} mb-3`}>
+      <div className="flex items-center gap-2 mb-2">
+        <svg className={`w-4 h-4 ${colors.text}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+          />
+        </svg>
+        <span className={`text-xs font-semibold ${colors.text}`}>Financial Impact</span>
+        <span className={`ml-auto px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${colors.badge}`}>
+          {impact.impact_level}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        {/* Total Impact */}
+        <div className="text-center p-2 rounded bg-slate-800/30">
+          <p className="text-[10px] text-slate-500 mb-0.5">Total Impact</p>
+          <p className={`text-sm font-bold font-mono ${colors.text}`}>
+            {formatCurrency(impact.total_impact_usd)}
+          </p>
+        </div>
+
+        {/* Potential Savings */}
+        {impact.potential_savings_usd !== undefined && impact.potential_savings_usd > 0 && (
+          <div className="text-center p-2 rounded bg-slate-800/30">
+            <p className="text-[10px] text-slate-500 mb-0.5">Potential Savings</p>
+            <p className="text-sm font-bold font-mono text-emerald-400">
+              {formatCurrency(impact.potential_savings_usd)}
+            </p>
+          </div>
+        )}
+
+        {/* Monthly Recurring */}
+        {impact.monthly_recurring_usd !== undefined && impact.monthly_recurring_usd > 0 && (
+          <div className="text-center p-2 rounded bg-slate-800/30">
+            <p className="text-[10px] text-slate-500 mb-0.5">Monthly</p>
+            <p className="text-sm font-bold font-mono text-amber-400">
+              {formatCurrency(impact.monthly_recurring_usd)}/mo
+            </p>
+          </div>
+        )}
+
+        {/* Payback Period */}
+        {impact.payback_months !== undefined && impact.payback_months > 0 && (
+          <div className="text-center p-2 rounded bg-slate-800/30">
+            <p className="text-[10px] text-slate-500 mb-0.5">ROI Payback</p>
+            <p className="text-sm font-bold font-mono text-cyan-400">
+              {impact.payback_months} mo
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Breakdown (if available and has items) */}
+      {impact.breakdown && impact.breakdown.length > 0 && (
+        <div className="mt-2 pt-2 border-t border-slate-700/30">
+          <p className="text-[10px] text-slate-500 mb-1">Cost Breakdown</p>
+          <div className="space-y-1">
+            {impact.breakdown.slice(0, 3).map((item, idx) => (
+              <div key={idx} className="flex items-center justify-between text-[10px]">
+                <span className="text-slate-400 truncate flex-1 mr-2">{item.description}</span>
+                <span className="font-mono text-slate-300 whitespace-nowrap">
+                  {formatCurrency(item.amount)}
+                  {item.is_recurring && <span className="text-slate-500">/mo</span>}
+                </span>
+              </div>
+            ))}
+            {impact.breakdown.length > 3 && (
+              <p className="text-[10px] text-slate-500">
+                +{impact.breakdown.length - 3} more items
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Confidence indicator */}
+      {impact.confidence_score !== undefined && (
+        <div className="mt-2 pt-2 border-t border-slate-700/30 flex items-center gap-2">
+          <span className="text-[10px] text-slate-500">Confidence:</span>
+          <div className="flex-1 h-1 bg-slate-700/50 rounded-full overflow-hidden">
+            <div
+              className={`h-full ${impact.confidence_score >= 0.7 ? 'bg-emerald-500' : impact.confidence_score >= 0.4 ? 'bg-amber-500' : 'bg-red-500'}`}
+              style={{ width: `${impact.confidence_score * 100}%` }}
+            />
+          </div>
+          <span className="text-[10px] text-slate-400 font-mono">
+            {(impact.confidence_score * 100).toFixed(0)}%
+          </span>
+        </div>
+      )}
+    </div>
+  );
+};
 
 interface AIInsightsPanelProps {
   title?: string;
@@ -263,6 +409,11 @@ export const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({
                     </div>
 
                     <p className="text-xs text-slate-400 leading-relaxed mb-3">{insight.description}</p>
+
+                    {/* Financial Impact */}
+                    {insight.financialImpact && (
+                      <FinancialImpactSection impact={insight.financialImpact} />
+                    )}
 
                     {/* Recommendation */}
                     {insight.recommendation && (

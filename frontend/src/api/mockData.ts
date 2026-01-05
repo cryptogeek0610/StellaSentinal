@@ -2154,6 +2154,17 @@ export function getMockNetworkAnalysis(): NetworkAnalysisResponse {
             'Investigate T-Mobile coverage issues in Zone B',
             'Review devices with suspicious offline patterns',
         ],
+        financial_impact: {
+            total_estimated_cost: 23475,
+            cost_breakdown: [
+                { category: 'Productivity Loss', amount: 15650, description: '156.5 hours offline x $100/hr avg worker cost' },
+                { category: 'IT Support', amount: 5125, description: 'Investigation time for 342 disconnects' },
+                { category: 'Dead Zone Impact', amount: 2700, description: '3 zones affecting 45 devices daily' },
+            ],
+            potential_savings: 18750,
+            cost_per_incident: 69,
+            monthly_trend: 12.5,
+        },
     };
 }
 
@@ -2192,6 +2203,18 @@ export function getMockDeviceAbuseAnalysis(): DeviceAbuseResponse {
             'Update firmware on Zebra TC52 devices (known reboot bug)',
             'Conduct device handling training at top 3 locations',
         ],
+        financial_impact: {
+            total_estimated_cost: 19500,
+            cost_breakdown: [
+                { category: 'Screen Repairs', amount: 9360, description: '12 devices with excessive drops x $780 avg repair' },
+                { category: 'Productivity Loss', amount: 5400, description: '156 drops x 15 min recovery x $35/hr' },
+                { category: 'IT Support', amount: 3340, description: '89 reboots investigated x $37.50/incident' },
+                { category: 'Accelerated Depreciation', amount: 1400, description: 'Reduced device lifespan from damage' },
+            ],
+            potential_savings: 15600,
+            cost_per_incident: 80,
+            monthly_trend: -8.5,
+        },
     };
 }
 
@@ -2217,6 +2240,18 @@ export function getMockAppAnalysis(): AppAnalysisResponse {
             'Consider replacing WMS Legacy - high crash rate, no recent updates',
             'Restrict BarcodePlus background activity to reduce battery drain',
         ],
+        financial_impact: {
+            total_estimated_cost: 28950,
+            cost_breakdown: [
+                { category: 'Crash Recovery Time', amount: 11700, description: '156 crashes x 15 min recovery x $30/hr avg' },
+                { category: 'Battery Replacement', amount: 8750, description: 'Accelerated battery wear from power-hungry apps' },
+                { category: 'Lost Productivity (ANRs)', amount: 5100, description: '34 ANRs x 10 min freeze x $30/hr x 5 users avg' },
+                { category: 'IT Support', amount: 3400, description: 'App troubleshooting and reinstalls' },
+            ],
+            potential_savings: 23160,
+            cost_per_incident: 152,
+            monthly_trend: 5.3,
+        },
     };
 }
 

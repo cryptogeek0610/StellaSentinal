@@ -14,6 +14,7 @@ import DataOverview from './pages/DataOverview'
 import TrainingMonitor from './pages/TrainingMonitor'
 import Baselines from './pages/Baselines'
 import Automation from './pages/Automation'
+import CostManagement from './pages/CostManagement'
 import Setup from './pages/Setup'
 import NotFound from './pages/NotFound'
 import { Layout } from './components/Layout'
@@ -88,6 +89,9 @@ function App() {
               <Route path="/training" element={<TrainingMonitor />} />
               <Route path="/baselines" element={<Baselines />} />
               <Route path="/automation" element={<Automation />} />
+
+              {/* Cost Intelligence */}
+              <Route path="/costs" element={<CostManagement />} />
 
               {/* System */}
               <Route path="/system" element={<System />} />

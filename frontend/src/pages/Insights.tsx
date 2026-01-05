@@ -637,27 +637,43 @@ function BatteryTab({
               value={`${shiftReadiness.readiness_percentage.toFixed(0)}%`}
               color={shiftReadiness.readiness_percentage >= 80 ? 'aurora' : 'warning'}
               progressValue={shiftReadiness.readiness_percentage}
-              icon={<span className="text-2xl">🔋</span>}
+              icon={
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              }
             />
             <KPICard
               title="Devices Ready"
               value={`${shiftReadiness.devices_ready}/${shiftReadiness.total_devices}`}
               color="aurora"
-              icon={<span className="text-2xl">✅</span>}
+              icon={
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              }
             />
             <KPICard
               title="At Risk"
               value={shiftReadiness.devices_at_risk}
               color="warning"
               isActive={shiftReadiness.devices_at_risk > 0}
-              icon={<span className="text-2xl">⚠️</span>}
+              icon={
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              }
             />
             <KPICard
               title="Critical"
               value={shiftReadiness.devices_critical}
               color="danger"
               isActive={shiftReadiness.devices_critical > 0}
-              icon={<span className="text-2xl">🚨</span>}
+              icon={
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+              }
             />
           </div>
 
@@ -809,25 +825,41 @@ function NetworkTab({
           title="WiFi Roaming Issues"
           value={networkAnalysis.wifi_summary.devices_with_roaming_issues}
           color="warning"
-          icon={<span className="text-2xl">📶</span>}
+          icon={
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
+            </svg>
+          }
         />
         <KPICard
           title="Potential Dead Zones"
           value={networkAnalysis.wifi_summary.potential_dead_zones}
           color="danger"
-          icon={<span className="text-2xl">❌</span>}
+          icon={
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+            </svg>
+          }
         />
         <KPICard
           title="Total Disconnects"
           value={networkAnalysis.disconnect_summary.total_disconnects}
           color="warning"
-          icon={<span className="text-2xl">🔌</span>}
+          icon={
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414" />
+            </svg>
+          }
         />
         <KPICard
           title="Hidden Devices"
           value={networkAnalysis.hidden_devices_count}
           color={networkAnalysis.hidden_devices_count > 0 ? 'danger' : 'aurora'}
-          icon={<span className="text-2xl">👻</span>}
+          icon={
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+            </svg>
+          }
         />
       </div>
 
@@ -869,6 +901,14 @@ function NetworkTab({
           </div>
         </Card>
       </div>
+
+      {/* Financial Impact */}
+      {networkAnalysis.financial_impact && (
+        <FinancialImpactCard
+          impact={networkAnalysis.financial_impact}
+          title="Network Issues - Financial Impact"
+        />
+      )}
 
       {/* Recommendations */}
       {networkAnalysis.recommendations.length > 0 && (
@@ -914,25 +954,41 @@ function DevicesTab({
           title="Total Drops"
           value={deviceAbuse.total_drops}
           color="warning"
-          icon={<span className="text-2xl">📉</span>}
+          icon={
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+            </svg>
+          }
         />
         <KPICard
           title="Excessive Drops"
           value={deviceAbuse.devices_with_excessive_drops}
           color="danger"
-          icon={<span className="text-2xl">⚠️</span>}
+          icon={
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          }
         />
         <KPICard
           title="Total Reboots"
           value={deviceAbuse.total_reboots}
           color="warning"
-          icon={<span className="text-2xl">🔄</span>}
+          icon={
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          }
         />
         <KPICard
           title="Excessive Reboots"
           value={deviceAbuse.devices_with_excessive_reboots}
           color="danger"
-          icon={<span className="text-2xl">🚨</span>}
+          icon={
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          }
         />
       </div>
 
@@ -991,6 +1047,14 @@ function DevicesTab({
         </Card>
       </div>
 
+      {/* Financial Impact */}
+      {deviceAbuse.financial_impact && (
+        <FinancialImpactCard
+          impact={deviceAbuse.financial_impact}
+          title="Device Issues - Financial Impact"
+        />
+      )}
+
       {/* Recommendations */}
       {deviceAbuse.recommendations.length > 0 && (
         <Card title="Recommendations" accent="aurora">
@@ -1035,25 +1099,41 @@ function AppsTab({
           title="Apps Analyzed"
           value={appAnalysis.total_apps_analyzed}
           color="stellar"
-          icon={<span className="text-2xl">📦</span>}
+          icon={
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            </svg>
+          }
         />
         <KPICard
           title="Apps with Issues"
           value={appAnalysis.apps_with_issues}
           color="warning"
-          icon={<span className="text-2xl">⚠️</span>}
+          icon={
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          }
         />
         <KPICard
           title="Total Crashes"
           value={appAnalysis.total_crashes}
           color="danger"
-          icon={<span className="text-2xl">💥</span>}
+          icon={
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+          }
         />
         <KPICard
           title="ANRs"
           value={appAnalysis.total_anrs}
           color="warning"
-          icon={<span className="text-2xl">⏳</span>}
+          icon={
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          }
         />
       </div>
 
@@ -1124,6 +1204,14 @@ function AppsTab({
           </div>
         </Card>
       </div>
+
+      {/* Financial Impact */}
+      {appAnalysis.financial_impact && (
+        <FinancialImpactCard
+          impact={appAnalysis.financial_impact}
+          title="App Issues - Financial Impact"
+        />
+      )}
 
       {/* Recommendations */}
       {appAnalysis.recommendations.length > 0 && (
@@ -1346,9 +1434,105 @@ function LoadingState({ message }: { message: string }) {
 function EmptyState({ message }: { message: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-16">
-      <span className="text-5xl mb-4">📊</span>
+      <div className="w-16 h-16 mb-4 rounded-full bg-slate-700/50 flex items-center justify-center text-slate-400">
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+      </div>
       <p className="text-slate-400">{message}</p>
     </div>
+  );
+}
+
+interface FinancialImpact {
+  total_estimated_cost: number;
+  cost_breakdown: Array<{ category: string; amount: number; description: string }>;
+  potential_savings: number;
+  cost_per_incident?: number;
+  monthly_trend?: number;
+}
+
+function FinancialImpactCard({ impact, title = "Financial Impact" }: { impact: FinancialImpact; title?: string }) {
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  return (
+    <Card title={title} accent="warning">
+      <div className="space-y-4">
+        {/* Top metrics row */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+            <p className="text-xs text-slate-400 mb-1">Total Impact</p>
+            <p className="text-xl font-bold font-mono text-red-400">
+              {formatCurrency(impact.total_estimated_cost)}
+            </p>
+          </div>
+          <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+            <p className="text-xs text-slate-400 mb-1">Potential Savings</p>
+            <p className="text-xl font-bold font-mono text-emerald-400">
+              {formatCurrency(impact.potential_savings)}
+            </p>
+          </div>
+          {impact.cost_per_incident && (
+            <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+              <p className="text-xs text-slate-400 mb-1">Cost/Incident</p>
+              <p className="text-xl font-bold font-mono text-amber-400">
+                {formatCurrency(impact.cost_per_incident)}
+              </p>
+            </div>
+          )}
+          {impact.monthly_trend !== undefined && (
+            <div className="p-3 rounded-lg bg-slate-700/30 border border-slate-600/30">
+              <p className="text-xs text-slate-400 mb-1">Monthly Trend</p>
+              <p className={clsx(
+                "text-xl font-bold font-mono flex items-center gap-1",
+                impact.monthly_trend > 0 ? "text-red-400" : "text-emerald-400"
+              )}>
+                {impact.monthly_trend > 0 ? '+' : ''}{impact.monthly_trend.toFixed(1)}%
+                {impact.monthly_trend > 0 ? (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11l5-5m0 0l5 5m-5-5v12" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 13l-5 5m0 0l-5-5m5 5V6" />
+                  </svg>
+                )}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Cost breakdown */}
+        <div>
+          <h4 className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">
+            Cost Breakdown
+          </h4>
+          <div className="space-y-2">
+            {impact.cost_breakdown.map((item, index) => (
+              <div
+                key={index}
+                className="flex items-center justify-between p-3 rounded-lg bg-slate-800/50 border border-slate-700/30"
+              >
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-white">{item.category}</p>
+                  <p className="text-xs text-slate-500">{item.description}</p>
+                </div>
+                <p className="text-sm font-bold font-mono text-amber-400 ml-4">
+                  {formatCurrency(item.amount)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </Card>
   );
 }
 
