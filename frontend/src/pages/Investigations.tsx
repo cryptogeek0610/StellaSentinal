@@ -1,21 +1,22 @@
 /**
  * Investigations Page - Stellar Operations
- * 
- * Anomaly case management with list and kanban views,
+ *
+ * Anomaly case management with list, smart groups, and kanban views,
  * filtering by status and severity
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { format, formatDistanceToNowStrict } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../components/Card';
+import { AnomalyGroupCard } from '../components/unified/AnomalyGroupCard';
 
-import { Anomaly } from '../types/anomaly';
+import { Anomaly, AnomalyGroup, AnomalyGroupMember } from '../types/anomaly';
 
-type ViewMode = 'list' | 'grouped' | 'kanban';
+type ViewMode = 'list' | 'grouped' | 'smartGroups' | 'kanban';
 type SortBy = 'score' | 'time' | 'device';
 
 // Helper to generate readable reasons
@@ -120,10 +121,17 @@ interface DeviceGroup {
 
 function Investigations() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [viewMode, setViewMode] = useState<ViewMode>('grouped');
+  const [viewMode, setViewMode] = useState<ViewMode>('smartGroups');
   const [sortBy, setSortBy] = useState<SortBy>('score');
   const [page, setPage] = useState(1);
   const [expandedDevices, setExpandedDevices] = useState<Set<number>>(new Set());
+
+  // Smart Groups state
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [selectedAnomalies, setSelectedAnomalies] = useState<Map<string, Set<number>>>(new Map());
+  const [isProcessingBulk, setIsProcessingBulk] = useState(false);
+
+  const queryClient = useQueryClient();
 
   const statusFilter = searchParams.get('status') || '';
   const severityFilter = searchParams.get('severity') || '';
@@ -142,18 +150,40 @@ function Investigations() {
     refetchInterval: 30000,
   });
 
+  // Fetch dashboard stats for consistent counts (used by sidebar badge too)
+  const { data: dashboardStats } = useQuery({
+    queryKey: ['dashboard', 'stats'],
+    queryFn: () => api.getDashboardStats(),
+    refetchInterval: 30000,
+  });
+
+  // Query for smart grouped anomalies
+  const { data: groupedData, isLoading: isLoadingGroups } = useQuery({
+    queryKey: ['anomalies-grouped', statusFilter, severityFilter],
+    queryFn: () => api.getGroupedAnomalies({
+      status: statusFilter || undefined,
+      min_severity: severityFilter || undefined,
+      min_group_size: 2,
+    }),
+    enabled: viewMode === 'smartGroups',
+    refetchInterval: 30000,
+  });
+
   // Calculate status counts from the current filtered dataset
+  // Note: Individual status counts are from current page only (for filter buttons)
+  // Total uses data.total from API for accurate header display
   const statusCounts = useMemo(() => {
-    if (!data) return { open: 0, investigating: 0, resolved: 0, false_positive: 0, total: 0 };
+    if (!data) return { open: 0, investigating: 0, resolved: 0, false_positive: 0, total: 0, pageCount: 0 };
     const counts = data.anomalies.reduce((acc, a) => {
       acc[a.status as keyof typeof acc] = (acc[a.status as keyof typeof acc] || 0) + 1;
       return acc;
     }, { open: 0, investigating: 0, resolved: 0, false_positive: 0 });
-    return { ...counts, total: data.anomalies.length };
+    return { ...counts, total: data.total, pageCount: data.anomalies.length };
   }, [data]);
 
-  // Count items requiring attention (open + investigating from current view)
-  const requiresAttentionCount = statusCounts.open + statusCounts.investigating;
+  // Count items requiring attention - use dashboard stats for consistency with sidebar
+  // Falls back to current page counts if dashboard stats not loaded
+  const requiresAttentionCount = dashboardStats?.open_cases ?? (statusCounts.open + statusCounts.investigating);
 
   // Group anomalies by device for the grouped view
   const deviceGroups = useMemo((): DeviceGroup[] => {
@@ -200,6 +230,83 @@ function Investigations() {
       return next;
     });
   };
+
+  // Smart Groups handlers
+  const toggleGroupExpanded = useCallback((groupId: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
+      }
+      return next;
+    });
+  }, []);
+
+  const getSelectedForGroup = useCallback((groupId: string): Set<number> => {
+    return selectedAnomalies.get(groupId) || new Set();
+  }, [selectedAnomalies]);
+
+  const handleSelectAnomaly = useCallback((groupId: string, anomalyId: number, selected: boolean) => {
+    setSelectedAnomalies(prev => {
+      const next = new Map(prev);
+      const groupSet = new Set(next.get(groupId) || []);
+      if (selected) {
+        groupSet.add(anomalyId);
+      } else {
+        groupSet.delete(anomalyId);
+      }
+      next.set(groupId, groupSet);
+      return next;
+    });
+  }, []);
+
+  const handleSelectAllInGroup = useCallback((groupId: string, group: AnomalyGroup, selected: boolean) => {
+    setSelectedAnomalies(prev => {
+      const next = new Map(prev);
+      if (selected) {
+        const allIds = new Set(group.sample_anomalies.map(a => a.anomaly_id));
+        next.set(groupId, allIds);
+      } else {
+        next.set(groupId, new Set());
+      }
+      return next;
+    });
+  }, []);
+
+  const handleBulkAction = useCallback(async (groupId: string, action: 'resolve' | 'investigating' | 'dismiss') => {
+    const selectedIds = selectedAnomalies.get(groupId);
+    if (!selectedIds || selectedIds.size === 0) return;
+
+    setIsProcessingBulk(true);
+    try {
+      await api.bulkAction({
+        action: action,
+        anomaly_ids: Array.from(selectedIds),
+      });
+
+      // Clear selection for this group
+      setSelectedAnomalies(prev => {
+        const next = new Map(prev);
+        next.set(groupId, new Set());
+        return next;
+      });
+
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['anomalies'] });
+      queryClient.invalidateQueries({ queryKey: ['anomalies-grouped'] });
+    } catch (error) {
+      console.error('Bulk action failed:', error);
+    } finally {
+      setIsProcessingBulk(false);
+    }
+  }, [selectedAnomalies, queryClient]);
+
+  const handleAnomalyClick = useCallback((anomaly: AnomalyGroupMember) => {
+    // Navigate to the anomaly detail page
+    window.location.href = `/investigations/${anomaly.anomaly_id}`;
+  }, []);
 
   const getSeverityKey = (score: number): keyof typeof severityConfig => {
     if (score <= -0.7) return 'critical';
@@ -250,6 +357,19 @@ function Investigations() {
 
         {/* View Toggle */}
         <div className="flex items-center gap-2 p-1 bg-slate-800/50 rounded-lg border border-slate-700/50">
+          <button
+            onClick={() => setViewMode('smartGroups')}
+            title="Smart Groups"
+            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all flex items-center gap-1.5 ${viewMode === 'smartGroups'
+              ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+              : 'text-slate-400 hover:text-white'
+              }`}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+            <span className="hidden sm:inline text-xs">Smart</span>
+          </button>
           <button
             onClick={() => setViewMode('grouped')}
             title="Grouped by Device"
@@ -357,7 +477,143 @@ function Investigations() {
       </div>
 
       {/* Content */}
-      {viewMode === 'grouped' ? (
+      {viewMode === 'smartGroups' ? (
+        /* Smart Groups View - AI-powered clustering */
+        <div className="space-y-4">
+          {/* Header stats */}
+          {groupedData && (
+            <div className="flex items-center justify-between px-1">
+              <p className="text-sm text-slate-400">
+                <span className="text-white font-medium">{groupedData.total_groups}</span> smart groups containing{' '}
+                <span className="text-white font-medium">{groupedData.total_anomalies}</span> anomalies
+                {groupedData.ungrouped_count > 0 && (
+                  <span className="text-slate-500"> • {groupedData.ungrouped_count} ungrouped</span>
+                )}
+              </p>
+              <span className="text-xs text-slate-500">
+                Grouped by: {groupedData.grouping_method}
+              </span>
+            </div>
+          )}
+
+          {/* Loading state for groups */}
+          {isLoadingGroups && (
+            <Card className="p-8">
+              <div className="flex items-center justify-center">
+                <div className="relative w-12 h-12 mr-4">
+                  <div className="absolute inset-0 rounded-full border-2 border-amber-500/20"></div>
+                  <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-amber-500 animate-spin"></div>
+                </div>
+                <p className="text-slate-400 font-mono text-sm">Analyzing anomaly patterns...</p>
+              </div>
+            </Card>
+          )}
+
+          {/* Smart Groups List */}
+          {!isLoadingGroups && groupedData && (
+            <div className="space-y-3">
+              <AnimatePresence mode="popLayout">
+                {groupedData.groups.map((group, index) => (
+                  <motion.div
+                    key={group.group_id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ delay: index * 0.03 }}
+                  >
+                    <AnomalyGroupCard
+                      group={group}
+                      isExpanded={expandedGroups.has(group.group_id)}
+                      onToggle={() => toggleGroupExpanded(group.group_id)}
+                      selectedAnomalies={getSelectedForGroup(group.group_id)}
+                      onSelectAnomaly={(id, selected) => handleSelectAnomaly(group.group_id, id, selected)}
+                      onSelectAll={(selected) => handleSelectAllInGroup(group.group_id, group, selected)}
+                      onBulkAction={(action) => handleBulkAction(group.group_id, action)}
+                      onAnomalyClick={handleAnomalyClick}
+                      isLoading={isProcessingBulk}
+                    />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+
+              {/* Ungrouped Anomalies Section */}
+              {groupedData.ungrouped_anomalies && groupedData.ungrouped_anomalies.length > 0 && (
+                <div className="mt-6">
+                  <h3 className="text-sm font-medium text-slate-400 mb-3 flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                    </svg>
+                    Ungrouped Anomalies ({groupedData.ungrouped_anomalies.length})
+                  </h3>
+                  <Card noPadding>
+                    <div className="divide-y divide-slate-800/50">
+                      {groupedData.ungrouped_anomalies.slice(0, 10).map((anomaly) => {
+                        const severityKey = getSeverityKey(anomaly.anomaly_score);
+                        const severity = severityConfig[severityKey];
+                        const status = statusConfig[anomaly.status as keyof typeof statusConfig] || statusConfig.open;
+
+                        return (
+                          <Link
+                            key={anomaly.anomaly_id}
+                            to={`/investigations/${anomaly.anomaly_id}`}
+                            className="flex items-center gap-4 p-4 hover:bg-slate-800/30 transition-colors group"
+                          >
+                            <div className={`w-1 h-10 rounded-full ${severity.barColor}`} />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-sm font-medium text-white">Device #{anomaly.device_id}</span>
+                                <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded ${severity.badgeBg} ${severity.badgeText}`}>
+                                  {severity.label}
+                                </span>
+                                <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded ${status.badgeBg} ${status.badgeText}`}>
+                                  {status.label}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-3 text-xs text-slate-500">
+                                <span className="font-mono">Score: {anomaly.anomaly_score.toFixed(4)}</span>
+                                <span>•</span>
+                                <span>{formatDistanceToNowStrict(new Date(anomaly.timestamp))} ago</span>
+                              </div>
+                            </div>
+                            <svg className="w-4 h-4 text-slate-600 group-hover:text-amber-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </Link>
+                        );
+                      })}
+                      {groupedData.ungrouped_anomalies.length > 10 && (
+                        <div className="p-4 text-center">
+                          <button
+                            onClick={() => setViewMode('list')}
+                            className="text-xs text-amber-400 hover:text-amber-300 font-medium"
+                          >
+                            View all {groupedData.ungrouped_anomalies.length} ungrouped anomalies in list view →
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </Card>
+                </div>
+              )}
+
+              {/* Empty state */}
+              {groupedData.groups.length === 0 && groupedData.ungrouped_count === 0 && (
+                <Card className="p-12 text-center">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                    <svg className="w-8 h-8 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <p className="text-xl font-medium text-slate-300">No anomalies found</p>
+                  <p className="text-slate-500 mt-1">
+                    {statusFilter || severityFilter ? 'Try adjusting your filters' : 'All systems operating normally'}
+                  </p>
+                </Card>
+              )}
+            </div>
+          )}
+        </div>
+      ) : viewMode === 'grouped' ? (
         /* Grouped by Device View */
         <Card noPadding>
           <div className="divide-y divide-slate-800/50">

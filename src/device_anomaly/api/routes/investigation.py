@@ -39,6 +39,12 @@ from device_anomaly.database.schema import (
     RemediationOutcome,
 )
 from device_anomaly.llm.client import get_default_llm_client, strip_thinking_tags
+from device_anomaly.llm.prompt_utils import (
+    get_severity_word,
+    get_severity_emoji,
+    get_common_root_causes,
+    NO_THINKING_INSTRUCTION,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -827,26 +833,69 @@ def get_ai_analysis(
         for fc in top_features
     ])
 
-    prompt = f"""Analyze this device anomaly and provide a root cause hypothesis.
+    # Determine severity description
+    severity_word = get_severity_word(anomaly.anomaly_score)
+    severity_emoji = get_severity_emoji(anomaly.anomaly_score)
+    common_causes = get_common_root_causes()
 
+    prompt = f"""<role>
+You are a device health analyst for an enterprise mobile device management system (SOTI MobiControl). You analyze anomalies detected by an Isolation Forest ML model that monitors daily device telemetry from Android/iOS devices used in warehouses, retail, and field operations.
+</role>
+
+<output_format>
+{NO_THINKING_INSTRUCTION}
+
+Structure your response EXACTLY as:
+
+PRIMARY HYPOTHESIS
+Title: [5-10 word cause title]
+Confidence: [High/Medium/Low]
+Description: [2-3 sentences explaining what likely happened]
+
+SUPPORTING EVIDENCE
+- [Specific metric + why it supports the hypothesis]
+- [Another piece of evidence]
+
+ALTERNATIVE HYPOTHESIS
+Title: [Alternative cause]
+Confidence: [Lower than primary]
+Why less likely: [1 sentence]
+
+RECOMMENDED ACTIONS
+Urgency: [Immediate/Soon/Monitor]
+1. [First action - be specific]
+2. [Second action]
+
+BUSINESS IMPACT
+[1-2 sentences in plain English about operational impact]
+</output_format>
+
+<anomaly_data>
 Device ID: {anomaly.device_id}
-Anomaly Score: {anomaly.anomaly_score:.4f} (threshold: -0.5)
-Severity: {_get_severity(anomaly.anomaly_score)}
 Detection Time: {anomaly.timestamp}
 
-Top Contributing Factors:
+Anomaly Score: {anomaly.anomaly_score:.4f} {severity_emoji}
+- Score interpretation: Isolation Forest scores range from -1 (most anomalous) to 0 (normal).
+- This device scored {anomaly.anomaly_score:.4f}, which is {severity_word}ly anomalous.
+
+Top Contributing Factors (metrics most different from normal):
 {feature_summary}
+</anomaly_data>
 
-Based on this data, provide:
-1. A primary hypothesis for what caused this anomaly (one sentence title, 2-3 sentence description)
-2. Evidence supporting your hypothesis
-3. One alternative hypothesis with lower likelihood
-4. Recommended actions to investigate or resolve
+<reference>
+{common_causes}
+</reference>
 
-Keep your response concise and actionable."""
+<instructions>
+1. Base your hypothesis ONLY on the metrics provided - do not invent data
+2. Consider combinations of metrics (e.g., high battery drain + high app time = heavy usage, not necessarily a problem)
+3. Confidence should reflect how clearly the evidence points to the cause
+4. Actions should be specific to what an IT admin can actually do
+5. Keep total response under 300 words
+</instructions>"""
 
     try:
-        raw_llm_response = llm_client.generate(prompt)
+        raw_llm_response = llm_client.generate(prompt, max_tokens=500, temperature=0.3)
         # Strip <think> tags from models like DeepSeek R1 that include internal reasoning
         llm_response = strip_thinking_tags(raw_llm_response)
         model_used = llm_client.model_name or "unknown"

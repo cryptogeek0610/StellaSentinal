@@ -9,6 +9,13 @@ import pandas as pd
 from sqlalchemy import text
 
 from device_anomaly.llm.client import BaseLLMClient, get_default_llm_client, strip_thinking_tags
+from device_anomaly.llm.prompt_utils import (
+    get_metric_info,
+    get_z_score_description,
+    get_severity_word,
+    NO_THINKING_INSTRUCTION,
+    DOMAIN_CONTEXT,
+)
 from device_anomaly.config.feature_config import (
     FeatureConfig
 )
@@ -95,32 +102,72 @@ def _build_prompt(payload: Dict) -> str:
     """
     json_str = json.dumps(payload, indent=2)
 
-    prompt = f"""
-        You are an assistant helping explain anomalies in **daily** device telemetry.
+    # Build human-readable metric summary
+    metrics = payload.get("metrics", [])
+    metric_lines = []
+    for m in sorted(metrics, key=lambda x: abs(x.get("z_score", 0)), reverse=True)[:5]:
+        name = m.get("name", "")
+        z = m.get("z_score", 0)
+        human_name, unit, desc = get_metric_info(name)
+        severity_desc = get_z_score_description(z)
+        metric_lines.append(f"- {human_name}: {severity_desc} (z={z:.1f})")
 
-        You will receive a JSON object describing one device and an anomalous day
-        (the timestamp marks the day). Each metric contains:
-        - name
-        - value (daily aggregate)
-        - typical_mean
-        - typical_std
-        - z_score (how many standard deviations away from typical this value is)
-        - optional day_over_day_delta (change from the prior day if available)
+    metric_summary = "\n".join(metric_lines) if metric_lines else "No significant deviations"
+    anomaly_score = payload.get("anomaly_score", 0)
+    severity = get_severity_word(anomaly_score)
 
-        JSON:
-        ```json
-        {json_str}
-        Please:
+    prompt = f"""<role>
+You are a device health advisor explaining anomaly alerts to warehouse supervisors and IT staff managing mobile devices (Android scanners, tablets) in enterprise operations.
+</role>
 
-        Briefly summarize what is unusual about this device on that day.
+<output_format>
+{NO_THINKING_INSTRUCTION}
 
-        Mention the top 2-3 most abnormal metrics, whether they are higher or lower
-        than what devices typically report for a day, and relate them to the metric name.
+Structure your response as:
 
-        Suggest 1-2 possible interpretations or next steps (high-level, not too technical).
+WHAT HAPPENED
+[2-3 sentences describing the unusual behavior in plain English]
 
-        Keep the explanation under 200 words.
-        """
+KEY CONCERNS
+- [Most significant metric and what it means]
+- [Second most significant if applicable]
+
+LIKELY EXPLANATION
+[1-2 sentences suggesting what might have caused this]
+
+SUGGESTED ACTION
+[1 specific, actionable recommendation]
+</output_format>
+
+<device_context>
+Device ID: {payload.get("device_id")}
+Date: {payload.get("timestamp")}
+Anomaly Severity: {severity.title()}
+</device_context>
+
+<metric_summary>
+Most unusual metrics on this day:
+{metric_summary}
+</metric_summary>
+
+<raw_data>
+{json_str}
+```
+
+<z_score_guide>
+z-score interpretation:
+- |z| < 2: Within normal variation
+- |z| 2-3: Notably unusual, worth attention
+- |z| > 3: Significantly unusual, likely a real issue
+</z_score_guide>
+
+<instructions>
+1. Write for someone who manages devices but isn't a data scientist
+2. Focus on the 2-3 most unusual metrics (highest |z-score|)
+3. Translate technical metric names to plain language
+4. Keep explanation under 150 words
+5. Don't be alarmist - some anomalies are benign (e.g., unusually busy day)
+</instructions>"""
     return prompt.strip()
 
 def explain_anomaly_row(row: pd.Series, ctx: ExplanationContext) -> Dict[str, str]:
@@ -185,32 +232,73 @@ def _build_anomaly_payload_from_stats(
 
 
 def _build_prompt_from_stats(payload: dict) -> str:
+    """Build prompt using median/MAD based statistics."""
     json_str = json.dumps(payload, indent=2)
-    prompt = f"""
-You are an assistant helping explain anomalies detected by Isolation Forest in daily device telemetry.
 
-Each metric includes:
-- name
-- value (daily aggregate)
-- typical_median
-- typical_mad (robust deviation)
-- z_score (robust z-score based on median/MAD)
+    # Build human-readable metric summary
+    metrics = payload.get("metrics", [])
+    metric_lines = []
+    for m in sorted(metrics, key=lambda x: abs(x.get("z_score", 0)), reverse=True)[:5]:
+        name = m.get("name", "")
+        z = m.get("z_score", 0)
+        human_name, unit, desc = get_metric_info(name)
+        severity_desc = get_z_score_description(z)
+        metric_lines.append(f"- {human_name}: {severity_desc} (z={z:.1f})")
 
-JSON:
-```json
+    metric_summary = "\n".join(metric_lines) if metric_lines else "No significant deviations"
+    anomaly_score = payload.get("anomaly_score", 0)
+    severity = get_severity_word(anomaly_score)
+
+    prompt = f"""<role>
+You are a device health advisor explaining anomaly alerts to warehouse supervisors and IT staff managing enterprise mobile devices.
+</role>
+
+<output_format>
+{NO_THINKING_INSTRUCTION}
+
+Structure your response as:
+
+WHAT HAPPENED
+[2-3 sentences describing the unusual behavior in plain English]
+
+KEY CONCERNS
+- [Most significant metric and what it means]
+- [Second most significant if applicable]
+
+LIKELY EXPLANATION
+[1-2 sentences suggesting what might have caused this]
+
+SUGGESTED ACTION
+[1 specific, actionable recommendation]
+</output_format>
+
+<device_context>
+Device ID: {payload.get("device_id")}
+Date: {payload.get("timestamp")}
+Anomaly Severity: {severity.title()}
+</device_context>
+
+<metric_summary>
+Most unusual metrics (compared to device population):
+{metric_summary}
+</metric_summary>
+
+<raw_data>
 {json_str}
+```
 
-Please:
+<statistics_note>
+These metrics use robust statistics (median/MAD) which are less affected by outliers than mean/std.
+z-score interpretation: |z| < 2 = normal, |z| 2-3 = notable, |z| > 3 = significant
+</statistics_note>
 
-Briefly summarize what is unusual about this device on that day.
-
-Mention the top 2-3 most abnormal metrics, whether they are higher or lower
-than typical for this device population.
-
-Suggest 1-2 possible interpretations or next steps (high-level, not too technical).
-
-Keep the explanation under 200 words.
-"""
+<instructions>
+1. Write for someone who manages devices but isn't a data scientist
+2. Focus on the 2-3 most unusual metrics
+3. Translate technical metric names to plain language
+4. Keep explanation under 150 words
+5. Be balanced - note if high values might be legitimate heavy usage
+</instructions>"""
     return prompt.strip()
 
 

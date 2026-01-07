@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import List, Optional
 from urllib.parse import quote_plus
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # Load environment variables from .env file if it exists
 try:
@@ -90,103 +90,165 @@ class ResultsDBSettings(BaseModel):
 
 
 class AppSettings(BaseModel):
-    env: str = os.getenv("APP_ENV", "local")
+    """Application settings with dynamic environment variable loading.
+
+    All settings are read from os.environ at instantiation time, not at
+    class definition time. This allows hot-reloading of settings.
+    """
+
+    env: str = "local"
 
     # XSight SQL Database (telemetry source data)
-    # Default: host.docker.internal for Docker deployments
-    # For production: set DW_DB_HOST to your SQL Server instance
-    dw: DBSettings = DBSettings(
-        host=os.getenv("DW_DB_HOST", "host.docker.internal"),
-        database=os.getenv("DW_DB_NAME", "XSight"),
-        user=os.getenv("DW_DB_USER", ""),
-        password=os.getenv("DW_DB_PASS", ""),
-        port=int(os.getenv("DW_DB_PORT", "1433")),
-        driver=os.getenv("DW_DB_DRIVER", "ODBC Driver 18 for SQL Server"),
-        trust_server_certificate=os.getenv("DW_TRUST_SERVER_CERT", "true").lower() == "true",
-        connect_timeout=int(os.getenv("DW_DB_CONNECT_TIMEOUT", "15")),
-        query_timeout=int(os.getenv("DW_DB_QUERY_TIMEOUT", "60")),
-        pool_size=int(os.getenv("DW_DB_POOL_SIZE", "5")),
-        pool_recycle=int(os.getenv("DW_DB_POOL_RECYCLE", "1800")),
-    )
+    dw: DBSettings = Field(default_factory=lambda: DBSettings(
+        host="host.docker.internal",
+        database="XSight",
+        user="",
+        password="",
+    ))
 
     # Backend database (anomaly detection app state) - PostgreSQL
-    # Default: postgres (Docker service name)
-    backend_db: PostgresSettings = PostgresSettings(
-        host=os.getenv("BACKEND_DB_HOST", "postgres"),
-        port=int(os.getenv("BACKEND_DB_PORT", "5432")),
-        database=os.getenv("BACKEND_DB_NAME", "anomaly_detection"),
-        user=os.getenv("BACKEND_DB_USER", "postgres"),
-        password=os.getenv("BACKEND_DB_PASS", "postgres"),
-    )
+    backend_db: PostgresSettings = Field(default_factory=lambda: PostgresSettings())
 
     # MobiControl SQL Database (device inventory, policies - optional enrichment)
-    # Default: host.docker.internal for Docker deployments
-    # For production: set MC_DB_HOST to your SQL Server instance
-    mc: DBSettings = DBSettings(
-        host=os.getenv("MC_DB_HOST", "host.docker.internal"),
-        database=os.getenv("MC_DB_NAME", "MobiControlDB"),
-        user=os.getenv("MC_DB_USER", ""),
-        password=os.getenv("MC_DB_PASS", ""),
-        port=int(os.getenv("MC_DB_PORT", "1433")),
-        driver=os.getenv("MC_DB_DRIVER", "ODBC Driver 18 for SQL Server"),
-        trust_server_certificate=os.getenv("MC_TRUST_SERVER_CERT", "true").lower() == "true",
-        connect_timeout=int(os.getenv("MC_DB_CONNECT_TIMEOUT", "15")),
-        query_timeout=int(os.getenv("MC_DB_QUERY_TIMEOUT", "60")),
-        pool_size=int(os.getenv("MC_DB_POOL_SIZE", "5")),
-        pool_recycle=int(os.getenv("MC_DB_POOL_RECYCLE", "1800")),
-    )
+    mc: DBSettings = Field(default_factory=lambda: DBSettings(
+        host="host.docker.internal",
+        database="MobiControlDB",
+        user="",
+        password="",
+    ))
 
-    results_db: ResultsDBSettings = ResultsDBSettings()
-
-    llm: LLMSettings = LLMSettings(
-        api_key=os.getenv("LLM_API_KEY"),
-        model_name=os.getenv("LLM_MODEL_NAME"),
-        base_url=os.getenv("LLM_BASE_URL"),
-        api_version=os.getenv("LLM_API_VERSION"),
-    )
-
-    mobicontrol: MobiControlSettings = MobiControlSettings(
-        server_url=os.getenv("MOBICONTROL_SERVER_URL", ""),
-        client_id=os.getenv("MOBICONTROL_CLIENT_ID"),
-        client_secret=os.getenv("MOBICONTROL_CLIENT_SECRET"),
-        username=os.getenv("MOBICONTROL_USERNAME"),
-        password=os.getenv("MOBICONTROL_PASSWORD"),
-        tenant_id=os.getenv("MOBICONTROL_TENANT_ID"),
-    )
+    results_db: ResultsDBSettings = Field(default_factory=lambda: ResultsDBSettings())
+    llm: LLMSettings = Field(default_factory=lambda: LLMSettings())
+    mobicontrol: MobiControlSettings = Field(default_factory=lambda: MobiControlSettings(server_url=""))
 
     # Feature flags
-    enable_llm: bool = os.getenv("ENABLE_LLM", "false").lower() == "true"
-    enable_mobicontrol: bool = os.getenv("ENABLE_MOBICONTROL", "false").lower() == "true"
+    enable_llm: bool = False
+    enable_mobicontrol: bool = False
 
     # API settings
-    api_host: str = os.getenv("API_HOST", "0.0.0.0")
-    api_port: int = int(os.getenv("API_PORT", "8000"))
+    api_host: str = "0.0.0.0"
+    api_port: int = 8000
 
     # Multi-source training configuration
-    # JSON array of training data sources, e.g.:
-    # [{"name": "BENELUX", "xsight_db": "XSight_BENELUX", "mc_db": "MobiControl_BENELUX"},
-    #  {"name": "PIBLIC", "xsight_db": "XSight_PIBLIC", "mc_db": "MobiControl_PIBLIC"}]
     training_data_sources: List[TrainingDataSource] = Field(default_factory=list)
 
-    def __init__(self, **data):
-        super().__init__(**data)
-        # Parse training data sources from environment
-        sources_json = os.getenv("TRAINING_DATA_SOURCES", "")
-        if sources_json:
-            try:
-                sources_list = json.loads(sources_json)
-                self.training_data_sources = [
-                    TrainingDataSource(**src) for src in sources_list
-                ]
-            except (json.JSONDecodeError, TypeError) as e:
-                import logging
-                logging.getLogger(__name__).warning(
-                    f"Failed to parse TRAINING_DATA_SOURCES: {e}"
-                )
-
     # Vector database (Qdrant)
-    qdrant_host: str = os.getenv("QDRANT_HOST", "localhost")
-    qdrant_port: int = int(os.getenv("QDRANT_PORT", "6333"))
+    qdrant_host: str = "localhost"
+    qdrant_port: int = 6333
+
+    @model_validator(mode='before')
+    @classmethod
+    def load_from_environment(cls, data: dict) -> dict:
+        """Load all settings from os.environ at instantiation time."""
+        # Only load from env if no explicit data is provided
+        # This allows explicit values to override env vars
+
+        # Environment
+        if 'env' not in data:
+            data['env'] = os.getenv("APP_ENV", "local")
+
+        # XSight Database
+        if 'dw' not in data:
+            data['dw'] = DBSettings(
+                host=os.getenv("DW_DB_HOST", "host.docker.internal"),
+                database=os.getenv("DW_DB_NAME", "XSight"),
+                user=os.getenv("DW_DB_USER", ""),
+                password=os.getenv("DW_DB_PASS", ""),
+                port=int(os.getenv("DW_DB_PORT", "1433")),
+                driver=os.getenv("DW_DB_DRIVER", "ODBC Driver 18 for SQL Server"),
+                trust_server_certificate=os.getenv("DW_TRUST_SERVER_CERT", "true").lower() == "true",
+                connect_timeout=int(os.getenv("DW_DB_CONNECT_TIMEOUT", "15")),
+                query_timeout=int(os.getenv("DW_DB_QUERY_TIMEOUT", "60")),
+                pool_size=int(os.getenv("DW_DB_POOL_SIZE", "5")),
+                pool_recycle=int(os.getenv("DW_DB_POOL_RECYCLE", "1800")),
+            )
+
+        # Backend Database
+        if 'backend_db' not in data:
+            data['backend_db'] = PostgresSettings(
+                host=os.getenv("BACKEND_DB_HOST", "postgres"),
+                port=int(os.getenv("BACKEND_DB_PORT", "5432")),
+                database=os.getenv("BACKEND_DB_NAME", "anomaly_detection"),
+                user=os.getenv("BACKEND_DB_USER", "postgres"),
+                password=os.getenv("BACKEND_DB_PASS", "postgres"),
+            )
+
+        # MobiControl Database
+        if 'mc' not in data:
+            data['mc'] = DBSettings(
+                host=os.getenv("MC_DB_HOST", "host.docker.internal"),
+                database=os.getenv("MC_DB_NAME", "MobiControlDB"),
+                user=os.getenv("MC_DB_USER", ""),
+                password=os.getenv("MC_DB_PASS", ""),
+                port=int(os.getenv("MC_DB_PORT", "1433")),
+                driver=os.getenv("MC_DB_DRIVER", "ODBC Driver 18 for SQL Server"),
+                trust_server_certificate=os.getenv("MC_TRUST_SERVER_CERT", "true").lower() == "true",
+                connect_timeout=int(os.getenv("MC_DB_CONNECT_TIMEOUT", "15")),
+                query_timeout=int(os.getenv("MC_DB_QUERY_TIMEOUT", "60")),
+                pool_size=int(os.getenv("MC_DB_POOL_SIZE", "5")),
+                pool_recycle=int(os.getenv("MC_DB_POOL_RECYCLE", "1800")),
+            )
+
+        # Results Database
+        if 'results_db' not in data:
+            data['results_db'] = ResultsDBSettings(
+                url=os.getenv("RESULTS_DB_URL"),
+                path=os.getenv("RESULTS_DB_PATH", "anomaly_results.db"),
+            )
+
+        # LLM Settings
+        if 'llm' not in data:
+            data['llm'] = LLMSettings(
+                api_key=os.getenv("LLM_API_KEY"),
+                model_name=os.getenv("LLM_MODEL_NAME"),
+                base_url=os.getenv("LLM_BASE_URL"),
+                api_version=os.getenv("LLM_API_VERSION"),
+            )
+
+        # MobiControl API Settings
+        if 'mobicontrol' not in data:
+            data['mobicontrol'] = MobiControlSettings(
+                server_url=os.getenv("MOBICONTROL_SERVER_URL", ""),
+                client_id=os.getenv("MOBICONTROL_CLIENT_ID"),
+                client_secret=os.getenv("MOBICONTROL_CLIENT_SECRET"),
+                username=os.getenv("MOBICONTROL_USERNAME"),
+                password=os.getenv("MOBICONTROL_PASSWORD"),
+                tenant_id=os.getenv("MOBICONTROL_TENANT_ID"),
+            )
+
+        # Feature flags
+        if 'enable_llm' not in data:
+            data['enable_llm'] = os.getenv("ENABLE_LLM", "false").lower() == "true"
+        if 'enable_mobicontrol' not in data:
+            data['enable_mobicontrol'] = os.getenv("ENABLE_MOBICONTROL", "false").lower() == "true"
+
+        # API settings
+        if 'api_host' not in data:
+            data['api_host'] = os.getenv("API_HOST", "0.0.0.0")
+        if 'api_port' not in data:
+            data['api_port'] = int(os.getenv("API_PORT", "8000"))
+
+        # Qdrant
+        if 'qdrant_host' not in data:
+            data['qdrant_host'] = os.getenv("QDRANT_HOST", "localhost")
+        if 'qdrant_port' not in data:
+            data['qdrant_port'] = int(os.getenv("QDRANT_PORT", "6333"))
+
+        # Training data sources
+        if 'training_data_sources' not in data:
+            sources_json = os.getenv("TRAINING_DATA_SOURCES", "")
+            if sources_json:
+                try:
+                    sources_list = json.loads(sources_json)
+                    data['training_data_sources'] = [
+                        TrainingDataSource(**src) for src in sources_list
+                    ]
+                except (json.JSONDecodeError, TypeError):
+                    data['training_data_sources'] = []
+            else:
+                data['training_data_sources'] = []
+
+        return data
 
 
 _settings: AppSettings | None = None
@@ -217,3 +279,69 @@ def reset_settings() -> None:
     """Reset cached settings. Useful for testing."""
     global _settings
     _settings = None
+
+
+def reload_settings(env_path: Path | str | None = None) -> AppSettings:
+    """
+    Hot-reload settings from .env file.
+
+    This function re-reads the .env file and updates os.environ,
+    then recreates the settings object with the new values.
+
+    Args:
+        env_path: Optional path to .env file. If not provided,
+                  searches for it in common locations.
+
+    Returns:
+        The newly loaded AppSettings instance.
+    """
+    global _settings
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    # Find the .env file
+    if env_path is None:
+        # Try multiple locations
+        search_paths = [
+            Path("/app/.env"),  # Docker container
+            Path(__file__).resolve().parents[3] / ".env",  # From src/device_anomaly/config
+            Path.cwd() / ".env",  # Current working directory
+        ]
+        for path in search_paths:
+            if path.exists():
+                env_path = path
+                break
+
+    if env_path is None or not Path(env_path).exists():
+        logger.warning("Could not find .env file for hot-reload")
+        return get_settings()
+
+    env_path = Path(env_path)
+    logger.info(f"Hot-reloading settings from {env_path}")
+
+    try:
+        from dotenv import load_dotenv
+
+        # Reload .env with override=True to update existing env vars
+        load_dotenv(env_path, override=True)
+
+        # Clear the cached settings
+        _settings = None
+
+        # Create new settings instance (will read from updated os.environ)
+        _settings = AppSettings()
+
+        logger.info(
+            f"Settings reloaded: ENABLE_LLM={_settings.enable_llm}, "
+            f"LLM_BASE_URL={_settings.llm.base_url}"
+        )
+
+        return _settings
+
+    except ImportError:
+        logger.error("python-dotenv not installed, cannot hot-reload")
+        return get_settings()
+    except Exception as e:
+        logger.exception(f"Failed to reload settings: {e}")
+        return get_settings()

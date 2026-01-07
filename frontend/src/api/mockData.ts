@@ -33,6 +33,11 @@ import type {
     SimilarCase,
     HistoricalTimeline,
     TimeSeriesDataPoint,
+    // Smart Grouping types
+    GroupedAnomaliesResponse,
+    AnomalyGroup,
+    AnomalyGroupMember,
+    Severity,
 } from '../types/anomaly';
 
 // Seeded random for consistent data
@@ -461,28 +466,138 @@ export function getMockAnomalies(params: {
 }
 
 export function getMockAnomalyDetail(anomalyId: number): AnomalyDetail | null {
+    // First check if it's in the main MOCK_ANOMALIES array
     const anomaly = MOCK_ANOMALIES.find((a) => a.id === anomalyId);
-    if (!anomaly) return null;
+    if (anomaly) {
+        return {
+            ...anomaly,
+            notes: 'Mock anomaly for demonstration purposes.',
+            investigation_notes: [
+                {
+                    id: 1,
+                    user: 'System',
+                    note: 'Anomaly detected by Isolation Forest model with high confidence.',
+                    action_type: 'detection',
+                    created_at: anomaly.created_at,
+                },
+                {
+                    id: 2,
+                    user: 'Admin',
+                    note: 'Reviewing device telemetry patterns.',
+                    action_type: 'investigation',
+                    created_at: new Date().toISOString(),
+                },
+            ],
+        };
+    }
+
+    // Check if this ID comes from grouped anomalies (IDs like 1001, 2001, 3001, etc.)
+    const groupedData = getMockGroupedAnomalies();
+
+    // Search in all group sample_anomalies
+    for (const group of groupedData.groups) {
+        const groupedAnomaly = group.sample_anomalies.find(a => a.anomaly_id === anomalyId);
+        if (groupedAnomaly) {
+            return createAnomalyDetailFromGroupMember(groupedAnomaly, group.group_name);
+        }
+    }
+
+    // Search in ungrouped anomalies
+    const ungroupedAnomaly = groupedData.ungrouped_anomalies?.find(a => a.anomaly_id === anomalyId);
+    if (ungroupedAnomaly) {
+        return createAnomalyDetailFromGroupMember(ungroupedAnomaly, 'Ungrouped');
+    }
+
+    return null;
+}
+
+// Helper function to create AnomalyDetail from AnomalyGroupMember
+function createAnomalyDetailFromGroupMember(member: AnomalyGroupMember, groupName: string): AnomalyDetail {
+    const now = new Date();
+    const metricValues = generateMetricValuesForGroupMember(member);
 
     return {
-        ...anomaly,
-        notes: 'Mock anomaly for demonstration purposes.',
+        id: member.anomaly_id,
+        device_id: member.device_id,
+        timestamp: member.timestamp,
+        anomaly_score: member.anomaly_score,
+        anomaly_label: -1,
+        status: member.status,
+        assigned_to: null,
+        total_battery_level_drop: metricValues.total_battery_level_drop,
+        total_free_storage_kb: metricValues.total_free_storage_kb,
+        download: metricValues.download,
+        upload: metricValues.upload,
+        offline_time: metricValues.offline_time,
+        disconnect_count: metricValues.disconnect_count,
+        wifi_signal_strength: metricValues.wifi_signal_strength,
+        connection_time: metricValues.connection_time,
+        feature_values_json: null,
+        created_at: member.timestamp,
+        updated_at: now.toISOString(),
+        notes: `Mock anomaly from smart group: ${groupName}`,
         investigation_notes: [
             {
                 id: 1,
                 user: 'System',
-                note: 'Anomaly detected by Isolation Forest model with high confidence.',
+                note: `Anomaly detected by Isolation Forest model. Part of group: ${groupName}`,
                 action_type: 'detection',
-                created_at: anomaly.created_at,
+                created_at: member.timestamp,
             },
             {
                 id: 2,
                 user: 'Admin',
-                note: 'Reviewing device telemetry patterns.',
+                note: `Primary metric: ${member.primary_metric || 'unknown'}. Location: ${member.location || 'unknown'}`,
                 action_type: 'investigation',
-                created_at: new Date().toISOString(),
+                created_at: now.toISOString(),
             },
         ],
+    };
+}
+
+// Generate realistic metric values based on the group member's primary metric
+function generateMetricValuesForGroupMember(member: AnomalyGroupMember): {
+    total_battery_level_drop: number;
+    total_free_storage_kb: number;
+    download: number;
+    upload: number;
+    offline_time: number;
+    disconnect_count: number;
+    wifi_signal_strength: number;
+    connection_time: number;
+} {
+    // Use anomaly_id as seed for consistent but varied values
+    const seed = member.anomaly_id;
+    const baseVariation = (seed % 10) / 10;
+
+    // Set abnormal values based on primary_metric
+    const isAbnormal = (metric: string) => member.primary_metric === metric;
+
+    return {
+        total_battery_level_drop: isAbnormal('total_battery_level_drop')
+            ? 35 + Math.floor(baseVariation * 40) // 35-75% (abnormal)
+            : 5 + Math.floor(baseVariation * 15),  // 5-20% (normal)
+        total_free_storage_kb: isAbnormal('total_free_storage_kb')
+            ? 100000 + Math.floor(baseVariation * 400000) // 100KB-500KB (critical low)
+            : 2000000 + Math.floor(baseVariation * 3000000), // 2GB-5GB (normal)
+        download: isAbnormal('download')
+            ? 500000 + Math.floor(baseVariation * 4500000) // 500KB-5MB (high)
+            : 10000 + Math.floor(baseVariation * 100000),   // 10KB-110KB (normal)
+        upload: isAbnormal('upload')
+            ? 200000 + Math.floor(baseVariation * 1800000) // 200KB-2MB (high)
+            : 5000 + Math.floor(baseVariation * 50000),    // 5KB-55KB (normal)
+        offline_time: isAbnormal('offline_time')
+            ? 60 + Math.floor(baseVariation * 180)  // 60-240 min (high)
+            : Math.floor(baseVariation * 20),       // 0-20 min (normal)
+        disconnect_count: isAbnormal('disconnect_count')
+            ? 8 + Math.floor(baseVariation * 17)    // 8-25 (high)
+            : Math.floor(baseVariation * 3),        // 0-3 (normal)
+        wifi_signal_strength: isAbnormal('wifi_signal_strength')
+            ? -85 + Math.floor(baseVariation * 15)  // -85 to -70 dBm (weak)
+            : -60 + Math.floor(baseVariation * 20), // -60 to -40 dBm (good)
+        connection_time: isAbnormal('connection_time')
+            ? 120 + Math.floor(baseVariation * 180) // 120-300s (slow)
+            : 30 + Math.floor(baseVariation * 60),  // 30-90s (normal)
     };
 }
 
@@ -2287,6 +2402,191 @@ export function getMockLocationComparison(locationAId: string, locationBId: stri
             `${storeA.name} has 2.9x more device drops per week`,
             `${storeB.name} achieves 89% shift readiness vs 72% at ${storeA.name}`,
         ],
+    };
+}
+
+// ============================================================================
+// Smart Anomaly Grouping Mock Data
+// ============================================================================
+
+export function getMockGroupedAnomalies(_params?: {
+    status?: string;
+    min_severity?: string;
+    min_group_size?: number;
+    temporal_window_hours?: number;
+}): GroupedAnomaliesResponse {
+    const now = new Date();
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+    const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+    const threeHoursAgo = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+
+    // Create sample group members
+    const batteryMembers: AnomalyGroupMember[] = [
+        { anomaly_id: 1001, device_id: 101, anomaly_score: -0.85, severity: 'critical', status: 'open', timestamp: oneHourAgo.toISOString(), device_model: 'Zebra TC52', location: 'Downtown Flagship', primary_metric: 'total_battery_level_drop' },
+        { anomaly_id: 1002, device_id: 102, anomaly_score: -0.72, severity: 'critical', status: 'investigating', timestamp: twoHoursAgo.toISOString(), device_model: 'Zebra TC52', location: 'Downtown Flagship', primary_metric: 'total_battery_level_drop' },
+        { anomaly_id: 1003, device_id: 103, anomaly_score: -0.68, severity: 'high', status: 'open', timestamp: threeHoursAgo.toISOString(), device_model: 'Samsung Galaxy Tab A8', location: 'Westside Mall', primary_metric: 'total_battery_level_drop' },
+        { anomaly_id: 1004, device_id: 104, anomaly_score: -0.55, severity: 'high', status: 'open', timestamp: oneHourAgo.toISOString(), device_model: 'Samsung Galaxy Tab A8', location: 'Harbor Point', primary_metric: 'total_battery_level_drop' },
+        { anomaly_id: 1005, device_id: 105, anomaly_score: -0.52, severity: 'high', status: 'open', timestamp: twoHoursAgo.toISOString(), device_model: 'iPad Pro 11', location: 'Tech Plaza', primary_metric: 'total_battery_level_drop' },
+    ];
+
+    const networkMembers: AnomalyGroupMember[] = [
+        { anomaly_id: 2001, device_id: 201, anomaly_score: -0.78, severity: 'critical', status: 'open', timestamp: oneHourAgo.toISOString(), device_model: 'Honeywell CT60', location: 'Harbor Point', primary_metric: 'disconnect_count' },
+        { anomaly_id: 2002, device_id: 202, anomaly_score: -0.65, severity: 'high', status: 'open', timestamp: twoHoursAgo.toISOString(), device_model: 'Honeywell CT60', location: 'Harbor Point', primary_metric: 'disconnect_count' },
+        { anomaly_id: 2003, device_id: 203, anomaly_score: -0.61, severity: 'high', status: 'investigating', timestamp: threeHoursAgo.toISOString(), device_model: 'Zebra TC52', location: 'Harbor Point', primary_metric: 'disconnect_count' },
+        { anomaly_id: 2004, device_id: 204, anomaly_score: -0.58, severity: 'high', status: 'open', timestamp: oneHourAgo.toISOString(), device_model: 'Samsung Galaxy XCover 6', location: 'Harbor Point', primary_metric: 'wifi_signal_strength' },
+    ];
+
+    const storageMembers: AnomalyGroupMember[] = [
+        { anomaly_id: 3001, device_id: 301, anomaly_score: -0.82, severity: 'critical', status: 'open', timestamp: oneHourAgo.toISOString(), device_model: 'Samsung Galaxy Tab A8', location: 'Central Station', primary_metric: 'total_free_storage_kb' },
+        { anomaly_id: 3002, device_id: 302, anomaly_score: -0.75, severity: 'critical', status: 'open', timestamp: twoHoursAgo.toISOString(), device_model: 'iPad Pro 11', location: 'University District', primary_metric: 'total_free_storage_kb' },
+        { anomaly_id: 3003, device_id: 303, anomaly_score: -0.71, severity: 'critical', status: 'investigating', timestamp: threeHoursAgo.toISOString(), device_model: 'Samsung Galaxy Tab A8', location: 'Riverside Center', primary_metric: 'total_free_storage_kb' },
+    ];
+
+    const cohortMembers: AnomalyGroupMember[] = [
+        { anomaly_id: 4001, device_id: 401, anomaly_score: -0.62, severity: 'high', status: 'open', timestamp: oneHourAgo.toISOString(), device_model: 'Zebra TC52', location: 'Airport Terminal', primary_metric: 'offline_time' },
+        { anomaly_id: 4002, device_id: 402, anomaly_score: -0.58, severity: 'high', status: 'open', timestamp: twoHoursAgo.toISOString(), device_model: 'Zebra TC52', location: 'Downtown Flagship', primary_metric: 'offline_time' },
+        { anomaly_id: 4003, device_id: 403, anomaly_score: -0.55, severity: 'high', status: 'open', timestamp: threeHoursAgo.toISOString(), device_model: 'Zebra TC52', location: 'Tech Plaza', primary_metric: 'connection_time' },
+    ];
+
+    // Create groups
+    const groups: AnomalyGroup[] = [
+        {
+            group_id: 'grp-battery-001',
+            group_name: 'Investigate Battery Drain (5 devices)',
+            group_category: 'battery_investigate',
+            group_type: 'remediation_match',
+            severity: 'critical' as Severity,
+            total_count: 5,
+            open_count: 4,
+            device_count: 5,
+            suggested_remediation: {
+                remediation_id: 'rem-001',
+                title: 'Investigate Battery Drain',
+                description: 'Identify and address causes of excessive battery consumption',
+                detailed_steps: [
+                    'Check battery usage by app in device settings',
+                    'Identify background apps consuming power',
+                    'Review location services and sync settings',
+                    'Consider disabling power-hungry features',
+                ],
+                priority: 1,
+                confidence_score: 0.85,
+                confidence_level: 'high',
+                source: 'policy',
+                source_details: 'Standard procedure for battery issues',
+                historical_success_rate: 0.82,
+                historical_sample_size: 47,
+                estimated_impact: 'Could improve battery life by 20-40%',
+                is_automated: false,
+                automation_type: null,
+            },
+            time_range_start: threeHoursAgo.toISOString(),
+            time_range_end: oneHourAgo.toISOString(),
+            sample_anomalies: batteryMembers,
+            grouping_factors: ['Same suggested fix: Investigate Battery Drain'],
+        },
+        {
+            group_id: 'grp-network-001',
+            group_name: 'Network Disconnections at Harbor Point (4 devices)',
+            group_category: 'network_disconnect_pattern',
+            group_type: 'category_match',
+            severity: 'critical' as Severity,
+            total_count: 4,
+            open_count: 3,
+            device_count: 4,
+            common_location: 'Harbor Point',
+            suggested_remediation: {
+                remediation_id: 'rem-002',
+                title: 'Diagnose Network Connectivity',
+                description: 'Investigate and resolve network disconnection issues at Harbor Point',
+                detailed_steps: [
+                    'Check WiFi signal strength at Harbor Point',
+                    'Verify network credentials are current',
+                    'Test device connectivity in different areas',
+                    'Consider network infrastructure review',
+                ],
+                priority: 1,
+                confidence_score: 0.78,
+                confidence_level: 'high',
+                source: 'ai_generated',
+                source_details: 'Location-specific pattern detected',
+                historical_success_rate: null,
+                historical_sample_size: null,
+                estimated_impact: 'Could stabilize connectivity for 4+ devices',
+                is_automated: false,
+                automation_type: null,
+            },
+            time_range_start: threeHoursAgo.toISOString(),
+            time_range_end: oneHourAgo.toISOString(),
+            sample_anomalies: networkMembers,
+            grouping_factors: ['Same category: Network Disconnections', 'Same location: Harbor Point'],
+        },
+        {
+            group_id: 'grp-storage-001',
+            group_name: 'Clear Device Storage (3 devices)',
+            group_category: 'storage_clear',
+            group_type: 'remediation_match',
+            severity: 'critical' as Severity,
+            total_count: 3,
+            open_count: 2,
+            device_count: 3,
+            suggested_remediation: {
+                remediation_id: 'rem-003',
+                title: 'Clear Device Storage',
+                description: 'Free up storage space by removing unnecessary files and apps',
+                detailed_steps: [
+                    'Review and remove unused applications',
+                    'Clear application caches',
+                    'Remove old downloads and media files',
+                    'Consider offloading data to cloud storage',
+                ],
+                priority: 1,
+                confidence_score: 0.92,
+                confidence_level: 'high',
+                source: 'policy',
+                source_details: 'Standard procedure for low storage',
+                historical_success_rate: 0.95,
+                historical_sample_size: 128,
+                estimated_impact: 'Could recover 500MB-2GB of storage',
+                is_automated: false,
+                automation_type: null,
+            },
+            time_range_start: threeHoursAgo.toISOString(),
+            time_range_end: oneHourAgo.toISOString(),
+            sample_anomalies: storageMembers,
+            grouping_factors: ['Same suggested fix: Clear Device Storage'],
+        },
+        {
+            group_id: 'grp-cohort-001',
+            group_name: 'Issues on Zebra TC52 (3 devices)',
+            group_category: 'cohort_performance_issue',
+            group_type: 'temporal_cluster',
+            severity: 'high' as Severity,
+            total_count: 3,
+            open_count: 3,
+            device_count: 3,
+            common_device_model: 'Zebra TC52',
+            time_range_start: threeHoursAgo.toISOString(),
+            time_range_end: oneHourAgo.toISOString(),
+            sample_anomalies: cohortMembers,
+            grouping_factors: ['Same device model: Zebra TC52', 'Within 24h time window'],
+        },
+    ];
+
+    // Create ungrouped anomalies
+    const ungroupedAnomalies: AnomalyGroupMember[] = [
+        { anomaly_id: 5001, device_id: 501, anomaly_score: -0.35, severity: 'medium', status: 'open', timestamp: oneHourAgo.toISOString(), device_model: 'Panasonic Toughbook N1', location: 'Airport Terminal', primary_metric: 'upload' },
+        { anomaly_id: 5002, device_id: 502, anomaly_score: -0.32, severity: 'medium', status: 'open', timestamp: twoHoursAgo.toISOString(), device_model: 'iPad Pro 11', location: 'Downtown Flagship', primary_metric: 'download' },
+    ];
+
+    return {
+        groups,
+        total_anomalies: 17,
+        total_groups: 4,
+        ungrouped_count: 2,
+        ungrouped_anomalies: ungroupedAnomalies,
+        grouping_method: 'smart_auto',
+        computed_at: now.toISOString(),
     };
 }
 

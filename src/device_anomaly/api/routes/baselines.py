@@ -20,6 +20,7 @@ from device_anomaly.models.baseline import (
     suggest_baseline_adjustments,
 )
 from device_anomaly.llm.client import get_default_llm_client, strip_thinking_tags
+from device_anomaly.llm.prompt_utils import translate_metric, NO_THINKING_INSTRUCTION
 from device_anomaly.database.schema import AnomalyResult
 
 router = APIRouter(prefix="/baselines", tags=["baselines"])
@@ -226,26 +227,59 @@ def analyze_baselines_with_llm(
     
     suggestions_json = json.dumps([s.dict() for s in suggestions], indent=2)
     
-    prompt = f"""You are analyzing anomaly detection results from an Isolation Forest model.
+    prompt = f"""<role>
+You are an ML operations analyst reviewing anomaly detection baseline adjustments for an enterprise mobile device management system. The system uses Isolation Forest to detect unusual device behavior in warehouses, retail stores, and field operations.
+</role>
 
-Current situation:
+<output_format>
+{NO_THINKING_INSTRUCTION}
+
+Return ONLY a valid JSON array. No markdown code blocks, no explanation text.
+
+Each object must have this exact structure:
+{{
+  "level": "string (from input)",
+  "group_key": "string (from input)",
+  "feature": "exact_feature_name_from_input",
+  "baseline_median": number_from_input,
+  "observed_median": number_from_input,
+  "proposed_new_median": number_from_input,
+  "priority": 1_to_5_where_1_is_highest,
+  "rationale": "2-3 sentences explaining why this adjustment matters and expected impact"
+}}
+</output_format>
+
+<current_situation>
 - Total anomalies detected: {total_anomalies}
-- False positive rate: {fp_rate:.1%}
-- Baseline adjustment suggestions: {len(suggestions)}
+- Estimated false positive rate: {fp_rate:.1%}
+- Number of suggested adjustments: {len(suggestions)}
 
-Baseline suggestions:
+Context: A high false positive rate ({fp_rate:.1%}) means the model is flagging too many normal devices as anomalous, causing alert fatigue for IT staff.
+</current_situation>
+
+<baseline_suggestions>
 {suggestions_json}
+</baseline_suggestions>
 
-Analyze these suggestions and:
-1. Prioritize the most impactful adjustments (those that will reduce false positives)
-2. Provide enhanced reasoning for each adjustment based on the false positive rate
-3. Suggest any additional adjustments based on patterns you detect
+<prioritization_criteria>
+Rank adjustments by priority (1=highest, 5=lowest):
+1. Features with highest false positive contribution (largest gap between current and observed)
+2. Features in critical domains (battery, connectivity) over less critical
+3. Adjustments that are safe (wide margin, won't miss real anomalies)
+4. Features where normal variation is well understood
+</prioritization_criteria>
 
-Return a JSON array of prioritized suggestions with enhanced rationale. Keep the same structure but improve the rationale field.
-"""
+<instructions>
+1. Return ALL suggestions from input - do not remove any
+2. Reorder by priority field (1 = adjust first, 5 = optional)
+3. Do NOT invent new features - only use features from the input
+4. Keep the same field names and types from input
+5. Enhance the rationale field with business context
+6. Be conservative: estimate 5-15% FP reduction per adjustment is realistic
+</instructions>"""
     
     try:
-        raw_llm_response = llm_client.generate(prompt, max_tokens=1000)
+        raw_llm_response = llm_client.generate(prompt, max_tokens=1200, temperature=0.1)
         llm_response = strip_thinking_tags(raw_llm_response)
 
         # Try to parse LLM response as JSON

@@ -19,16 +19,65 @@ def strip_thinking_tags(text: str) -> str:
 
     Some models (like DeepSeek R1) include internal reasoning in <think> tags
     that should not be shown to end users.
+
+    Handles edge cases where models incorrectly place the actual response
+    content inside thinking tags (e.g., glm models that put Summary/Troubleshooting
+    inside <think> blocks).
     """
     if not text:
         return text
+
+    original_text = text
+
     # Remove <think>...</think> blocks (including multiline content)
     cleaned = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL | re.IGNORECASE)
     # Also handle unclosed <think> tags (in case response was truncated)
     cleaned = re.sub(r'<think>.*$', '', cleaned, flags=re.DOTALL | re.IGNORECASE)
     # Clean up any extra whitespace left behind
     cleaned = re.sub(r'\n\s*\n\s*\n', '\n\n', cleaned)
-    return cleaned.strip()
+    cleaned = cleaned.strip()
+
+    # If we ended up with an empty result but original had content,
+    # the model likely placed the actual response inside thinking tags
+    if not cleaned and '<think>' in original_text.lower():
+        # Try to extract content from within the thinking block
+        # Look for common response markers that indicate the actual output
+        response_markers = [
+            r'SUMMARY:',
+            r'Summary:',
+            r'TROUBLESHOOTING STEPS:',
+            r'Troubleshooting Steps:',
+            r'\*\*SUMMARY\*\*',
+            r'\*\*Summary\*\*',
+            r'1\.\s+For\s+"',  # Numbered troubleshooting steps
+            r'##\s+Summary',
+        ]
+
+        # Extract content within think tags
+        think_content_match = re.search(
+            r'<think>(.*?)(?:</think>|$)',
+            original_text,
+            flags=re.DOTALL | re.IGNORECASE
+        )
+
+        if think_content_match:
+            think_content = think_content_match.group(1)
+
+            # Find the earliest response marker
+            earliest_pos = len(think_content)
+            for marker in response_markers:
+                match = re.search(marker, think_content, re.IGNORECASE)
+                if match and match.start() < earliest_pos:
+                    earliest_pos = match.start()
+
+            # If we found a marker, extract from that point
+            if earliest_pos < len(think_content):
+                cleaned = think_content[earliest_pos:].strip()
+                # Remove any trailing </think> if present
+                cleaned = re.sub(r'</think>\s*$', '', cleaned, flags=re.IGNORECASE)
+                logger.info(f"Extracted response from within thinking tags (length: {len(cleaned)})")
+
+    return cleaned
 
 
 class BaseLLMClient(ABC):
@@ -87,9 +136,10 @@ class OpenAICompatibleClient(BaseLLMClient):
                 {
                     "role": "system",
                     "content": (
-                        "You are a technical support assistant helping troubleshoot database and API "
-                        "connection issues in an enterprise device monitoring system. "
-                        "Provide clear, actionable troubleshooting steps."
+                        "You are a helpful assistant for an enterprise mobile device management system. "
+                        "IMPORTANT: Provide ONLY your final response. Do NOT include any internal reasoning, "
+                        "<think> tags, chain-of-thought, or preamble. Start directly with the requested output format. "
+                        "Be clear, concise, and actionable."
                     ),
                 },
                 {"role": "user", "content": prompt},
@@ -144,8 +194,10 @@ class AzureOpenAILLMClient(BaseLLMClient):
                 {
                     "role": "system",
                     "content": (
-                        "You are an assistant that explains anomalies in device "
-                        "telemetry in clear, concise language for non-technical readers."
+                        "You are a helpful assistant for an enterprise mobile device management system. "
+                        "IMPORTANT: Provide ONLY your final response. Do NOT include any internal reasoning, "
+                        "<think> tags, chain-of-thought, or preamble. Start directly with the requested output format. "
+                        "Be clear, concise, and actionable."
                     ),
                 },
                 {"role": "user", "content": prompt},

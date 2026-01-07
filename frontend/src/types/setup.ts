@@ -76,6 +76,7 @@ export interface EnvironmentConfig {
   mc_trust_server_cert: boolean;
 
   // LLM Configuration
+  enable_llm: boolean;
   llm_base_url: string;
   llm_api_key: string;
   llm_model_name: string;
@@ -189,7 +190,7 @@ export const defaultEnvironmentConfig: EnvironmentConfig = {
   backend_db_port: 5432,
   backend_db_name: 'anomaly_detection',
   backend_db_user: 'postgres',
-  backend_db_pass: 'changeme',
+  backend_db_pass: 'postgres',
   backend_db_connect_timeout: 5,
   backend_db_statement_timeout_ms: 30000,
 
@@ -216,6 +217,7 @@ export const defaultEnvironmentConfig: EnvironmentConfig = {
   mc_trust_server_cert: false,
 
   // LLM Configuration
+  enable_llm: true,
   llm_base_url: 'http://ollama:11434',
   llm_api_key: 'not-needed',
   llm_model_name: 'llama3.2',

@@ -5,9 +5,9 @@
  * with individually saveable sections.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
 import { Card } from '../components/Card';
@@ -350,6 +350,28 @@ export default function Setup() {
   const [config, setConfig] = useState<EnvironmentConfig>(defaultEnvironmentConfig);
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
   const [savingSection, setSavingSection] = useState<string | null>(null);
+  const [configLoaded, setConfigLoaded] = useState(false);
+
+  // Fetch current configuration from backend
+  const { data: savedConfig, isLoading: isLoadingConfig } = useQuery({
+    queryKey: ['setup-config'],
+    queryFn: () => api.getSetupConfig(),
+    staleTime: 0, // Always fetch fresh data
+    refetchOnWindowFocus: false,
+  });
+
+  // Merge saved config with defaults when data is loaded
+  useEffect(() => {
+    if (savedConfig && !configLoaded) {
+      // Merge saved config with defaults (saved values take precedence)
+      const mergedConfig = {
+        ...defaultEnvironmentConfig,
+        ...savedConfig,
+      } as EnvironmentConfig;
+      setConfig(mergedConfig);
+      setConfigLoaded(true);
+    }
+  }, [savedConfig, configLoaded]);
 
   // Update config helper
   const updateConfig = useCallback(<K extends keyof EnvironmentConfig>(
@@ -506,6 +528,7 @@ MC_TRUST_SERVER_CERT=${cfg.mc_trust_server_cert}
 # =============================================================================
 # LLM Configuration
 # =============================================================================
+ENABLE_LLM=${cfg.enable_llm}
 LLM_BASE_URL=${cfg.llm_base_url}
 LLM_API_KEY=${cfg.llm_api_key}
 LLM_MODEL_NAME=${cfg.llm_model_name}
@@ -995,6 +1018,19 @@ MOBICONTROL_TENANT_ID=${cfg.mobicontrol_tenant_id}
               </div>
             </div>
 
+            {/* Enable LLM Toggle */}
+            <div className="flex items-center justify-between p-4 rounded-lg bg-slate-800/50 border border-slate-700/50">
+              <div>
+                <p className="text-sm text-white font-medium">Enable AI/LLM Features</p>
+                <p className="text-xs text-slate-400 mt-1">Turn on AI-powered anomaly explanations and troubleshooting</p>
+              </div>
+              <ToggleSwitch
+                enabled={config.enable_llm}
+                onChange={(v) => updateConfig('enable_llm', v)}
+                variant="stellar"
+              />
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* LLM Provider Quick Select */}
               <div className="md:col-span-2">
@@ -1454,6 +1490,22 @@ MOBICONTROL_TENANT_ID=${cfg.mobicontrol_tenant_id}
   };
 
   const currentSection = SECTIONS.find(s => s.id === activeSection) || SECTIONS[0];
+
+  // Show loading state while fetching config
+  if (isLoadingConfig) {
+    return (
+      <motion.div
+        className="flex items-center justify-center min-h-[400px]"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+      >
+        <div className="text-center">
+          <LoadingSpinner />
+          <p className="text-slate-400 mt-4">Loading current configuration...</p>
+        </div>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div

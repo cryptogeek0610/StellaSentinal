@@ -147,6 +147,8 @@ models/production/*
 
 # Database backups
 DatabaseExamples/
+backups/*
+!backups/.gitkeep
 *.bak
 
 # =============================================================================
@@ -185,3 +187,6 @@ secrets/
 # Duplicate files from macOS
 *\ 2*
 *\ 2.*
+
+# Auto Claude data directory
+.auto-claude/

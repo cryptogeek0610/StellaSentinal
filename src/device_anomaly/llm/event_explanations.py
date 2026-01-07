@@ -8,6 +8,12 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from device_anomaly.llm.client import get_default_llm_client, strip_thinking_tags
+from device_anomaly.llm.prompt_utils import (
+    get_severity_word,
+    get_severity_emoji,
+    get_duration_interpretation,
+    NO_THINKING_INSTRUCTION,
+)
 from device_anomaly.config.feature_config import FeatureConfig
 
 
@@ -39,30 +45,76 @@ def build_event_llm_payload(row: pd.Series) -> dict[str, Any]:
 
 
 def build_event_prompt(payload: dict[str, Any]) -> str:
+    """Build prompt for explaining multi-day anomaly events."""
     json_str = json.dumps(payload, indent=2)
 
-    prompt = f"""
-You are an assistant helping explain anomaly *events* in daily device telemetry.
+    duration = payload.get("duration_days", 1)
+    worst_score = payload.get("worst_anomaly_score", 0)
+    mean_score = payload.get("mean_anomaly_score", 0)
 
-You receive JSON describing a device event composed of consecutive anomalous days.
-Fields include:
-- event window (start/end are dates)
-- duration in days / row counts
-- anomaly scores
-- aggregated daily metrics captured during the event
+    severity_word = get_severity_word(worst_score)
+    severity_emoji = get_severity_emoji(worst_score)
+    duration_interpretation = get_duration_interpretation(duration)
 
-JSON:
-```json
+    prompt = f"""<role>
+You are a device health analyst explaining multi-day anomaly events to IT operations staff managing enterprise mobile devices in warehouses and retail operations.
+</role>
+
+<output_format>
+{NO_THINKING_INSTRUCTION}
+
+Structure your response EXACTLY as:
+
+EVENT SUMMARY
+Duration: {duration} day(s) | Severity: {severity_word.title()} {severity_emoji}
+[1-2 sentences: What happened over this period]
+
+PATTERN OBSERVED
+[Describe the trend - was it getting worse, stable, or improving?]
+
+MOST AFFECTED AREAS
+1. [Metric category]: [Brief description of the issue]
+2. [Another category]: [Description]
+
+ROOT CAUSE HYPOTHESIS
+[Most likely explanation for this sustained anomaly]
+
+RECOMMENDED RESPONSE
+Priority: [High/Medium/Low]
+- [Specific action to take]
+- [Follow-up action if first doesn't resolve]
+</output_format>
+
+<event_data>
+Device: {payload.get("device_id")}
+Event Window: {payload.get("event_start")} to {payload.get("event_end")}
+Duration: {duration} consecutive anomalous days
+Worst Anomaly Score: {worst_score:.3f} (more negative = more severe)
+Average Anomaly Score: {mean_score:.3f}
+
+Aggregated Metrics During Event:
 {json_str}
-Please:
+```
 
-Briefly summarize what is unusual about this stretch of days.
+<duration_context>
+{duration_interpretation}
+</duration_context>
 
-Mention 2-3 key metrics that look abnormal for those days (state if higher/lower than
-normal daily values).
+<common_multi_day_patterns>
+Multi-day events suggest persistent issues:
+- Gradual battery degradation → aging battery needs replacement
+- Persistent connectivity issues → device location or hardware problem
+- Sustained high usage → either legitimate heavy use or potential misuse
+- Recurring crashes → software bug or compatibility issue
+</common_multi_day_patterns>
 
-Suggest 1-2 possible next steps (high-level, non-technical). Keep it under 200 words.
-"""
+<instructions>
+1. Consider whether the anomaly trend is worsening, stable, or improving
+2. Multi-day events suggest persistent causes, not random glitches
+3. Prioritize actionable recommendations
+4. Keep response under 200 words
+5. If metrics suggest heavy but legitimate usage, note that
+</instructions>"""
     return prompt.strip()
 
 def generate_and_save_event_explanation(

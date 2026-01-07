@@ -106,11 +106,13 @@ function StatusIndicator({
 }
 
 // Main status card with live indicators
-function AutomationStatusCard({ status }: { status: SchedulerStatus }) {
+function AutomationStatusCard({ status, totalAnomaliesDB }: { status: SchedulerStatus; totalAnomaliesDB?: number }) {
   const trainingRunning = status.training_status === 'running';
   const scoringRunning = status.scoring_status === 'running';
   const devicesScored = status.last_scoring_result?.total_scored ?? 0;
   const anomaliesDetected = status.last_scoring_result?.anomalies_detected ?? 0;
+  // Use DB count for consistency with other dashboards, fallback to Redis counter
+  const totalAnomalies = totalAnomaliesDB ?? status.total_anomalies_detected;
 
   return (
     <Card className="p-6">
@@ -160,18 +162,21 @@ function AutomationStatusCard({ status }: { status: SchedulerStatus }) {
             {devicesScored}
           </p>
           <p className="text-xs text-slate-500">Devices Scored</p>
+          <p className="text-[10px] text-slate-600">Last Run</p>
         </div>
         <div className="text-center">
           <p className="text-2xl font-bold text-cosmic-400">
             {anomaliesDetected}
           </p>
           <p className="text-xs text-slate-500">Anomalies Found</p>
+          <p className="text-[10px] text-slate-600">Last Run</p>
         </div>
         <div className="text-center">
           <p className="text-2xl font-bold text-aurora-400">
-            {status.total_anomalies_detected}
+            {totalAnomalies}
           </p>
           <p className="text-xs text-slate-500">Total Anomalies</p>
+          <p className="text-[10px] text-slate-600">In Database</p>
         </div>
         <div className="text-center">
           <p className="text-sm font-medium text-slate-300">
@@ -704,6 +709,13 @@ export default function Automation() {
     refetchInterval: 5000, // Poll every 5 seconds
   });
 
+  // Fetch dashboard stats for consistent total anomaly count across all dashboards
+  const { data: dashboardStats } = useQuery({
+    queryKey: ['dashboard', 'stats'],
+    queryFn: () => api.getDashboardStats(),
+    refetchInterval: 30000,
+  });
+
   // Fetch automation config
   const { data: config, isLoading: configLoading } = useQuery({
     queryKey: ['automation-config'],
@@ -809,7 +821,7 @@ export default function Automation() {
       {/* Status and Quick Actions */}
       <div className="grid grid-cols-3 gap-6">
         <div className="col-span-2">
-          <AutomationStatusCard status={status} />
+          <AutomationStatusCard status={status} totalAnomaliesDB={dashboardStats?.total_anomalies} />
         </div>
         <QuickActionsPanel
           onTrigger={(type) => triggerJobMutation.mutate(type)}

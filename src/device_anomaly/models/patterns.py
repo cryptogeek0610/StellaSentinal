@@ -6,6 +6,10 @@ from typing import List, Optional
 import pandas as pd
 
 from device_anomaly.llm.client import get_default_llm_client
+from device_anomaly.llm.prompt_utils import (
+    get_health_status,
+    NO_THINKING_INSTRUCTION,
+)
 from device_anomaly.config.feature_config import (
     FeatureConfig
 )
@@ -89,38 +93,84 @@ def _build_device_pattern_payload(
 
 
 def _build_pattern_prompt(payload: dict) -> str:
+    """Build prompt for summarizing device health patterns over a time period."""
     def _default(o):
         try:
-            # try to treat numeric-like stuff as float
             return float(o)
         except Exception:
-            # fallback: string representation (e.g. timestamps)
             return str(o)
-    
+
     json_str = json.dumps(payload, indent=2, default=_default)
 
-    prompt = f"""
-        You are an assistant summarizing anomaly patterns in **daily** device telemetry
-        for a non-technical audience.
+    # Calculate health indicators
+    anomaly_rate = payload.get("anomaly_rate", 0)
+    event_count = payload.get("event_count", 0)
+    health_status, health_emoji = get_health_status(anomaly_rate)
 
-        You will receive JSON describing one device over a given time period:
-        - overall anomaly rate
-        - number of anomaly events
-        - worst anomaly scores
-        - average daily values for important metrics in normal vs anomalous periods
-        - a few of the most severe events
+    prompt = f"""<role>
+You are a device fleet analyst creating health summaries for operations managers who oversee hundreds of mobile devices in warehouses and retail locations.
+</role>
 
-        JSON:
-        ```json
-        {json_str}
-        Please:
+<output_format>
+{NO_THINKING_INSTRUCTION}
 
-        1-Give a short summary of how "healthy" this device looks over the period.
-        2-Highlight any clear patterns (for example: frequent network issues, persistent battery drain, repeated offline days).
-        3-Mention 2-3 metrics where anomalous daily behavior is most different from normal.
-        4-Suggest 1-2 possible follow-up actions (at a high level).
-        5-Keep it under 250 words.
-    """
+Structure your response EXACTLY as:
+
+DEVICE HEALTH: {health_status} {health_emoji}
+
+OVERVIEW
+[2-3 sentences summarizing this device's behavior over the analysis period]
+
+KEY FINDINGS
+- [Most important observation about this device]
+- [Second observation]
+- [Third observation if relevant]
+
+PATTERNS DETECTED
+[Describe any recurring issues: "This device consistently shows..." or "No concerning patterns detected"]
+
+COMPARISON TO FLEET
+[How does this device compare to similar devices? Better/worse/average?]
+
+RECOMMENDATION
+[Single clear action: "Continue monitoring" / "Schedule for inspection" / "Replace battery" / etc.]
+</output_format>
+
+<device_analysis_data>
+Analysis Period: {payload.get("period_start", "N/A")} to {payload.get("period_end", "N/A")}
+Days Analyzed: {payload.get("total_days", "N/A")}
+Anomalous Days: {payload.get("total_anomalies", "N/A")} ({anomaly_rate:.1%} of period)
+Number of Anomaly Events: {event_count}
+
+Device Metrics (Normal Days vs Anomalous Days):
+{json_str}
+```
+
+<metric_categories>
+When discussing metrics, translate technical names:
+- Battery metrics (TotalBatteryLevelDrop, TotalDischargeTime): "battery performance"
+- Connectivity (DisconnectCount, OfflineMinutes, AvgSignalStrength): "network reliability"
+- Usage (AppForegroundTime, AppVisitCount): "device utilization"
+- Stability (CrashCount, ANRCount): "app stability"
+- Physical (TotalDropCnt): "physical handling"
+</metric_categories>
+
+<health_thresholds>
+Reference for assessment:
+- Anomaly rate <5%: Normal device behavior
+- Anomaly rate 5-15%: Some issues, worth monitoring
+- Anomaly rate >15%: Significant problems, needs attention
+- Multiple events with worst_score < -0.7: Severe issues detected
+</health_thresholds>
+
+<instructions>
+1. Write for an operations manager, not a data scientist
+2. Use plain language: "battery drains quickly" not "elevated TotalBatteryLevelDrop"
+3. Compare anomalous vs normal periods - what's different?
+4. Be specific in recommendations (what action, not just "investigate")
+5. Keep total response under 200 words
+6. If device is healthy, say so clearly - don't manufacture concerns
+</instructions>"""
     return prompt.strip()
 
 def build_device_pattern_results(

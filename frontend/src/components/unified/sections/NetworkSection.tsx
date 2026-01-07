@@ -263,6 +263,7 @@ export function NetworkSection({ data, isLoading }: NetworkSectionProps) {
       ]}
       collapsedContent={collapsedContent}
       expandedContent={expandedContent}
+      defaultExpanded={true}
       accent={deadZones > 0 ? 'red' : hasIssues ? 'purple' : 'slate'}
     />
   );

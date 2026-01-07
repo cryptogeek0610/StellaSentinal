@@ -200,12 +200,21 @@ def get_dashboard_stats(
         .scalar()
     ) or 0
 
+    # Total anomalies (all anomalies regardless of status)
+    total_anomalies = (
+        db.query(func.count(AnomalyResult.id))
+        .filter(AnomalyResult.tenant_id == tenant_id)
+        .filter(AnomalyResult.anomaly_label == -1)
+        .scalar()
+    ) or 0
+
     return DashboardStatsResponse(
         anomalies_today=anomalies_today,
         devices_monitored=devices_monitored,
         critical_issues=critical_issues,
         resolved_today=resolved_today,
         open_cases=open_cases,
+        total_anomalies=total_anomalies,
     )
 
 
@@ -837,29 +846,52 @@ def get_troubleshooting_advice(
     # Cache miss - generate new advice from LLM
     errors_json = json.dumps(failed_connections, indent=2)
     
-    prompt = f"""You are a technical support assistant helping troubleshoot database and API connection issues in an enterprise device monitoring system.
+    prompt = f"""<role>
+You are Stella, an AI assistant for SOTI MobiControl administrators. You help troubleshoot connection issues in an enterprise mobile device management system that monitors thousands of mobile devices (Android, iOS, Windows) across warehouses, retail stores, and field operations.
+</role>
 
-The following services are experiencing connection failures:
+<output_format>
+IMPORTANT: Output ONLY the formatted response below. Do NOT include any internal reasoning, <think> tags, or preamble.
 
+Structure your response EXACTLY as:
+
+SUMMARY: [1-2 sentences: What's broken and business impact]
+
+PRIORITY ACTIONS (in order of importance):
+1. [Service Name]: [Specific action - what to check/do first]
+2. [Service Name]: [Next action]
+
+QUICK FIXES (things you can try yourself):
+- [Actionable step with specific command/location if applicable]
+- [Another step]
+
+ESCALATE TO IT IF:
+- [Condition requiring IT involvement]
+</output_format>
+
+<context>
+Services in this system:
+- XSight Database SQL Server: Data warehouse storing device telemetry (battery, connectivity, app usage). Connection timeout usually means network/firewall issues.
+- MobiControl SQL Server: Core MDM database with device inventory, policies, compliance status. "Host not configured" means missing database_host in config.
+- MobiControl API: REST API for device management actions. Requires ENABLE_MOBICONTROL=true environment variable to activate.
+- LLM Service: AI service for generating insights. Local service (LM Studio) must be running with a model loaded.
+- Redis: Cache layer for performance. Usually auto-recovers.
+- Qdrant: Vector database for semantic search. Check if Docker container is running.
+- Backend Database: PostgreSQL for application state. Check DATABASE_URL connection string.
+</context>
+
+<failed_services>
 {errors_json}
+</failed_services>
 
-Please provide:
-1. A brief summary of the main issue(s) (1-2 sentences)
-2. Specific troubleshooting steps tailored to each error message
-3. Common causes and solutions for these types of connection errors
-4. When to contact IT support vs. what can be resolved independently
-
-Keep the advice practical, actionable, and non-technical where possible. Focus on the most likely causes first.
-
-Format your response as:
-SUMMARY: [brief summary]
-
-TROUBLESHOOTING STEPS:
-[numbered list of specific steps]
-
-ADDITIONAL NOTES:
-[any other relevant information]
-"""
+<instructions>
+1. Prioritize by business impact: SQL databases > API > LLM > Cache
+2. For each failure, identify the SPECIFIC error type (timeout, auth, config, network)
+3. Provide concrete steps (file paths, commands, config keys) not generic advice
+4. Distinguish between "restart/retry" fixes vs. "need IT/DBA" issues
+5. Keep total response under 400 words
+6. If multiple services fail with similar errors, note potential common cause (network, firewall, DNS)
+</instructions>"""
     
     # Try LLM first, fallback to rule-based if unavailable
     try:
@@ -874,7 +906,7 @@ ADDITIONAL NOTES:
             raise ValueError("LLM not configured")
         
         logger.info(f"Using LLM client: {type(llm_client).__name__} to generate troubleshooting advice")
-        raw_advice = llm_client.generate(prompt, max_tokens=600, temperature=0.3)
+        raw_advice = llm_client.generate(prompt, max_tokens=800, temperature=0.2)
         advice = strip_thinking_tags(raw_advice)
 
         # Check if we got dummy output (shouldn't happen, but be safe)

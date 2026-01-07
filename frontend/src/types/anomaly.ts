@@ -73,6 +73,7 @@ export interface DashboardStats {
   critical_issues: number
   resolved_today: number
   open_cases?: number
+  total_anomalies?: number  // Total count of all anomalies in database
 }
 
 export interface DashboardTrend {
@@ -635,5 +636,72 @@ export interface BaselineHistoryEntry {
   new_value: number;
   type: 'auto' | 'manual';
   reason: string | null;
+}
+
+// ==========================================
+// Smart Anomaly Grouping Types
+// ==========================================
+
+export type AnomalyGroupType =
+  | 'remediation_match'
+  | 'category_match'
+  | 'similarity_cluster'
+  | 'temporal_cluster'
+  | 'location_cluster';
+
+export type Severity = 'critical' | 'high' | 'medium' | 'low';
+
+export interface AnomalyGroupMember {
+  anomaly_id: number;
+  device_id: number;
+  anomaly_score: number;
+  severity: Severity;
+  status: string;
+  timestamp: string;
+  device_model?: string;
+  location?: string;
+  primary_metric?: string;
+}
+
+export interface AnomalyGroup {
+  group_id: string;
+  group_name: string;
+  group_category: string;
+  group_type: AnomalyGroupType;
+  severity: Severity;
+  total_count: number;
+  open_count: number;
+  device_count: number;
+  suggested_remediation?: RemediationSuggestion;
+  common_location?: string;
+  common_device_model?: string;
+  time_range_start: string;
+  time_range_end: string;
+  sample_anomalies: AnomalyGroupMember[];
+  grouping_factors: string[];
+  avg_similarity_score?: number;
+}
+
+export interface GroupedAnomaliesResponse {
+  groups: AnomalyGroup[];
+  total_anomalies: number;
+  total_groups: number;
+  ungrouped_count: number;
+  ungrouped_anomalies: AnomalyGroupMember[];
+  grouping_method: string;
+  computed_at: string;
+}
+
+export interface BulkActionRequest {
+  action: 'resolve' | 'investigating' | 'dismiss';
+  anomaly_ids: number[];
+  notes?: string;
+}
+
+export interface BulkActionResponse {
+  success: boolean;
+  affected_count: number;
+  failed_ids: number[];
+  message: string;
 }
 

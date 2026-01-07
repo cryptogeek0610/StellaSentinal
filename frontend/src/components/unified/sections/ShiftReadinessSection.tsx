@@ -316,6 +316,7 @@ export function ShiftReadinessSection({
         ]}
         collapsedContent={collapsedContent}
         expandedContent={expandedContent}
+        defaultExpanded={true}
         accent={readinessVariant === 'danger' ? 'red' : readinessVariant === 'warning' ? 'amber' : 'emerald'}
       />
 

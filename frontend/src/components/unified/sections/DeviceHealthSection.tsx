@@ -292,6 +292,7 @@ export function DeviceHealthSection({ data, isLoading }: DeviceHealthSectionProp
       ]}
       collapsedContent={collapsedContent}
       expandedContent={expandedContent}
+      defaultExpanded={true}
       accent={hasIssues ? 'red' : 'slate'}
     />
   );

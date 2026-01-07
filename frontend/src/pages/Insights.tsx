@@ -5,7 +5,7 @@
  * Provides pre-interpreted, contextualized, and actionable insights.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api, CustomerInsightResponse, DailyDigestResponse, ShiftReadinessResponse } from '../api/client';
@@ -13,6 +13,7 @@ import { motion } from 'framer-motion';
 import { Card } from '../components/Card';
 import { KPICard } from '../components/KPICard';
 import { SlideOverPanel } from '../components/unified';
+import { useMockMode } from '../hooks/useMockMode';
 import {
   BarChart,
   Bar,
@@ -74,7 +75,63 @@ function Insights() {
   const initialTab = tabFromUrl && VALID_TABS.includes(tabFromUrl) ? tabFromUrl : 'digest';
 
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
-  const [selectedLocation, setSelectedLocation] = useState<string>('store-001');
+  const { mockMode } = useMockMode();
+  
+  // Fetch devices to extract unique locations when not in mock mode
+  const { data: devicesData } = useQuery({
+    queryKey: ['devices', 'locations'],
+    queryFn: () => api.getDevices({ page: 1, page_size: 1000 }),
+    enabled: !mockMode,
+    staleTime: 300000, // Cache for 5 minutes
+  });
+
+  // Extract unique locations from devices when not in mock mode
+  const locations = useMemo(() => {
+    if (mockMode) {
+      // Mock locations
+      return [
+        { id: 'store-001', name: 'Downtown Flagship' },
+        { id: 'store-002', name: 'Westside Mall' },
+        { id: 'store-003', name: 'Harbor Point' },
+        { id: 'store-004', name: 'Tech Plaza' },
+      ];
+    }
+    
+    // Extract unique locations from devices
+    if (devicesData?.devices) {
+      const locationMap = new Map<string, string>();
+      devicesData.devices.forEach((device) => {
+        if (device.location && device.store_id) {
+          // Use store_id as the ID and location as the name
+          locationMap.set(device.store_id, device.location);
+        } else if (device.location) {
+          // Fallback: use location as both ID and name if no store_id
+          locationMap.set(device.location, device.location);
+        }
+      });
+      
+      return Array.from(locationMap.entries()).map(([id, name]) => ({
+        id,
+        name,
+      }));
+    }
+    
+    // Return empty array if no devices loaded yet
+    return [];
+  }, [mockMode, devicesData]);
+
+  // Set initial selected location when locations are available
+  const [selectedLocation, setSelectedLocation] = useState<string>(() => {
+    if (mockMode) return 'store-001';
+    return '';
+  });
+
+  // Update selected location when locations change (for non-mock mode)
+  useEffect(() => {
+    if (!mockMode && locations.length > 0 && !selectedLocation) {
+      setSelectedLocation(locations[0].id);
+    }
+  }, [mockMode, locations, selectedLocation]);
 
   // Sync tab state with URL params
   useEffect(() => {
@@ -599,29 +656,73 @@ function BatteryTab({
   selectedLocation: string;
   onLocationChange: (loc: string) => void;
 }) {
-  const locations = [
-    { id: 'store-001', name: 'Downtown Flagship' },
-    { id: 'store-002', name: 'Westside Mall' },
-    { id: 'store-003', name: 'Harbor Point' },
-    { id: 'store-004', name: 'Tech Plaza' },
-  ];
+  const { mockMode } = useMockMode();
+  
+  // Fetch devices to extract unique locations when not in mock mode
+  const { data: devicesData } = useQuery({
+    queryKey: ['devices', 'locations'],
+    queryFn: () => api.getDevices({ page: 1, page_size: 1000 }),
+    enabled: !mockMode,
+    staleTime: 300000, // Cache for 5 minutes
+  });
+
+  // Extract unique locations from devices when not in mock mode
+  const locations = useMemo(() => {
+    if (mockMode) {
+      // Mock locations
+      return [
+        { id: 'store-001', name: 'Downtown Flagship' },
+        { id: 'store-002', name: 'Westside Mall' },
+        { id: 'store-003', name: 'Harbor Point' },
+        { id: 'store-004', name: 'Tech Plaza' },
+      ];
+    }
+    
+    // Extract unique locations from devices
+    if (devicesData?.devices) {
+      const locationMap = new Map<string, string>();
+      devicesData.devices.forEach((device) => {
+        if (device.location && device.store_id) {
+          // Use store_id as the ID and location as the name
+          locationMap.set(device.store_id, device.location);
+        } else if (device.location) {
+          // Fallback: use location as both ID and name if no store_id
+          locationMap.set(device.location, device.location);
+        }
+      });
+      
+      return Array.from(locationMap.entries()).map(([id, name]) => ({
+        id,
+        name,
+      }));
+    }
+    
+    // Return empty array if no devices loaded yet
+    return [];
+  }, [mockMode, devicesData]);
 
   return (
     <div className="space-y-6">
       {/* Location Selector */}
       <div className="flex items-center gap-4">
         <label className="text-sm text-slate-400">Location:</label>
-        <select
-          value={selectedLocation}
-          onChange={(e) => onLocationChange(e.target.value)}
-          className="input-stellar px-4 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-white"
-        >
-          {locations.map((loc) => (
-            <option key={loc.id} value={loc.id}>
-              {loc.name}
-            </option>
-          ))}
-        </select>
+        {locations.length > 0 ? (
+          <select
+            value={selectedLocation}
+            onChange={(e) => onLocationChange(e.target.value)}
+            className="input-stellar px-4 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-white"
+          >
+            {locations.map((loc) => (
+              <option key={loc.id} value={loc.id}>
+                {loc.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <div className="px-4 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-slate-500 text-sm">
+            No locations available. Please ensure devices have location data.
+          </div>
+        )}
       </div>
 
       {isLoading ? (

@@ -30,6 +30,9 @@ import type {
   RemediationOutcome,
   SimilarCase,
   LearnFromFix,
+  GroupedAnomaliesResponse,
+  BulkActionRequest,
+  BulkActionResponse,
 } from '../types/anomaly';
 import type {
   TableProfile,
@@ -117,6 +120,8 @@ import {
   getMockAppAnalysis,
   getMockInsightsByCategory,
   getMockLocationComparison,
+  // Smart Grouping mock data
+  getMockGroupedAnomalies,
 } from './mockData';
 
 // Environment-based API URL configuration
@@ -431,6 +436,56 @@ export const api = {
     return fetchAPI<{ id: number; message: string }>(`/anomalies/${id}/notes`, {
       method: 'POST',
       body: JSON.stringify({ note, action_type }),
+    });
+  },
+
+  // Grouped Anomalies
+  getGroupedAnomalies: (params?: {
+    status?: string;
+    min_severity?: string;
+    min_group_size?: number;
+    temporal_window_hours?: number;
+  }): Promise<GroupedAnomaliesResponse> => {
+    // Return mock data when mock mode is enabled
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockGroupedAnomalies(params));
+    }
+    if (shouldReturnEmptyLiveData()) {
+      return Promise.resolve({
+        groups: [],
+        total_anomalies: 0,
+        total_groups: 0,
+        ungrouped_count: 0,
+        ungrouped_anomalies: [],
+        grouping_method: 'smart_auto',
+        computed_at: new Date().toISOString(),
+      });
+    }
+
+    const queryParams = new URLSearchParams();
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.min_severity) queryParams.append('min_severity', params.min_severity);
+    if (params?.min_group_size !== undefined)
+      queryParams.append('min_group_size', params.min_group_size.toString());
+    if (params?.temporal_window_hours !== undefined)
+      queryParams.append('temporal_window_hours', params.temporal_window_hours.toString());
+
+    return fetchAPI<GroupedAnomaliesResponse>(`/anomalies/grouped?${queryParams.toString()}`);
+  },
+
+  bulkAction: (request: BulkActionRequest): Promise<BulkActionResponse> => {
+    // In mock mode, simulate a successful response
+    if (getMockModeFromStorage()) {
+      return Promise.resolve({
+        success: true,
+        affected_count: request.anomaly_ids.length,
+        failed_ids: [],
+        message: `Successfully updated ${request.anomaly_ids.length} anomalies (mock mode)`,
+      });
+    }
+    return fetchAPI<BulkActionResponse>('/anomalies/bulk-action', {
+      method: 'POST',
+      body: JSON.stringify(request),
     });
   },
 
@@ -1012,18 +1067,8 @@ export const api = {
     type: 'backend_db' | 'dw_db' | 'mc_db' | 'llm' | 'redis' | 'mobicontrol_api';
     config: Record<string, unknown>;
   }): Promise<{ success: boolean; message: string; latency_ms?: number }> => {
-    // In mock mode, simulate successful connections
-    if (getMockModeFromStorage()) {
-      return new Promise((resolve) => {
-        setTimeout(() => {
-          resolve({
-            success: true,
-            message: `${request.type} connection successful (mock mode)`,
-            latency_ms: Math.floor(Math.random() * 100) + 20,
-          });
-        }, 500 + Math.random() * 500);
-      });
-    }
+    // Always test real connections - users need actual feedback
+    // regardless of mock mode (mock mode is for device/anomaly data, not setup)
     return fetchAPI<{ success: boolean; message: string; latency_ms?: number }>(
       '/setup/test-connection',
       {
@@ -1036,14 +1081,8 @@ export const api = {
   saveSetupConfig: (
     config: Record<string, unknown>
   ): Promise<{ success: boolean; message: string; file_path?: string }> => {
-    // In mock mode, simulate successful save
-    if (getMockModeFromStorage()) {
-      return Promise.resolve({
-        success: true,
-        message: 'Configuration saved successfully (mock mode)',
-        file_path: '.env',
-      });
-    }
+    // Always save real config - users need actual changes to persist
+    // regardless of mock mode (mock mode is for device/anomaly data, not setup)
     return fetchAPI<{ success: boolean; message: string; file_path?: string }>(
       '/setup/save-config',
       {
@@ -1054,10 +1093,8 @@ export const api = {
   },
 
   getSetupConfig: (): Promise<Record<string, unknown>> => {
-    // In mock mode, return empty config
-    if (getMockModeFromStorage()) {
-      return Promise.resolve({});
-    }
+    // Always fetch actual config - Setup Wizard should show real settings
+    // regardless of mock mode (mock mode is for device/anomaly data, not setup)
     return fetchAPI<Record<string, unknown>>('/setup/config');
   },
 

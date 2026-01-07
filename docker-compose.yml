@@ -20,27 +20,23 @@ services:
     networks:
       - stellasentinal-network
 
-  # SQL Server database for customer data (restored from BAK files)
-  # Contains: XSight_BENELUX, MobiControl_BENELUX, XSight_PIBLIC, MobiControl_PIBLIC
-  # Start with: docker-compose --profile sqlserver up
+  # SQL Server database (DEPRECATED - now using external Windows SQL Server at 192.168.3.50)
+  # Keeping for reference but not required when using external server
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: stellasentinal-sqlserver
-    profiles:
-      - sqlserver
     environment:
       - ACCEPT_EULA=Y
-      - MSSQL_SA_PASSWORD=${SQLSERVER_SA_PASSWORD:?SQLSERVER_SA_PASSWORD is required}
+      - MSSQL_SA_PASSWORD=${SQLSERVER_SA_PASSWORD:-YourStrong!Passw0rd}
       - MSSQL_PID=Developer
     ports:
       - "${SQLSERVER_PORT:-1433}:1433"
     volumes:
       - sqlserver_data:/var/opt/mssql
-      # Mount your database backup files here (not included in repo)
-      # - ./DatabaseExamples:/var/opt/mssql/backup:ro
-      # Copy scripts/restore-databases.sql.template to scripts/restore-databases.sql
-      # and customize with your database names before mounting
-      # - ./scripts/restore-databases.sql:/var/opt/mssql/scripts/restore-databases.sql:ro
+      # Mount database backup files (place BAK files in ./backups)
+      - ./backups:/var/opt/mssql/backup:ro
+      # Mount restore script
+      - ./scripts/restore-databases.sql:/var/opt/mssql/scripts/restore-databases.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q \"SELECT 1\" || exit 1"]
       interval: 10s
@@ -127,9 +123,9 @@ services:
       - BACKEND_DB_NAME=${BACKEND_DB_NAME:-anomaly_detection}
       - BACKEND_DB_USER=${BACKEND_DB_USER:-postgres}
       - BACKEND_DB_PASS=${BACKEND_DB_PASS:-postgres}
-      # XSight SQL Database (telemetry source - test server: A0024952\SQLEXPRESS)
-      - DW_DB_HOST=${DW_DB_HOST:-sqlserver}
-      - DW_DB_NAME=${DW_DB_NAME:-XSight}
+      # XSight SQL Database (Windows SQL Server)
+      - DW_DB_HOST=${DW_DB_HOST:-192.168.3.50}
+      - DW_DB_NAME=${DW_DB_NAME:-XSight_DW}
       - DW_DB_USER=${DW_DB_USER:-}
       - DW_DB_PASS=${DW_DB_PASS:-}
       - DW_DB_DRIVER=${DW_DB_DRIVER:-ODBC Driver 18 for SQL Server}
@@ -139,8 +135,8 @@ services:
       - LLM_API_KEY=${LLM_API_KEY:-}
       - LLM_MODEL_NAME=${LLM_MODEL_NAME:-llama3.2}
       - LLM_BASE_URL=${LLM_BASE_URL:-http://ollama:11434}
-      # MobiControl SQL Database (same server as XSight: A0024952\SQLEXPRESS)
-      - MC_DB_HOST=${MC_DB_HOST:-}
+      # MobiControl SQL Database (Windows SQL Server)
+      - MC_DB_HOST=${MC_DB_HOST:-192.168.3.50}
       - MC_DB_PORT=${MC_DB_PORT:-1433}
       - MC_DB_NAME=${MC_DB_NAME:-MobiControlDB}
       - MC_DB_USER=${MC_DB_USER:-}
@@ -159,7 +155,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       # Feature Flags
       - ENABLE_LLM=${ENABLE_LLM:-false}
-      - ENABLE_MOBICONTROL=${ENABLE_MOBICONTROL:-false}
+      - ENABLE_MOBICONTROL=${ENABLE_MOBICONTROL:-true}
       # Training configuration
       - MIN_TRAIN_ROWS=${MIN_TRAIN_ROWS:-50}
       - MIN_VALIDATION_ROWS=${MIN_VALIDATION_ROWS:-20}
@@ -171,6 +167,7 @@ services:
       - ./src:/app/src
       - ./data:/app/data
       - ./logs:/app/logs
+      - ./.env:/app/.env:rw  # Mount .env for hot-reload persistence
     depends_on:
       postgres:
         condition: service_healthy
@@ -202,15 +199,15 @@ services:
       - BACKEND_DB_NAME=${BACKEND_DB_NAME:-anomaly_detection}
       - BACKEND_DB_USER=${BACKEND_DB_USER:-postgres}
       - BACKEND_DB_PASS=${BACKEND_DB_PASS:-postgres}
-      # XSight SQL Database
-      - DW_DB_HOST=${DW_DB_HOST:-sqlserver}
-      - DW_DB_NAME=${DW_DB_NAME:-XSight}
+      # XSight SQL Database (Windows SQL Server)
+      - DW_DB_HOST=${DW_DB_HOST:-192.168.3.50}
+      - DW_DB_NAME=${DW_DB_NAME:-XSight_DW}
       - DW_DB_USER=${DW_DB_USER:-}
       - DW_DB_PASS=${DW_DB_PASS:-}
       - DW_DB_DRIVER=${DW_DB_DRIVER:-ODBC Driver 18 for SQL Server}
       - DW_DB_PORT=${DW_DB_PORT:-1433}
-      # MobiControl SQL Database
-      - MC_DB_HOST=${MC_DB_HOST:-}
+      # MobiControl SQL Database (Windows SQL Server)
+      - MC_DB_HOST=${MC_DB_HOST:-192.168.3.50}
       - MC_DB_PORT=${MC_DB_PORT:-1433}
       - MC_DB_NAME=${MC_DB_NAME:-MobiControlDB}
       - MC_DB_USER=${MC_DB_USER:-}
@@ -218,8 +215,8 @@ services:
       - MC_DB_DRIVER=${MC_DB_DRIVER:-ODBC Driver 18 for SQL Server}
       # Historical data support for demo/testing
       - HISTORICAL_DATA_END_DATE=${HISTORICAL_DATA_END_DATE:-}
-      # Mock mode for development - defaults to true when no SQL Server is available
-      - MOCK_MODE=${MOCK_MODE:-true}
+      # Mock mode for development - defaults to false for real SQL Server
+      - MOCK_MODE=${MOCK_MODE:-false}
       # Training configuration
       - MIN_TRAIN_ROWS=${MIN_TRAIN_ROWS:-50}
       - MIN_VALIDATION_ROWS=${MIN_VALIDATION_ROWS:-20}
@@ -258,15 +255,15 @@ services:
       - BACKEND_DB_NAME=${BACKEND_DB_NAME:-anomaly_detection}
       - BACKEND_DB_USER=${BACKEND_DB_USER:-postgres}
       - BACKEND_DB_PASS=${BACKEND_DB_PASS:-postgres}
-      # XSight SQL Database
-      - DW_DB_HOST=${DW_DB_HOST:-sqlserver}
-      - DW_DB_NAME=${DW_DB_NAME:-XSight}
+      # XSight SQL Database (Windows SQL Server)
+      - DW_DB_HOST=${DW_DB_HOST:-192.168.3.50}
+      - DW_DB_NAME=${DW_DB_NAME:-XSight_DW}
       - DW_DB_USER=${DW_DB_USER:-}
       - DW_DB_PASS=${DW_DB_PASS:-}
       - DW_DB_DRIVER=${DW_DB_DRIVER:-ODBC Driver 18 for SQL Server}
       - DW_DB_PORT=${DW_DB_PORT:-1433}
-      # MobiControl SQL Database
-      - MC_DB_HOST=${MC_DB_HOST:-}
+      # MobiControl SQL Database (Windows SQL Server)
+      - MC_DB_HOST=${MC_DB_HOST:-192.168.3.50}
       - MC_DB_PORT=${MC_DB_PORT:-1433}
       - MC_DB_NAME=${MC_DB_NAME:-MobiControlDB}
       - MC_DB_USER=${MC_DB_USER:-}
@@ -274,8 +271,8 @@ services:
       - MC_DB_DRIVER=${MC_DB_DRIVER:-ODBC Driver 18 for SQL Server}
       # Historical data support for demo/testing
       - HISTORICAL_DATA_END_DATE=${HISTORICAL_DATA_END_DATE:-}
-      # Mock mode for development - defaults to true when no SQL Server is available
-      - MOCK_MODE=${MOCK_MODE:-true}
+      # Mock mode for development - defaults to false for real SQL Server
+      - MOCK_MODE=${MOCK_MODE:-false}
       # Training configuration
       - MIN_TRAIN_ROWS=${MIN_TRAIN_ROWS:-50}
       - MIN_VALIDATION_ROWS=${MIN_VALIDATION_ROWS:-20}

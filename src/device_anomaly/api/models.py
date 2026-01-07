@@ -84,6 +84,7 @@ class DashboardStatsResponse(BaseModel):
     critical_issues: int
     resolved_today: int
     open_cases: int = 0
+    total_anomalies: int = 0  # Total count of all anomalies in database
 
 
 class DashboardTrendResponse(BaseModel):
@@ -453,4 +454,79 @@ class LearnFromFixRequest(BaseModel):
 
     remediation_description: str
     tags: List[str] = Field(default_factory=list)
+
+
+# ============================================
+# Smart Anomaly Grouping Types
+# ============================================
+
+
+class AnomalyGroupMember(BaseModel):
+    """Single anomaly within a group."""
+
+    anomaly_id: int
+    device_id: int
+    anomaly_score: float
+    severity: str  # critical, high, medium, low
+    status: str  # open, investigating, resolved, false_positive
+    timestamp: datetime
+    device_model: Optional[str] = None
+    location: Optional[str] = None
+    primary_metric: Optional[str] = None  # Main contributing factor
+
+
+class AnomalyGroup(BaseModel):
+    """Smart-grouped collection of related anomalies."""
+
+    group_id: str  # Unique identifier for the group
+    group_name: str  # Human-readable name, e.g., "Battery Drain Issues (5 devices)"
+    group_category: str  # InsightCategory value or custom category
+    group_type: str  # category_match, remediation_match, similarity_cluster, temporal_cluster
+    severity: str  # Worst severity in the group
+    total_count: int  # Total anomalies in group
+    open_count: int  # Open + investigating count
+    device_count: int  # Unique devices affected
+
+    # Optional group context
+    suggested_remediation: Optional[RemediationSuggestion] = None
+    common_location: Optional[str] = None
+    common_device_model: Optional[str] = None
+    time_range_start: datetime
+    time_range_end: datetime
+
+    # Sample anomalies for preview (first 5)
+    sample_anomalies: List[AnomalyGroupMember]
+
+    # Explanation of why these are grouped
+    grouping_factors: List[str]  # e.g., ["Same category: BATTERY_RAPID_DRAIN", "Similar score range"]
+    avg_similarity_score: Optional[float] = None
+
+
+class GroupedAnomaliesResponse(BaseModel):
+    """Response containing grouped anomalies."""
+
+    groups: List[AnomalyGroup]
+    total_anomalies: int
+    total_groups: int
+    ungrouped_count: int  # Anomalies that don't fit any group
+    ungrouped_anomalies: List[AnomalyGroupMember] = Field(default_factory=list)
+    grouping_method: str = "smart_auto"
+    computed_at: datetime
+
+
+class BulkActionRequest(BaseModel):
+    """Request for bulk status changes on anomalies."""
+
+    action: str  # resolve, dismiss, investigate, false_positive
+    anomaly_ids: List[int]  # IDs of anomalies to update
+    notes: Optional[str] = None  # Optional note to add
+
+
+class BulkActionResponse(BaseModel):
+    """Response for bulk action."""
+
+    success: bool
+    affected_count: int
+    failed_ids: List[int] = Field(default_factory=list)
+    message: str
 

@@ -13,6 +13,8 @@ from typing import Any, Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from device_anomaly.config.settings import reload_settings
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/setup", tags=["setup"])
@@ -82,7 +84,7 @@ class EnvironmentConfig(BaseModel):
     backend_db_port: int = 5432
     backend_db_name: str = "anomaly_detection"
     backend_db_user: str = "postgres"
-    backend_db_pass: str = "changeme"
+    backend_db_pass: str = "postgres"
     backend_db_connect_timeout: int = 5
     backend_db_statement_timeout_ms: int = 30000
 
@@ -109,6 +111,7 @@ class EnvironmentConfig(BaseModel):
     mc_trust_server_cert: bool = False
 
     # LLM Configuration
+    enable_llm: bool = False
     llm_base_url: str = "http://ollama:11434"
     llm_api_key: str = "not-needed"
     llm_model_name: str = "llama3.2"
@@ -383,6 +386,50 @@ async def test_connection(request: TestConnectionRequest) -> TestConnectionRespo
         )
 
 
+def _find_project_root() -> Path | None:
+    """
+    Find the project root directory by searching for marker files.
+
+    Walks up from the current file and also checks the current working directory.
+    """
+    # Project root indicators (in order of priority)
+    markers = ["docker-compose.yml", "docker-compose.yaml", "pyproject.toml", ".git"]
+
+    # Strategy 1: Walk up from the current file location
+    current_dir = Path(__file__).resolve().parent
+    for _ in range(10):  # Limit search depth
+        for marker in markers:
+            if (current_dir / marker).exists():
+                return current_dir
+        if current_dir.parent == current_dir:
+            break  # Reached filesystem root
+        current_dir = current_dir.parent
+
+    # Strategy 2: Check current working directory
+    cwd = Path.cwd()
+    for marker in markers:
+        if (cwd / marker).exists():
+            return cwd
+
+    # Strategy 3: Check common paths relative to cwd
+    for subdir in [".", "..", "../.."]:
+        check_dir = (cwd / subdir).resolve()
+        for marker in markers:
+            if (check_dir / marker).exists():
+                return check_dir
+
+    # Strategy 4: Use /app if running in Docker
+    docker_app = Path("/app")
+    if docker_app.exists():
+        for marker in markers:
+            if (docker_app / marker).exists():
+                return docker_app
+        # Even without markers, /app is likely the right place in Docker
+        return docker_app
+
+    return None
+
+
 @router.post("/save-config", response_model=SaveConfigResponse)
 async def save_config(config: EnvironmentConfig) -> SaveConfigResponse:
     """
@@ -391,19 +438,14 @@ async def save_config(config: EnvironmentConfig) -> SaveConfigResponse:
     This will create or overwrite the .env file in the project root.
     """
     try:
-        # Find the project root (where docker-compose.yml is)
-        current_dir = Path(__file__).resolve()
-        project_root = current_dir.parent.parent.parent.parent.parent
+        # Find the project root
+        project_root = _find_project_root()
 
-        # Check for common project root indicators
-        if not (project_root / "docker-compose.yml").exists():
-            # Try going up one more level
-            project_root = project_root.parent
-            if not (project_root / "docker-compose.yml").exists():
-                raise HTTPException(
-                    status_code=500,
-                    detail="Could not locate project root directory",
-                )
+        if project_root is None:
+            raise HTTPException(
+                status_code=500,
+                detail="Could not locate project root directory. Ensure docker-compose.yml, pyproject.toml, or .git exists.",
+            )
 
         env_path = project_root / ".env"
 
@@ -416,9 +458,16 @@ async def save_config(config: EnvironmentConfig) -> SaveConfigResponse:
 
         logger.info(f"Configuration saved to {env_path}")
 
+        # Hot-reload settings so changes take effect immediately
+        new_settings = reload_settings(env_path)
+        logger.info(
+            f"Settings hot-reloaded: ENABLE_LLM={new_settings.enable_llm}, "
+            f"LLM_BASE_URL={new_settings.llm.base_url}"
+        )
+
         return SaveConfigResponse(
             success=True,
-            message="Configuration saved successfully",
+            message="Configuration saved and applied successfully",
             file_path=str(env_path),
         )
     except HTTPException:
@@ -440,11 +489,10 @@ async def get_config() -> dict[str, Any]:
     """
     try:
         # Find the project root
-        current_dir = Path(__file__).resolve()
-        project_root = current_dir.parent.parent.parent.parent.parent
+        project_root = _find_project_root()
 
-        if not (project_root / "docker-compose.yml").exists():
-            project_root = project_root.parent
+        if project_root is None:
+            return {}
 
         env_path = project_root / ".env"
 
@@ -567,6 +615,7 @@ MC_TRUST_SERVER_CERT={str(config.mc_trust_server_cert).lower()}
 # =============================================================================
 # LLM Configuration
 # =============================================================================
+ENABLE_LLM={str(config.enable_llm).lower()}
 LLM_BASE_URL={config.llm_base_url}
 LLM_API_KEY={config.llm_api_key}
 LLM_MODEL_NAME={config.llm_model_name}
@@ -591,4 +640,9 @@ MOBICONTROL_CLIENT_SECRET={config.mobicontrol_client_secret}
 MOBICONTROL_USERNAME={config.mobicontrol_username}
 MOBICONTROL_PASSWORD={config.mobicontrol_password}
 MOBICONTROL_TENANT_ID={config.mobicontrol_tenant_id}
+
+# =============================================================================
+# Docker Compose Requirements
+# =============================================================================
+SQLSERVER_SA_PASSWORD=NotUsed123!
 """
