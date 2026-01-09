@@ -40,6 +40,22 @@ import type {
     Severity,
 } from '../types/anomaly';
 
+import type {
+    CorrelationMatrixResponse,
+    CorrelationCell,
+    ScatterPlotResponse,
+    ScatterDataPoint,
+    CausalGraphResponse,
+    CausalNode,
+    CausalEdge,
+    CorrelationInsight,
+    CorrelationInsightsResponse,
+    CohortCorrelationPattern,
+    CohortCorrelationPatternsResponse,
+    TimeLagCorrelation,
+    TimeLagCorrelationsResponse,
+} from '../types/correlations';
+
 // Seeded random for consistent data
 class SeededRandom {
     private seed: number;
@@ -876,11 +892,13 @@ import type {
 
 export function getMockTableProfiles(): TableProfile[] {
     return [
+        // XSight DW Tables
         {
             table_name: 'cs_BatteryStat',
             row_count: 1_250_000,
             date_range: ['2024-01-01', '2024-12-28'],
             device_count: 4_500,
+            source_db: 'xsight',
             column_stats: {
                 TotalBatteryLevelDrop: {
                     column_name: 'TotalBatteryLevelDrop',
@@ -926,6 +944,7 @@ export function getMockTableProfiles(): TableProfile[] {
             row_count: 3_500_000,
             date_range: ['2024-01-01', '2024-12-28'],
             device_count: 4_500,
+            source_db: 'xsight',
             column_stats: {
                 VisitCount: {
                     column_name: 'VisitCount',
@@ -959,6 +978,7 @@ export function getMockTableProfiles(): TableProfile[] {
             row_count: 2_800_000,
             date_range: ['2024-01-01', '2024-12-28'],
             device_count: 4_500,
+            source_db: 'xsight',
             column_stats: {
                 Download: {
                     column_name: 'Download',
@@ -992,6 +1012,7 @@ export function getMockTableProfiles(): TableProfile[] {
             row_count: 5_200_000,
             date_range: ['2024-01-01', '2024-12-28'],
             device_count: 4_500,
+            source_db: 'xsight',
             column_stats: {
                 SignalStrength: {
                     column_name: 'SignalStrength',
@@ -1020,30 +1041,290 @@ export function getMockTableProfiles(): TableProfile[] {
             },
             profiled_at: new Date().toISOString(),
         },
+        // Extended XSight tables (hourly)
+        {
+            table_name: 'cs_DataUsageByHour',
+            row_count: 104_000_000,
+            date_range: ['2024-01-01', '2024-12-28'],
+            device_count: 4_500,
+            source_db: 'xsight',
+            column_stats: {
+                HourlyDownload: {
+                    column_name: 'HourlyDownload',
+                    dtype: 'bigint',
+                    null_count: 1040000,
+                    null_percent: 1.0,
+                    unique_count: 500000,
+                    min_val: 0,
+                    max_val: 500_000_000,
+                    mean: 6_250_000,
+                    std: 15_000_000,
+                    percentiles: { p5: 0, p25: 500000, p50: 3000000, p75: 8000000, p95: 25000000, p99: 75000000 },
+                },
+            },
+            profiled_at: new Date().toISOString(),
+        },
+        {
+            table_name: 'cs_BatteryLevelDrop',
+            row_count: 14_800_000,
+            date_range: ['2024-01-01', '2024-12-28'],
+            device_count: 4_500,
+            source_db: 'xsight',
+            column_stats: {
+                HourlyDrop: {
+                    column_name: 'HourlyDrop',
+                    dtype: 'int',
+                    null_count: 148000,
+                    null_percent: 1.0,
+                    unique_count: 100,
+                    min_val: 0,
+                    max_val: 25,
+                    mean: 1.5,
+                    std: 2.8,
+                    percentiles: { p5: 0, p25: 0, p50: 1, p75: 2, p95: 6, p99: 12 },
+                },
+            },
+            profiled_at: new Date().toISOString(),
+        },
+        {
+            table_name: 'cs_WiFiLocation',
+            row_count: 790_000,
+            date_range: ['2024-01-01', '2024-12-28'],
+            device_count: 4_500,
+            source_db: 'xsight',
+            column_stats: {
+                WiFiSignalStrength: {
+                    column_name: 'WiFiSignalStrength',
+                    dtype: 'int',
+                    null_count: 7900,
+                    null_percent: 1.0,
+                    unique_count: 80,
+                    min_val: -100,
+                    max_val: -30,
+                    mean: -62,
+                    std: 12,
+                    percentiles: { p5: -85, p25: -70, p50: -62, p75: -52, p95: -40, p99: -35 },
+                },
+                Latitude: {
+                    column_name: 'Latitude',
+                    dtype: 'float',
+                    null_count: 15800,
+                    null_percent: 2.0,
+                    unique_count: 50000,
+                    min_val: 25.0,
+                    max_val: 48.0,
+                    mean: 39.5,
+                    std: 5.2,
+                    percentiles: { p5: 30, p25: 35, p50: 40, p75: 43, p95: 46, p99: 47 },
+                },
+            },
+            profiled_at: new Date().toISOString(),
+        },
+        // MobiControl Tables
+        {
+            table_name: 'DeviceStatInt',
+            row_count: 764_000,
+            date_range: ['2024-01-01', '2024-12-28'],
+            device_count: 4_500,
+            source_db: 'mobicontrol',
+            column_stats: {
+                BatteryLevel: {
+                    column_name: 'BatteryLevel',
+                    dtype: 'int',
+                    null_count: 7640,
+                    null_percent: 1.0,
+                    unique_count: 100,
+                    min_val: 0,
+                    max_val: 100,
+                    mean: 65,
+                    std: 25,
+                    percentiles: { p5: 15, p25: 45, p50: 70, p75: 85, p95: 98, p99: 100 },
+                },
+                AvailableRAM: {
+                    column_name: 'AvailableRAM',
+                    dtype: 'bigint',
+                    null_count: 3820,
+                    null_percent: 0.5,
+                    unique_count: 200000,
+                    min_val: 100_000_000,
+                    max_val: 4_000_000_000,
+                    mean: 1_500_000_000,
+                    std: 800_000_000,
+                    percentiles: { p5: 300000000, p25: 800000000, p50: 1500000000, p75: 2200000000, p95: 3200000000, p99: 3800000000 },
+                },
+                CPUUsage: {
+                    column_name: 'CPUUsage',
+                    dtype: 'int',
+                    null_count: 7640,
+                    null_percent: 1.0,
+                    unique_count: 100,
+                    min_val: 0,
+                    max_val: 100,
+                    mean: 35,
+                    std: 20,
+                    percentiles: { p5: 5, p25: 18, p50: 32, p75: 48, p95: 75, p99: 90 },
+                },
+            },
+            profiled_at: new Date().toISOString(),
+        },
+        {
+            table_name: 'DeviceStatLocation',
+            row_count: 619_000,
+            date_range: ['2024-01-01', '2024-12-28'],
+            device_count: 4_500,
+            source_db: 'mobicontrol',
+            column_stats: {
+                Latitude: {
+                    column_name: 'Latitude',
+                    dtype: 'float',
+                    null_count: 12380,
+                    null_percent: 2.0,
+                    unique_count: 100000,
+                    min_val: 25.0,
+                    max_val: 48.0,
+                    mean: 39.5,
+                    std: 5.2,
+                    percentiles: { p5: 30, p25: 35, p50: 40, p75: 43, p95: 46, p99: 47 },
+                },
+                Speed: {
+                    column_name: 'Speed',
+                    dtype: 'float',
+                    null_count: 30950,
+                    null_percent: 5.0,
+                    unique_count: 1000,
+                    min_val: 0,
+                    max_val: 120,
+                    mean: 8.5,
+                    std: 15.2,
+                    percentiles: { p5: 0, p25: 0, p50: 0, p75: 10, p95: 45, p99: 75 },
+                },
+            },
+            profiled_at: new Date().toISOString(),
+        },
+        {
+            table_name: 'MainLog',
+            row_count: 1_000_000,
+            date_range: ['2024-01-01', '2024-12-28'],
+            device_count: 4_500,
+            source_db: 'mobicontrol',
+            column_stats: {
+                Severity: {
+                    column_name: 'Severity',
+                    dtype: 'int',
+                    null_count: 10000,
+                    null_percent: 1.0,
+                    unique_count: 5,
+                    min_val: 1,
+                    max_val: 5,
+                    mean: 2.3,
+                    std: 0.9,
+                    percentiles: { p5: 1, p25: 2, p50: 2, p75: 3, p95: 4, p99: 5 },
+                },
+            },
+            profiled_at: new Date().toISOString(),
+        },
+        {
+            table_name: 'Alert',
+            row_count: 1_300,
+            date_range: ['2024-01-01', '2024-12-28'],
+            device_count: 850,
+            source_db: 'mobicontrol',
+            column_stats: {
+                SeverityLevel: {
+                    column_name: 'SeverityLevel',
+                    dtype: 'int',
+                    null_count: 13,
+                    null_percent: 1.0,
+                    unique_count: 4,
+                    min_val: 1,
+                    max_val: 4,
+                    mean: 2.1,
+                    std: 0.8,
+                    percentiles: { p5: 1, p25: 1, p50: 2, p75: 3, p95: 4, p99: 4 },
+                },
+            },
+            profiled_at: new Date().toISOString(),
+        },
     ];
 }
 
 export function getMockAvailableMetrics(): AvailableMetric[] {
     return [
-        // Raw database metrics
+        // XSight - Battery metrics
         { table: 'cs_BatteryStat', column: 'TotalBatteryLevelDrop', dtype: 'int', mean: 35.2, std: 18.5, min: 0, max: 100, category: 'raw', domain: 'battery' },
         { table: 'cs_BatteryStat', column: 'TotalDischargeTime_Sec', dtype: 'int', mean: 28800, std: 12000, min: 0, max: 86400, category: 'raw', domain: 'battery' },
         { table: 'cs_BatteryStat', column: 'TotalFreeStorageKb', dtype: 'bigint', mean: 2_000_000, std: 1_500_000, min: 0, max: 16_000_000, category: 'raw', domain: 'storage' },
+        { table: 'cs_BatteryStat', column: 'ScreenOnTime_Sec', dtype: 'int', mean: 14400, std: 7200, min: 0, max: 86400, category: 'raw', domain: 'battery' },
+        { table: 'cs_BatteryStat', column: 'ChargePatternGoodCount', dtype: 'int', mean: 3.5, std: 2.1, min: 0, max: 20, category: 'raw', domain: 'battery' },
+
+        // XSight - App Usage metrics
         { table: 'cs_AppUsage', column: 'VisitCount', dtype: 'int', mean: 45, std: 32, min: 0, max: 1000, category: 'raw', domain: 'usage' },
         { table: 'cs_AppUsage', column: 'TotalForegroundTime', dtype: 'int', mean: 3600, std: 2400, min: 0, max: 28800, category: 'raw', domain: 'usage' },
+        { table: 'cs_AppUsage', column: 'CrashCount', dtype: 'int', mean: 0.8, std: 1.5, min: 0, max: 50, category: 'raw', domain: 'usage' },
+        { table: 'cs_AppUsage', column: 'ANRCount', dtype: 'int', mean: 0.3, std: 0.8, min: 0, max: 20, category: 'raw', domain: 'usage' },
+
+        // XSight - Data Usage metrics
         { table: 'cs_DataUsage', column: 'Download', dtype: 'bigint', mean: 150_000_000, std: 250_000_000, min: 0, max: 10_000_000_000, category: 'raw', domain: 'throughput' },
         { table: 'cs_DataUsage', column: 'Upload', dtype: 'bigint', mean: 25_000_000, std: 50_000_000, min: 0, max: 2_000_000_000, category: 'raw', domain: 'throughput' },
+        { table: 'cs_DataUsage', column: 'WifiDownload', dtype: 'bigint', mean: 120_000_000, std: 200_000_000, min: 0, max: 8_000_000_000, category: 'raw', domain: 'throughput' },
+        { table: 'cs_DataUsage', column: 'MobileDownload', dtype: 'bigint', mean: 30_000_000, std: 80_000_000, min: 0, max: 2_000_000_000, category: 'raw', domain: 'throughput' },
+
+        // XSight - RF/Signal metrics
         { table: 'cs_Heatmap', column: 'SignalStrength', dtype: 'int', mean: -72, std: 15, min: -120, max: -40, category: 'raw', domain: 'rf' },
         { table: 'cs_Heatmap', column: 'DropCnt', dtype: 'int', mean: 2.5, std: 5.2, min: 0, max: 100, category: 'raw', domain: 'rf' },
-        // Engineered features
+        { table: 'cs_Heatmap', column: 'WiFiAPCount', dtype: 'int', mean: 8, std: 5, min: 1, max: 50, category: 'raw', domain: 'rf' },
+
+        // XSight Extended - Hourly data
+        { table: 'cs_DataUsageByHour', column: 'HourlyDownload', dtype: 'bigint', mean: 6_250_000, std: 15_000_000, min: 0, max: 500_000_000, category: 'raw', domain: 'throughput' },
+        { table: 'cs_BatteryLevelDrop', column: 'HourlyDrop', dtype: 'int', mean: 1.5, std: 2.8, min: 0, max: 25, category: 'raw', domain: 'battery' },
+        { table: 'cs_WiFiLocation', column: 'WiFiSignalStrength', dtype: 'int', mean: -62, std: 12, min: -100, max: -30, category: 'raw', domain: 'rf' },
+
+        // MobiControl - Device metrics
+        { table: 'DeviceStatInt', column: 'BatteryLevel', dtype: 'int', mean: 65, std: 25, min: 0, max: 100, category: 'raw', domain: 'battery' },
+        { table: 'DeviceStatInt', column: 'AvailableRAM', dtype: 'bigint', mean: 1_500_000_000, std: 800_000_000, min: 100_000_000, max: 4_000_000_000, category: 'raw', domain: 'storage' },
+        { table: 'DeviceStatInt', column: 'CPUUsage', dtype: 'int', mean: 35, std: 20, min: 0, max: 100, category: 'raw', domain: 'cpu' },
+        { table: 'DeviceStatInt', column: 'Temperature', dtype: 'int', mean: 32, std: 8, min: 15, max: 60, category: 'raw', domain: 'hardware' },
+
+        // MobiControl - Location metrics
+        { table: 'DeviceStatLocation', column: 'Latitude', dtype: 'float', mean: 39.5, std: 5.2, min: 25.0, max: 48.0, category: 'raw', domain: 'location' },
+        { table: 'DeviceStatLocation', column: 'Speed', dtype: 'float', mean: 8.5, std: 15.2, min: 0, max: 120, category: 'raw', domain: 'location' },
+
+        // MobiControl - Events & Alerts
+        { table: 'MainLog', column: 'Severity', dtype: 'int', mean: 2.3, std: 0.9, min: 1, max: 5, category: 'raw', domain: 'events' },
+        { table: 'Alert', column: 'SeverityLevel', dtype: 'int', mean: 2.1, std: 0.8, min: 1, max: 4, category: 'raw', domain: 'events' },
+
+        // Engineered features - Rolling
         { table: 'feature_engineered', column: 'TotalBatteryLevelDrop_roll_mean', dtype: 'float', mean: 35.1, std: 12.3, min: 2, max: 95, category: 'rolling', domain: 'battery', description: 'Mean of TotalBatteryLevelDrop over 14 days' },
         { table: 'feature_engineered', column: 'TotalBatteryLevelDrop_roll_std', dtype: 'float', mean: 8.2, std: 5.1, min: 0, max: 35, category: 'rolling', domain: 'battery', description: 'Std of TotalBatteryLevelDrop over 14 days' },
-        { table: 'feature_engineered', column: 'BatteryDrainPerHour', dtype: 'float', mean: 4.5, std: 2.8, min: 0, max: 25, category: 'derived', domain: 'battery', description: 'Derived: TotalBatteryLevelDrop / (TotalDischargeTime_Sec / 3600 + 1)' },
+        { table: 'feature_engineered', column: 'Download_roll_mean', dtype: 'float', mean: 150_000_000, std: 100_000_000, min: 1000, max: 5_000_000_000, category: 'rolling', domain: 'throughput', description: 'Mean of Download over 14 days' },
+        { table: 'feature_engineered', column: 'SignalStrength_roll_mean', dtype: 'float', mean: -72, std: 8, min: -100, max: -40, category: 'rolling', domain: 'rf', description: 'Mean of SignalStrength over 14 days' },
+
+        // Engineered features - Derived
+        { table: 'feature_engineered', column: 'BatteryDrainPerHour', dtype: 'float', mean: 4.5, std: 2.8, min: 0, max: 25, category: 'derived', domain: 'battery', description: 'TotalBatteryLevelDrop / (TotalDischargeTime_Sec / 3600 + 1)' },
+        { table: 'feature_engineered', column: 'StorageUtilization', dtype: 'float', mean: 0.72, std: 0.18, min: 0, max: 1, category: 'derived', domain: 'storage', description: '1 - (AvailableStorage / TotalStorage)' },
+        { table: 'feature_engineered', column: 'DataPerSignalQuality', dtype: 'float', mean: 2_500_000, std: 5_000_000, min: 0, max: 100_000_000, category: 'derived', domain: 'composite', description: 'Download / abs(SignalStrength)' },
+        { table: 'feature_engineered', column: 'CrashRate', dtype: 'float', mean: 0.02, std: 0.05, min: 0, max: 1, category: 'derived', domain: 'usage', description: 'CrashCount / VisitCount' },
+
+        // Engineered features - Delta
         { table: 'feature_engineered', column: 'Download_delta', dtype: 'float', mean: 5_000_000, std: 50_000_000, min: -500_000_000, max: 500_000_000, category: 'delta', domain: 'throughput', description: 'Day-over-day change for Download' },
-        { table: 'feature_engineered', column: 'hour_of_day', dtype: 'int', mean: 12, std: 6.9, min: 0, max: 23, category: 'temporal', domain: 'temporal', description: 'Temporal feature: hour of day' },
-        { table: 'feature_engineered', column: 'day_of_week', dtype: 'int', mean: 3, std: 2, min: 0, max: 6, category: 'temporal', domain: 'temporal', description: 'Temporal feature: day of week' },
-        { table: 'feature_engineered', column: 'TotalBatteryLevelDrop_cohort_z', dtype: 'float', mean: 0, std: 1, min: -3, max: 3, category: 'cohort', domain: 'battery', description: 'Cohort-normalized z-score for TotalBatteryLevelDrop' },
-        { table: 'feature_engineered', column: 'Download_cv', dtype: 'float', mean: 1.2, std: 0.8, min: 0, max: 5, category: 'volatility', domain: 'throughput', description: 'Coefficient of variation (volatility) for Download' },
+        { table: 'feature_engineered', column: 'BatteryLevel_delta', dtype: 'float', mean: -2.5, std: 10, min: -50, max: 50, category: 'delta', domain: 'battery', description: 'Day-over-day change for BatteryLevel' },
+        { table: 'feature_engineered', column: 'TotalBatteryLevelDrop_trend_7d', dtype: 'float', mean: 0.5, std: 2, min: -10, max: 10, category: 'delta', domain: 'battery', description: '7-day trend for TotalBatteryLevelDrop' },
+
+        // Engineered features - Temporal
+        { table: 'feature_engineered', column: 'hour_of_day', dtype: 'int', mean: 12, std: 6.9, min: 0, max: 23, category: 'temporal', domain: 'temporal', description: 'Hour of day (0-23)' },
+        { table: 'feature_engineered', column: 'day_of_week', dtype: 'int', mean: 3, std: 2, min: 0, max: 6, category: 'temporal', domain: 'temporal', description: 'Day of week (0=Mon, 6=Sun)' },
+        { table: 'feature_engineered', column: 'is_weekend', dtype: 'int', mean: 0.29, std: 0.45, min: 0, max: 1, category: 'temporal', domain: 'temporal', description: 'Weekend indicator' },
+        { table: 'feature_engineered', column: 'is_business_hours', dtype: 'int', mean: 0.42, std: 0.49, min: 0, max: 1, category: 'temporal', domain: 'temporal', description: 'Business hours indicator (9-17)' },
+
+        // Engineered features - Cohort z-scores
+        { table: 'feature_engineered', column: 'TotalBatteryLevelDrop_cohort_z', dtype: 'float', mean: 0, std: 1, min: -3, max: 3, category: 'cohort', domain: 'battery', description: 'Cohort-normalized z-score by device model' },
+        { table: 'feature_engineered', column: 'Download_cohort_z', dtype: 'float', mean: 0, std: 1, min: -3, max: 3, category: 'cohort', domain: 'throughput', description: 'Cohort-normalized z-score by device model' },
+        { table: 'feature_engineered', column: 'SignalStrength_cohort_z', dtype: 'float', mean: 0, std: 1, min: -3, max: 3, category: 'cohort', domain: 'rf', description: 'Cohort-normalized z-score by device model' },
+
+        // Engineered features - Volatility (CV)
+        { table: 'feature_engineered', column: 'Download_cv', dtype: 'float', mean: 1.2, std: 0.8, min: 0, max: 5, category: 'volatility', domain: 'throughput', description: 'Coefficient of variation for Download' },
+        { table: 'feature_engineered', column: 'BatteryLevel_cv', dtype: 'float', mean: 0.25, std: 0.15, min: 0, max: 1, category: 'volatility', domain: 'battery', description: 'Coefficient of variation for BatteryLevel' },
+        { table: 'feature_engineered', column: 'SignalStrength_cv', dtype: 'float', mean: 0.18, std: 0.1, min: 0, max: 0.5, category: 'volatility', domain: 'rf', description: 'Coefficient of variation for SignalStrength' },
     ];
 }
 
@@ -1706,6 +1987,7 @@ import type {
     SchedulerStatus,
     AutomationAlert,
     AutomationJob,
+    TriggerJobRequest,
     TriggerJobResponse,
 } from '../types/automation';
 
@@ -1726,9 +2008,20 @@ export function getMockAutomationConfig(): SchedulerConfig {
         alerting_enabled: true,
         alert_on_high_anomaly_rate: true,
         high_anomaly_rate_threshold: 0.10,
+        insights_enabled: true,
+        daily_digest_hour: 5,
+        shift_readiness_enabled: true,
+        shift_readiness_lead_minutes: 60,
+        shift_schedules: ['morning', 'afternoon', 'day'],
+        location_baseline_enabled: true,
+        location_baseline_day_of_week: 0,
+        location_baseline_hour: 3,
         last_training_time: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
         last_scoring_time: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
         last_auto_retrain_time: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+        last_daily_digest_time: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+        last_shift_readiness_time: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+        last_location_baseline_time: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
     };
 }
 
@@ -1742,6 +2035,7 @@ export function getMockAutomationStatus(): SchedulerStatus {
         is_running: true,
         training_status: 'idle',
         scoring_status: 'idle',
+        insights_status: 'idle',
         last_training_result: {
             success: true,
             timestamp: lastTrainingTime.toISOString(),
@@ -1759,9 +2053,16 @@ export function getMockAutomationStatus(): SchedulerStatus {
             anomalies_detected: 12,
             anomaly_rate: 0.048,
         },
+        last_insight_result: {
+            success: true,
+            timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+            insights_generated: 12,
+        },
         next_training_time: nextTrainingTime.toISOString(),
         next_scoring_time: nextScoringTime.toISOString(),
+        next_insight_time: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
         total_anomalies_detected: 156,
+        total_insights_generated: 42,
         false_positive_rate: 0.08,
         uptime_seconds: 86400 * 3 + 12345,
         errors: [],
@@ -1806,42 +2107,42 @@ export function getMockAutomationHistory(limit: number = 10): AutomationJob[] {
             timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
             triggered_by: 'schedule',
             success: true,
-            metrics: { total_scored: 248, anomalies_detected: 12, anomaly_rate: 0.048 },
+            details: { total_scored: 248, anomalies_detected: 12, anomaly_rate: 0.048 },
         },
         {
             type: 'scoring',
             timestamp: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
             triggered_by: 'schedule',
             success: true,
-            metrics: { total_scored: 250, anomalies_detected: 8, anomaly_rate: 0.032 },
+            details: { total_scored: 250, anomalies_detected: 8, anomaly_rate: 0.032 },
         },
         {
             type: 'training',
             timestamp: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
             triggered_by: 'schedule',
             success: true,
-            metrics: { samples_trained: 12450, model_accuracy: 0.94 },
+            details: { samples_trained: 12450, model_accuracy: 0.94 },
         },
         {
             type: 'scoring',
             timestamp: new Date(Date.now() - 12.5 * 60 * 60 * 1000).toISOString(),
             triggered_by: 'schedule',
             success: true,
-            metrics: { total_scored: 245, anomalies_detected: 15, anomaly_rate: 0.061 },
+            details: { total_scored: 245, anomalies_detected: 15, anomaly_rate: 0.061 },
         },
         {
             type: 'auto_retrain',
             timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
             triggered_by: 'auto',
             success: true,
-            metrics: { reason: 'fp_threshold_exceeded', previous_fp_rate: 0.18, new_fp_rate: 0.08 },
+            details: { reason: 'fp_threshold_exceeded', previous_fp_rate: 0.18, new_fp_rate: 0.08 },
         },
         {
             type: 'training',
             timestamp: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
             triggered_by: 'manual',
             success: true,
-            metrics: { samples_trained: 11200, model_accuracy: 0.91 },
+            details: { samples_trained: 11200, model_accuracy: 0.91 },
         },
         {
             type: 'scoring',
@@ -1855,7 +2156,7 @@ export function getMockAutomationHistory(limit: number = 10): AutomationJob[] {
     return jobs.slice(0, limit);
 }
 
-export function getMockTriggerJobResponse(jobType: 'training' | 'scoring'): TriggerJobResponse {
+export function getMockTriggerJobResponse(jobType: TriggerJobRequest['job_type']): TriggerJobResponse {
     return {
         success: true,
         job_id: `job-${Date.now()}-${jobType}`,
@@ -2301,6 +2602,69 @@ export function getMockDeviceAbuseAnalysis(): DeviceAbuseResponse {
             { cohort_id: 'Zebra_TC52_12', reboots: 23, rate_per_device: 2.3 },
             { cohort_id: 'Samsung_XCover_13', reboots: 18, rate_per_device: 1.8 },
         ],
+        // Carl's "People with excessive drops" - users ranked by drop count
+        worst_users: [
+            {
+                user_id: 'usr-001',
+                user_name: 'John Martinez',
+                user_email: 'john.martinez@warehouse.com',
+                total_drops: 23,
+                total_reboots: 8,
+                device_count: 2,
+                drops_per_device: 11.5,
+                drops_per_day: 3.29,
+                vs_fleet_multiplier: 4.2,
+                is_excessive: true,
+            },
+            {
+                user_id: 'usr-002',
+                user_name: 'Sarah Chen',
+                user_email: 'sarah.chen@warehouse.com',
+                total_drops: 18,
+                total_reboots: 5,
+                device_count: 1,
+                drops_per_device: 18.0,
+                drops_per_day: 2.57,
+                vs_fleet_multiplier: 3.3,
+                is_excessive: true,
+            },
+            {
+                user_id: 'usr-003',
+                user_name: 'Mike Johnson',
+                user_email: 'mike.johnson@warehouse.com',
+                total_drops: 12,
+                total_reboots: 3,
+                device_count: 1,
+                drops_per_device: 12.0,
+                drops_per_day: 1.71,
+                vs_fleet_multiplier: 2.2,
+                is_excessive: true,
+            },
+            {
+                user_id: 'usr-004',
+                user_name: 'Lisa Wong',
+                user_email: 'lisa.wong@warehouse.com',
+                total_drops: 9,
+                total_reboots: 2,
+                device_count: 1,
+                drops_per_device: 9.0,
+                drops_per_day: 1.29,
+                vs_fleet_multiplier: 1.7,
+                is_excessive: false,
+            },
+            {
+                user_id: 'usr-005',
+                user_name: 'David Kim',
+                user_email: 'david.kim@warehouse.com',
+                total_drops: 7,
+                total_reboots: 4,
+                device_count: 1,
+                drops_per_device: 7.0,
+                drops_per_day: 1.0,
+                vs_fleet_multiplier: 1.3,
+                is_excessive: false,
+            },
+        ],
         problem_combinations: [
             {
                 cohort_id: 'Zebra_TC52_Android12_fw1.2',
@@ -2317,6 +2681,7 @@ export function getMockDeviceAbuseAnalysis(): DeviceAbuseResponse {
             'Deploy protective cases at Harbor Point (highest drop rate)',
             'Update firmware on Zebra TC52 devices (known reboot bug)',
             'Conduct device handling training at top 3 locations',
+            'Schedule refresher training for John Martinez (4.2x fleet average drops)',
         ],
         financial_impact: {
             total_estimated_cost: 19500,
@@ -2422,30 +2787,30 @@ export function getMockGroupedAnomalies(_params?: {
 
     // Create sample group members
     const batteryMembers: AnomalyGroupMember[] = [
-        { anomaly_id: 1001, device_id: 101, anomaly_score: -0.85, severity: 'critical', status: 'open', timestamp: oneHourAgo.toISOString(), device_model: 'Zebra TC52', location: 'Downtown Flagship', primary_metric: 'total_battery_level_drop' },
-        { anomaly_id: 1002, device_id: 102, anomaly_score: -0.72, severity: 'critical', status: 'investigating', timestamp: twoHoursAgo.toISOString(), device_model: 'Zebra TC52', location: 'Downtown Flagship', primary_metric: 'total_battery_level_drop' },
-        { anomaly_id: 1003, device_id: 103, anomaly_score: -0.68, severity: 'high', status: 'open', timestamp: threeHoursAgo.toISOString(), device_model: 'Samsung Galaxy Tab A8', location: 'Westside Mall', primary_metric: 'total_battery_level_drop' },
-        { anomaly_id: 1004, device_id: 104, anomaly_score: -0.55, severity: 'high', status: 'open', timestamp: oneHourAgo.toISOString(), device_model: 'Samsung Galaxy Tab A8', location: 'Harbor Point', primary_metric: 'total_battery_level_drop' },
-        { anomaly_id: 1005, device_id: 105, anomaly_score: -0.52, severity: 'high', status: 'open', timestamp: twoHoursAgo.toISOString(), device_model: 'iPad Pro 11', location: 'Tech Plaza', primary_metric: 'total_battery_level_drop' },
+        { anomaly_id: 1001, device_id: 101, anomaly_score: -0.85, severity: 'critical', status: 'open', timestamp: oneHourAgo.toISOString(), device_name: 'POS-Downtown-01', device_model: 'Zebra TC52', location: 'Downtown Flagship', primary_metric: 'total_battery_level_drop' },
+        { anomaly_id: 1002, device_id: 102, anomaly_score: -0.72, severity: 'critical', status: 'investigating', timestamp: twoHoursAgo.toISOString(), device_name: 'POS-Downtown-02', device_model: 'Zebra TC52', location: 'Downtown Flagship', primary_metric: 'total_battery_level_drop' },
+        { anomaly_id: 1003, device_id: 103, anomaly_score: -0.68, severity: 'high', status: 'open', timestamp: threeHoursAgo.toISOString(), device_name: 'Tablet-Westside-A', device_model: 'Samsung Galaxy Tab A8', location: 'Westside Mall', primary_metric: 'total_battery_level_drop' },
+        { anomaly_id: 1004, device_id: 104, anomaly_score: -0.55, severity: 'high', status: 'open', timestamp: oneHourAgo.toISOString(), device_name: 'Tablet-Harbor-01', device_model: 'Samsung Galaxy Tab A8', location: 'Harbor Point', primary_metric: 'total_battery_level_drop' },
+        { anomaly_id: 1005, device_id: 105, anomaly_score: -0.52, severity: 'high', status: 'open', timestamp: twoHoursAgo.toISOString(), device_name: 'iPad-TechPlaza-03', device_model: 'iPad Pro 11', location: 'Tech Plaza', primary_metric: 'total_battery_level_drop' },
     ];
 
     const networkMembers: AnomalyGroupMember[] = [
-        { anomaly_id: 2001, device_id: 201, anomaly_score: -0.78, severity: 'critical', status: 'open', timestamp: oneHourAgo.toISOString(), device_model: 'Honeywell CT60', location: 'Harbor Point', primary_metric: 'disconnect_count' },
-        { anomaly_id: 2002, device_id: 202, anomaly_score: -0.65, severity: 'high', status: 'open', timestamp: twoHoursAgo.toISOString(), device_model: 'Honeywell CT60', location: 'Harbor Point', primary_metric: 'disconnect_count' },
-        { anomaly_id: 2003, device_id: 203, anomaly_score: -0.61, severity: 'high', status: 'investigating', timestamp: threeHoursAgo.toISOString(), device_model: 'Zebra TC52', location: 'Harbor Point', primary_metric: 'disconnect_count' },
-        { anomaly_id: 2004, device_id: 204, anomaly_score: -0.58, severity: 'high', status: 'open', timestamp: oneHourAgo.toISOString(), device_model: 'Samsung Galaxy XCover 6', location: 'Harbor Point', primary_metric: 'wifi_signal_strength' },
+        { anomaly_id: 2001, device_id: 201, anomaly_score: -0.78, severity: 'critical', status: 'open', timestamp: oneHourAgo.toISOString(), device_name: 'Scanner-Harbor-01', device_model: 'Honeywell CT60', location: 'Harbor Point', primary_metric: 'disconnect_count' },
+        { anomaly_id: 2002, device_id: 202, anomaly_score: -0.65, severity: 'high', status: 'open', timestamp: twoHoursAgo.toISOString(), device_name: 'Scanner-Harbor-02', device_model: 'Honeywell CT60', location: 'Harbor Point', primary_metric: 'disconnect_count' },
+        { anomaly_id: 2003, device_id: 203, anomaly_score: -0.61, severity: 'high', status: 'investigating', timestamp: threeHoursAgo.toISOString(), device_name: 'POS-Harbor-05', device_model: 'Zebra TC52', location: 'Harbor Point', primary_metric: 'disconnect_count' },
+        { anomaly_id: 2004, device_id: 204, anomaly_score: -0.58, severity: 'high', status: 'open', timestamp: oneHourAgo.toISOString(), device_name: 'Mobile-Harbor-A1', device_model: 'Samsung Galaxy XCover 6', location: 'Harbor Point', primary_metric: 'wifi_signal_strength' },
     ];
 
     const storageMembers: AnomalyGroupMember[] = [
-        { anomaly_id: 3001, device_id: 301, anomaly_score: -0.82, severity: 'critical', status: 'open', timestamp: oneHourAgo.toISOString(), device_model: 'Samsung Galaxy Tab A8', location: 'Central Station', primary_metric: 'total_free_storage_kb' },
-        { anomaly_id: 3002, device_id: 302, anomaly_score: -0.75, severity: 'critical', status: 'open', timestamp: twoHoursAgo.toISOString(), device_model: 'iPad Pro 11', location: 'University District', primary_metric: 'total_free_storage_kb' },
-        { anomaly_id: 3003, device_id: 303, anomaly_score: -0.71, severity: 'critical', status: 'investigating', timestamp: threeHoursAgo.toISOString(), device_model: 'Samsung Galaxy Tab A8', location: 'Riverside Center', primary_metric: 'total_free_storage_kb' },
+        { anomaly_id: 3001, device_id: 301, anomaly_score: -0.82, severity: 'critical', status: 'open', timestamp: oneHourAgo.toISOString(), device_name: 'Kiosk-Central-01', device_model: 'Samsung Galaxy Tab A8', location: 'Central Station', primary_metric: 'total_free_storage_kb' },
+        { anomaly_id: 3002, device_id: 302, anomaly_score: -0.75, severity: 'critical', status: 'open', timestamp: twoHoursAgo.toISOString(), device_name: 'iPad-University-02', device_model: 'iPad Pro 11', location: 'University District', primary_metric: 'total_free_storage_kb' },
+        { anomaly_id: 3003, device_id: 303, anomaly_score: -0.71, severity: 'critical', status: 'investigating', timestamp: threeHoursAgo.toISOString(), device_name: 'Tablet-Riverside-B', device_model: 'Samsung Galaxy Tab A8', location: 'Riverside Center', primary_metric: 'total_free_storage_kb' },
     ];
 
     const cohortMembers: AnomalyGroupMember[] = [
-        { anomaly_id: 4001, device_id: 401, anomaly_score: -0.62, severity: 'high', status: 'open', timestamp: oneHourAgo.toISOString(), device_model: 'Zebra TC52', location: 'Airport Terminal', primary_metric: 'offline_time' },
-        { anomaly_id: 4002, device_id: 402, anomaly_score: -0.58, severity: 'high', status: 'open', timestamp: twoHoursAgo.toISOString(), device_model: 'Zebra TC52', location: 'Downtown Flagship', primary_metric: 'offline_time' },
-        { anomaly_id: 4003, device_id: 403, anomaly_score: -0.55, severity: 'high', status: 'open', timestamp: threeHoursAgo.toISOString(), device_model: 'Zebra TC52', location: 'Tech Plaza', primary_metric: 'connection_time' },
+        { anomaly_id: 4001, device_id: 401, anomaly_score: -0.62, severity: 'high', status: 'open', timestamp: oneHourAgo.toISOString(), device_name: 'POS-Airport-T1', device_model: 'Zebra TC52', location: 'Airport Terminal', primary_metric: 'offline_time' },
+        { anomaly_id: 4002, device_id: 402, anomaly_score: -0.58, severity: 'high', status: 'open', timestamp: twoHoursAgo.toISOString(), device_name: 'POS-Downtown-03', device_model: 'Zebra TC52', location: 'Downtown Flagship', primary_metric: 'offline_time' },
+        { anomaly_id: 4003, device_id: 403, anomaly_score: -0.55, severity: 'high', status: 'open', timestamp: threeHoursAgo.toISOString(), device_name: 'POS-TechPlaza-01', device_model: 'Zebra TC52', location: 'Tech Plaza', primary_metric: 'connection_time' },
     ];
 
     // Create groups
@@ -2575,9 +2940,13 @@ export function getMockGroupedAnomalies(_params?: {
 
     // Create ungrouped anomalies
     const ungroupedAnomalies: AnomalyGroupMember[] = [
-        { anomaly_id: 5001, device_id: 501, anomaly_score: -0.35, severity: 'medium', status: 'open', timestamp: oneHourAgo.toISOString(), device_model: 'Panasonic Toughbook N1', location: 'Airport Terminal', primary_metric: 'upload' },
-        { anomaly_id: 5002, device_id: 502, anomaly_score: -0.32, severity: 'medium', status: 'open', timestamp: twoHoursAgo.toISOString(), device_model: 'iPad Pro 11', location: 'Downtown Flagship', primary_metric: 'download' },
+        { anomaly_id: 5001, device_id: 501, anomaly_score: -0.35, severity: 'medium', status: 'open', timestamp: oneHourAgo.toISOString(), device_name: 'Toughbook-Airport-01', device_model: 'Panasonic Toughbook N1', location: 'Airport Terminal', primary_metric: 'upload' },
+        { anomaly_id: 5002, device_id: 502, anomaly_score: -0.32, severity: 'medium', status: 'open', timestamp: twoHoursAgo.toISOString(), device_name: 'iPad-Downtown-05', device_model: 'iPad Pro 11', location: 'Downtown Flagship', primary_metric: 'download' },
     ];
+
+    // Calculate coverage
+    const groupedCount = groups.reduce((sum, g) => sum + g.total_count, 0);
+    const coveragePercent = (groupedCount / 17) * 100;
 
     return {
         groups,
@@ -2587,6 +2956,1024 @@ export function getMockGroupedAnomalies(_params?: {
         ungrouped_anomalies: ungroupedAnomalies,
         grouping_method: 'smart_auto',
         computed_at: now.toISOString(),
+        // Impact metrics for hero card
+        coverage_percent: Math.round(coveragePercent * 10) / 10,
+        top_impact_group_id: groups[0]?.group_id || null,
+        top_impact_group_name: groups[0]?.group_name || null,
+    };
+}
+
+// ============================================================================
+// SYSTEM HEALTH MOCK DATA
+// ============================================================================
+
+// NOTE: Response types are imported dynamically to avoid circular dependency
+// Types are defined in client.ts and imported at runtime
+
+export function getMockSystemHealthSummary() {
+    return {
+        tenant_id: 'demo',
+        fleet_health_score: 82.5,
+        health_trend: 'stable' as const,
+        total_devices: 358,
+        healthy_count: 295,
+        warning_count: 48,
+        critical_count: 15,
+        metrics: {
+            avg_cpu_usage: 32.4,
+            avg_memory_usage: 58.7,
+            avg_storage_available_pct: 45.2,
+            avg_device_temp: 34.8,
+            avg_battery_temp: 31.2,
+            devices_high_cpu: 18,
+            devices_high_memory: 23,
+            devices_low_storage: 15,
+            devices_high_temp: 8,
+            total_devices: 358,
+        },
+        cohort_breakdown: [
+            { cohort_id: 'zebra-tc52', cohort_name: 'Zebra TC52', device_count: 120, health_score: 85, avg_cpu: 28.5, avg_memory: 55.2, avg_storage_pct: 48.3, devices_at_risk: 12 },
+            { cohort_id: 'zebra-tc75x', cohort_name: 'Zebra TC75x', device_count: 85, health_score: 78, avg_cpu: 35.2, avg_memory: 62.4, avg_storage_pct: 42.1, devices_at_risk: 18 },
+            { cohort_id: 'honeywell-ck65', cohort_name: 'Honeywell CK65', device_count: 45, health_score: 88, avg_cpu: 25.8, avg_memory: 48.9, avg_storage_pct: 52.6, devices_at_risk: 5 },
+            { cohort_id: 'samsung-xcover6', cohort_name: 'Samsung Galaxy XCover 6', device_count: 62, health_score: 82, avg_cpu: 38.1, avg_memory: 67.3, avg_storage_pct: 38.9, devices_at_risk: 14 },
+            { cohort_id: 'ipad-pro', cohort_name: 'iPad Pro 11', device_count: 28, health_score: 91, avg_cpu: 22.4, avg_memory: 42.1, avg_storage_pct: 58.2, devices_at_risk: 2 },
+            { cohort_id: 'panasonic-n1', cohort_name: 'Panasonic Toughbook N1', device_count: 18, health_score: 75, avg_cpu: 42.8, avg_memory: 71.5, avg_storage_pct: 35.4, devices_at_risk: 12 },
+        ],
+        recommendations: [
+            'Consider clearing cache on 15 devices with low storage (<20%)',
+            'Monitor 8 devices showing elevated temperatures (>40°C)',
+            'Investigate high memory usage on Samsung XCover 6 cohort',
+        ],
+        generated_at: new Date().toISOString(),
+    };
+}
+
+export function getMockHealthTrends(metric: string) {
+    const now = new Date();
+    const trends = [];
+    for (let i = 6; i >= 0; i--) {
+        const date = new Date(now);
+        date.setDate(date.getDate() - i);
+        const baseValue = metric === 'cpu_usage' ? 32 : metric === 'memory_usage' ? 58 : metric === 'storage_available' ? 45 : 34;
+        trends.push({
+            timestamp: date.toISOString(),
+            value: baseValue + (Math.random() * 10 - 5),
+            device_count: 350 + Math.floor(Math.random() * 16),
+        });
+    }
+    return {
+        tenant_id: 'demo',
+        metric,
+        trends,
+        generated_at: new Date().toISOString(),
+    };
+}
+
+export function getMockStorageForecast() {
+    const now = new Date();
+    return {
+        tenant_id: 'demo',
+        devices_at_risk: [
+            { device_id: 1001, device_name: 'Device-WH-001', current_storage_pct: 12.5, storage_trend_gb_per_day: -0.45, projected_full_date: new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000).toISOString(), days_until_full: 5, confidence: 0.92 },
+            { device_id: 1002, device_name: 'Device-WH-002', current_storage_pct: 18.2, storage_trend_gb_per_day: -0.32, projected_full_date: new Date(now.getTime() + 12 * 24 * 60 * 60 * 1000).toISOString(), days_until_full: 12, confidence: 0.85 },
+            { device_id: 1003, device_name: 'Device-ST-015', current_storage_pct: 8.8, storage_trend_gb_per_day: -0.58, projected_full_date: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString(), days_until_full: 3, confidence: 0.95 },
+            { device_id: 1004, device_name: 'Device-FL-008', current_storage_pct: 22.1, storage_trend_gb_per_day: -0.28, projected_full_date: new Date(now.getTime() + 18 * 24 * 60 * 60 * 1000).toISOString(), days_until_full: 18, confidence: 0.78 },
+            { device_id: 1005, device_name: 'Device-DC-003', current_storage_pct: 15.6, storage_trend_gb_per_day: -0.41, projected_full_date: new Date(now.getTime() + 8 * 24 * 60 * 60 * 1000).toISOString(), days_until_full: 8, confidence: 0.88 },
+        ],
+        total_at_risk_count: 15,
+        avg_days_until_full: 9.2,
+        recommendations: [
+            'Clear cache on Device-ST-015 immediately (3 days until full)',
+            'Schedule storage cleanup for 5 devices within next week',
+            'Review app data retention policies for warehouse devices',
+        ],
+        generated_at: new Date().toISOString(),
+    };
+}
+
+export function getMockCohortHealthBreakdown() {
+    return {
+        tenant_id: 'demo',
+        cohorts: [
+            { cohort_id: 'zebra-tc52', cohort_name: 'Zebra TC52', device_count: 120, health_score: 85, avg_cpu: 28.5, avg_memory: 55.2, avg_storage_pct: 48.3, devices_at_risk: 12 },
+            { cohort_id: 'zebra-tc75x', cohort_name: 'Zebra TC75x', device_count: 85, health_score: 78, avg_cpu: 35.2, avg_memory: 62.4, avg_storage_pct: 42.1, devices_at_risk: 18 },
+            { cohort_id: 'honeywell-ck65', cohort_name: 'Honeywell CK65', device_count: 45, health_score: 88, avg_cpu: 25.8, avg_memory: 48.9, avg_storage_pct: 52.6, devices_at_risk: 5 },
+            { cohort_id: 'samsung-xcover6', cohort_name: 'Samsung Galaxy XCover 6', device_count: 62, health_score: 82, avg_cpu: 38.1, avg_memory: 67.3, avg_storage_pct: 38.9, devices_at_risk: 14 },
+            { cohort_id: 'ipad-pro', cohort_name: 'iPad Pro 11', device_count: 28, health_score: 91, avg_cpu: 22.4, avg_memory: 42.1, avg_storage_pct: 58.2, devices_at_risk: 2 },
+            { cohort_id: 'panasonic-n1', cohort_name: 'Panasonic Toughbook N1', device_count: 18, health_score: 75, avg_cpu: 42.8, avg_memory: 71.5, avg_storage_pct: 35.4, devices_at_risk: 12 },
+        ],
+        total_cohorts: 6,
+        generated_at: new Date().toISOString(),
+    };
+}
+
+// ============================================================================
+// LOCATION INTELLIGENCE MOCK DATA
+// ============================================================================
+
+export function getMockWiFiHeatmap() {
+    const gridCells = [];
+    // Generate a 10x10 grid of signal data
+    for (let lat = 0; lat < 10; lat++) {
+        for (let lng = 0; lng < 10; lng++) {
+            const signalStrength = -45 - Math.random() * 50; // Range: -45 to -95 dBm
+            gridCells.push({
+                lat: 40.7128 + lat * 0.001,
+                long: -74.006 + lng * 0.001,
+                signal_strength: signalStrength,
+                reading_count: 50 + Math.floor(Math.random() * 200),
+                is_dead_zone: signalStrength < -80,
+                access_point_id: `AP-${String(lat * 10 + lng).padStart(3, '0')}`,
+            });
+        }
+    }
+    return {
+        tenant_id: 'demo',
+        grid_cells: gridCells,
+        bounds: {
+            min_lat: 40.7128,
+            max_lat: 40.7228,
+            min_long: -74.006,
+            max_long: -73.996,
+        },
+        total_readings: 15420,
+        avg_signal_strength: -62.5,
+        dead_zone_count: 8,
+        generated_at: new Date().toISOString(),
+    };
+}
+
+export function getMockDeadZones() {
+    return {
+        tenant_id: 'demo',
+        dead_zones: [
+            { zone_id: 'dz-001', lat: 40.7148, long: -74.002, avg_signal: -88.5, affected_devices: 12, total_readings: 245, first_detected: '2025-01-05T08:00:00Z', last_detected: '2025-01-09T14:30:00Z' },
+            { zone_id: 'dz-002', lat: 40.7165, long: -74.0045, avg_signal: -85.2, affected_devices: 8, total_readings: 182, first_detected: '2025-01-06T10:15:00Z', last_detected: '2025-01-09T12:45:00Z' },
+            { zone_id: 'dz-003', lat: 40.7182, long: -73.998, avg_signal: -92.1, affected_devices: 15, total_readings: 312, first_detected: '2025-01-04T14:00:00Z', last_detected: '2025-01-09T15:00:00Z' },
+            { zone_id: 'dz-004', lat: 40.7195, long: -74.001, avg_signal: -81.8, affected_devices: 5, total_readings: 98, first_detected: '2025-01-07T09:30:00Z', last_detected: '2025-01-09T11:00:00Z' },
+        ],
+        total_count: 4,
+        recommendations: [
+            'Consider adding WiFi access point near zone dz-003 (highest impact)',
+            'Investigate signal interference at zone dz-001',
+            'Check for physical obstructions in zone dz-002',
+        ],
+        generated_at: new Date().toISOString(),
+    };
+}
+
+export function getMockDeviceMovements(deviceId: number) {
+    const now = new Date();
+    const movements = [];
+    for (let i = 23; i >= 0; i--) {
+        const timestamp = new Date(now.getTime() - i * 60 * 60 * 1000);
+        movements.push({
+            timestamp: timestamp.toISOString(),
+            lat: 40.7128 + (Math.random() * 0.01 - 0.005),
+            long: -74.006 + (Math.random() * 0.01 - 0.005),
+            speed: i % 4 === 0 ? 0 : Math.random() * 15,
+            heading: Math.random() * 360,
+        });
+    }
+    return {
+        device_id: deviceId,
+        movements,
+        total_distance_km: 8.5,
+        avg_speed_kmh: 4.2,
+        stationary_time_pct: 65.5,
+        active_hours: [8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
+    };
+}
+
+export function getMockDwellTime() {
+    return {
+        tenant_id: 'demo',
+        dwell_zones: [
+            { zone_id: 'dwell-001', lat: 40.7140, long: -74.0030, avg_dwell_minutes: 45.2, device_count: 28, visit_count: 156, peak_hours: [9, 10, 14, 15] },
+            { zone_id: 'dwell-002', lat: 40.7155, long: -74.0015, avg_dwell_minutes: 32.8, device_count: 22, visit_count: 124, peak_hours: [11, 12, 13] },
+            { zone_id: 'dwell-003', lat: 40.7168, long: -74.0045, avg_dwell_minutes: 18.5, device_count: 35, visit_count: 245, peak_hours: [8, 9, 16, 17] },
+            { zone_id: 'dwell-004', lat: 40.7182, long: -74.0020, avg_dwell_minutes: 62.4, device_count: 15, visit_count: 68, peak_hours: [10, 11, 14, 15] },
+        ],
+        total_zones: 4,
+        recommendations: [
+            'Zone dwell-004 shows extended dwell times - consider workflow optimization',
+            'High traffic through zone dwell-003 during shift transitions',
+        ],
+        generated_at: new Date().toISOString(),
+    };
+}
+
+export function getMockCoverageSummary() {
+    return {
+        tenant_id: 'demo',
+        total_readings: 45820,
+        avg_signal: -58.4,
+        coverage_distribution: {
+            excellent: 28,
+            good: 42,
+            fair: 22,
+            poor: 8,
+        },
+        coverage_percentage: 92,
+        recommendations: [
+            'Overall WiFi coverage is good (92%)',
+            'Consider improving coverage in 8% of areas with poor signal',
+            'Signal strength trending stable over last 7 days',
+        ],
+        generated_at: new Date().toISOString(),
+    };
+}
+
+// ============================================================================
+// EVENTS & ALERTS MOCK DATA
+// ============================================================================
+
+export function getMockEventTimeline() {
+    const now = new Date();
+    const events = [];
+    const severities = ['Info', 'Warning', 'Error', 'Critical'];
+    const eventClasses = ['Device', 'Network', 'Application', 'Security', 'System'];
+    const messages = [
+        'Device connected to WiFi network',
+        'Battery level dropped below 20%',
+        'Application crash detected',
+        'Network disconnection occurred',
+        'Device rebooted unexpectedly',
+        'Storage space warning',
+        'Security policy updated',
+        'Firmware update available',
+    ];
+
+    for (let i = 0; i < 50; i++) {
+        const timestamp = new Date(now.getTime() - i * 15 * 60 * 1000);
+        events.push({
+            log_id: 10000 + i,
+            timestamp: timestamp.toISOString(),
+            event_id: 100 + (i % 20),
+            severity: severities[Math.floor(Math.random() * 4)],
+            event_class: eventClasses[Math.floor(Math.random() * 5)],
+            message: messages[Math.floor(Math.random() * messages.length)],
+            device_id: 1000 + Math.floor(Math.random() * 50),
+            login_id: Math.random() > 0.3 ? `user${Math.floor(Math.random() * 10)}` : null,
+        });
+    }
+
+    return {
+        tenant_id: 'demo',
+        events,
+        total: 1250,
+        page: 1,
+        page_size: 50,
+        severity_distribution: { Info: 420, Warning: 385, Error: 312, Critical: 133 },
+        event_class_distribution: { Device: 380, Network: 290, Application: 245, Security: 185, System: 150 },
+        generated_at: new Date().toISOString(),
+    };
+}
+
+export function getMockAlertSummary() {
+    return {
+        tenant_id: 'demo',
+        total_active: 28,
+        total_acknowledged: 15,
+        total_resolved: 142,
+        by_severity: { Critical: 8, High: 12, Medium: 45, Low: 120 },
+        by_alert_name: [
+            { name: 'Low Battery', count: 45 },
+            { name: 'Network Disconnect', count: 38 },
+            { name: 'Storage Warning', count: 32 },
+            { name: 'High CPU', count: 28 },
+            { name: 'Device Offline', count: 22 },
+        ],
+        recent_alerts: [
+            { alert_id: 1, alert_key: 'battery-low-1001', alert_name: 'Low Battery', severity: 'High', device_id: '1001', status: 'Active', set_datetime: new Date(Date.now() - 30 * 60000).toISOString(), ack_datetime: null },
+            { alert_id: 2, alert_key: 'storage-warn-1005', alert_name: 'Storage Warning', severity: 'Critical', device_id: '1005', status: 'Active', set_datetime: new Date(Date.now() - 45 * 60000).toISOString(), ack_datetime: null },
+            { alert_id: 3, alert_key: 'network-disc-1012', alert_name: 'Network Disconnect', severity: 'Medium', device_id: '1012', status: 'Acknowledged', set_datetime: new Date(Date.now() - 60 * 60000).toISOString(), ack_datetime: new Date(Date.now() - 50 * 60000).toISOString() },
+        ],
+        avg_acknowledge_time_minutes: 12.5,
+        avg_resolution_time_minutes: 45.8,
+        generated_at: new Date().toISOString(),
+    };
+}
+
+export function getMockAlertTrends() {
+    const now = new Date();
+    const trends = [];
+    const severities = ['Critical', 'High', 'Medium', 'Low'];
+
+    for (let day = 6; day >= 0; day--) {
+        const date = new Date(now);
+        date.setDate(date.getDate() - day);
+        for (const severity of severities) {
+            trends.push({
+                timestamp: date.toISOString(),
+                count: Math.floor(Math.random() * 20) + (severity === 'Low' ? 10 : severity === 'Medium' ? 5 : severity === 'High' ? 3 : 1),
+                severity,
+            });
+        }
+    }
+
+    return {
+        tenant_id: 'demo',
+        trends,
+        generated_at: new Date().toISOString(),
+    };
+}
+
+export function getMockEventCorrelation(deviceId: number) {
+    const now = new Date();
+    return {
+        tenant_id: 'demo',
+        anomaly_timestamp: new Date(now.getTime() - 60 * 60000).toISOString(),
+        device_id: deviceId,
+        correlated_events: [
+            {
+                event: { log_id: 5001, timestamp: new Date(now.getTime() - 90 * 60000).toISOString(), event_id: 105, severity: 'Warning', event_class: 'Network', message: 'WiFi signal strength dropped to -78 dBm', device_id: deviceId, login_id: null },
+                time_before_minutes: 30,
+                frequency_score: 0.85,
+            },
+            {
+                event: { log_id: 5002, timestamp: new Date(now.getTime() - 75 * 60000).toISOString(), event_id: 108, severity: 'Info', event_class: 'Device', message: 'Device entered power saving mode', device_id: deviceId, login_id: null },
+                time_before_minutes: 15,
+                frequency_score: 0.72,
+            },
+            {
+                event: { log_id: 5003, timestamp: new Date(now.getTime() - 65 * 60000).toISOString(), event_id: 112, severity: 'Warning', event_class: 'Application', message: 'Background sync delayed', device_id: deviceId, login_id: null },
+                time_before_minutes: 5,
+                frequency_score: 0.68,
+            },
+        ],
+        total_events_found: 3,
+        generated_at: new Date().toISOString(),
+    };
+}
+
+export function getMockEventStatistics() {
+    return {
+        tenant_id: 'demo',
+        total_events: 12458,
+        events_per_day: 1780,
+        unique_devices: 342,
+        top_event_classes: [
+            { class: 'Device', count: 4520 },
+            { class: 'Network', count: 3215 },
+            { class: 'Application', count: 2480 },
+            { class: 'Security', count: 1428 },
+            { class: 'System', count: 815 },
+        ],
+        generated_at: new Date().toISOString(),
+    };
+}
+
+// ============================================================================
+// TEMPORAL ANALYSIS MOCK DATA
+// ============================================================================
+
+export function getMockHourlyBreakdown(metric: string) {
+    const hourlyData = [];
+    const baseValues: Record<string, number> = { data_usage: 50, battery_drain: 5, app_usage: 30 };
+    const base = baseValues[metric] || 40;
+
+    for (let hour = 0; hour < 24; hour++) {
+        const isWorkHour = hour >= 8 && hour <= 18;
+        const multiplier = isWorkHour ? 1.5 : 0.7;
+        const avg = base * multiplier + (Math.random() * 10 - 5);
+        const std = avg * 0.2;
+
+        hourlyData.push({
+            hour,
+            avg_value: avg,
+            min_value: avg - std * 2,
+            max_value: avg + std * 2,
+            std_value: std,
+            sample_count: 500 + Math.floor(Math.random() * 1500),
+        });
+    }
+
+    return {
+        tenant_id: 'demo',
+        metric,
+        hourly_data: hourlyData,
+        peak_hours: [9, 10, 11, 14, 15, 16],
+        low_hours: [2, 3, 4, 5],
+        day_night_ratio: 1.8,
+        generated_at: new Date().toISOString(),
+    };
+}
+
+export function getMockPeakDetection(metric: string) {
+    const now = new Date();
+    const peaks = [];
+
+    for (let i = 0; i < 8; i++) {
+        const daysAgo = Math.random() * 7;
+        const hoursAgo = Math.random() * 24;
+        const timestamp = new Date(now.getTime() - (daysAgo * 24 + hoursAgo) * 60 * 60 * 1000);
+
+        peaks.push({
+            timestamp: timestamp.toISOString(),
+            value: 100 + Math.random() * 400,
+            z_score: 2.0 + Math.random() * 2.5,
+            is_significant: true,
+        });
+    }
+
+    peaks.sort((a, b) => b.z_score - a.z_score);
+
+    return {
+        tenant_id: 'demo',
+        metric,
+        peaks,
+        total_peaks: peaks.length,
+        generated_at: new Date().toISOString(),
+    };
+}
+
+export function getMockTemporalComparison(metric: string) {
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+
+    const avgA = 40 + Math.random() * 20;
+    const avgB = avgA * (0.8 + Math.random() * 0.4);
+
+    return {
+        tenant_id: 'demo',
+        metric,
+        period_a: {
+            start: twoWeeksAgo.toISOString(),
+            end: weekAgo.toISOString(),
+            avg: avgA,
+            median: avgA * 0.95,
+            std: avgA * 0.2,
+            sample_count: 5000 + Math.floor(Math.random() * 10000),
+        },
+        period_b: {
+            start: weekAgo.toISOString(),
+            end: now.toISOString(),
+            avg: avgB,
+            median: avgB * 0.95,
+            std: avgB * 0.2,
+            sample_count: 5000 + Math.floor(Math.random() * 10000),
+        },
+        change_percent: ((avgB - avgA) / avgA) * 100,
+        is_significant: Math.abs(avgB - avgA) / avgA > 0.1,
+        p_value: Math.random() * 0.2,
+        generated_at: new Date().toISOString(),
+    };
+}
+
+export function getMockDayOverDay(metric: string) {
+    const now = new Date();
+    const comparisons = [];
+    let prevValue: number | null = null;
+
+    for (let i = 6; i >= 0; i--) {
+        const date = new Date(now);
+        date.setDate(date.getDate() - i);
+        const value = 40 + Math.random() * 20;
+        const change = prevValue ? ((value - prevValue) / prevValue) * 100 : 0;
+
+        comparisons.push({
+            date: date.toISOString().split('T')[0],
+            value,
+            sample_count: 1000 + Math.floor(Math.random() * 2000),
+            change_percent: change,
+        });
+        prevValue = value;
+    }
+
+    return {
+        tenant_id: 'demo',
+        metric,
+        comparisons,
+        generated_at: new Date().toISOString(),
+    };
+}
+
+export function getMockWeekOverWeek(metric: string) {
+    const now = new Date();
+    const comparisons = [];
+    let prevValue: number | null = null;
+
+    for (let i = 3; i >= 0; i--) {
+        const weekDate = new Date(now.getTime() - i * 7 * 24 * 60 * 60 * 1000);
+        const year = weekDate.getFullYear();
+        const week = Math.ceil((weekDate.getDate() + new Date(weekDate.getFullYear(), 0, 1).getDay()) / 7);
+        const value = 280 + Math.random() * 140;
+        const change = prevValue ? ((value - prevValue) / prevValue) * 100 : 0;
+
+        comparisons.push({
+            year,
+            week,
+            value,
+            sample_count: 7000 + Math.floor(Math.random() * 14000),
+            change_percent: change,
+        });
+        prevValue = value;
+    }
+
+    return {
+        tenant_id: 'demo',
+        metric,
+        comparisons,
+        generated_at: new Date().toISOString(),
+    };
+}
+
+// =============================================================================
+// CORRELATION INTELLIGENCE MOCK DATA
+// =============================================================================
+
+/**
+ * Generate mock correlation matrix with realistic correlations
+ */
+export function getMockCorrelationMatrix(domain?: string): CorrelationMatrixResponse {
+    // Define metrics by domain
+    const allMetrics: Record<string, string[]> = {
+        battery: ["TotalBatteryLevelDrop", "TotalDischargeTime_Sec", "ScreenOnTime_Sec", "BatteryDrainPerHour"],
+        rf: ["AvgSignalStrength", "TotalDropCnt", "WifiDisconnectCount", "CellSignalStrength"],
+        throughput: ["Download", "Upload", "TotalDataUsage"],
+        usage: ["AppForegroundTime", "CrashCount", "AppVisitCount"],
+        storage: ["StorageUtilization", "RAMPressure", "FreeStorageKb"],
+        system: ["CPUUsage", "Temperature", "MemoryUsage"],
+    };
+
+    let metrics: string[];
+    if (domain && allMetrics[domain]) {
+        metrics = allMetrics[domain];
+    } else {
+        // All metrics
+        metrics = [];
+        Object.values(allMetrics).forEach(m => metrics.push(...m));
+        metrics = metrics.slice(0, 15); // Limit for display
+    }
+
+    const n = metrics.length;
+
+    // Known correlations (domain knowledge)
+    const knownCorrelations: Record<string, number> = {
+        "TotalBatteryLevelDrop|ScreenOnTime_Sec": 0.78,
+        "TotalBatteryLevelDrop|AvgSignalStrength": -0.72,
+        "AvgSignalStrength|TotalDropCnt": -0.81,
+        "TotalBatteryLevelDrop|TotalDropCnt": 0.65,
+        "Download|Upload": 0.73,
+        "CrashCount|RAMPressure": 0.68,
+        "CPUUsage|Temperature": 0.76,
+        "TotalBatteryLevelDrop|CPUUsage": 0.54,
+        "AppForegroundTime|TotalBatteryLevelDrop": 0.67,
+        "StorageUtilization|CrashCount": 0.45,
+    };
+
+    // Build matrix
+    const matrix: number[][] = [];
+    for (let i = 0; i < n; i++) {
+        matrix[i] = [];
+        for (let j = 0; j < n; j++) {
+            if (i === j) {
+                matrix[i][j] = 1.0;
+            } else if (i < j) {
+                // Check for known correlation
+                const pair = `${metrics[i]}|${metrics[j]}`;
+                const reversePair = `${metrics[j]}|${metrics[i]}`;
+                let corr: number;
+                if (knownCorrelations[pair]) {
+                    corr = knownCorrelations[pair];
+                } else if (knownCorrelations[reversePair]) {
+                    corr = knownCorrelations[reversePair];
+                } else {
+                    // Random weak correlation
+                    corr = Math.round((Math.random() * 0.8 - 0.4) * 100) / 100;
+                }
+                matrix[i][j] = corr;
+            } else {
+                matrix[i][j] = matrix[j][i]; // Symmetric
+            }
+        }
+    }
+
+    // Find strong correlations
+    const strong: CorrelationCell[] = [];
+    for (let i = 0; i < n; i++) {
+        for (let j = i + 1; j < n; j++) {
+            if (Math.abs(matrix[i][j]) >= 0.6) {
+                strong.push({
+                    metric_x: metrics[i],
+                    metric_y: metrics[j],
+                    correlation: matrix[i][j],
+                    p_value: Math.abs(matrix[i][j]) > 0.7 ? 0.001 : 0.01,
+                    sample_count: 3000 + Math.floor(Math.random() * 2000),
+                    method: "pearson",
+                });
+            }
+        }
+    }
+
+    // Sort by absolute correlation
+    strong.sort((a, b) => Math.abs(b.correlation) - Math.abs(a.correlation));
+
+    return {
+        metrics,
+        matrix,
+        strong_correlations: strong,
+        method: "pearson",
+        computed_at: new Date().toISOString(),
+        total_samples: 4532,
+        domain_filter: domain || null,
+    };
+}
+
+/**
+ * Generate mock scatter plot data for two metrics
+ */
+export function getMockScatterData(metricX: string, metricY: string, limit: number = 500): ScatterPlotResponse {
+    // Known correlation for common pairs
+    const knownCorrelations: Record<string, [number, number]> = {
+        "TotalBatteryLevelDrop|ScreenOnTime_Sec": [0.78, 0.15],
+        "TotalBatteryLevelDrop|AvgSignalStrength": [-0.72, -0.08],
+        "AvgSignalStrength|TotalDropCnt": [-0.81, -2.5],
+    };
+
+    const pair = `${metricX}|${metricY}`;
+    const reversePair = `${metricY}|${metricX}`;
+
+    let corr: number, slope: number;
+    if (knownCorrelations[pair]) {
+        [corr, slope] = knownCorrelations[pair];
+    } else if (knownCorrelations[reversePair]) {
+        [corr] = knownCorrelations[reversePair];
+        slope = corr * 0.5;
+    } else {
+        corr = Math.round((Math.random() - 0.5) * 100) / 100;
+        slope = corr * 0.5;
+    }
+
+    // Generate correlated data points
+    const points: ScatterDataPoint[] = [];
+    const cohorts = ["Samsung_SM-G991B", "Samsung_SM-A515F", "Zebra_TC52", "Honeywell_CT40", "Other"];
+    let anomalyCount = 0;
+
+    for (let i = 0; i < limit; i++) {
+        // Generate correlated values using Box-Muller for normal distribution
+        const u1 = Math.random();
+        const u2 = Math.random();
+        const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+
+        const x = 50 + z * 15;
+        const noise = (Math.random() - 0.5) * 20 * (1 - Math.abs(corr));
+        let y = slope * x + 30 + noise;
+
+        const isAnomaly = Math.random() < 0.08;
+        if (isAnomaly) {
+            anomalyCount++;
+            // Anomalies are outliers
+            y += (Math.random() > 0.5 ? 1 : -1) * (20 + Math.random() * 20);
+        }
+
+        points.push({
+            device_id: 1000 + i,
+            x_value: Math.round(Math.max(0, x) * 100) / 100,
+            y_value: Math.round(Math.max(0, y) * 100) / 100,
+            is_anomaly: isAnomaly,
+            cohort: cohorts[Math.floor(Math.random() * cohorts.length)],
+            timestamp: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString(),
+        });
+    }
+
+    const rSquared = corr * corr;
+
+    return {
+        metric_x: metricX,
+        metric_y: metricY,
+        points,
+        correlation: corr,
+        regression_slope: Math.round(slope * 10000) / 10000,
+        regression_intercept: 30.0,
+        r_squared: Math.round(rSquared * 10000) / 10000,
+        total_points: points.length,
+        anomaly_count: anomalyCount,
+    };
+}
+
+/**
+ * Generate mock causal graph from RootCauseAnalyzer's domain knowledge
+ */
+export function getMockCausalGraph(): CausalGraphResponse {
+    // This mirrors the causal graph from root_cause.py
+    const causalRelationships: Record<string, string[]> = {
+        "ScreenOnTime": ["BatteryDrain", "BatteryDrainPerHour"],
+        "AppForegroundTime": ["BatteryDrain", "BatteryDrainPerHour"],
+        "BackgroundAppActivity": ["BatteryDrain"],
+        "PoorSignal": ["BatteryDrain", "NetworkDrops"],
+        "ChargingPattern": ["BatteryHealth", "BatteryCapacity"],
+        "BatteryHealth": ["BatteryDrain", "BatteryCapacity"],
+        "Temperature": ["BatteryDrain", "CPUThrottle"],
+        "LocationMovement": ["APHopping", "NetworkDrops"],
+        "WeakWifiCoverage": ["NetworkDrops", "SignalStrength"],
+        "CellCoverage": ["TowerHopping", "NetworkDrops"],
+        "APHopping": ["BatteryDrain", "NetworkDrops"],
+        "HighDataUsage": ["BatteryDrain", "NetworkCongestion"],
+        "AppVersion": ["AppCrash", "ANR"],
+        "LowMemory": ["AppCrash", "ANR", "SlowPerformance"],
+        "LowStorage": ["AppCrash", "InstallFailure"],
+        "HighCPU": ["BatteryDrain", "Temperature", "SlowPerformance"],
+        "OsVersion": ["AppCrash", "SecurityVulnerability"],
+        "AgentVersion": ["DataCollectionIssues"],
+        "Rooted": ["SecurityIssues", "AppBehavior"],
+    };
+
+    // Domain mapping
+    const domainMap: Record<string, string> = {
+        "ScreenOnTime": "usage", "AppForegroundTime": "usage", "BackgroundAppActivity": "usage",
+        "PoorSignal": "rf", "WeakWifiCoverage": "rf", "CellCoverage": "rf", "SignalStrength": "rf",
+        "ChargingPattern": "battery", "BatteryHealth": "battery", "BatteryDrain": "battery",
+        "BatteryDrainPerHour": "battery", "BatteryCapacity": "battery",
+        "Temperature": "system", "CPUThrottle": "system", "HighCPU": "system",
+        "LocationMovement": "location", "APHopping": "connectivity", "NetworkDrops": "connectivity",
+        "TowerHopping": "connectivity", "NetworkCongestion": "connectivity",
+        "HighDataUsage": "throughput",
+        "AppVersion": "app", "AppCrash": "app", "ANR": "app", "AppBehavior": "app",
+        "LowMemory": "storage", "LowStorage": "storage", "InstallFailure": "storage",
+        "SlowPerformance": "system",
+        "OsVersion": "system", "AgentVersion": "system", "SecurityVulnerability": "security",
+        "Rooted": "security", "SecurityIssues": "security", "DataCollectionIssues": "system",
+    };
+
+    // Build nodes and edges
+    const nodesDict: Record<string, CausalNode> = {};
+    const edges: CausalEdge[] = [];
+
+    Object.entries(causalRelationships).forEach(([cause, effects]) => {
+        // Add cause node
+        if (!nodesDict[cause]) {
+            nodesDict[cause] = {
+                metric: cause,
+                domain: domainMap[cause] || "unknown",
+                is_cause: true,
+                is_effect: false,
+                connection_count: 0,
+            };
+        }
+        nodesDict[cause].is_cause = true;
+        nodesDict[cause].connection_count += effects.length;
+
+        effects.forEach(effect => {
+            // Add effect node
+            if (!nodesDict[effect]) {
+                nodesDict[effect] = {
+                    metric: effect,
+                    domain: domainMap[effect] || "unknown",
+                    is_cause: false,
+                    is_effect: true,
+                    connection_count: 0,
+                };
+            }
+            nodesDict[effect].is_effect = true;
+            nodesDict[effect].connection_count += 1;
+
+            // Add edge
+            edges.push({
+                source: cause,
+                target: effect,
+                relationship: "causes",
+                strength: 0.8,
+                evidence: `${cause} is known to cause ${effect}`,
+            });
+        });
+    });
+
+    return {
+        nodes: Object.values(nodesDict),
+        edges,
+        generated_at: new Date().toISOString(),
+    };
+}
+
+/**
+ * Generate auto-discovered correlation insights
+ */
+export function getMockCorrelationInsights(): CorrelationInsightsResponse {
+    const insights: CorrelationInsight[] = [
+        {
+            insight_id: "ins_001",
+            headline: "Battery drain strongly correlates with screen time",
+            description: "Devices with higher screen-on time show proportionally higher battery drain. This is expected behavior but can help identify devices with abnormal screen usage patterns.",
+            metrics_involved: ["TotalBatteryLevelDrop", "ScreenOnTime_Sec"],
+            correlation_value: 0.78,
+            strength: "strong",
+            direction: "positive",
+            novelty_score: 0.3,
+            confidence: 0.95,
+            recommendation: "Consider implementing screen brightness auto-adjustment policies for high-drain devices.",
+        },
+        {
+            insight_id: "ins_002",
+            headline: "Poor signal quality causes increased network drops",
+            description: "Strong negative correlation between signal strength and connection drops. Devices in weak coverage areas experience significantly more disconnections.",
+            metrics_involved: ["AvgSignalStrength", "TotalDropCnt"],
+            correlation_value: -0.81,
+            strength: "strong",
+            direction: "negative",
+            novelty_score: 0.2,
+            confidence: 0.97,
+            recommendation: "Map coverage dead zones and consider WiFi boosters or network optimization.",
+        },
+        {
+            insight_id: "ins_003",
+            headline: "Battery drain increases with weak signal",
+            description: "Devices constantly searching for better signal consume more battery. This cross-domain correlation explains unexpectedly high drain in certain locations.",
+            metrics_involved: ["TotalBatteryLevelDrop", "AvgSignalStrength"],
+            correlation_value: -0.72,
+            strength: "strong",
+            direction: "negative",
+            novelty_score: 0.6,
+            confidence: 0.89,
+            recommendation: "Prioritize coverage improvements in high-activity areas to reduce battery impact.",
+        },
+        {
+            insight_id: "ins_004",
+            headline: "Memory pressure correlates with app crashes",
+            description: "Devices experiencing high RAM pressure show increased crash rates. This suggests memory-hungry apps may be destabilizing the system.",
+            metrics_involved: ["RAMPressure", "CrashCount"],
+            correlation_value: 0.68,
+            strength: "moderate",
+            direction: "positive",
+            novelty_score: 0.4,
+            confidence: 0.85,
+            recommendation: "Review memory usage of frequently used apps and consider increasing minimum free memory thresholds.",
+        },
+        {
+            insight_id: "ins_005",
+            headline: "CPU usage drives temperature increases",
+            description: "Clear correlation between CPU utilization and device temperature. Sustained high CPU usage leads to thermal throttling.",
+            metrics_involved: ["CPUUsage", "Temperature"],
+            correlation_value: 0.76,
+            strength: "strong",
+            direction: "positive",
+            novelty_score: 0.2,
+            confidence: 0.93,
+            recommendation: "Monitor apps causing sustained CPU load and consider background processing limits.",
+        },
+        {
+            insight_id: "ins_006",
+            headline: "Download and upload traffic are strongly correlated",
+            description: "Symmetric data usage patterns suggest bidirectional app communications (API calls, sync operations).",
+            metrics_involved: ["Download", "Upload"],
+            correlation_value: 0.73,
+            strength: "strong",
+            direction: "positive",
+            novelty_score: 0.1,
+            confidence: 0.91,
+            recommendation: null,
+        },
+        {
+            insight_id: "ins_007",
+            headline: "App foreground time impacts battery drain",
+            description: "Active app usage correlates with battery consumption, though less strongly than screen time alone.",
+            metrics_involved: ["AppForegroundTime", "TotalBatteryLevelDrop"],
+            correlation_value: 0.67,
+            strength: "moderate",
+            direction: "positive",
+            novelty_score: 0.3,
+            confidence: 0.87,
+            recommendation: "Identify power-hungry apps consuming excessive foreground time.",
+        },
+        {
+            insight_id: "ins_008",
+            headline: "Storage utilization weakly correlates with crashes",
+            description: "Devices with nearly full storage show slightly elevated crash rates, likely due to cache and temp file issues.",
+            metrics_involved: ["StorageUtilization", "CrashCount"],
+            correlation_value: 0.45,
+            strength: "weak",
+            direction: "positive",
+            novelty_score: 0.5,
+            confidence: 0.72,
+            recommendation: "Set up storage threshold alerts to proactively free space before issues occur.",
+        },
+    ];
+
+    return {
+        insights,
+        total_correlations_analyzed: 253,
+        generated_at: new Date().toISOString(),
+    };
+}
+
+/**
+ * Generate cohort-specific correlation patterns
+ */
+export function getMockCohortCorrelationPatterns(): CohortCorrelationPatternsResponse {
+    const patterns: CohortCorrelationPattern[] = [
+        {
+            cohort_id: "samsung_sm-g991b_13",
+            cohort_name: "Samsung Galaxy S21 (Android 13)",
+            metric_pair: ["TotalBatteryLevelDrop", "AvgSignalStrength"],
+            cohort_correlation: -0.85,
+            fleet_correlation: -0.72,
+            deviation: 0.13,
+            device_count: 342,
+            is_anomalous: true,
+            insight: "This model shows 18% stronger battery-signal correlation than fleet average, suggesting firmware-specific radio power management issues.",
+        },
+        {
+            cohort_id: "zebra_tc52_11",
+            cohort_name: "Zebra TC52 (Android 11)",
+            metric_pair: ["CrashCount", "RAMPressure"],
+            cohort_correlation: 0.82,
+            fleet_correlation: 0.68,
+            deviation: 0.14,
+            device_count: 567,
+            is_anomalous: true,
+            insight: "Enterprise scanner app on this model correlates crashes strongly with memory pressure. Consider memory optimization.",
+        },
+        {
+            cohort_id: "honeywell_ct40_10",
+            cohort_name: "Honeywell CT40 (Android 10)",
+            metric_pair: ["TotalDropCnt", "LocationMovement"],
+            cohort_correlation: 0.71,
+            fleet_correlation: 0.55,
+            deviation: 0.16,
+            device_count: 234,
+            is_anomalous: true,
+            insight: "Mobile workers with this device experience more drops during movement than other models. WiFi roaming may need tuning.",
+        },
+        {
+            cohort_id: "samsung_sm-a515f_12",
+            cohort_name: "Samsung Galaxy A51 (Android 12)",
+            metric_pair: ["Download", "TotalBatteryLevelDrop"],
+            cohort_correlation: 0.58,
+            fleet_correlation: 0.62,
+            deviation: -0.04,
+            device_count: 189,
+            is_anomalous: false,
+            insight: null,
+        },
+    ];
+
+    const anomalousCount = patterns.filter(p => p.is_anomalous).length;
+
+    return {
+        patterns,
+        anomalous_cohorts: anomalousCount,
+        generated_at: new Date().toISOString(),
+    };
+}
+
+/**
+ * Generate time-lagged correlation analysis
+ */
+export function getMockTimeLaggedCorrelations(): TimeLagCorrelationsResponse {
+    const correlations: TimeLagCorrelation[] = [
+        {
+            metric_a: "AvgSignalStrength",
+            metric_b: "TotalBatteryLevelDrop",
+            lag_days: 1,
+            correlation: 0.45,
+            p_value: 0.003,
+            direction: "a_predicts_b",
+            insight: "Poor signal today predicts elevated battery drain tomorrow (r=0.45, lag=1d). Useful for proactive battery alerts.",
+        },
+        {
+            metric_a: "RAMPressure",
+            metric_b: "CrashCount",
+            lag_days: 2,
+            correlation: 0.38,
+            p_value: 0.012,
+            direction: "a_predicts_b",
+            insight: "Sustained memory pressure predicts crashes 2 days out. Early warning signal for stability issues.",
+        },
+        {
+            metric_a: "StorageUtilization",
+            metric_b: "SlowPerformance",
+            lag_days: 3,
+            correlation: 0.42,
+            p_value: 0.008,
+            direction: "a_predicts_b",
+            insight: "Storage filling up predicts performance degradation within 3 days. Trigger cleanup before issues arise.",
+        },
+        {
+            metric_a: "TotalDropCnt",
+            metric_b: "AppCrash",
+            lag_days: 1,
+            correlation: 0.33,
+            p_value: 0.025,
+            direction: "a_predicts_b",
+            insight: "Network instability correlates with app crashes the next day, possibly due to incomplete sync operations.",
+        },
+        {
+            metric_a: "Temperature",
+            metric_b: "BatteryHealth",
+            lag_days: 7,
+            correlation: -0.41,
+            p_value: 0.006,
+            direction: "a_predicts_b",
+            insight: "Sustained high temperatures correlate with battery health decline over a week. Critical for device longevity.",
+        },
+    ];
+
+    return {
+        correlations,
+        max_lag_analyzed: 7,
+        generated_at: new Date().toISOString(),
     };
 }
 
