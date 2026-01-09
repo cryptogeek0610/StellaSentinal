@@ -69,10 +69,20 @@ class AlertThresholdType(str, Enum):
 
 
 # =============================================================================
+# BASE MODEL CONFIGURATION
+# =============================================================================
+
+class CostBaseModel(BaseModel):
+    """Base model for cost payloads with consistent Decimal serialization."""
+
+    model_config = {"from_attributes": True, "json_encoders": {Decimal: float}}
+
+
+# =============================================================================
 # HARDWARE COST MODELS
 # =============================================================================
 
-class HardwareCostBase(BaseModel):
+class HardwareCostBase(CostBaseModel):
     """Base model for hardware cost entries."""
 
     device_model: str = Field(..., min_length=1, max_length=255, description="Device model identifier")
@@ -92,7 +102,7 @@ class HardwareCostCreate(HardwareCostBase):
     pass
 
 
-class HardwareCostUpdate(BaseModel):
+class HardwareCostUpdate(CostBaseModel):
     """Request model for updating a hardware cost entry (partial update)."""
 
     device_model: Optional[str] = Field(None, min_length=1, max_length=255)
@@ -118,10 +128,8 @@ class HardwareCostResponse(HardwareCostBase):
     updated_at: datetime
     created_by: Optional[str] = None
 
-    model_config = {"from_attributes": True}
 
-
-class HardwareCostListResponse(BaseModel):
+class HardwareCostListResponse(CostBaseModel):
     """Response model for paginated hardware cost list."""
 
     costs: List[HardwareCostResponse]
@@ -132,7 +140,7 @@ class HardwareCostListResponse(BaseModel):
     total_fleet_value: Decimal = Field(description="Sum of all fleet values")
 
 
-class DeviceModelInfo(BaseModel):
+class DeviceModelInfo(CostBaseModel):
     """Device model information from database."""
 
     device_model: str
@@ -140,7 +148,7 @@ class DeviceModelInfo(BaseModel):
     has_cost_entry: bool
 
 
-class DeviceModelsResponse(BaseModel):
+class DeviceModelsResponse(CostBaseModel):
     """Response model for device models list."""
 
     models: List[DeviceModelInfo]
@@ -151,7 +159,7 @@ class DeviceModelsResponse(BaseModel):
 # OPERATIONAL COST MODELS
 # =============================================================================
 
-class OperationalCostBase(BaseModel):
+class OperationalCostBase(CostBaseModel):
     """Base model for operational cost entries."""
 
     name: str = Field(..., min_length=1, max_length=255, description="Cost entry name")
@@ -173,7 +181,7 @@ class OperationalCostCreate(OperationalCostBase):
     pass
 
 
-class OperationalCostUpdate(BaseModel):
+class OperationalCostUpdate(CostBaseModel):
     """Request model for updating an operational cost entry."""
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
@@ -201,10 +209,8 @@ class OperationalCostResponse(OperationalCostBase):
     updated_at: datetime
     created_by: Optional[str] = None
 
-    model_config = {"from_attributes": True}
 
-
-class OperationalCostListResponse(BaseModel):
+class OperationalCostListResponse(CostBaseModel):
     """Response model for paginated operational cost list."""
 
     costs: List[OperationalCostResponse]
@@ -220,7 +226,7 @@ class OperationalCostListResponse(BaseModel):
 # COST SUMMARY MODELS
 # =============================================================================
 
-class CategoryCostSummary(BaseModel):
+class CategoryCostSummary(CostBaseModel):
     """Cost summary for a single category."""
 
     category: str
@@ -229,7 +235,7 @@ class CategoryCostSummary(BaseModel):
     percentage_of_total: float
 
 
-class DeviceModelCostSummary(BaseModel):
+class DeviceModelCostSummary(CostBaseModel):
     """Cost summary for a device model."""
 
     device_model: str
@@ -238,7 +244,7 @@ class DeviceModelCostSummary(BaseModel):
     total_value: Decimal
 
 
-class CostSummaryResponse(BaseModel):
+class CostSummaryResponse(CostBaseModel):
     """Response model for cost summary."""
 
     tenant_id: str
@@ -269,7 +275,7 @@ class CostSummaryResponse(BaseModel):
 # ANOMALY IMPACT MODELS
 # =============================================================================
 
-class ImpactComponent(BaseModel):
+class ImpactComponent(CostBaseModel):
     """Single component of financial impact."""
 
     type: str = Field(description="Type: direct, productivity, support, opportunity")
@@ -279,7 +285,7 @@ class ImpactComponent(BaseModel):
     confidence: float = Field(ge=0, le=1, description="Confidence in this estimate")
 
 
-class AnomalyImpactResponse(BaseModel):
+class AnomalyImpactResponse(CostBaseModel):
     """Financial impact calculation for a specific anomaly."""
 
     anomaly_id: int
@@ -327,7 +333,7 @@ class AnomalyImpactResponse(BaseModel):
     calculated_at: datetime
 
 
-class DeviceImpactSummary(BaseModel):
+class DeviceImpactSummary(CostBaseModel):
     """Cost impact summary for a single device."""
 
     device_id: int
@@ -354,7 +360,7 @@ class DeviceImpactSummary(BaseModel):
     risk_level: str = Field(description="low, medium, high, critical")
 
 
-class DeviceImpactResponse(BaseModel):
+class DeviceImpactResponse(CostBaseModel):
     """Detailed device-level cost impact response."""
 
     device_id: int
@@ -378,7 +384,7 @@ class DeviceImpactResponse(BaseModel):
 # COST HISTORY / AUDIT MODELS
 # =============================================================================
 
-class CostChangeEntry(BaseModel):
+class CostChangeEntry(CostBaseModel):
     """Single entry in cost change history."""
 
     id: int
@@ -399,7 +405,7 @@ class CostChangeEntry(BaseModel):
     after_snapshot: Optional[Dict[str, Any]] = None
 
 
-class CostHistoryResponse(BaseModel):
+class CostHistoryResponse(CostBaseModel):
     """Response model for cost change history."""
 
     changes: List[CostChangeEntry]
@@ -419,7 +425,7 @@ class CostHistoryResponse(BaseModel):
 # FINANCIAL IMPACT FOR INSIGHTS
 # =============================================================================
 
-class CostBreakdownItem(BaseModel):
+class CostBreakdownItem(CostBaseModel):
     """A single item in a cost breakdown."""
 
     category: str
@@ -430,7 +436,7 @@ class CostBreakdownItem(BaseModel):
     confidence: float = Field(0.7, ge=0, le=1)
 
 
-class FinancialImpactSummary(BaseModel):
+class FinancialImpactSummary(CostBaseModel):
     """Financial impact summary for insights."""
 
     total_impact_usd: Decimal
@@ -453,7 +459,7 @@ class FinancialImpactSummary(BaseModel):
 # BATTERY FORECASTING MODELS
 # =============================================================================
 
-class BatteryForecastEntry(BaseModel):
+class BatteryForecastEntry(CostBaseModel):
     """Battery replacement forecast for a device model."""
 
     device_model: str
@@ -467,9 +473,11 @@ class BatteryForecastEntry(BaseModel):
     estimated_cost_90_days: Decimal
     avg_battery_age_months: float
     oldest_battery_months: Optional[float] = None
+    avg_battery_health_percent: Optional[float] = None
+    data_quality: str = "estimated"  # "real", "estimated", "mixed"
 
 
-class BatteryForecastResponse(BaseModel):
+class BatteryForecastResponse(CostBaseModel):
     """Response model for battery replacement forecast."""
 
     forecasts: List[BatteryForecastEntry]
@@ -479,13 +487,15 @@ class BatteryForecastResponse(BaseModel):
     total_replacements_due_30_days: int
     total_replacements_due_90_days: int
     forecast_generated_at: datetime
+    data_quality: str = "estimated"  # "real", "estimated", "mixed"
+    devices_with_health_data: int = 0
 
 
 # =============================================================================
 # COST ALERT MODELS
 # =============================================================================
 
-class CostAlertBase(BaseModel):
+class CostAlertBase(CostBaseModel):
     """Base model for cost alerts."""
 
     name: str = Field(..., min_length=1, max_length=255)
@@ -502,7 +512,7 @@ class CostAlertCreate(CostAlertBase):
     pass
 
 
-class CostAlertUpdate(BaseModel):
+class CostAlertUpdate(CostBaseModel):
     """Request model for updating a cost alert."""
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
@@ -513,7 +523,7 @@ class CostAlertUpdate(BaseModel):
     notify_webhook: Optional[str] = Field(None, max_length=2000)
 
 
-class CostAlert(BaseModel):
+class CostAlert(CostBaseModel):
     """Response model for a cost alert."""
 
     id: int
@@ -529,7 +539,7 @@ class CostAlert(BaseModel):
     updated_at: datetime
 
 
-class CostAlertListResponse(BaseModel):
+class CostAlertListResponse(CostBaseModel):
     """Response model for cost alert list."""
 
     alerts: List[CostAlert]
@@ -540,7 +550,7 @@ class CostAlertListResponse(BaseModel):
 # NFF SUMMARY MODELS
 # =============================================================================
 
-class NFFByDeviceModel(BaseModel):
+class NFFByDeviceModel(CostBaseModel):
     """NFF summary grouped by device model."""
 
     device_model: str
@@ -548,7 +558,7 @@ class NFFByDeviceModel(BaseModel):
     total_cost: Decimal
 
 
-class NFFByResolution(BaseModel):
+class NFFByResolution(CostBaseModel):
     """NFF summary grouped by resolution."""
 
     resolution: str
@@ -556,7 +566,7 @@ class NFFByResolution(BaseModel):
     total_cost: Decimal
 
 
-class NFFSummaryResponse(BaseModel):
+class NFFSummaryResponse(CostBaseModel):
     """Summary response for No Fault Found analysis."""
 
     total_nff_count: int
