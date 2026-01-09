@@ -53,6 +53,19 @@ export interface Device {
   custom_attributes?: Record<string, string>
 }
 
+// List endpoint shape includes pagination metadata and per-device counts.
+export interface DeviceListItem extends Device {
+  anomaly_count: number
+}
+
+export interface DeviceListResponse {
+  devices: DeviceListItem[]
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
+}
+
 export interface DeviceDetail extends Device {
   anomaly_count: number
   recent_anomalies: Anomaly[]
@@ -104,6 +117,21 @@ export interface TroubleshootingAdvice {
   summary?: string
 }
 
+export interface DashboardAISummary {
+  summary: string
+  priority_actions: string[]
+  health_status: 'healthy' | 'degraded' | 'critical'
+  generated_at: string
+  cached: boolean
+  based_on: {
+    open_cases: number
+    critical_issues: number
+    anomalies_today: number
+    resolved_today: number
+    devices_monitored: number
+  }
+}
+
 export interface IsolationForestConfig {
   n_estimators: number
   contamination: number
@@ -134,6 +162,7 @@ export interface ScoreDistribution {
 
 export interface IsolationForestStats {
   config: IsolationForestConfig
+  defaults?: IsolationForestConfig
   score_distribution: ScoreDistribution
   total_predictions: number
   anomaly_rate: number
@@ -145,7 +174,7 @@ export interface FeedbackStats {
   false_positives: number
   confirmed_anomalies: number
   projected_accuracy_gain: number
-  last_retrain: string
+  last_retrain?: string | null
 }
 
 export interface BaselineSuggestion {
@@ -625,7 +654,7 @@ export interface BaselineFeature {
   drift_percent: number;
   mad: number;
   sample_count: number;
-  last_updated: string | null;
+  last_updated?: string | null;
 }
 
 export interface BaselineHistoryEntry {
@@ -658,9 +687,10 @@ export interface AnomalyGroupMember {
   severity: Severity;
   status: string;
   timestamp: string;
-  device_model?: string;
-  location?: string;
-  primary_metric?: string;
+  device_name?: string | null;
+  device_model?: string | null;
+  location?: string | null;
+  primary_metric?: string | null;
 }
 
 export interface AnomalyGroup {
@@ -672,14 +702,14 @@ export interface AnomalyGroup {
   total_count: number;
   open_count: number;
   device_count: number;
-  suggested_remediation?: RemediationSuggestion;
-  common_location?: string;
-  common_device_model?: string;
+  suggested_remediation?: RemediationSuggestion | null;
+  common_location?: string | null;
+  common_device_model?: string | null;
   time_range_start: string;
   time_range_end: string;
   sample_anomalies: AnomalyGroupMember[];
   grouping_factors: string[];
-  avg_similarity_score?: number;
+  avg_similarity_score?: number | null;
 }
 
 export interface GroupedAnomaliesResponse {
@@ -690,6 +720,11 @@ export interface GroupedAnomaliesResponse {
   ungrouped_anomalies: AnomalyGroupMember[];
   grouping_method: string;
   computed_at: string;
+
+  // Impact metrics for hero card
+  coverage_percent: number;
+  top_impact_group_id: string | null;
+  top_impact_group_name: string | null;
 }
 
 export interface BulkActionRequest {
@@ -704,4 +739,3 @@ export interface BulkActionResponse {
   failed_ids: number[];
   message: string;
 }
-

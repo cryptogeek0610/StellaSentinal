@@ -6,6 +6,7 @@ import type {
   DashboardTrend,
   DashboardAISummary,
   DeviceDetail,
+  DeviceListResponse,
   TroubleshootingAdvice,
   IsolationForestStats,
   BaselineSuggestion,
@@ -613,7 +614,7 @@ export const api = {
     search?: string;
     group_by?: string;
     group_value?: string;
-  }): Promise<{ devices: DeviceDetail[]; total: number }> => {
+  }): Promise<DeviceListResponse> => {
     // Return mock data when mock mode is enabled
     if (getMockModeFromStorage()) {
       let devices = getMockDevices();
@@ -642,13 +643,20 @@ export const api = {
       const start = (page - 1) * pageSize;
       const end = start + pageSize;
 
+      // Include pagination metadata so list responses align with backend contracts.
       return Promise.resolve({
         devices: devices.slice(start, end),
-        total: devices.length
+        total: devices.length,
+        page,
+        page_size: pageSize,
+        total_pages: Math.ceil(devices.length / pageSize),
       });
     }
     if (shouldReturnEmptyLiveData()) {
-      return Promise.resolve({ devices: [], total: 0 });
+      const page = params?.page || 1;
+      const pageSize = params?.page_size || 50;
+      // Include pagination metadata so list responses align with backend contracts.
+      return Promise.resolve({ devices: [], total: 0, page, page_size: pageSize, total_pages: 0 });
     }
 
     const queryParams = new URLSearchParams();
@@ -658,7 +666,7 @@ export const api = {
     if (params?.group_by) queryParams.append('group_by', params.group_by);
     if (params?.group_value) queryParams.append('group_value', params.group_value);
 
-    return fetchAPI<{ devices: DeviceDetail[]; total: number }>(`/devices?${queryParams.toString()}`);
+    return fetchAPI<DeviceListResponse>(`/devices?${queryParams.toString()}`);
   },
 
   getDevice: (id: number): Promise<DeviceDetail> => {
@@ -728,12 +736,14 @@ export const api = {
     const queryParams = new URLSearchParams();
     if (source) queryParams.append('source', source);
     if (days) queryParams.append('days', days.toString());
+    // Backend expects POST for LLM analysis even when using query params.
     if (queryParams.toString()) {
       return fetchAPI<BaselineSuggestion[]>(
-        `/baselines/analyze-with-llm?${queryParams.toString()}`
+        `/baselines/analyze-with-llm?${queryParams.toString()}`,
+        { method: 'POST' }
       ).then(parseBaselineSuggestions);
     }
-    return fetchAPI<BaselineSuggestion[]>('/baselines/analyze-with-llm')
+    return fetchAPI<BaselineSuggestion[]>('/baselines/analyze-with-llm', { method: 'POST' })
       .then(parseBaselineSuggestions);
   },
 
@@ -1173,7 +1183,8 @@ export const api = {
     }
     const queryParams = new URLSearchParams();
     if (limit) queryParams.append('limit', limit.toString());
-    if (unacknowledged_only) queryParams.append('unacknowledged_only', 'true');
+    // Backend expects an acknowledged flag; map the UI filter to acknowledged=false.
+    if (unacknowledged_only) queryParams.append('acknowledged', 'false');
     const query = queryParams.toString();
     return fetchAPI<AutomationAlert[]>(`/automation/alerts${query ? '?' + query : ''}`);
   },
@@ -2212,6 +2223,8 @@ export const api = {
             estimated_cost_90_days: 1260,
             avg_battery_age_months: 14,
             oldest_battery_months: 22,
+            avg_battery_health_percent: 72,
+            data_quality: 'real' as const,
           },
           {
             device_model: 'Zebra TC75x',
@@ -2225,6 +2238,8 @@ export const api = {
             estimated_cost_90_days: 990,
             avg_battery_age_months: 18,
             oldest_battery_months: 28,
+            avg_battery_health_percent: 68,
+            data_quality: 'real' as const,
           },
           {
             device_model: 'Honeywell CK65',
@@ -2238,6 +2253,8 @@ export const api = {
             estimated_cost_90_days: 715,
             avg_battery_age_months: 16,
             oldest_battery_months: 26,
+            avg_battery_health_percent: 76,
+            data_quality: 'mixed' as const,
           },
           {
             device_model: 'Samsung Galaxy XCover 6',
@@ -2251,6 +2268,8 @@ export const api = {
             estimated_cost_90_days: 700,
             avg_battery_age_months: 12,
             oldest_battery_months: 20,
+            avg_battery_health_percent: 81,
+            data_quality: 'real' as const,
           },
           {
             device_model: 'Panasonic Toughbook N1',
@@ -2264,6 +2283,7 @@ export const api = {
             estimated_cost_90_days: 356,
             avg_battery_age_months: 20,
             oldest_battery_months: 32,
+            data_quality: 'estimated' as const,
           },
         ],
         total_devices_with_battery_data: 330,
@@ -2272,6 +2292,8 @@ export const api = {
         total_replacements_due_30_days: 29,
         total_replacements_due_90_days: 81,
         forecast_generated_at: new Date().toISOString(),
+        data_quality: 'mixed' as const,
+        devices_with_health_data: 267,
       });
     }
     return fetchAPI<BatteryForecastResponse>('/costs/battery-forecast');
@@ -2504,6 +2526,8 @@ export const api = {
     event_class?: string;
     device_id?: number;
     hours_back?: number;
+    start_time?: string;
+    end_time?: string;
   }): Promise<EventTimelineResponse> => {
     if (getMockModeFromStorage()) {
       return Promise.resolve(getMockEventTimeline());
@@ -2514,7 +2538,15 @@ export const api = {
     if (params?.severity) queryParams.append('severity', params.severity);
     if (params?.event_class) queryParams.append('event_class', params.event_class);
     if (params?.device_id) queryParams.append('device_id', params.device_id.toString());
-    if (params?.hours_back) queryParams.append('hours_back', params.hours_back.toString());
+    if (params?.start_time) queryParams.append('start_time', params.start_time);
+    if (params?.end_time) queryParams.append('end_time', params.end_time);
+    if (params?.hours_back && !params.start_time && !params.end_time) {
+      // Translate hours_back to the backend's start_time/end_time filter.
+      const end = new Date();
+      const start = new Date(end.getTime() - params.hours_back * 60 * 60 * 1000);
+      queryParams.append('start_time', start.toISOString());
+      queryParams.append('end_time', end.toISOString());
+    }
     const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
     return fetchAPI<EventTimelineResponse>(`/insights/events/timeline${query}`);
   },
@@ -2523,7 +2555,9 @@ export const api = {
     if (getMockModeFromStorage()) {
       return Promise.resolve(getMockAlertSummary());
     }
-    const params = hoursBack ? `?hours_back=${hoursBack}` : '';
+    // Backend uses period_days; convert UI hours into a day window.
+    const periodDays = hoursBack ? Math.max(1, Math.ceil(hoursBack / 24)) : undefined;
+    const params = periodDays ? `?period_days=${periodDays}` : '';
     return fetchAPI<AlertSummaryResponse>(`/insights/events/alerts/summary${params}`);
   },
 
@@ -2560,7 +2594,9 @@ export const api = {
     if (getMockModeFromStorage()) {
       return Promise.resolve(getMockEventStatistics());
     }
-    const params = hoursBack ? `?hours_back=${hoursBack}` : '';
+    // Backend uses period_days; convert UI hours into a day window.
+    const periodDays = hoursBack ? Math.max(1, Math.ceil(hoursBack / 24)) : undefined;
+    const params = periodDays ? `?period_days=${periodDays}` : '';
     return fetchAPI<EventStatisticsResponse>(`/insights/events/statistics${params}`);
   },
 

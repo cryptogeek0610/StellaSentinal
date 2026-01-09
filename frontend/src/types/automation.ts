@@ -38,10 +38,23 @@ export interface SchedulerConfig {
   alert_on_high_anomaly_rate: boolean;
   high_anomaly_rate_threshold: number;
 
+  // Insight generation settings
+  insights_enabled: boolean;
+  daily_digest_hour: number;
+  shift_readiness_enabled: boolean;
+  shift_readiness_lead_minutes: number;
+  shift_schedules: string[];
+  location_baseline_enabled: boolean;
+  location_baseline_day_of_week: number;
+  location_baseline_hour: number;
+
   // Timestamps
   last_training_time: string | null;
   last_scoring_time: string | null;
   last_auto_retrain_time: string | null;
+  last_daily_digest_time: string | null;
+  last_shift_readiness_time: string | null;
+  last_location_baseline_time: string | null;
 }
 
 /**
@@ -63,6 +76,14 @@ export interface SchedulerConfigUpdate {
   alerting_enabled?: boolean;
   alert_on_high_anomaly_rate?: boolean;
   high_anomaly_rate_threshold?: number;
+  insights_enabled?: boolean;
+  daily_digest_hour?: number;
+  shift_readiness_enabled?: boolean;
+  shift_readiness_lead_minutes?: number;
+  shift_schedules?: string[];
+  location_baseline_enabled?: boolean;
+  location_baseline_day_of_week?: number;
+  location_baseline_hour?: number;
 }
 
 /**
@@ -72,6 +93,7 @@ export interface SchedulerStatus {
   is_running: boolean;
   training_status: 'idle' | 'running' | 'completed' | 'failed';
   scoring_status: 'idle' | 'running' | 'completed' | 'failed';
+  insights_status?: 'idle' | 'running' | 'completed' | 'failed';
   last_training_result: {
     success: boolean;
     timestamp: string;
@@ -85,9 +107,12 @@ export interface SchedulerStatus {
     anomalies_detected: number;
     anomaly_rate: number;
   } | null;
+  last_insight_result?: Record<string, unknown> | null;
   next_training_time: string | null;
   next_scoring_time: string | null;
+  next_insight_time?: string | null;
   total_anomalies_detected: number;
+  total_insights_generated?: number;
   false_positive_rate: number;
   uptime_seconds: number;
   errors: string[];
@@ -112,7 +137,8 @@ export interface AutomationJob {
   triggered_by: string;
   success?: boolean;
   error?: string;
-  metrics?: Record<string, unknown>;
+  // Backend returns details; keep this optional for forward compatibility.
+  details?: Record<string, unknown>;
 }
 
 /**
@@ -124,10 +150,11 @@ export type AutomationHistory = AutomationJob[];
  * Manual job trigger request
  */
 export interface TriggerJobRequest {
-  job_type: 'training' | 'scoring';
+  job_type: 'training' | 'scoring' | 'daily_digest' | 'shift_readiness' | 'location_baseline' | 'device_metadata_sync';
   start_date?: string;
   end_date?: string;
   validation_days?: number;
+  shift_name?: string;
 }
 
 /**
