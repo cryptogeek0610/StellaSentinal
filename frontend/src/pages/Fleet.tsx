@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../components/Card';
@@ -16,8 +16,25 @@ function Fleet() {
   const [searchQuery, setSearchQuery] = useState('');
   const [attributeName] = useLocationAttribute();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const selectedGroup = searchParams.get('group');
+
+  // Device metadata sync mutation
+  const syncMetadataMutation = useMutation({
+    mutationFn: () => api.syncDeviceMetadata(),
+    onSuccess: (data) => {
+      // Invalidate devices query to refresh the list with new names/models
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
+      // Avoid noisy production logs; keep visibility for local debugging only.
+      if (import.meta.env.DEV) {
+        console.log(`Synced ${data.synced_count} devices in ${data.duration_seconds}s`);
+      }
+    },
+    onError: (error) => {
+      console.error('Device metadata sync failed:', error);
+    },
+  });
 
   // Fetch Grouping Data (Heatmap/Store Stats)
   const { data: groupData } = useQuery({
@@ -37,7 +54,7 @@ function Fleet() {
     }),
   });
 
-  const devices = devicesResponse?.devices || [];
+  const devices = useMemo(() => devicesResponse?.devices ?? [], [devicesResponse]);
   const filteredDevices = useMemo(() => {
     if (anomalyFilter === 'all') {
       return devices;
@@ -199,6 +216,33 @@ function Fleet() {
               </svg>
             </button>
           </div>
+
+          {/* Sync Device Names Button */}
+          <button
+            onClick={() => syncMetadataMutation.mutate()}
+            disabled={syncMetadataMutation.isPending}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
+              syncMetadataMutation.isPending
+                ? 'bg-slate-700/50 border-slate-600 text-slate-400 cursor-wait'
+                : 'bg-slate-800/50 border-slate-700/50 text-slate-300 hover:border-amber-500/50 hover:text-amber-400'
+            }`}
+            title="Sync device names and models from MobiControl"
+          >
+            <svg
+              className={`w-4 h-4 ${syncMetadataMutation.isPending ? 'animate-spin' : ''}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+            {syncMetadataMutation.isPending ? 'Syncing...' : 'Refresh Names'}
+          </button>
         </div>
       </div>
 

@@ -128,6 +128,10 @@ export function formatDOMPathInfo(info: DOMPathInfo): string {
  * Logs DOM path info to console
  */
 export function logDOMPath(element: HTMLElement | null): void {
+  // Guard logging in production to avoid leaking DOM details.
+  if (!import.meta.env.DEV) {
+    return;
+  }
   const info = getDOMPathInfo(element);
   if (info) {
     console.log(formatDOMPathInfo(info));
@@ -140,6 +144,10 @@ export function logDOMPath(element: HTMLElement | null): void {
  * Call this from browser console: window.enableDOMPathLogging(true)
  */
 export function setupGlobalDOMPathLogging(): void {
+  // Global debug helpers are only exposed in development builds.
+  if (!import.meta.env.DEV) {
+    return;
+  }
   if (typeof window !== 'undefined') {
     (window as any).enableDOMPathLogging = (enabled: boolean) => {
       (window as any).__DOM_PATH_LOGGING_ENABLED__ = enabled;
@@ -175,4 +183,3 @@ export function setupGlobalDOMPathLogging(): void {
 }
 
 // Note: React hook removed - use getDOMPathInfo directly with ref.current
-
