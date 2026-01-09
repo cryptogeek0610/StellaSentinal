@@ -1274,6 +1274,7 @@ export const api = {
   syncLocations: (): Promise<{ success: boolean; message: string }> => {
     return fetchAPI<{ success: boolean; message: string }>('/setup/sync-locations', {
       method: 'POST',
+      body: JSON.stringify({}),
     });
   },
 

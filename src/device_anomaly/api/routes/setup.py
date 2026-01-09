@@ -640,9 +640,102 @@ MOBICONTROL_CLIENT_SECRET={config.mobicontrol_client_secret}
 MOBICONTROL_USERNAME={config.mobicontrol_username}
 MOBICONTROL_PASSWORD={config.mobicontrol_password}
 MOBICONTROL_TENANT_ID={config.mobicontrol_tenant_id}
+"""
+
 
 # =============================================================================
-# Docker Compose Requirements
+# Location Sync Endpoints
 # =============================================================================
-SQLSERVER_SA_PASSWORD=NotUsed123!
-"""
+
+
+class LocationSyncRequest(BaseModel):
+    """Request model for location sync."""
+
+    tenant_id: str = "default"
+    label_types: list[str] | None = None
+    include_device_groups: bool = True
+
+
+class LocationSyncResponse(BaseModel):
+    """Response model for location sync."""
+
+    success: bool
+    message: str
+    synced_count: int
+    labels_synced: int = 0
+    groups_synced: int = 0
+    duration_seconds: float
+    errors: list[str] = []
+    label_types_searched: list[str] = []
+
+
+@router.post("/sync-locations", response_model=LocationSyncResponse)
+async def sync_locations(request: LocationSyncRequest) -> LocationSyncResponse:
+    """
+    Sync locations from MobiControl to PostgreSQL.
+
+    This endpoint imports location data from MobiControl labels and device groups
+    to enable "Warehouse A vs Warehouse B" comparisons in insights.
+
+    Label types that can represent locations:
+    - Store, Warehouse, Site, Location, Building, Branch, Office, Facility, Region
+
+    The sync creates location_metadata records that map devices to semantic location names.
+    """
+    try:
+        from device_anomaly.services.location_sync import sync_all_locations
+
+        result = sync_all_locations(
+            tenant_id=request.tenant_id,
+            label_types=request.label_types,
+            include_device_groups=request.include_device_groups,
+            raise_on_error=False,
+        )
+
+        errors = result.get("errors", [])
+        success = result.get("success", False)
+        if success and errors:
+            message = f"Location sync completed with {len(errors)} warning(s)."
+        elif success:
+            message = "Locations synced successfully."
+        else:
+            message = "Location sync failed."
+
+        return LocationSyncResponse(
+            success=success,
+            message=message,
+            synced_count=result.get("synced_count", 0),
+            labels_synced=result.get("labels_synced", 0),
+            groups_synced=result.get("groups_synced", 0),
+            duration_seconds=result.get("duration_seconds", 0.0),
+            errors=errors,
+            label_types_searched=request.label_types or [],
+        )
+    except Exception as e:
+        logger.exception("Error syncing locations")
+        return LocationSyncResponse(
+            success=False,
+            message=f"Location sync failed: {e}",
+            synced_count=0,
+            duration_seconds=0.0,
+            errors=[str(e)],
+        )
+
+
+@router.get("/location-sync-stats")
+async def get_location_sync_stats(tenant_id: str = "default") -> dict[str, Any]:
+    """
+    Get statistics about synced locations.
+
+    Returns counts of locations from different sources (labels vs device groups).
+    """
+    try:
+        from device_anomaly.services.location_sync import get_location_sync_stats as get_stats
+
+        return get_stats(tenant_id=tenant_id)
+    except Exception as e:
+        logger.exception("Error getting location sync stats")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get location sync stats: {e!s}",
+        ) from e
