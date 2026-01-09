@@ -161,13 +161,16 @@ def create_audit_log(
         entity_type=entity_type,
         entity_id=entity_id,
         action=action,
-        old_values_json=json.dumps(old_values) if old_values else None,
-        new_values_json=json.dumps(new_values) if new_values else None,
+        old_values_json=json.dumps(old_values, default=str) if old_values else None,
+        new_values_json=json.dumps(new_values, default=str) if new_values else None,
         changed_fields_json=json.dumps(changed_fields) if changed_fields else None,
         user_id=user_id,
         user_email=user_email,
         source="api",
     )
+    if db.bind and db.bind.dialect.name == "sqlite":
+        max_id = db.query(func.max(CostAuditLog.id)).scalar() or 0
+        log.id = max_id + 1
     db.add(log)
     return log
 
@@ -364,7 +367,7 @@ def create_hardware_cost(
         action="create",
         new_values=request.model_dump(exclude_none=True),
         user_id=user.user_id,
-        user_email=user.email,
+        user_email=getattr(user, "email", None),
     )
 
     db.commit()
@@ -471,7 +474,7 @@ def update_hardware_cost(
         old_values=old_values,
         new_values=request.model_dump(exclude_none=True),
         user_id=user.user_id,
-        user_email=user.email,
+        user_email=getattr(user, "email", None),
     )
 
     db.commit()
@@ -544,7 +547,7 @@ def delete_hardware_cost(
         action="delete",
         old_values=old_values,
         user_id=user.user_id,
-        user_email=user.email,
+        user_email=getattr(user, "email", None),
     )
 
     db.commit()
@@ -674,7 +677,7 @@ def create_operational_cost(
         action="create",
         new_values=request.model_dump(exclude_none=True, mode="json"),
         user_id=user.user_id,
-        user_email=user.email,
+        user_email=getattr(user, "email", None),
     )
 
     db.commit()
@@ -766,7 +769,7 @@ def update_operational_cost(
         old_values=old_values,
         new_values=new_values,
         user_id=user.user_id,
-        user_email=user.email,
+        user_email=getattr(user, "email", None),
     )
 
     db.commit()
@@ -835,7 +838,7 @@ def delete_operational_cost(
         action="delete",
         old_values=old_values,
         user_id=user.user_id,
-        user_email=user.email,
+        user_email=getattr(user, "email", None),
     )
 
     db.commit()
@@ -1364,8 +1367,9 @@ def get_battery_forecast(
             lifespan = 24
 
         battery_replacement_cost = (base_cost * Decimal("0.2")).quantize(Decimal("0.01"))
-        avg_age = float(lifespan) * 0.7
-        age_ratio = min(avg_age / float(lifespan), 1.0) if lifespan else 0.0
+        # Round to avoid floating point display issues (e.g., 16.799999... -> 17)
+        avg_age = round(lifespan * 0.7)
+        age_ratio = min(avg_age / lifespan, 1.0) if lifespan else 0.0
 
         due_30 = int(count * 0.1 * age_ratio)
         due_next = int(count * 0.08 * age_ratio)
@@ -1373,6 +1377,9 @@ def get_battery_forecast(
 
         cost_30 = battery_replacement_cost * due_30
         cost_90 = battery_replacement_cost * due_90
+
+        # Calculate oldest battery age (capped at 120% of lifespan or lifespan + 6 months)
+        oldest_age = round(min(lifespan * 1.2, lifespan + 6))
 
         forecasts.append(
             BatteryForecastEntry(
@@ -1386,7 +1393,7 @@ def get_battery_forecast(
                 estimated_cost_30_days=cost_30,
                 estimated_cost_90_days=cost_90,
                 avg_battery_age_months=avg_age,
-                oldest_battery_months=min(float(lifespan) * 1.2, float(lifespan) + 6),
+                oldest_battery_months=oldest_age,
             )
         )
 
