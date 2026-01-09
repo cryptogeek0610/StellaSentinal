@@ -10,7 +10,9 @@ Provides:
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
@@ -92,6 +94,7 @@ class StreamingState:
     anomaly_processor = None
     websocket_manager = None
     initialized = False
+    restored_at: Optional[datetime] = None
 
 
 _state = StreamingState()
@@ -109,6 +112,8 @@ async def initialize_streaming() -> None:
     from device_anomaly.streaming.feature_computer import StreamingFeatureComputer
     from device_anomaly.streaming.anomaly_processor import AnomalyStreamProcessor
     from device_anomaly.streaming.websocket_manager import WebSocketManager
+    from device_anomaly.features.cohort_stats import load_latest_cohort_stats
+    from device_anomaly.features.device_features import load_feature_metadata, resolve_feature_norms
 
     try:
         # Initialize engine
@@ -117,9 +122,25 @@ async def initialize_streaming() -> None:
         await _state.engine.connect()
 
         # Initialize components
-        buffer = TelemetryBuffer()
+        buffer = _load_streaming_state()
         _state.telemetry_stream = TelemetryStream(_state.engine, buffer)
-        _state.feature_computer = StreamingFeatureComputer(_state.engine, buffer)
+        cohort_stats = load_latest_cohort_stats()
+        if cohort_stats is None:
+            logger.warning("Streaming cohort stats not found; cohort z-scores disabled.")
+
+        metadata = load_feature_metadata()
+        feature_spec = (metadata or {}).get("feature_spec")
+        feature_norms = resolve_feature_norms(metadata)
+        if not feature_norms:
+            logger.warning("Streaming feature norms missing; cross-domain features may drift.")
+
+        _state.feature_computer = StreamingFeatureComputer(
+            _state.engine,
+            buffer,
+            cohort_stats=cohort_stats,
+            feature_spec=feature_spec,
+            feature_norms=feature_norms,
+        )
         _state.anomaly_processor = AnomalyStreamProcessor(_state.engine)
         _state.websocket_manager = WebSocketManager(_state.engine)
 
@@ -151,6 +172,7 @@ async def shutdown_streaming() -> None:
         await _state.anomaly_processor.stop()
         await _state.feature_computer.stop()
         await _state.telemetry_stream.stop()
+        _persist_streaming_state()
         await _state.engine.disconnect()
 
         _state.initialized = False
@@ -158,6 +180,47 @@ async def shutdown_streaming() -> None:
 
     except Exception as e:
         logger.error("Error during streaming shutdown: %s", e, exc_info=True)
+
+
+def _parse_max_bytes(value: Optional[str], default: int) -> int:
+    try:
+        if value is None:
+            return default
+        parsed = int(value)
+        return parsed
+    except (TypeError, ValueError):
+        return default
+
+
+def _load_streaming_state() -> TelemetryBuffer:
+    state_path = os.getenv("STREAMING_STATE_PATH")
+    max_bytes = _parse_max_bytes(os.getenv("STREAMING_STATE_MAX_BYTES"), 10_000_000)
+    if not state_path:
+        return TelemetryBuffer()
+
+    path = Path(state_path)
+    buffer = TelemetryBuffer.load_snapshot_path(path, max_bytes)
+    if buffer is None:
+        logger.warning("Streaming state not restored; starting with empty buffer.")
+        return TelemetryBuffer()
+
+    _state.restored_at = buffer.restored_at
+    logger.info("Streaming state restored from %s", path)
+    return buffer
+
+
+def _persist_streaming_state() -> None:
+    state_path = os.getenv("STREAMING_STATE_PATH")
+    max_bytes = _parse_max_bytes(os.getenv("STREAMING_STATE_MAX_BYTES"), 10_000_000)
+    if not state_path:
+        return
+    if not _state.telemetry_stream:
+        return
+
+    path = Path(state_path)
+    saved = _state.telemetry_stream.buffer.save_snapshot(path, max_bytes)
+    if not saved:
+        logger.warning("Streaming state not persisted; check size limits and permissions.")
 
 
 # =============================================================================
@@ -247,6 +310,7 @@ async def ingest_telemetry_batch(
     response_model=StreamingStatusResponse,
     summary="Get streaming system status",
     description="Get the current status of the streaming system and its components.",
+    deprecated=True,
 )
 async def get_streaming_status(
     state: StreamingState = Depends(get_streaming_state),
@@ -257,6 +321,7 @@ async def get_streaming_status(
     if state.initialized:
         components = {
             "telemetry_stream": state.telemetry_stream.get_stats(),
+            "feature_computer": state.feature_computer.get_stats(),
             "anomaly_processor": state.anomaly_processor.get_stats(),
             "websocket_manager": state.websocket_manager.get_stats(),
         }
@@ -276,6 +341,7 @@ async def get_streaming_status(
     "/device/{device_id}/buffer",
     summary="Get device telemetry buffer",
     description="Get the buffered telemetry data for a specific device.",
+    deprecated=True,
 )
 async def get_device_buffer(
     device_id: int,
@@ -353,6 +419,7 @@ async def websocket_anomalies(
     "/cohorts",
     summary="Get cohort statistics",
     description="Get running statistics for device cohorts (model + OS combinations).",
+    deprecated=True,
 )
 async def get_cohort_stats(
     state: StreamingState = Depends(get_streaming_state),

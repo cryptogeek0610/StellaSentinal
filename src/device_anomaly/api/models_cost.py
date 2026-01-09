@@ -59,6 +59,15 @@ class AuditAction(str, Enum):
     DELETE = "delete"
 
 
+class AlertThresholdType(str, Enum):
+    """Threshold types for cost alerts."""
+
+    ANOMALY_COST_DAILY = "anomaly_cost_daily"
+    ANOMALY_COST_MONTHLY = "anomaly_cost_monthly"
+    BATTERY_FORECAST = "battery_forecast"
+    OPERATIONAL_COST = "operational_cost"
+
+
 # =============================================================================
 # HARDWARE COST MODELS
 # =============================================================================
@@ -309,6 +318,12 @@ class AnomalyImpactResponse(BaseModel):
     # Impact level
     impact_level: ImpactLevel
 
+    # Configuration status
+    using_defaults: bool = Field(
+        default=True,
+        description="True if using system defaults instead of user-configured costs"
+    )
+
     calculated_at: datetime
 
 
@@ -432,3 +447,122 @@ class FinancialImpactSummary(BaseModel):
     # Metadata
     confidence_score: float = Field(0.7, ge=0, le=1)
     calculated_at: Optional[datetime] = None
+
+
+# =============================================================================
+# BATTERY FORECASTING MODELS
+# =============================================================================
+
+class BatteryForecastEntry(BaseModel):
+    """Battery replacement forecast for a device model."""
+
+    device_model: str
+    device_count: int
+    battery_replacement_cost: Decimal
+    battery_lifespan_months: int
+    devices_due_this_month: int
+    devices_due_next_month: int
+    devices_due_in_90_days: int
+    estimated_cost_30_days: Decimal
+    estimated_cost_90_days: Decimal
+    avg_battery_age_months: float
+    oldest_battery_months: Optional[float] = None
+
+
+class BatteryForecastResponse(BaseModel):
+    """Response model for battery replacement forecast."""
+
+    forecasts: List[BatteryForecastEntry]
+    total_devices_with_battery_data: int
+    total_estimated_cost_30_days: Decimal
+    total_estimated_cost_90_days: Decimal
+    total_replacements_due_30_days: int
+    total_replacements_due_90_days: int
+    forecast_generated_at: datetime
+
+
+# =============================================================================
+# COST ALERT MODELS
+# =============================================================================
+
+class CostAlertBase(BaseModel):
+    """Base model for cost alerts."""
+
+    name: str = Field(..., min_length=1, max_length=255)
+    threshold_type: AlertThresholdType
+    threshold_value: Decimal = Field(..., ge=0)
+    is_active: bool = True
+    notify_email: Optional[str] = Field(None, max_length=255)
+    notify_webhook: Optional[str] = Field(None, max_length=2000)
+
+
+class CostAlertCreate(CostAlertBase):
+    """Request model for creating a cost alert."""
+
+    pass
+
+
+class CostAlertUpdate(BaseModel):
+    """Request model for updating a cost alert."""
+
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    threshold_type: Optional[AlertThresholdType] = None
+    threshold_value: Optional[Decimal] = Field(None, ge=0)
+    is_active: Optional[bool] = None
+    notify_email: Optional[str] = Field(None, max_length=255)
+    notify_webhook: Optional[str] = Field(None, max_length=2000)
+
+
+class CostAlert(BaseModel):
+    """Response model for a cost alert."""
+
+    id: int
+    name: str
+    threshold_type: AlertThresholdType
+    threshold_value: Decimal
+    is_active: bool
+    notify_email: Optional[str] = None
+    notify_webhook: Optional[str] = None
+    last_triggered: Optional[datetime] = None
+    trigger_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class CostAlertListResponse(BaseModel):
+    """Response model for cost alert list."""
+
+    alerts: List[CostAlert]
+    total: int
+
+
+# =============================================================================
+# NFF SUMMARY MODELS
+# =============================================================================
+
+class NFFByDeviceModel(BaseModel):
+    """NFF summary grouped by device model."""
+
+    device_model: str
+    count: int
+    total_cost: Decimal
+
+
+class NFFByResolution(BaseModel):
+    """NFF summary grouped by resolution."""
+
+    resolution: str
+    count: int
+    total_cost: Decimal
+
+
+class NFFSummaryResponse(BaseModel):
+    """Summary response for No Fault Found analysis."""
+
+    total_nff_count: int
+    total_nff_cost: Decimal
+    avg_cost_per_nff: Decimal
+    nff_rate_percent: float
+    by_device_model: List[NFFByDeviceModel]
+    by_resolution: List[NFFByResolution]
+    trend_30_days: float

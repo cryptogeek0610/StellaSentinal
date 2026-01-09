@@ -158,11 +158,10 @@ def get_dashboard_stats(
         .scalar()
     ) or 0
 
-    # Devices monitored (count distinct device_ids with anomalies)
+    # Fleet size (count all registered devices)
     devices_monitored = (
-        db.query(func.count(func.distinct(AnomalyResult.device_id)))
-        .filter(AnomalyResult.tenant_id == tenant_id)
-        .filter(AnomalyResult.anomaly_label == -1)
+        db.query(func.count(DeviceMetadata.device_id))
+        .filter(DeviceMetadata.tenant_id == tenant_id)
         .scalar()
     ) or 0
 
@@ -1018,6 +1017,49 @@ def get_troubleshooting_cache_stats(db: Session = Depends(get_db)):
     }
 
 
+@router.get("/model-info")
+def get_model_info():
+    """Return model availability and ONNX configuration details."""
+    from device_anomaly.config.onnx_config import get_onnx_config
+    from device_anomaly.models.inference_engine import EngineType
+    from device_anomaly.models.model_registry import resolve_artifact_path, resolve_model_artifacts
+
+    onnx_config = get_onnx_config()
+    artifacts = resolve_model_artifacts()
+
+    onnx_path = None
+    if artifacts.metadata and artifacts.metadata.get("artifacts"):
+        onnx_path = artifacts.metadata["artifacts"].get("onnx_path")
+    resolved_onnx = resolve_artifact_path(artifacts.model_dir, onnx_path)
+    onnx_available = bool(resolved_onnx and resolved_onnx.exists())
+
+    sklearn_path = artifacts.model_dir / "isolation_forest.pkl"
+    if not sklearn_path.exists():
+        sklearn_path = None
+
+    try:
+        import onnxruntime as ort
+        available_providers = ort.get_available_providers()
+    except Exception:
+        available_providers = []
+
+    active_backend = (
+        "onnx"
+        if onnx_available and onnx_config.inference.engine_type == EngineType.ONNX
+        else "sklearn"
+    )
+
+    return {
+        "active_backend": active_backend,
+        "engine_type": onnx_config.inference.engine_type.value,
+        "onnx_available": onnx_available,
+        "onnx_path": str(resolved_onnx) if resolved_onnx else None,
+        "sklearn_path": str(sklearn_path) if sklearn_path else None,
+        "onnx_provider": onnx_config.inference.onnx_provider.value,
+        "available_providers": available_providers,
+    }
+
+
 @router.get("/isolation-forest/stats", response_model=IsolationForestStatsResponse)
 def get_isolation_forest_stats(
     days: Optional[int] = Query(30, ge=1, le=365),
@@ -1050,14 +1092,30 @@ def get_isolation_forest_stats(
     
     # Get model configuration from code (default values)
     from device_anomaly.models.anomaly_detector import AnomalyDetectorConfig
+    from device_anomaly.models.model_registry import load_latest_training_metadata
     
-    default_config = AnomalyDetectorConfig()
+    default_cfg = AnomalyDetectorConfig()
+    defaults = IsolationForestConfigResponse(
+        n_estimators=default_cfg.n_estimators,
+        contamination=default_cfg.contamination,
+        random_state=default_cfg.random_state,
+        scale_features=default_cfg.scale_features,
+        min_variance=default_cfg.min_variance,
+        model_type="isolation_forest",
+    )
+
+    metadata = load_latest_training_metadata()
+    detector_cfg = (metadata or {}).get("detector_config") or {}
+    training_cfg = (metadata or {}).get("config") or {}
+    feature_cols = (metadata or {}).get("feature_cols") or []
+
     config = IsolationForestConfigResponse(
-        n_estimators=default_config.n_estimators,
-        contamination=default_config.contamination,
-        random_state=default_config.random_state,
-        scale_features=default_config.scale_features,
-        min_variance=default_config.min_variance,
+        n_estimators=int(detector_cfg.get("n_estimators", training_cfg.get("n_estimators", default_cfg.n_estimators))),
+        contamination=float(detector_cfg.get("contamination", training_cfg.get("contamination", default_cfg.contamination))),
+        random_state=int(detector_cfg.get("random_state", training_cfg.get("random_state", default_cfg.random_state))),
+        scale_features=bool(detector_cfg.get("scale_features", default_cfg.scale_features)),
+        min_variance=float(detector_cfg.get("min_variance", default_cfg.min_variance)),
+        feature_count=len(feature_cols) if feature_cols else None,
         model_type="isolation_forest",
     )
     
@@ -1081,6 +1139,7 @@ def get_isolation_forest_stats(
         # Return empty distribution if no data
         return IsolationForestStatsResponse(
             config=config,
+            defaults=defaults,
             score_distribution=ScoreDistributionResponse(
                 bins=[],
                 total_normal=0,
@@ -1176,6 +1235,7 @@ def get_isolation_forest_stats(
     
     return IsolationForestStatsResponse(
         config=config,
+        defaults=defaults,
         score_distribution=score_distribution,
         total_predictions=total_predictions,
         anomaly_rate=anomaly_rate,
@@ -1380,3 +1440,227 @@ def get_location_heatmap(
         totalLocations=len(locations),
         totalDevices=sum(loc.deviceCount for loc in locations),
     )
+
+
+@router.get("/ai-summary")
+def get_dashboard_ai_summary(
+    force_regenerate: bool = Query(False, description="Force regeneration of AI summary, bypassing cache"),
+    mock_mode: bool = Depends(get_mock_mode),
+    db: Session = Depends(get_db),
+):
+    """Generate an AI-powered executive summary of the current dashboard state.
+
+    Analyzes current fleet status and provides:
+    - Executive summary (2-3 sentences)
+    - Priority actions (if any critical issues)
+    - Overall fleet health assessment
+
+    Results are cached in Redis for 5 minutes to avoid excessive LLM calls.
+    """
+    import json
+    import redis as redis_client
+
+    # Return mock data if Mock Mode is enabled
+    if mock_mode:
+        return {
+            "summary": "Fleet health is stable with 3 critical issues requiring attention. Battery drain patterns suggest optimization opportunities at 2 locations.",
+            "priority_actions": [
+                "Investigate battery drain at Westside Mall (12 devices affected)",
+                "Review 3 critical anomalies flagged in the last hour",
+                "Schedule firmware update for devices showing connectivity issues"
+            ],
+            "health_status": "degraded",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "cached": False,
+            "based_on": {
+                "open_cases": 15,
+                "critical_issues": 3,
+                "anomalies_today": 7,
+                "resolved_today": 4,
+                "devices_monitored": 250
+            }
+        }
+
+    tenant_id = get_tenant_id()
+    cache_key = f"dashboard_ai_summary:{tenant_id}"
+    redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
+
+    # Try to get from cache first (unless force regenerate)
+    if not force_regenerate:
+        try:
+            r = redis_client.from_url(redis_url, socket_timeout=3)
+            cached = r.get(cache_key)
+            r.close()
+            if cached:
+                result = json.loads(cached)
+                result["cached"] = True
+                logger.info("Returning cached dashboard AI summary")
+                return result
+        except Exception as e:
+            logger.warning(f"Redis cache read failed: {e}")
+
+    # Get current stats for the summary
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # Anomalies today
+    anomalies_today = (
+        db.query(func.count(AnomalyResult.id))
+        .filter(AnomalyResult.tenant_id == tenant_id)
+        .filter(AnomalyResult.anomaly_label == -1)
+        .filter(AnomalyResult.timestamp >= today_start)
+        .scalar()
+    ) or 0
+
+    # Fleet size
+    devices_monitored = (
+        db.query(func.count(DeviceMetadata.device_id))
+        .filter(DeviceMetadata.tenant_id == tenant_id)
+        .scalar()
+    ) or 0
+
+    # Critical issues
+    critical_threshold = -0.7
+    critical_issues = (
+        db.query(func.count(AnomalyResult.id))
+        .filter(AnomalyResult.tenant_id == tenant_id)
+        .filter(AnomalyResult.anomaly_label == -1)
+        .filter(AnomalyResult.anomaly_score <= critical_threshold)
+        .filter(
+            AnomalyResult.status.in_([AnomalyStatus.OPEN.value, AnomalyStatus.INVESTIGATING.value])
+        )
+        .scalar()
+    ) or 0
+
+    # Resolved today
+    resolved_today = (
+        db.query(func.count(AnomalyResult.id))
+        .filter(AnomalyResult.tenant_id == tenant_id)
+        .filter(AnomalyResult.anomaly_label == -1)
+        .filter(AnomalyResult.status == AnomalyStatus.RESOLVED.value)
+        .filter(AnomalyResult.updated_at >= today_start)
+        .scalar()
+    ) or 0
+
+    # Open cases
+    open_cases = (
+        db.query(func.count(AnomalyResult.id))
+        .filter(AnomalyResult.tenant_id == tenant_id)
+        .filter(AnomalyResult.anomaly_label == -1)
+        .filter(
+            AnomalyResult.status.in_([AnomalyStatus.OPEN.value, AnomalyStatus.INVESTIGATING.value])
+        )
+        .scalar()
+    ) or 0
+
+    stats = {
+        "open_cases": open_cases,
+        "critical_issues": critical_issues,
+        "anomalies_today": anomalies_today,
+        "resolved_today": resolved_today,
+        "devices_monitored": devices_monitored
+    }
+
+    # Determine health status
+    if critical_issues > 5:
+        health_status = "critical"
+    elif critical_issues > 0 or open_cases > 20:
+        health_status = "degraded"
+    else:
+        health_status = "healthy"
+
+    # Build LLM prompt
+    prompt = f"""<role>
+You are an AI assistant analyzing a mobile device fleet management dashboard. Provide a brief executive summary for operations managers.
+</role>
+
+<output_format>
+Respond in this exact JSON format (no markdown, just raw JSON):
+{{
+  "summary": "2-3 sentence executive summary of fleet status",
+  "priority_actions": ["action 1", "action 2", "action 3"],
+  "health_assessment": "One sentence overall assessment"
+}}
+</output_format>
+
+<current_status>
+- Open incidents: {stats['open_cases']}
+- Critical issues: {stats['critical_issues']}
+- Anomalies detected today: {stats['anomalies_today']}
+- Resolved today: {stats['resolved_today']}
+- Total devices monitored: {stats['devices_monitored']}
+</current_status>
+
+<instructions>
+1. Summarize the current fleet health in business terms
+2. If there are critical issues, make them the priority
+3. Suggest 1-3 specific actions based on the numbers (or empty list if all clear)
+4. Keep summary under 50 words
+5. Return ONLY the JSON, no other text
+</instructions>"""
+
+    # Try to generate with LLM
+    try:
+        from device_anomaly.llm.client import get_default_llm_client, DummyLLMClient, strip_thinking_tags
+
+        llm_client = get_default_llm_client()
+
+        if isinstance(llm_client, DummyLLMClient):
+            raise ValueError("LLM not configured")
+
+        raw_response = llm_client.generate(prompt, max_tokens=400, temperature=0.3)
+        response = strip_thinking_tags(raw_response)
+
+        # Try to parse JSON from response
+        try:
+            # Try to extract JSON from response
+            import re
+            json_match = re.search(r'\{[^{}]*\}', response, re.DOTALL)
+            if json_match:
+                parsed = json.loads(json_match.group())
+                summary = parsed.get("summary", "Fleet status analyzed.")
+                priority_actions = parsed.get("priority_actions", [])
+                health_assessment = parsed.get("health_assessment", "")
+                if health_assessment:
+                    summary = f"{summary} {health_assessment}"
+            else:
+                # If no JSON found, use response as summary
+                summary = response[:200]
+                priority_actions = []
+        except json.JSONDecodeError:
+            summary = response[:200]
+            priority_actions = []
+
+    except Exception as e:
+        logger.warning(f"LLM generation failed, using fallback: {e}")
+        # Fallback to rule-based summary
+        if critical_issues > 0:
+            summary = f"Fleet requires attention: {critical_issues} critical issue(s) detected among {devices_monitored} monitored devices. {anomalies_today} anomalies detected today with {resolved_today} resolved."
+            priority_actions = [f"Address {critical_issues} critical anomalies immediately"]
+            if open_cases > 10:
+                priority_actions.append(f"Review backlog of {open_cases} open cases")
+        elif open_cases > 0:
+            summary = f"Fleet operating normally with {open_cases} open case(s) pending review. {anomalies_today} anomalies detected today, {resolved_today} resolved."
+            priority_actions = []
+        else:
+            summary = f"Fleet health is optimal. {devices_monitored} devices monitored with no critical issues. {resolved_today} anomalies resolved today."
+            priority_actions = []
+
+    result = {
+        "summary": summary,
+        "priority_actions": priority_actions[:3],  # Limit to 3 actions
+        "health_status": health_status,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "cached": False,
+        "based_on": stats
+    }
+
+    # Cache the result for 5 minutes
+    try:
+        r = redis_client.from_url(redis_url, socket_timeout=3)
+        r.setex(cache_key, 300, json.dumps(result))
+        r.close()
+        logger.info("Cached dashboard AI summary for 5 minutes")
+    except Exception as e:
+        logger.warning(f"Redis cache write failed: {e}")
+
+    return result

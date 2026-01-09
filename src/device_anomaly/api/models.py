@@ -61,10 +61,12 @@ class DeviceResponse(BaseModel):
     device_model: Optional[str] = None
     device_name: Optional[str] = None
     location: Optional[str] = None
+    store_id: Optional[str] = None
     status: str
     last_seen: Optional[datetime] = None
     os_version: Optional[str] = None
     agent_version: Optional[str] = None
+    custom_attributes: Optional[dict[str, str]] = None
 
     model_config = {"from_attributes": True}
 
@@ -189,6 +191,7 @@ class IsolationForestStatsResponse(BaseModel):
     """Response model for Isolation Forest statistics."""
 
     config: IsolationForestConfigResponse
+    defaults: Optional[IsolationForestConfigResponse] = None
     score_distribution: ScoreDistributionResponse
     total_predictions: int
     anomaly_rate: float
@@ -470,6 +473,7 @@ class AnomalyGroupMember(BaseModel):
     severity: str  # critical, high, medium, low
     status: str  # open, investigating, resolved, false_positive
     timestamp: datetime
+    device_name: Optional[str] = None
     device_model: Optional[str] = None
     location: Optional[str] = None
     primary_metric: Optional[str] = None  # Main contributing factor
@@ -513,6 +517,11 @@ class GroupedAnomaliesResponse(BaseModel):
     grouping_method: str = "smart_auto"
     computed_at: datetime
 
+    # Impact metrics for hero card
+    coverage_percent: float = 0.0  # % of anomalies in groups
+    top_impact_group_id: Optional[str] = None  # Group with highest impact (count * severity)
+    top_impact_group_name: Optional[str] = None  # Name of top impact group
+
 
 class BulkActionRequest(BaseModel):
     """Request for bulk status changes on anomalies."""
@@ -529,4 +538,3 @@ class BulkActionResponse(BaseModel):
     affected_count: int
     failed_ids: List[int] = Field(default_factory=list)
     message: str
-

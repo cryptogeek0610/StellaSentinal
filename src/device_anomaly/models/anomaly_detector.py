@@ -48,6 +48,8 @@ class AnomalyDetectorIsolationForest:
         self.scaler: Optional[StandardScaler] = None
         self.feature_overrides = feature_overrides
         self.feature_weights: dict[str, float] = {}
+        self.model_path: Optional[Path] = None
+        self.onnx_engine = None
 
     def _select_feature_columns(self, df: pd.DataFrame) -> list[str]:
         """
@@ -75,11 +77,13 @@ class AnomalyDetectorIsolationForest:
                 )
             return numeric_overrides
 
-        # 1) All numeric columns
+        # 1) All numeric columns (use pandas.api.types for robust dtype checking)
+        import pandas.api.types as ptypes
+
         numeric_cols: list[str] = [
             c
             for c in df.columns
-            if np.issubdtype(df[c].dtype, np.number)
+            if ptypes.is_numeric_dtype(df[c])
         ]
 
         # 2) Exclude IDs / labels / targets
@@ -217,6 +221,7 @@ class AnomalyDetectorIsolationForest:
             "feature_weights": self.feature_weights,
         }
         joblib.dump(detector_state, sklearn_path)
+        self.model_path = sklearn_path
         saved_paths["sklearn"] = sklearn_path
         logger.info("Saved detector state to %s", sklearn_path)
 
@@ -266,11 +271,11 @@ class AnomalyDetectorIsolationForest:
 
     def score(self, df: pd.DataFrame) -> np.ndarray:
         X = self._prepare_inference_matrix(df)
-        return self.model.decision_function(X)
+        return self._score_matrix(X)
 
     def predict(self, df: pd.DataFrame) -> np.ndarray:
         X = self._prepare_inference_matrix(df)
-        return self.model.predict(X)
+        return self._predict_matrix(X)
 
     def score_dataframe(self, df: pd.DataFrame, use_adaptive: bool | None = None) -> pd.DataFrame:
         """
@@ -291,10 +296,11 @@ class AnomalyDetectorIsolationForest:
         """
         logger = logging.getLogger(__name__)
         df_scored = df.copy()
-        scores = self.score(df_scored)
+        X = self._prepare_inference_matrix(df_scored)
+        scores = self._score_matrix(X)
 
         # Get model-based predictions first
-        model_labels = self.predict(df_scored)
+        model_labels = self._predict_matrix(X)
         model_anomaly_count = int((model_labels == -1).sum())
 
         # Determine if we should use adaptive thresholding
@@ -327,6 +333,66 @@ class AnomalyDetectorIsolationForest:
         df_scored["anomaly_score"] = scores     # lower is more anomalous
         df_scored["anomaly_label"] = labels     # 1 normal, -1 anomaly
         return df_scored
+
+    def _resolve_onnx_path(self) -> Optional[Path]:
+        if self.model_path:
+            candidate = self.model_path.with_suffix(".onnx")
+            if candidate.exists():
+                return candidate
+        try:
+            from device_anomaly.models.model_registry import resolve_model_artifacts, resolve_artifact_path
+
+            artifacts = resolve_model_artifacts()
+            if artifacts.metadata and artifacts.metadata.get("artifacts"):
+                onnx_path = artifacts.metadata["artifacts"].get("onnx_path")
+                resolved = resolve_artifact_path(artifacts.model_dir, onnx_path)
+                if resolved and resolved.exists():
+                    return resolved
+        except Exception:
+            return None
+        return None
+
+    def _get_onnx_engine(self):
+        if self.onnx_engine is not None:
+            return self.onnx_engine
+        try:
+            from device_anomaly.config.onnx_config import get_onnx_config
+            from device_anomaly.models.inference_engine import EngineConfig, EngineType, ONNXInferenceEngine
+
+            onnx_config = get_onnx_config()
+            if onnx_config.inference.engine_type != EngineType.ONNX:
+                return None
+
+            onnx_path = self._resolve_onnx_path()
+            if not onnx_path:
+                return None
+
+            engine_config = EngineConfig(
+                engine_type=EngineType.ONNX,
+                onnx_provider=onnx_config.inference.onnx_provider,
+                intra_op_num_threads=onnx_config.inference.intra_op_num_threads,
+                inter_op_num_threads=onnx_config.inference.inter_op_num_threads,
+                enable_profiling=onnx_config.inference.enable_profiling,
+                enable_graph_optimization=onnx_config.inference.enable_graph_optimization,
+                collect_metrics=onnx_config.inference.collect_metrics,
+            )
+            self.onnx_engine = ONNXInferenceEngine(onnx_path, config=engine_config)
+        except Exception as exc:
+            logging.getLogger(__name__).warning("ONNX engine unavailable, falling back to sklearn: %s", exc)
+            self.onnx_engine = None
+        return self.onnx_engine
+
+    def _score_matrix(self, X: np.ndarray) -> np.ndarray:
+        engine = self._get_onnx_engine()
+        if engine is not None:
+            return engine.score_samples(X)
+        return self.model.decision_function(X)
+
+    def _predict_matrix(self, X: np.ndarray) -> np.ndarray:
+        engine = self._get_onnx_engine()
+        if engine is not None:
+            return engine.predict(X)
+        return self.model.predict(X)
 
     # ------------------------------------------------------------------ #
     # Feature weighting helpers
@@ -392,6 +458,7 @@ class AnomalyDetectorIsolationForest:
 
         # Create instance
         instance = cls()
+        instance.model_path = model_path
 
         # Handle both new format (dict with full state) and old format (just model)
         if isinstance(loaded, dict) and "model" in loaded:
