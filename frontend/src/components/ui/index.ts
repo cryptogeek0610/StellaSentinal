@@ -14,3 +14,4 @@ export {
 } from './Loading';
 
 export { ToggleSwitch } from './ToggleSwitch';
+export { QueryState } from './QueryState';

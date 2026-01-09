@@ -4,6 +4,7 @@ import type {
   AnomalyListResponse,
   DashboardStats,
   DashboardTrend,
+  DashboardAISummary,
   DeviceDetail,
   TroubleshootingAdvice,
   IsolationForestStats,
@@ -44,6 +45,8 @@ import type {
   TrainingConfigRequest,
   TrainingRun,
   TrainingMetrics,
+  TrainingArtifacts,
+  TrainingQueueStatus,
   TrainingHistoryResponse,
 } from '../types/training';
 import type {
@@ -122,7 +125,54 @@ import {
   getMockLocationComparison,
   // Smart Grouping mock data
   getMockGroupedAnomalies,
+  // System Health mock data
+  getMockSystemHealthSummary,
+  getMockHealthTrends,
+  getMockStorageForecast,
+  getMockCohortHealthBreakdown,
+  // Location Intelligence mock data
+  getMockWiFiHeatmap,
+  getMockDeadZones,
+  getMockDeviceMovements,
+  getMockDwellTime,
+  getMockCoverageSummary,
+  // Events & Alerts mock data
+  getMockEventTimeline,
+  getMockAlertSummary,
+  getMockAlertTrends,
+  getMockEventCorrelation,
+  getMockEventStatistics,
+  // Temporal Analysis mock data
+  getMockHourlyBreakdown,
+  getMockPeakDetection,
+  getMockTemporalComparison,
+  getMockDayOverDay,
+  getMockWeekOverWeek,
+  // Correlation Intelligence mock data
+  getMockCorrelationMatrix,
+  getMockScatterData,
+  getMockCausalGraph,
+  getMockCorrelationInsights,
+  getMockCohortCorrelationPatterns,
+  getMockTimeLaggedCorrelations,
 } from './mockData';
+
+import type {
+  CorrelationMatrixResponse,
+  ScatterPlotResponse,
+  CausalGraphResponse,
+  CorrelationInsightsResponse,
+  CohortCorrelationPatternsResponse,
+  TimeLagCorrelationsResponse,
+  CorrelationMatrixParams,
+} from '../types/correlations';
+import {
+  parseAnomalyList,
+  parseBaselineFeatures,
+  parseBaselineSuggestions,
+  parseGroupedAnomalies,
+  parseIsolationForestStats,
+} from './contracts';
 
 // Environment-based API URL configuration
 // Set VITE_API_URL in .env for different environments
@@ -202,7 +252,7 @@ const emptyIsolationForestStats: IsolationForestStats = {
     scale_features: true,
     min_variance: 0,
     feature_count: 0,
-    model_type: 'IsolationForest',
+    model_type: 'isolation_forest',
   },
   score_distribution: {
     bins: [],
@@ -343,6 +393,72 @@ export const api = {
     });
   },
 
+  getLLMDiagnostics: (): Promise<Record<string, unknown>> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve({
+        status: 'mock',
+        message: 'LLM diagnostics unavailable in mock mode',
+      });
+    }
+    return fetchAPI<Record<string, unknown>>('/dashboard/llm/diagnostics');
+  },
+
+  getTroubleshootingCacheStats: (): Promise<Record<string, unknown>> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve({
+        total_cached_advice: 0,
+        total_times_reused: 0,
+        average_reuses_per_advice: 0,
+        most_used_advice: [],
+      });
+    }
+    return fetchAPI<Record<string, unknown>>('/dashboard/connections/troubleshoot/cache/stats');
+  },
+
+  getDashboardAISummary: (params?: {
+    forceRegenerate?: boolean;
+  }): Promise<DashboardAISummary> => {
+    // Return mock data when mock mode is enabled
+    if (getMockModeFromStorage()) {
+      return Promise.resolve({
+        summary: 'Fleet health is stable with 3 critical issues requiring attention. Battery drain patterns suggest optimization opportunities at 2 locations.',
+        priority_actions: [
+          'Investigate battery drain at Westside Mall (12 devices affected)',
+          'Review 3 critical anomalies flagged in the last hour',
+          'Schedule firmware update for devices showing connectivity issues'
+        ],
+        health_status: 'degraded' as const,
+        generated_at: new Date().toISOString(),
+        cached: false,
+        based_on: {
+          open_cases: 15,
+          critical_issues: 3,
+          anomalies_today: 7,
+          resolved_today: 4,
+          devices_monitored: 250
+        }
+      });
+    }
+    if (shouldReturnEmptyLiveData()) {
+      return Promise.resolve({
+        summary: 'No data available. Connect to data sources to see AI-generated insights.',
+        priority_actions: [],
+        health_status: 'healthy' as const,
+        generated_at: new Date().toISOString(),
+        cached: false,
+        based_on: {
+          open_cases: 0,
+          critical_issues: 0,
+          anomalies_today: 0,
+          resolved_today: 0,
+          devices_monitored: 0
+        }
+      });
+    }
+    const query = params?.forceRegenerate ? '?force_regenerate=true' : '';
+    return fetchAPI<DashboardAISummary>(`/dashboard/ai-summary${query}`);
+  },
+
   // Anomalies
   getAnomalies: (params: {
     device_id?: number;
@@ -357,18 +473,18 @@ export const api = {
     // Return mock data when mock mode is enabled
     if (getMockModeFromStorage()) {
       return Promise.resolve(
-        getMockAnomalies({
+        parseAnomalyList(getMockAnomalies({
           device_id: params.device_id,
           status: params.status,
           page: params.page,
           page_size: params.page_size,
-        })
+        }))
       );
     }
     if (shouldReturnEmptyLiveData()) {
       const page = params.page || 1;
       const pageSize = params.page_size || 50;
-      return Promise.resolve(emptyAnomalyList(page, pageSize));
+      return Promise.resolve(parseAnomalyList(emptyAnomalyList(page, pageSize)));
     }
 
     const queryParams = new URLSearchParams();
@@ -384,7 +500,7 @@ export const api = {
     queryParams.append('page', (params.page || 1).toString());
     queryParams.append('page_size', (params.page_size || 50).toString());
 
-    return fetchAPI<AnomalyListResponse>(`/anomalies?${queryParams.toString()}`);
+    return fetchAPI<AnomalyListResponse>(`/anomalies?${queryParams.toString()}`).then(parseAnomalyList);
   },
 
   getAnomaly: (id: number): Promise<AnomalyDetail> => {
@@ -448,10 +564,10 @@ export const api = {
   }): Promise<GroupedAnomaliesResponse> => {
     // Return mock data when mock mode is enabled
     if (getMockModeFromStorage()) {
-      return Promise.resolve(getMockGroupedAnomalies(params));
+      return Promise.resolve(parseGroupedAnomalies(getMockGroupedAnomalies(params)));
     }
     if (shouldReturnEmptyLiveData()) {
-      return Promise.resolve({
+      return Promise.resolve(parseGroupedAnomalies({
         groups: [],
         total_anomalies: 0,
         total_groups: 0,
@@ -459,7 +575,7 @@ export const api = {
         ungrouped_anomalies: [],
         grouping_method: 'smart_auto',
         computed_at: new Date().toISOString(),
-      });
+      }));
     }
 
     const queryParams = new URLSearchParams();
@@ -470,7 +586,8 @@ export const api = {
     if (params?.temporal_window_hours !== undefined)
       queryParams.append('temporal_window_hours', params.temporal_window_hours.toString());
 
-    return fetchAPI<GroupedAnomaliesResponse>(`/anomalies/grouped?${queryParams.toString()}`);
+    return fetchAPI<GroupedAnomaliesResponse>(`/anomalies/grouped?${queryParams.toString()}`)
+      .then(parseGroupedAnomalies);
   },
 
   bulkAction: (request: BulkActionRequest): Promise<BulkActionResponse> => {
@@ -560,10 +677,10 @@ export const api = {
   getIsolationForestStats: (days?: number): Promise<IsolationForestStats> => {
     // Return mock data when mock mode is enabled
     if (getMockModeFromStorage()) {
-      return Promise.resolve(getMockIsolationForestStats());
+      return Promise.resolve(parseIsolationForestStats(getMockIsolationForestStats()));
     }
     if (shouldReturnEmptyLiveData()) {
-      return Promise.resolve(emptyIsolationForestStats);
+      return Promise.resolve(parseIsolationForestStats(emptyIsolationForestStats));
     }
 
     const queryParams = new URLSearchParams();
@@ -571,9 +688,10 @@ export const api = {
     if (queryParams.toString()) {
       return fetchAPI<IsolationForestStats>(
         `/dashboard/isolation-forest/stats?${queryParams.toString()}`
-      );
+      ).then(parseIsolationForestStats);
     }
-    return fetchAPI<IsolationForestStats>('/dashboard/isolation-forest/stats');
+    return fetchAPI<IsolationForestStats>('/dashboard/isolation-forest/stats')
+      .then(parseIsolationForestStats);
   },
 
   // Baselines
@@ -583,7 +701,7 @@ export const api = {
   ): Promise<BaselineSuggestion[]> => {
     // Return mock data when mock mode is enabled
     if (getMockModeFromStorage()) {
-      return Promise.resolve(getMockBaselineSuggestions());
+      return Promise.resolve(parseBaselineSuggestions(getMockBaselineSuggestions()));
     }
 
     const queryParams = new URLSearchParams();
@@ -592,9 +710,10 @@ export const api = {
     if (queryParams.toString()) {
       return fetchAPI<BaselineSuggestion[]>(
         `/baselines/suggestions?${queryParams.toString()}`
-      );
+      ).then(parseBaselineSuggestions);
     }
-    return fetchAPI<BaselineSuggestion[]>('/baselines/suggestions');
+    return fetchAPI<BaselineSuggestion[]>('/baselines/suggestions')
+      .then(parseBaselineSuggestions);
   },
 
   analyzeBaselinesWithLLM: (
@@ -603,7 +722,7 @@ export const api = {
   ): Promise<BaselineSuggestion[]> => {
     // Return mock data when mock mode is enabled
     if (getMockModeFromStorage()) {
-      return Promise.resolve(getMockBaselineSuggestions());
+      return Promise.resolve(parseBaselineSuggestions(getMockBaselineSuggestions()));
     }
 
     const queryParams = new URLSearchParams();
@@ -612,9 +731,10 @@ export const api = {
     if (queryParams.toString()) {
       return fetchAPI<BaselineSuggestion[]>(
         `/baselines/analyze-with-llm?${queryParams.toString()}`
-      );
+      ).then(parseBaselineSuggestions);
     }
-    return fetchAPI<BaselineSuggestion[]>('/baselines/analyze-with-llm');
+    return fetchAPI<BaselineSuggestion[]>('/baselines/analyze-with-llm')
+      .then(parseBaselineSuggestions);
   },
 
   applyBaselineAdjustment: (
@@ -643,21 +763,22 @@ export const api = {
   ): Promise<BaselineFeature[]> => {
     // In mock mode, return mock baseline features
     if (getMockModeFromStorage()) {
-      return Promise.resolve([
+      return Promise.resolve(parseBaselineFeatures([
         { feature: 'BatteryDrop', baseline: 12, observed: 14.2, unit: '%/day', status: 'stable' as const, drift_percent: 18.3, mad: 2.5, sample_count: 1250, last_updated: null },
         { feature: 'OfflineTime', baseline: 30, observed: 42, unit: 'min/day', status: 'drift' as const, drift_percent: 40.0, mad: 8.0, sample_count: 1250, last_updated: null },
         { feature: 'UploadSize', baseline: 500, observed: 520, unit: 'MB/day', status: 'stable' as const, drift_percent: 4.0, mad: 45.0, sample_count: 1250, last_updated: null },
         { feature: 'DownloadSize', baseline: 1200, observed: 1180, unit: 'MB/day', status: 'stable' as const, drift_percent: -1.7, mad: 120.0, sample_count: 1250, last_updated: null },
         { feature: 'StorageFree', baseline: 8.5, observed: 7.2, unit: 'GB', status: 'warning' as const, drift_percent: -15.3, mad: 0.8, sample_count: 1250, last_updated: null },
         { feature: 'AppCrashes', baseline: 0.5, observed: 1.8, unit: '/device/day', status: 'drift' as const, drift_percent: 260.0, mad: 0.3, sample_count: 1250, last_updated: null },
-      ]);
+      ]));
     }
 
     const queryParams = new URLSearchParams();
     if (source) queryParams.append('source', source);
     if (days) queryParams.append('days', days.toString());
     const query = queryParams.toString();
-    return fetchAPI<BaselineFeature[]>(`/baselines/features${query ? '?' + query : ''}`);
+    return fetchAPI<BaselineFeature[]>(`/baselines/features${query ? '?' + query : ''}`)
+      .then(parseBaselineFeatures);
   },
 
   getBaselineHistory: (
@@ -955,6 +1076,30 @@ export const api = {
     return fetchAPI<TrainingMetrics>(`/training/${runId}/metrics`);
   },
 
+  getTrainingQueueStatus: (): Promise<TrainingQueueStatus> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve({
+        queue_length: 0,
+        worker_available: true,
+        last_job_completed_at: new Date().toISOString(),
+        next_scheduled: null,
+      });
+    }
+    return fetchAPI<TrainingQueueStatus>('/training/queue');
+  },
+
+  getTrainingArtifacts: (runId: string): Promise<TrainingArtifacts> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve({
+        model_path: 'models/production/isolation_forest.pkl',
+        onnx_path: 'models/production/isolation_forest.onnx',
+        baselines_path: 'models/production/baselines.json',
+        metadata_path: 'models/production/training_metadata.json',
+      });
+    }
+    return fetchAPI<TrainingArtifacts>(`/training/${runId}/artifacts`);
+  },
+
   // ============================================================================
   // Automation
   // ============================================================================
@@ -1043,6 +1188,34 @@ export const api = {
     });
   },
 
+  syncDeviceMetadata: (): Promise<{
+    success: boolean;
+    synced_count: number;
+    duration_seconds: number;
+    message: string;
+    errors: string[];
+  }> => {
+    // In mock mode, return mock response
+    if (getMockModeFromStorage()) {
+      return Promise.resolve({
+        success: true,
+        synced_count: 0,
+        duration_seconds: 0,
+        message: 'Mock mode enabled - sync skipped',
+        errors: [],
+      });
+    }
+    return fetchAPI<{
+      success: boolean;
+      synced_count: number;
+      duration_seconds: number;
+      message: string;
+      errors: string[];
+    }>('/automation/sync-device-metadata', {
+      method: 'POST',
+    });
+  },
+
   getAutomationHistory: (limit?: number, job_type?: string): Promise<AutomationHistory> => {
     // Return mock data when mock mode is enabled
     if (getMockModeFromStorage()) {
@@ -1096,6 +1269,16 @@ export const api = {
     // Always fetch actual config - Setup Wizard should show real settings
     // regardless of mock mode (mock mode is for device/anomaly data, not setup)
     return fetchAPI<Record<string, unknown>>('/setup/config');
+  },
+
+  syncLocations: (): Promise<{ success: boolean; message: string }> => {
+    return fetchAPI<{ success: boolean; message: string }>('/setup/sync-locations', {
+      method: 'POST',
+    });
+  },
+
+  getLocationSyncStats: (): Promise<Record<string, unknown>> => {
+    return fetchAPI<Record<string, unknown>>('/setup/location-sync-stats');
   },
 
   // ============================================================================
@@ -1938,6 +2121,7 @@ export const api = {
         overall_confidence: scenario.confidence,
         confidence_explanation: scenario.explanation,
         impact_level: scenario.level,
+        using_defaults: false,  // Mock mode simulates configured costs
         calculated_at: new Date().toISOString(),
       });
     }
@@ -2204,6 +2388,365 @@ export const api = {
     }
     return fetchAPI<NFFSummary>('/costs/nff/summary');
   },
+
+  // ============================================================================
+  // SYSTEM HEALTH API
+  // Fleet health monitoring with CPU, RAM, storage, and temperature metrics
+  // ============================================================================
+
+  getSystemHealthSummary: (periodDays?: number): Promise<SystemHealthSummaryResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockSystemHealthSummary());
+    }
+    const params = periodDays ? `?period_days=${periodDays}` : '';
+    return fetchAPI<SystemHealthSummaryResponse>(`/insights/system-health/summary${params}`);
+  },
+
+  getHealthTrends: (
+    metric: string,
+    periodDays?: number
+  ): Promise<HealthTrendsResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockHealthTrends(metric));
+    }
+    const queryParams = new URLSearchParams();
+    queryParams.append('metric', metric);
+    if (periodDays) queryParams.append('period_days', periodDays.toString());
+    return fetchAPI<HealthTrendsResponse>(`/insights/system-health/trends?${queryParams.toString()}`);
+  },
+
+  getStorageForecast: (
+    daysUntilFullThreshold?: number,
+    limit?: number
+  ): Promise<StorageForecastResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockStorageForecast());
+    }
+    const queryParams = new URLSearchParams();
+    if (daysUntilFullThreshold) queryParams.append('days_until_full_threshold', daysUntilFullThreshold.toString());
+    if (limit) queryParams.append('limit', limit.toString());
+    const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return fetchAPI<StorageForecastResponse>(`/insights/system-health/storage-forecast${query}`);
+  },
+
+  getCohortHealthBreakdown: (periodDays?: number): Promise<CohortHealthBreakdownResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockCohortHealthBreakdown());
+    }
+    const params = periodDays ? `?period_days=${periodDays}` : '';
+    return fetchAPI<CohortHealthBreakdownResponse>(`/insights/system-health/cohort-breakdown${params}`);
+  },
+
+  // ============================================================================
+  // LOCATION INTELLIGENCE API
+  // WiFi coverage, GPS tracking, and mobility analytics
+  // ============================================================================
+
+  getWiFiHeatmap: (periodDays?: number): Promise<WiFiHeatmapResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockWiFiHeatmap());
+    }
+    const params = periodDays ? `?period_days=${periodDays}` : '';
+    return fetchAPI<WiFiHeatmapResponse>(`/insights/location/wifi-heatmap${params}`);
+  },
+
+  getDeadZones: (
+    signalThreshold?: number,
+    minReadings?: number
+  ): Promise<DeadZonesResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockDeadZones());
+    }
+    const queryParams = new URLSearchParams();
+    if (signalThreshold) queryParams.append('signal_threshold', signalThreshold.toString());
+    if (minReadings) queryParams.append('min_readings', minReadings.toString());
+    const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return fetchAPI<DeadZonesResponse>(`/insights/location/dead-zones${query}`);
+  },
+
+  getDeviceMovements: (
+    deviceId: number,
+    periodDays?: number
+  ): Promise<DeviceMovementResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockDeviceMovements(deviceId));
+    }
+    const params = periodDays ? `?period_days=${periodDays}` : '';
+    return fetchAPI<DeviceMovementResponse>(`/insights/location/device-movements/${deviceId}${params}`);
+  },
+
+  getDwellTime: (periodDays?: number): Promise<DwellTimeResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockDwellTime());
+    }
+    const params = periodDays ? `?period_days=${periodDays}` : '';
+    return fetchAPI<DwellTimeResponse>(`/insights/location/dwell-time${params}`);
+  },
+
+  getCoverageSummary: (periodDays?: number): Promise<CoverageSummaryResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockCoverageSummary());
+    }
+    const params = periodDays ? `?period_days=${periodDays}` : '';
+    return fetchAPI<CoverageSummaryResponse>(`/insights/location/coverage-summary${params}`);
+  },
+
+  // ============================================================================
+  // EVENTS & ALERTS API
+  // System event timeline and alert monitoring
+  // ============================================================================
+
+  getEventTimeline: (params?: {
+    page?: number;
+    page_size?: number;
+    severity?: string;
+    event_class?: string;
+    device_id?: number;
+    hours_back?: number;
+  }): Promise<EventTimelineResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockEventTimeline());
+    }
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.page_size) queryParams.append('page_size', params.page_size.toString());
+    if (params?.severity) queryParams.append('severity', params.severity);
+    if (params?.event_class) queryParams.append('event_class', params.event_class);
+    if (params?.device_id) queryParams.append('device_id', params.device_id.toString());
+    if (params?.hours_back) queryParams.append('hours_back', params.hours_back.toString());
+    const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return fetchAPI<EventTimelineResponse>(`/insights/events/timeline${query}`);
+  },
+
+  getAlertSummary: (hoursBack?: number): Promise<AlertSummaryResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockAlertSummary());
+    }
+    const params = hoursBack ? `?hours_back=${hoursBack}` : '';
+    return fetchAPI<AlertSummaryResponse>(`/insights/events/alerts/summary${params}`);
+  },
+
+  getAlertTrends: (
+    periodDays?: number,
+    granularity?: 'hourly' | 'daily'
+  ): Promise<AlertTrendsResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockAlertTrends());
+    }
+    const queryParams = new URLSearchParams();
+    if (periodDays) queryParams.append('period_days', periodDays.toString());
+    if (granularity) queryParams.append('granularity', granularity);
+    const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return fetchAPI<AlertTrendsResponse>(`/insights/events/alerts/trends${query}`);
+  },
+
+  getEventCorrelation: (
+    anomalyTimestamp: string,
+    deviceId: number,
+    windowMinutes?: number
+  ): Promise<EventCorrelationResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockEventCorrelation(deviceId));
+    }
+    const queryParams = new URLSearchParams();
+    queryParams.append('anomaly_timestamp', anomalyTimestamp);
+    queryParams.append('device_id', deviceId.toString());
+    if (windowMinutes) queryParams.append('window_minutes', windowMinutes.toString());
+    return fetchAPI<EventCorrelationResponse>(`/insights/events/correlation?${queryParams.toString()}`);
+  },
+
+  getEventStatistics: (hoursBack?: number): Promise<EventStatisticsResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockEventStatistics());
+    }
+    const params = hoursBack ? `?hours_back=${hoursBack}` : '';
+    return fetchAPI<EventStatisticsResponse>(`/insights/events/statistics${params}`);
+  },
+
+  // ============================================================================
+  // TEMPORAL ANALYSIS API
+  // Time-based patterns, peaks, and period comparisons
+  // ============================================================================
+
+  getHourlyBreakdown: (
+    metric: string,
+    periodDays?: number
+  ): Promise<HourlyBreakdownResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockHourlyBreakdown(metric));
+    }
+    const queryParams = new URLSearchParams();
+    queryParams.append('metric', metric);
+    if (periodDays) queryParams.append('period_days', periodDays.toString());
+    return fetchAPI<HourlyBreakdownResponse>(`/insights/temporal/hourly-breakdown?${queryParams.toString()}`);
+  },
+
+  getPeakDetection: (
+    metric: string,
+    periodDays?: number,
+    stdThreshold?: number
+  ): Promise<PeakDetectionResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockPeakDetection(metric));
+    }
+    const queryParams = new URLSearchParams();
+    queryParams.append('metric', metric);
+    if (periodDays) queryParams.append('period_days', periodDays.toString());
+    if (stdThreshold) queryParams.append('std_threshold', stdThreshold.toString());
+    return fetchAPI<PeakDetectionResponse>(`/insights/temporal/peak-detection?${queryParams.toString()}`);
+  },
+
+  getTemporalComparison: (params: {
+    metric: string;
+    period_a_start: string;
+    period_a_end: string;
+    period_b_start: string;
+    period_b_end: string;
+  }): Promise<TemporalComparisonResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockTemporalComparison(params.metric));
+    }
+    const queryParams = new URLSearchParams();
+    queryParams.append('metric', params.metric);
+    queryParams.append('period_a_start', params.period_a_start);
+    queryParams.append('period_a_end', params.period_a_end);
+    queryParams.append('period_b_start', params.period_b_start);
+    queryParams.append('period_b_end', params.period_b_end);
+    return fetchAPI<TemporalComparisonResponse>(`/insights/temporal/comparison?${queryParams.toString()}`);
+  },
+
+  getDayOverDay: (
+    metric: string,
+    lookbackDays?: number
+  ): Promise<DayOverDayResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockDayOverDay(metric));
+    }
+    const queryParams = new URLSearchParams();
+    queryParams.append('metric', metric);
+    if (lookbackDays) queryParams.append('lookback_days', lookbackDays.toString());
+    return fetchAPI<DayOverDayResponse>(`/insights/temporal/day-over-day?${queryParams.toString()}`);
+  },
+
+  getWeekOverWeek: (
+    metric: string,
+    lookbackWeeks?: number
+  ): Promise<WeekOverWeekResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockWeekOverWeek(metric));
+    }
+    const queryParams = new URLSearchParams();
+    queryParams.append('metric', metric);
+    if (lookbackWeeks) queryParams.append('lookback_weeks', lookbackWeeks.toString());
+    return fetchAPI<WeekOverWeekResponse>(`/insights/temporal/week-over-week?${queryParams.toString()}`);
+  },
+
+  // ============================================================================
+  // CORRELATION INTELLIGENCE
+  // ============================================================================
+
+  /**
+   * Get correlation matrix for numeric metrics.
+   * Returns N x N correlation matrix and list of strong correlations.
+   */
+  getCorrelationMatrix: (
+    params?: CorrelationMatrixParams
+  ): Promise<CorrelationMatrixResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockCorrelationMatrix(params?.domain));
+    }
+    const queryParams = new URLSearchParams();
+    if (params?.domain) queryParams.append('domain', params.domain);
+    if (params?.method) queryParams.append('method', params.method);
+    if (params?.threshold) queryParams.append('threshold', params.threshold.toString());
+    if (params?.max_metrics) queryParams.append('max_metrics', params.max_metrics.toString());
+    const query = queryParams.toString();
+    return fetchAPI<CorrelationMatrixResponse>(
+      `/correlations/matrix${query ? `?${query}` : ''}`
+    );
+  },
+
+  /**
+   * Get scatter plot data for two metrics.
+   * Returns data points, correlation coefficient, and regression line parameters.
+   */
+  getScatterData: (
+    metricX: string,
+    metricY: string,
+    colorBy: 'anomaly' | 'cohort' = 'anomaly',
+    limit: number = 500
+  ): Promise<ScatterPlotResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockScatterData(metricX, metricY, limit));
+    }
+    const queryParams = new URLSearchParams({
+      metric_x: metricX,
+      metric_y: metricY,
+      color_by: colorBy,
+      limit: limit.toString(),
+    });
+    return fetchAPI<ScatterPlotResponse>(
+      `/correlations/scatter?${queryParams.toString()}`
+    );
+  },
+
+  /**
+   * Get causal relationship network from domain knowledge.
+   * Returns nodes and edges representing known causal relationships.
+   */
+  getCausalGraph: (includeInferred: boolean = true): Promise<CausalGraphResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockCausalGraph());
+    }
+    return fetchAPI<CausalGraphResponse>(
+      `/correlations/causal-graph?include_inferred=${includeInferred}`
+    );
+  },
+
+  /**
+   * Get auto-discovered correlation insights.
+   * Returns ranked list of insights about metric relationships.
+   */
+  getCorrelationInsights: (
+    topK: number = 10,
+    minStrength: number = 0.5
+  ): Promise<CorrelationInsightsResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockCorrelationInsights());
+    }
+    return fetchAPI<CorrelationInsightsResponse>(
+      `/correlations/insights?top_k=${topK}&min_strength=${minStrength}`
+    );
+  },
+
+  /**
+   * Get cohort-specific correlation patterns.
+   * Identifies cohorts with unusual correlation patterns compared to fleet average.
+   */
+  getCohortCorrelationPatterns: (): Promise<CohortCorrelationPatternsResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockCohortCorrelationPatterns());
+    }
+    return fetchAPI<CohortCorrelationPatternsResponse>(
+      '/correlations/cohort-patterns'
+    );
+  },
+
+  /**
+   * Get time-lagged correlations for predictive insights.
+   * Analyzes how metrics at time T correlate with other metrics at time T+lag.
+   */
+  getTimeLaggedCorrelations: (
+    maxLag: number = 7,
+    minCorrelation: number = 0.3
+  ): Promise<TimeLagCorrelationsResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockTimeLaggedCorrelations());
+    }
+    return fetchAPI<TimeLagCorrelationsResponse>(
+      `/correlations/time-lagged?max_lag=${maxLag}&min_correlation=${minCorrelation}`
+    );
+  },
 };
 
 // Device action response types
@@ -2361,6 +2904,20 @@ export interface NetworkAnalysisResponse {
   financial_impact?: AnalysisFinancialImpact;
 }
 
+// User abuse item for by-user analysis (Carl's "People with excessive drops")
+export interface UserAbuseItem {
+  user_id: string;
+  user_name?: string;
+  user_email?: string;
+  total_drops: number;
+  total_reboots: number;
+  device_count: number;
+  drops_per_device: number;
+  drops_per_day: number;
+  vs_fleet_multiplier: number;
+  is_excessive: boolean;
+}
+
 export interface DeviceAbuseResponse {
   tenant_id: string;
   analysis_period_days: number;
@@ -2379,6 +2936,8 @@ export interface DeviceAbuseResponse {
     reboots: number;
     rate_per_device: number;
   }>;
+  // Carl's "People with excessive drops" - users ranked by drop count
+  worst_users?: UserAbuseItem[];
   problem_combinations: Array<{
     cohort_id: string;
     manufacturer: string;
@@ -2434,4 +2993,357 @@ export interface LocationCompareResponse {
   }>;
   overall_winner: string | null;
   key_differences: string[];
+}
+
+// ============================================================================
+// SYSTEM HEALTH API Response Types
+// ============================================================================
+
+export interface SystemHealthMetricsResponse {
+  avg_cpu_usage: number;
+  avg_memory_usage: number;
+  avg_storage_available_pct: number;
+  avg_device_temp: number;
+  avg_battery_temp: number;
+  devices_high_cpu: number;
+  devices_high_memory: number;
+  devices_low_storage: number;
+  devices_high_temp: number;
+  total_devices: number;
+}
+
+export interface CohortHealthResponse {
+  cohort_id: string;
+  cohort_name: string;
+  device_count: number;
+  health_score: number;
+  avg_cpu: number;
+  avg_memory: number;
+  avg_storage_pct: number;
+  devices_at_risk: number;
+}
+
+export interface SystemHealthSummaryResponse {
+  tenant_id: string;
+  fleet_health_score: number;
+  health_trend: 'improving' | 'stable' | 'degrading' | 'unknown';
+  total_devices: number;
+  healthy_count: number;
+  warning_count: number;
+  critical_count: number;
+  metrics: SystemHealthMetricsResponse;
+  cohort_breakdown: CohortHealthResponse[];
+  recommendations: string[];
+  generated_at: string;
+}
+
+export interface HealthTrendPointResponse {
+  timestamp: string;
+  value: number;
+  device_count: number;
+}
+
+export interface HealthTrendsResponse {
+  tenant_id: string;
+  metric: string;
+  trends: HealthTrendPointResponse[];
+  generated_at: string;
+}
+
+export interface StorageForecastDeviceResponse {
+  device_id: number;
+  device_name: string;
+  current_storage_pct: number;
+  storage_trend_gb_per_day: number;
+  projected_full_date: string | null;
+  days_until_full: number | null;
+  confidence: number;
+}
+
+export interface StorageForecastResponse {
+  tenant_id: string;
+  devices_at_risk: StorageForecastDeviceResponse[];
+  total_at_risk_count: number;
+  avg_days_until_full: number | null;
+  recommendations: string[];
+  generated_at: string;
+}
+
+export interface CohortHealthBreakdownResponse {
+  tenant_id: string;
+  cohorts: CohortHealthResponse[];
+  total_cohorts: number;
+  generated_at: string;
+}
+
+// ============================================================================
+// LOCATION INTELLIGENCE API Response Types
+// ============================================================================
+
+export interface GeoBoundsResponse {
+  min_lat: number;
+  max_lat: number;
+  min_long: number;
+  max_long: number;
+}
+
+export interface HeatmapCellResponse {
+  lat: number;
+  long: number;
+  signal_strength: number;
+  reading_count: number;
+  is_dead_zone: boolean;
+  access_point_id: string | null;
+}
+
+export interface WiFiHeatmapResponse {
+  tenant_id: string;
+  grid_cells: HeatmapCellResponse[];
+  bounds: GeoBoundsResponse | null;
+  total_readings: number;
+  avg_signal_strength: number;
+  dead_zone_count: number;
+  generated_at: string;
+}
+
+export interface DeadZoneResponse {
+  zone_id: string;
+  lat: number;
+  long: number;
+  avg_signal: number;
+  affected_devices: number;
+  total_readings: number;
+  first_detected: string | null;
+  last_detected: string | null;
+}
+
+export interface DeadZonesResponse {
+  tenant_id: string;
+  dead_zones: DeadZoneResponse[];
+  total_count: number;
+  recommendations: string[];
+  generated_at: string;
+}
+
+export interface MovementPointResponse {
+  timestamp: string;
+  lat: number;
+  long: number;
+  speed: number;
+  heading: number;
+}
+
+export interface DeviceMovementResponse {
+  device_id: number;
+  movements: MovementPointResponse[];
+  total_distance_km: number;
+  avg_speed_kmh: number;
+  stationary_time_pct: number;
+  active_hours: number[];
+}
+
+export interface DwellZoneResponse {
+  zone_id: string;
+  lat: number;
+  long: number;
+  avg_dwell_minutes: number;
+  device_count: number;
+  visit_count: number;
+  peak_hours: number[];
+}
+
+export interface DwellTimeResponse {
+  tenant_id: string;
+  dwell_zones: DwellZoneResponse[];
+  total_zones: number;
+  recommendations: string[];
+  generated_at: string;
+}
+
+export interface CoverageSummaryResponse {
+  tenant_id: string;
+  total_readings: number;
+  avg_signal: number;
+  coverage_distribution: Record<string, number>;
+  coverage_percentage: number;
+  recommendations: string[];
+  generated_at: string;
+}
+
+// ============================================================================
+// EVENTS & ALERTS API Response Types
+// ============================================================================
+
+export interface EventEntryResponse {
+  log_id: number;
+  timestamp: string;
+  event_id: number;
+  severity: string;
+  event_class: string;
+  message: string;
+  device_id: number | null;
+  login_id: string | null;
+}
+
+export interface EventTimelineResponse {
+  tenant_id: string;
+  events: EventEntryResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+  severity_distribution: Record<string, number>;
+  event_class_distribution: Record<string, number>;
+  generated_at: string;
+}
+
+export interface AlertEntryResponse {
+  alert_id: number;
+  alert_key: string;
+  alert_name: string;
+  severity: string;
+  device_id: string | null;
+  status: string;
+  set_datetime: string | null;
+  ack_datetime: string | null;
+}
+
+export interface AlertNameCountResponse {
+  name: string;
+  count: number;
+}
+
+export interface AlertSummaryResponse {
+  tenant_id: string;
+  total_active: number;
+  total_acknowledged: number;
+  total_resolved: number;
+  by_severity: Record<string, number>;
+  by_alert_name: AlertNameCountResponse[];
+  recent_alerts: AlertEntryResponse[];
+  avg_acknowledge_time_minutes: number;
+  avg_resolution_time_minutes: number;
+  generated_at: string;
+}
+
+export interface AlertTrendPointResponse {
+  timestamp: string;
+  count: number;
+  severity: string;
+}
+
+export interface AlertTrendsResponse {
+  tenant_id: string;
+  trends: AlertTrendPointResponse[];
+  generated_at: string;
+}
+
+export interface CorrelatedEventResponse {
+  event: EventEntryResponse;
+  time_before_minutes: number;
+  frequency_score: number;
+}
+
+export interface EventCorrelationResponse {
+  tenant_id: string;
+  anomaly_timestamp: string;
+  device_id: number;
+  correlated_events: CorrelatedEventResponse[];
+  total_events_found: number;
+  generated_at: string;
+}
+
+export interface EventStatisticsResponse {
+  tenant_id: string;
+  total_events: number;
+  events_per_day: number;
+  unique_devices: number;
+  top_event_classes: Array<{ class: string; count: number }>;
+  generated_at: string;
+}
+
+// ============================================================================
+// TEMPORAL ANALYSIS API Response Types
+// ============================================================================
+
+export interface HourlyDataPointResponse {
+  hour: number;
+  avg_value: number;
+  min_value: number;
+  max_value: number;
+  std_value: number;
+  sample_count: number;
+}
+
+export interface HourlyBreakdownResponse {
+  tenant_id: string;
+  metric: string;
+  hourly_data: HourlyDataPointResponse[];
+  peak_hours: number[];
+  low_hours: number[];
+  day_night_ratio: number;
+  generated_at: string;
+}
+
+export interface PeakDetectionItemResponse {
+  timestamp: string;
+  value: number;
+  z_score: number;
+  is_significant: boolean;
+}
+
+export interface PeakDetectionResponse {
+  tenant_id: string;
+  metric: string;
+  peaks: PeakDetectionItemResponse[];
+  total_peaks: number;
+  generated_at: string;
+}
+
+export interface PeriodStatsResponse {
+  start: string;
+  end: string;
+  avg: number;
+  median: number;
+  std: number;
+  sample_count: number;
+}
+
+export interface TemporalComparisonResponse {
+  tenant_id: string;
+  metric: string;
+  period_a: PeriodStatsResponse;
+  period_b: PeriodStatsResponse;
+  change_percent: number;
+  is_significant: boolean;
+  p_value: number;
+  generated_at: string;
+}
+
+export interface DailyComparisonPointResponse {
+  date: string;
+  value: number;
+  sample_count: number;
+  change_percent: number;
+}
+
+export interface DayOverDayResponse {
+  tenant_id: string;
+  metric: string;
+  comparisons: DailyComparisonPointResponse[];
+  generated_at: string;
+}
+
+export interface WeeklyComparisonPointResponse {
+  year: number;
+  week: number;
+  value: number;
+  sample_count: number;
+  change_percent: number;
+}
+
+export interface WeekOverWeekResponse {
+  tenant_id: string;
+  metric: string;
+  comparisons: WeeklyComparisonPointResponse[];
+  generated_at: string;
 }

@@ -671,6 +671,63 @@ function HistoryRow({ run, isFirst }: { run: TrainingRun; isFirst: boolean }) {
   );
 }
 
+function TrainingQueueCard({
+  queueStatus,
+  isLoading,
+}: {
+  queueStatus?: Awaited<ReturnType<typeof api.getTrainingQueueStatus>>;
+  isLoading: boolean;
+}) {
+  return (
+    <Card className="p-6">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-200">Training Queue</h2>
+          <p className="text-sm text-slate-500">Scheduler backlog and worker availability</p>
+        </div>
+        {isLoading ? (
+          <span className="text-xs text-slate-500">Loading…</span>
+        ) : (
+          <span
+            className={`px-2 py-1 text-xs rounded-full border ${
+              queueStatus?.worker_available
+                ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+            }`}
+          >
+            {queueStatus?.worker_available ? 'Worker Ready' : 'Worker Busy'}
+          </span>
+        )}
+      </div>
+      {isLoading || !queueStatus ? (
+        <div className="space-y-3 animate-pulse">
+          <div className="h-4 bg-slate-700 rounded w-1/2" />
+          <div className="h-4 bg-slate-700 rounded w-2/3" />
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-4 text-sm text-slate-300">
+          <div className="bg-slate-800/50 rounded-lg p-3">
+            <div className="text-xs text-slate-500">Queue Length</div>
+            <div className="text-xl font-semibold text-white mt-1">{queueStatus.queue_length}</div>
+          </div>
+          <div className="bg-slate-800/50 rounded-lg p-3">
+            <div className="text-xs text-slate-500">Next Scheduled</div>
+            <div className="text-sm mt-1">
+              {queueStatus.next_scheduled ? formatRelativeTime(queueStatus.next_scheduled) : 'Not scheduled'}
+            </div>
+          </div>
+          <div className="bg-slate-800/50 rounded-lg p-3 col-span-2">
+            <div className="text-xs text-slate-500">Last Job Completed</div>
+            <div className="text-sm mt-1">
+              {queueStatus.last_job_completed_at ? formatRelativeTime(queueStatus.last_job_completed_at) : 'N/A'}
+            </div>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export default function TrainingMonitor() {
   const queryClient = useQueryClient();
   const [showConfig, setShowConfig] = useState(false);
@@ -691,6 +748,19 @@ export default function TrainingMonitor() {
     queryFn: () => api.getTrainingHistory(10),
   });
 
+  const { data: queueStatus, isLoading: queueLoading } = useQuery({
+    queryKey: ['training-queue'],
+    queryFn: () => api.getTrainingQueueStatus(),
+    refetchInterval: 10000,
+  });
+
+  const { data: artifactsData } = useQuery({
+    queryKey: ['training-artifacts', currentRun?.run_id],
+    queryFn: () => api.getTrainingArtifacts(currentRun?.run_id || ''),
+    enabled: Boolean(currentRun?.run_id),
+    refetchInterval: currentRun?.status === 'completed' ? 60000 : false,
+  });
+
   // Start training mutation
   const startTrainingMutation = useMutation({
     mutationFn: (config: TrainingConfigRequest) => api.startTraining(config),
@@ -702,6 +772,7 @@ export default function TrainingMonitor() {
   });
 
   const isRunning = currentRun?.status === 'running' || currentRun?.status === 'pending';
+  const artifacts = currentRun?.artifacts ?? artifactsData;
 
   return (
     <div className="space-y-6">
@@ -769,6 +840,8 @@ export default function TrainingMonitor() {
         <TrainingProgressCard run={currentRun} />
       )}
 
+      <TrainingQueueCard queueStatus={queueStatus} isLoading={queueLoading} />
+
       {/* Completed Training Metrics */}
       {currentRun?.status === 'completed' && currentRun.metrics && (
         <Card className="p-6">
@@ -778,13 +851,13 @@ export default function TrainingMonitor() {
           <MetricsDisplay metrics={currentRun.metrics} />
 
           {/* Artifacts */}
-          {currentRun.artifacts && (
+          {artifacts && (
             <div className="mt-6 pt-6 border-t border-slate-700">
               <h3 className="text-sm font-semibold text-slate-300 mb-4 uppercase tracking-wide">
                 Model Artifacts
               </h3>
               <div className="grid grid-cols-2 gap-3">
-                {currentRun.artifacts.model_path && (
+                {artifacts.model_path && (
                   <div className="flex items-center gap-3 p-3 bg-slate-800/50 rounded-lg">
                     <div className="w-10 h-10 rounded-lg bg-stellar-900/50 flex items-center justify-center">
                       <svg className="w-5 h-5 text-stellar-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -793,11 +866,11 @@ export default function TrainingMonitor() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-slate-300">Model (sklearn)</p>
-                      <p className="text-xs text-slate-500 font-mono truncate">{currentRun.artifacts.model_path}</p>
+                      <p className="text-xs text-slate-500 font-mono truncate">{artifacts.model_path}</p>
                     </div>
                   </div>
                 )}
-                {currentRun.artifacts.onnx_path && (
+                {artifacts.onnx_path && (
                   <div className="flex items-center gap-3 p-3 bg-slate-800/50 rounded-lg">
                     <div className="w-10 h-10 rounded-lg bg-aurora-900/50 flex items-center justify-center">
                       <svg className="w-5 h-5 text-aurora-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -806,11 +879,11 @@ export default function TrainingMonitor() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-slate-300">ONNX Runtime</p>
-                      <p className="text-xs text-slate-500 font-mono truncate">{currentRun.artifacts.onnx_path}</p>
+                      <p className="text-xs text-slate-500 font-mono truncate">{artifacts.onnx_path}</p>
                     </div>
                   </div>
                 )}
-                {currentRun.artifacts.baselines_path && (
+                {artifacts.baselines_path && (
                   <div className="flex items-center gap-3 p-3 bg-slate-800/50 rounded-lg">
                     <div className="w-10 h-10 rounded-lg bg-nebula-900/50 flex items-center justify-center">
                       <svg className="w-5 h-5 text-nebula-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -819,7 +892,7 @@ export default function TrainingMonitor() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-slate-300">Baselines</p>
-                      <p className="text-xs text-slate-500 font-mono truncate">{currentRun.artifacts.baselines_path}</p>
+                      <p className="text-xs text-slate-500 font-mono truncate">{artifacts.baselines_path}</p>
                     </div>
                   </div>
                 )}

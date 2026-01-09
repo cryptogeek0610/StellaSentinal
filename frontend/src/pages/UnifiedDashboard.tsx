@@ -22,13 +22,14 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { format, formatDistanceToNowStrict } from 'date-fns';
 import clsx from 'clsx';
 
 import { api } from '../api/client';
 import { KPICard } from '../components/KPICard';
 import { Card } from '../components/Card';
+import { QueryState } from '../components/ui';
 import {
   InvestigationsSection,
   ShiftReadinessSection,
@@ -36,6 +37,7 @@ import {
   DeviceHealthSection,
   SlideOverPanel,
 } from '../components/unified';
+import { LiveAlerts } from '../components/streaming/LiveAlerts';
 import type { Anomaly } from '../types/anomaly';
 import type { CustomerInsightResponse } from '../api/client';
 
@@ -47,7 +49,13 @@ function useUnifiedDashboardData() {
   const [selectedLocation, setSelectedLocation] = useState('store-001');
 
   // Core operational stats
-  const { data: stats, isLoading: statsLoading } = useQuery({
+  const {
+    data: stats,
+    isLoading: statsLoading,
+    isError: statsError,
+    error: statsErrorDetail,
+    refetch: refetchStats,
+  } = useQuery({
     queryKey: ['dashboard', 'stats'],
     queryFn: () => api.getDashboardStats(),
     refetchInterval: 15000,
@@ -159,6 +167,13 @@ function useUnifiedDashboardData() {
       shift: shiftLoading,
       network: networkLoading,
       device: deviceLoading,
+    },
+    errors: {
+      stats: statsError,
+      statsDetail: statsErrorDetail as Error | null,
+    },
+    refetch: {
+      stats: refetchStats,
     },
   };
 }
@@ -697,6 +712,7 @@ function ExecutiveSummaryCard({
 // ============================================================================
 
 export default function UnifiedDashboard() {
+  const navigate = useNavigate();
   const data = useUnifiedDashboardData();
   const [alertDismissed, setAlertDismissed] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -761,49 +777,58 @@ export default function UnifiedDashboard() {
       )}
 
       {/* Primary KPI Row */}
-      <div className="grid grid-cols-5 gap-4">
-        <KPICard
-          title="Open Cases"
-          value={data.stats?.open_cases ?? '—'}
-          color={data.stats?.open_cases && data.stats.open_cases > 0 ? 'warning' : 'stellar'}
-          showProgress={false}
-          onClick={() => window.location.href = '/investigations?status=open'}
-          explainer="Active investigations requiring attention"
-        />
-        <KPICard
-          title="Critical"
-          value={criticalCount}
-          color="danger"
-          showProgress={false}
-          isActive={criticalCount > 0}
-          onClick={() => window.location.href = '/investigations?severity=critical'}
-          explainer="High-severity issues needing immediate action"
-        />
-        <KPICard
-          title="AI Insights"
-          value={data.digest?.total_insights ?? '—'}
-          color="plasma"
-          showProgress={false}
-          onClick={() => window.location.href = '/insights'}
-          explainer="AI-generated intelligence signals today"
-        />
-        <KPICard
-          title="Resolved Today"
-          value={data.stats?.resolved_today ?? '—'}
-          color="aurora"
-          showProgress={false}
-          onClick={() => window.location.href = '/investigations?status=resolved'}
-          explainer="Issues closed in the last 24 hours"
-        />
-        <KPICard
-          title="Fleet Size"
-          value={data.stats?.devices_monitored ?? '—'}
-          color="stellar"
-          showProgress={false}
-          onClick={() => window.location.href = '/fleet'}
-          explainer="Total devices under monitoring"
-        />
-      </div>
+      <QueryState
+        isLoading={data.isLoading.stats}
+        isError={data.errors.stats}
+        error={data.errors.statsDetail}
+        isEmpty={!data.stats}
+        emptyMessage="No dashboard data available yet."
+        onRetry={data.refetch.stats}
+      >
+        <div className="grid grid-cols-5 gap-4">
+          <KPICard
+            title="Open Cases"
+            value={data.stats?.open_cases ?? '—'}
+            color={data.stats?.open_cases && data.stats.open_cases > 0 ? 'warning' : 'stellar'}
+            showProgress={false}
+            onClick={() => window.location.href = '/investigations?status=open'}
+            explainer="Active investigations requiring attention"
+          />
+          <KPICard
+            title="Critical"
+            value={criticalCount}
+            color="danger"
+            showProgress={false}
+            isActive={criticalCount > 0}
+            onClick={() => window.location.href = '/investigations?severity=critical'}
+            explainer="High-severity issues needing immediate action"
+          />
+          <KPICard
+            title="AI Insights"
+            value={data.digest?.total_insights ?? '—'}
+            color="plasma"
+            showProgress={false}
+            onClick={() => window.location.href = '/insights'}
+            explainer="AI-generated intelligence signals today"
+          />
+          <KPICard
+            title="Resolved Today"
+            value={data.stats?.resolved_today ?? '—'}
+            color="aurora"
+            showProgress={false}
+            onClick={() => window.location.href = '/investigations?status=resolved'}
+            explainer="Issues closed in the last 24 hours"
+          />
+          <KPICard
+            title="Fleet Size"
+            value={data.stats?.devices_monitored ?? '—'}
+            color="stellar"
+            showProgress={false}
+            onClick={() => window.location.href = '/fleet'}
+            explainer="Total devices under monitoring"
+          />
+        </div>
+      </QueryState>
 
       {/* ================================================================== */}
       {/* LEVEL 2: INTELLIGENCE CENTER                                      */}
@@ -856,7 +881,7 @@ export default function UnifiedDashboard() {
       {/* LEVEL 4: SYSTEM & AUTOMATION                                      */}
       {/* ================================================================== */}
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         {/* System Services */}
         <Card title="System Services" accent="stellar">
           <ServiceHealthGrid connections={data.connections} isLoading={data.isLoading.connections} />
@@ -880,6 +905,8 @@ export default function UnifiedDashboard() {
             isLoading={data.isLoading.anomalies || data.isLoading.resolved}
           />
         </Card>
+
+        <LiveAlerts onAlertClick={(alert) => navigate(`/investigations/${alert.id}`)} />
       </div>
     </motion.div>
   );

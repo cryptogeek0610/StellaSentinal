@@ -56,6 +56,18 @@ function System() {
     retryDelay: 5000,
   });
 
+  const { data: llmDiagnostics, isFetching: isLoadingDiagnostics } = useQuery({
+    queryKey: ['dashboard', 'llm-diagnostics'],
+    queryFn: () => api.getLLMDiagnostics(),
+    refetchInterval: 60000,
+  });
+
+  const { data: cacheStats, isFetching: isLoadingCacheStats } = useQuery({
+    queryKey: ['dashboard', 'cache-stats'],
+    queryFn: () => api.getTroubleshootingCacheStats(),
+    refetchInterval: 60000,
+  });
+
   const [troubleshootingAdvice, setTroubleshootingAdvice] = useState<string | null>(null);
   const [troubleshootingError, setTroubleshootingError] = useState<string | null>(null);
   const [showTroubleshooting, setShowTroubleshooting] = useState(false);
@@ -315,6 +327,25 @@ function System() {
 
       {/* Location Attribute Configuration */}
       <LocationAttributeSettings />
+
+      <section aria-labelledby="diagnostics-heading">
+        <Card title={<span id="diagnostics-heading" className="telemetry-label">System Diagnostics</span>}>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div className="space-y-3">
+              <div className="text-sm text-slate-400">LLM Diagnostics</div>
+              <div className="bg-slate-800/50 rounded-lg border border-slate-700/50 p-4 text-xs text-slate-300 font-mono">
+                {isLoadingDiagnostics ? 'Loading diagnostics…' : JSON.stringify(llmDiagnostics, null, 2)}
+              </div>
+            </div>
+            <div className="space-y-3">
+              <div className="text-sm text-slate-400">Troubleshooting Cache</div>
+              <div className="bg-slate-800/50 rounded-lg border border-slate-700/50 p-4 text-xs text-slate-300 font-mono">
+                {isLoadingCacheStats ? 'Loading cache stats…' : JSON.stringify(cacheStats, null, 2)}
+              </div>
+            </div>
+          </div>
+        </Card>
+      </section>
 
       {/* Application Info */}
       <section aria-labelledby="app-info-heading">
