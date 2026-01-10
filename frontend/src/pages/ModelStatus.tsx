@@ -512,8 +512,8 @@ export default function ModelStatus() {
                                 ref={stageRef}
                                 onClick={() => {
                                     setActiveStage(stage.id);
-                                    // Log DOM path on click
-                                    if (stageRef?.current) {
+                                    // Log DOM path on click in development only.
+                                    if (import.meta.env.DEV && stageRef?.current) {
                                         const info = getDOMPathInfo(stageRef.current);
                                         if (info) {
                                             console.log(`\n=== ${stage.title} ===`);

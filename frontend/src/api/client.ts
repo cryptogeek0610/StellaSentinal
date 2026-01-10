@@ -317,7 +317,20 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
     throw new APIError(response.status, response.statusText, errorBody);
   }
 
-  return response.json();
+  if (response.status === 204) {
+    // Some endpoints return 204 with no body (e.g., deletes); avoid JSON parse errors.
+    return undefined as T;
+  }
+
+  const contentType = response.headers.get('content-type') || '';
+  const text = await response.text();
+  if (!text) {
+    return undefined as T;
+  }
+  if (!contentType.includes('application/json')) {
+    return text as unknown as T;
+  }
+  return JSON.parse(text) as T;
 }
 
 export const api = {
