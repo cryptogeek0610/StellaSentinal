@@ -1,163 +1,70 @@
 /**
- * Investigations Page - Stellar Operations
+ * Investigations Page - Steve Jobs Redesign v2
  *
- * Anomaly case management with list, smart groups, and kanban views,
- * filtering by status and severity
+ * Philosophy: "When I open this page, what's the ONE thing I should do?"
+ *
+ * The answer should be OBVIOUS:
+ * - First group auto-expanded (no clicks needed)
+ * - Filters hidden by default (most users want "Needs Action")
+ * - Hero card IS the interface - single dominant CTA
+ * - The page tells you what to do, not asks you to choose
  */
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import { format, formatDistanceToNowStrict } from 'date-fns';
+import { formatDistanceToNowStrict } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../components/Card';
 import { AnomalyGroupCard } from '../components/unified/AnomalyGroupCard';
+import { ImpactSummaryCard } from '../components/ImpactSummaryCard';
+import { SuccessToast } from '../components/SuccessToast';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import {
+  SEVERITY_CONFIGS,
+  STATUS_CONFIGS,
+  getSeverityFromScore,
+  type SeverityLevel,
+  type StatusLevel,
+} from '../utils/severity';
 
-import { Anomaly, AnomalyGroup, AnomalyGroupMember } from '../types/anomaly';
+import { AnomalyGroup, AnomalyGroupMember } from '../types/anomaly';
 
-type ViewMode = 'list' | 'grouped' | 'smartGroups' | 'kanban';
-type SortBy = 'score' | 'time' | 'device';
+// Derive local configs from centralized source for component use
+const severityConfig = Object.fromEntries(
+  Object.entries(SEVERITY_CONFIGS).map(([key, cfg]) => [
+    key,
+    { label: cfg.label, barColor: cfg.color.dot, badgeBg: cfg.color.bg, badgeText: cfg.color.text },
+  ])
+) as Record<SeverityLevel, { label: string; barColor: string; badgeBg: string; badgeText: string }>;
 
-// Helper to generate readable reasons
-const getAnomalyReason = (anomaly: Anomaly): string => {
-  if (anomaly.total_battery_level_drop && anomaly.total_battery_level_drop > 20) {
-    return 'Severe battery drain detected relative to usage';
-  }
-  if (anomaly.total_free_storage_kb && anomaly.total_free_storage_kb < 500000) {
-    return 'Critical low storage space available';
-  }
-  if (anomaly.offline_time && anomaly.offline_time > 120) {
-    return 'Extended period of offline inactivity';
-  }
-  if (anomaly.wifi_signal_strength && anomaly.wifi_signal_strength < -80) {
-    return 'Persistent poor network quality connectivity';
-  }
-  if (anomaly.download && anomaly.download > 500) {
-    return 'Unusual accumulated data consumption';
-  }
-  if (anomaly.disconnect_count && anomaly.disconnect_count > 10) {
-    return 'High frequency of network disconnections';
-  }
-  return 'Unusual behavioral pattern detected by AI model';
-};
-
-// Severity configuration with static classes
-const severityConfig = {
-  critical: {
-    label: 'CRITICAL',
-    barColor: 'bg-red-500',
-    badgeBg: 'bg-red-500/20',
-    badgeText: 'text-red-400',
-    badgeBorder: 'border-red-500/30',
-  },
-  high: {
-    label: 'HIGH',
-    barColor: 'bg-orange-500',
-    badgeBg: 'bg-orange-500/20',
-    badgeText: 'text-orange-400',
-    badgeBorder: 'border-orange-500/30',
-  },
-  medium: {
-    label: 'MEDIUM',
-    barColor: 'bg-amber-500',
-    badgeBg: 'bg-amber-500/20',
-    badgeText: 'text-amber-400',
-    badgeBorder: 'border-amber-500/30',
-  },
-  low: {
-    label: 'LOW',
-    barColor: 'bg-slate-500',
-    badgeBg: 'bg-slate-700/50',
-    badgeText: 'text-slate-400',
-    badgeBorder: 'border-slate-600/50',
-  },
-};
-
-// Status configuration with static classes
-const statusConfig = {
-  open: {
-    label: 'Open',
-    badgeBg: 'bg-red-500/20',
-    badgeText: 'text-red-400',
-    badgeBorder: 'border-red-500/30',
-    headerBg: 'bg-red-500/10',
-    headerText: 'text-red-400',
-  },
-  investigating: {
-    label: 'Investigating',
-    badgeBg: 'bg-orange-500/20',
-    badgeText: 'text-orange-400',
-    badgeBorder: 'border-orange-500/30',
-    headerBg: 'bg-orange-500/10',
-    headerText: 'text-orange-400',
-  },
-  resolved: {
-    label: 'Resolved',
-    badgeBg: 'bg-emerald-500/20',
-    badgeText: 'text-emerald-400',
-    badgeBorder: 'border-emerald-500/30',
-    headerBg: 'bg-emerald-500/10',
-    headerText: 'text-emerald-400',
-  },
-  false_positive: {
-    label: 'False Positive',
-    badgeBg: 'bg-slate-700/50',
-    badgeText: 'text-slate-400',
-    badgeBorder: 'border-slate-600/50',
-    headerBg: 'bg-slate-700/30',
-    headerText: 'text-slate-400',
-  },
-};
-
-// Group anomalies by device
-interface DeviceGroup {
-  device_id: number;
-  anomalies: Anomaly[];
-  worstScore: number;
-  latestTimestamp: string;
-  openCount: number;
-}
+const statusConfig = Object.fromEntries(
+  Object.entries(STATUS_CONFIGS).map(([key, cfg]) => [
+    key,
+    { label: cfg.label, badgeBg: cfg.bg, badgeText: cfg.color },
+  ])
+) as Record<StatusLevel, { label: string; badgeBg: string; badgeText: string }>;
 
 function Investigations() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [viewMode, setViewMode] = useState<ViewMode>('smartGroups');
-  const [sortBy, setSortBy] = useState<SortBy>('score');
-  const [page, setPage] = useState(1);
-  const [expandedDevices, setExpandedDevices] = useState<Set<number>>(new Set());
-
-  // Smart Groups state
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [selectedAnomalies, setSelectedAnomalies] = useState<Map<string, Set<number>>>(new Map());
   const [isProcessingBulk, setIsProcessingBulk] = useState(false);
+  const [focusedGroupIndex, setFocusedGroupIndex] = useState(0);
+  const [successToast, setSuccessToast] = useState<{ message: string; count?: number } | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [hasAutoExpanded, setHasAutoExpanded] = useState(false);
 
   const queryClient = useQueryClient();
 
-  const statusFilter = searchParams.get('status') || '';
+  // Default to 'open' (Needs Action) - no choice needed
+  const statusFilter = searchParams.get('status') ?? 'open';
   const severityFilter = searchParams.get('severity') || '';
-  const deviceFilter = searchParams.get('device') || '';
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['anomalies', page, statusFilter, severityFilter, deviceFilter],
-    queryFn: () => api.getAnomalies({
-      page,
-      page_size: 50,
-      status: statusFilter || undefined,
-      device_id: deviceFilter ? parseInt(deviceFilter) : undefined,
-      min_score: severityFilter === 'critical' ? -1.0 : severityFilter === 'high' ? -0.7 : undefined,
-      max_score: severityFilter === 'critical' ? -0.7 : severityFilter === 'high' ? -0.5 : undefined,
-    }),
-    refetchInterval: 30000,
-  });
+  // Show filters if user has explicitly filtered
+  const hasActiveFilters = statusFilter !== 'open' || severityFilter !== '';
 
-  // Fetch dashboard stats for consistent counts (used by sidebar badge too)
-  const { data: dashboardStats } = useQuery({
-    queryKey: ['dashboard', 'stats'],
-    queryFn: () => api.getDashboardStats(),
-    refetchInterval: 30000,
-  });
-
-  // Query for smart grouped anomalies
   const { data: groupedData, isLoading: isLoadingGroups } = useQuery({
     queryKey: ['anomalies-grouped', statusFilter, severityFilter],
     queryFn: () => api.getGroupedAnomalies({
@@ -165,81 +72,27 @@ function Investigations() {
       min_severity: severityFilter || undefined,
       min_group_size: 2,
     }),
-    enabled: viewMode === 'smartGroups',
     refetchInterval: 30000,
   });
 
-  // Calculate status counts from the current filtered dataset
-  // Note: Individual status counts are from current page only (for filter buttons)
-  // Total uses data.total from API for accurate header display
-  const statusCounts = useMemo(() => {
-    if (!data) return { open: 0, investigating: 0, resolved: 0, false_positive: 0, total: 0, pageCount: 0 };
-    const counts = data.anomalies.reduce((acc, a) => {
-      acc[a.status as keyof typeof acc] = (acc[a.status as keyof typeof acc] || 0) + 1;
-      return acc;
-    }, { open: 0, investigating: 0, resolved: 0, false_positive: 0 });
-    return { ...counts, total: data.total, pageCount: data.anomalies.length };
-  }, [data]);
-
-  // Count items requiring attention - use dashboard stats for consistency with sidebar
-  // Falls back to current page counts if dashboard stats not loaded
-  const requiresAttentionCount = dashboardStats?.open_cases ?? (statusCounts.open + statusCounts.investigating);
-
-  // Group anomalies by device for the grouped view
-  const deviceGroups = useMemo((): DeviceGroup[] => {
-    if (!data) return [];
-
-    const groupMap = new Map<number, DeviceGroup>();
-
-    for (const anomaly of data.anomalies) {
-      const existing = groupMap.get(anomaly.device_id);
-      if (existing) {
-        existing.anomalies.push(anomaly);
-        if (anomaly.anomaly_score < existing.worstScore) {
-          existing.worstScore = anomaly.anomaly_score;
-        }
-        if (new Date(anomaly.timestamp) > new Date(existing.latestTimestamp)) {
-          existing.latestTimestamp = anomaly.timestamp;
-        }
-        if (anomaly.status === 'open') {
-          existing.openCount++;
-        }
-      } else {
-        groupMap.set(anomaly.device_id, {
-          device_id: anomaly.device_id,
-          anomalies: [anomaly],
-          worstScore: anomaly.anomaly_score,
-          latestTimestamp: anomaly.timestamp,
-          openCount: anomaly.status === 'open' ? 1 : 0,
-        });
-      }
+  // AUTO-EXPAND first group when data loads - the page should be ready to act
+  useEffect(() => {
+    if (!hasAutoExpanded && groupedData?.groups && groupedData.groups.length > 0) {
+      const firstGroup = groupedData.groups[0];
+      setExpandedGroups(new Set([firstGroup.group_id]));
+      setHasAutoExpanded(true);
     }
+  }, [groupedData?.groups, hasAutoExpanded]);
 
-    // Sort groups by worst score (most severe first)
-    return Array.from(groupMap.values()).sort((a, b) => a.worstScore - b.worstScore);
-  }, [data]);
+  const groups = groupedData?.groups || [];
+  const totalAnomalies = groupedData?.total_anomalies ?? 0;
 
-  const toggleDeviceExpanded = (deviceId: number) => {
-    setExpandedDevices(prev => {
-      const next = new Set(prev);
-      if (next.has(deviceId)) {
-        next.delete(deviceId);
-      } else {
-        next.add(deviceId);
-      }
-      return next;
-    });
-  };
-
-  // Smart Groups handlers
+  // Handlers
   const toggleGroupExpanded = useCallback((groupId: string) => {
-    setExpandedGroups(prev => {
+    setExpandedGroups((prev) => {
       const next = new Set(prev);
-      if (next.has(groupId)) {
-        next.delete(groupId);
-      } else {
-        next.add(groupId);
-      }
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
       return next;
     });
   }, []);
@@ -249,25 +102,21 @@ function Investigations() {
   }, [selectedAnomalies]);
 
   const handleSelectAnomaly = useCallback((groupId: string, anomalyId: number, selected: boolean) => {
-    setSelectedAnomalies(prev => {
+    setSelectedAnomalies((prev) => {
       const next = new Map(prev);
       const groupSet = new Set(next.get(groupId) || []);
-      if (selected) {
-        groupSet.add(anomalyId);
-      } else {
-        groupSet.delete(anomalyId);
-      }
+      if (selected) groupSet.add(anomalyId);
+      else groupSet.delete(anomalyId);
       next.set(groupId, groupSet);
       return next;
     });
   }, []);
 
   const handleSelectAllInGroup = useCallback((groupId: string, group: AnomalyGroup, selected: boolean) => {
-    setSelectedAnomalies(prev => {
+    setSelectedAnomalies((prev) => {
       const next = new Map(prev);
       if (selected) {
-        const allIds = new Set(group.sample_anomalies.map(a => a.anomaly_id));
-        next.set(groupId, allIds);
+        next.set(groupId, new Set(group.sample_anomalies.map((a) => a.anomaly_id)));
       } else {
         next.set(groupId, new Set());
       }
@@ -279,23 +128,15 @@ function Investigations() {
     const selectedIds = selectedAnomalies.get(groupId);
     if (!selectedIds || selectedIds.size === 0) return;
 
+    const count = selectedIds.size;
     setIsProcessingBulk(true);
     try {
-      await api.bulkAction({
-        action: action,
-        anomaly_ids: Array.from(selectedIds),
-      });
-
-      // Clear selection for this group
-      setSelectedAnomalies(prev => {
-        const next = new Map(prev);
-        next.set(groupId, new Set());
-        return next;
-      });
-
-      // Invalidate queries to refresh data
+      await api.bulkAction({ action, anomaly_ids: Array.from(selectedIds) });
+      setSelectedAnomalies((prev) => { const next = new Map(prev); next.set(groupId, new Set()); return next; });
+      setSuccessToast({ message: action === 'resolve' ? 'Resolved' : action === 'investigating' ? 'Marked for investigation' : 'Dismissed', count });
       queryClient.invalidateQueries({ queryKey: ['anomalies'] });
       queryClient.invalidateQueries({ queryKey: ['anomalies-grouped'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'stats'] });
     } catch (error) {
       console.error('Bulk action failed:', error);
     } finally {
@@ -304,724 +145,276 @@ function Investigations() {
   }, [selectedAnomalies, queryClient]);
 
   const handleAnomalyClick = useCallback((anomaly: AnomalyGroupMember) => {
-    // Navigate to the anomaly detail page
     window.location.href = `/investigations/${anomaly.anomaly_id}`;
   }, []);
 
-  const getSeverityKey = (score: number): keyof typeof severityConfig => {
-    if (score <= -0.7) return 'critical';
-    if (score <= -0.5) return 'high';
-    if (score <= -0.3) return 'medium';
-    return 'low';
+  const handleStartWithGroup = useCallback((groupId: string) => {
+    setExpandedGroups((prev) => new Set(prev).add(groupId));
+    setTimeout(() => {
+      document.getElementById(`group-${groupId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  }, []);
+
+  // Keyboard navigation
+  const handleKeyboardNext = useCallback(() => {
+    if (groups.length === 0) return;
+    setFocusedGroupIndex((prev) => {
+      const next = Math.min(prev + 1, groups.length - 1);
+      document.getElementById(`group-${groups[next]?.group_id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return next;
+    });
+  }, [groups]);
+
+  const handleKeyboardPrevious = useCallback(() => {
+    if (groups.length === 0) return;
+    setFocusedGroupIndex((prev) => {
+      const next = Math.max(prev - 1, 0);
+      document.getElementById(`group-${groups[next]?.group_id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return next;
+    });
+  }, [groups]);
+
+  const handleKeyboardExpand = useCallback(() => {
+    if (groups.length === 0) return;
+    const group = groups[focusedGroupIndex];
+    if (group) toggleGroupExpanded(group.group_id);
+  }, [groups, focusedGroupIndex, toggleGroupExpanded]);
+
+  const handleKeyboardFix = useCallback(() => {
+    if (groups.length === 0) return;
+    const group = groups[focusedGroupIndex];
+    if (group?.suggested_remediation) {
+      handleSelectAllInGroup(group.group_id, group, true);
+      handleBulkAction(group.group_id, 'resolve');
+    }
+  }, [groups, focusedGroupIndex, handleSelectAllInGroup, handleBulkAction]);
+
+  useKeyboardShortcuts({
+    onNext: handleKeyboardNext,
+    onPrevious: handleKeyboardPrevious,
+    onExpand: handleKeyboardExpand,
+    onFix: handleKeyboardFix,
+    onEscape: () => setExpandedGroups(new Set()),
+    enabled: true,
+  });
+
+  const getSeverityKey = (score: number): SeverityLevel => {
+    return getSeverityFromScore(score).level;
   };
 
   const updateFilter = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams);
-    if (value) {
-      params.set(key, value);
-    } else {
-      params.delete(key);
-    }
+    if (value) params.set(key, value);
+    else params.delete(key);
     setSearchParams(params);
-    setPage(1);
+    setHasAutoExpanded(false); // Reset auto-expand when filters change
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-center">
-          <div className="relative w-16 h-16 mx-auto mb-4">
-            <div className="absolute inset-0 rounded-full border-2 border-amber-500/20"></div>
-            <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-amber-500 animate-spin"></div>
-          </div>
-          <p className="text-slate-400 font-mono text-sm">Loading investigations...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <motion.div
-      className="space-y-6"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-    >
-      {/* Header */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <motion.div className="space-y-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      {/* Header - Minimal */}
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white">Investigations</h1>
-          <p className="text-slate-500 mt-1">
-            {statusCounts.total} anomalies {statusFilter || severityFilter ? 'matching filters' : 'detected'} • {requiresAttentionCount} requiring attention
-          </p>
+          <h1 className="text-2xl font-bold text-white">Investigations</h1>
+          {totalAnomalies > 0 && (
+            <p className="text-sm text-slate-500 mt-0.5">
+              {totalAnomalies} anomalies to review
+            </p>
+          )}
         </div>
 
-        {/* View Toggle */}
-        <div className="flex items-center gap-2 p-1 bg-slate-800/50 rounded-lg border border-slate-700/50">
-          <button
-            onClick={() => setViewMode('smartGroups')}
-            title="Smart Groups"
-            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all flex items-center gap-1.5 ${viewMode === 'smartGroups'
-              ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-              : 'text-slate-400 hover:text-white'
-              }`}
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-            </svg>
-            <span className="hidden sm:inline text-xs">Smart</span>
-          </button>
-          <button
-            onClick={() => setViewMode('grouped')}
-            title="Grouped by Device"
-            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${viewMode === 'grouped'
-              ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-              : 'text-slate-400 hover:text-white'
-              }`}
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-            </svg>
-          </button>
-          <button
-            onClick={() => setViewMode('list')}
-            title="All Anomalies"
-            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${viewMode === 'list'
-              ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-              : 'text-slate-400 hover:text-white'
-              }`}
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-          <button
-            onClick={() => setViewMode('kanban')}
-            title="Kanban View"
-            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${viewMode === 'kanban'
-              ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-              : 'text-slate-400 hover:text-white'
-              }`}
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      {/* Quick Filters */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
-          <span className="telemetry-label">Status:</span>
-          {(['', 'open', 'investigating', 'resolved'] as const).map((status) => (
-            <button
-              key={status || 'all'}
-              onClick={() => updateFilter('status', status)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${statusFilter === status
-                ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
-                : 'text-slate-400 border-slate-700/50 hover:border-slate-600'
-                }`}
-            >
-              {status || 'All'} {status && `(${statusCounts[status as keyof typeof statusCounts]})`}
-            </button>
-          ))}
-        </div>
-
-        <div className="w-px h-6 bg-slate-700/50" />
-
-        <div className="flex items-center gap-2">
-          <span className="telemetry-label">Severity:</span>
-          {(['', 'critical', 'high'] as const).map((severity) => (
-            <button
-              key={severity || 'all'}
-              onClick={() => updateFilter('severity', severity)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${severityFilter === severity
-                ? severity === 'critical'
-                  ? 'bg-red-500/20 text-red-400 border-red-500/30'
-                  : severity === 'high'
-                    ? 'bg-orange-500/20 text-orange-400 border-orange-500/30'
-                    : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
-                : 'text-slate-400 border-slate-700/50 hover:border-slate-600'
-                }`}
-            >
-              {severity || 'All'}
-            </button>
-          ))}
-        </div>
-
-        {/* Device Search */}
-        <div className="flex-1" />
-        <div className="relative w-full sm:w-auto">
-          <input
-            type="text"
-            placeholder="Search device ID..."
-            value={deviceFilter}
-            onChange={(e) => updateFilter('device', e.target.value)}
-            className="input-stellar w-full sm:w-48 pl-9"
-          />
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-        </div>
-
-        {/* Sort */}
-        <select
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as SortBy)}
-          className="select-field w-full sm:w-auto"
+        {/* Subtle filter toggle - not in your face */}
+        <button
+          onClick={() => setShowFilters(!showFilters)}
+          className="text-xs text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1"
         >
-          <option value="score">Sort by Score</option>
-          <option value="time">Sort by Time</option>
-          <option value="device">Sort by Device</option>
-        </select>
+          {hasActiveFilters && <span className="w-1.5 h-1.5 bg-amber-400 rounded-full" />}
+          {showFilters ? 'Hide filters' : 'Filter'}
+          <svg className={`w-3 h-3 transition-transform ${showFilters ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
       </div>
+
+      {/* Collapsible Filters - Hidden by default */}
+      <AnimatePresence>
+        {showFilters && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="flex flex-wrap items-center gap-3 pb-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-600">Status:</span>
+                {[
+                  { value: '', label: 'All' },
+                  { value: 'open', label: 'Needs Action' },
+                  { value: 'investigating', label: 'In Progress' },
+                  { value: 'resolved', label: 'Fixed' },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => updateFilter('status', opt.value)}
+                    className={`px-2 py-1 text-xs rounded transition-all ${
+                      (statusFilter || '') === opt.value
+                        ? 'bg-slate-700 text-white'
+                        : 'text-slate-500 hover:text-slate-300'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <div className="w-px h-4 bg-slate-700/50" />
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-600">Severity:</span>
+                {[
+                  { value: '', label: 'All' },
+                  { value: 'critical', label: 'Critical' },
+                  { value: 'high', label: 'High' },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => updateFilter('severity', opt.value)}
+                    className={`px-2 py-1 text-xs rounded transition-all ${
+                      severityFilter === opt.value
+                        ? 'bg-slate-700 text-white'
+                        : 'text-slate-500 hover:text-slate-300'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Hero Card - THE Interface */}
+      <ImpactSummaryCard
+        totalGroups={groupedData?.total_groups ?? 0}
+        coveragePercent={groupedData?.coverage_percent ?? 0}
+        totalAnomalies={totalAnomalies}
+        groupedCount={(groupedData?.total_anomalies ?? 0) - (groupedData?.ungrouped_count ?? 0)}
+        topGroupName={groupedData?.top_impact_group_name}
+        topGroupId={groupedData?.top_impact_group_id}
+        onStartAction={handleStartWithGroup}
+      />
 
       {/* Content */}
-      {viewMode === 'smartGroups' ? (
-        /* Smart Groups View - AI-powered clustering */
-        <div className="space-y-4">
-          {/* Header stats */}
-          {groupedData && (
-            <div className="flex items-center justify-between px-1">
-              <p className="text-sm text-slate-400">
-                <span className="text-white font-medium">{groupedData.total_groups}</span> smart groups containing{' '}
-                <span className="text-white font-medium">{groupedData.total_anomalies}</span> anomalies
-                {groupedData.ungrouped_count > 0 && (
-                  <span className="text-slate-500"> • {groupedData.ungrouped_count} ungrouped</span>
-                )}
-              </p>
-              <span className="text-xs text-slate-500">
-                Grouped by: {groupedData.grouping_method}
-              </span>
-            </div>
-          )}
-
-          {/* Loading state for groups */}
-          {isLoadingGroups && (
-            <Card className="p-8">
-              <div className="flex items-center justify-center">
-                <div className="relative w-12 h-12 mr-4">
-                  <div className="absolute inset-0 rounded-full border-2 border-amber-500/20"></div>
-                  <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-amber-500 animate-spin"></div>
-                </div>
-                <p className="text-slate-400 font-mono text-sm">Analyzing anomaly patterns...</p>
+      <div className="space-y-3">
+        {isLoadingGroups && (
+          <Card className="p-8">
+            <div className="flex items-center justify-center">
+              <div className="relative w-10 h-10 mr-3">
+                <div className="absolute inset-0 rounded-full border-2 border-amber-500/20" />
+                <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-amber-500 animate-spin" />
               </div>
-            </Card>
-          )}
-
-          {/* Smart Groups List */}
-          {!isLoadingGroups && groupedData && (
-            <div className="space-y-3">
-              <AnimatePresence mode="popLayout">
-                {groupedData.groups.map((group, index) => (
-                  <motion.div
-                    key={group.group_id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ delay: index * 0.03 }}
-                  >
-                    <AnomalyGroupCard
-                      group={group}
-                      isExpanded={expandedGroups.has(group.group_id)}
-                      onToggle={() => toggleGroupExpanded(group.group_id)}
-                      selectedAnomalies={getSelectedForGroup(group.group_id)}
-                      onSelectAnomaly={(id, selected) => handleSelectAnomaly(group.group_id, id, selected)}
-                      onSelectAll={(selected) => handleSelectAllInGroup(group.group_id, group, selected)}
-                      onBulkAction={(action) => handleBulkAction(group.group_id, action)}
-                      onAnomalyClick={handleAnomalyClick}
-                      isLoading={isProcessingBulk}
-                    />
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-
-              {/* Ungrouped Anomalies Section */}
-              {groupedData.ungrouped_anomalies && groupedData.ungrouped_anomalies.length > 0 && (
-                <div className="mt-6">
-                  <h3 className="text-sm font-medium text-slate-400 mb-3 flex items-center gap-2">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                    </svg>
-                    Ungrouped Anomalies ({groupedData.ungrouped_anomalies.length})
-                  </h3>
-                  <Card noPadding>
-                    <div className="divide-y divide-slate-800/50">
-                      {groupedData.ungrouped_anomalies.slice(0, 10).map((anomaly) => {
-                        const severityKey = getSeverityKey(anomaly.anomaly_score);
-                        const severity = severityConfig[severityKey];
-                        const status = statusConfig[anomaly.status as keyof typeof statusConfig] || statusConfig.open;
-
-                        return (
-                          <Link
-                            key={anomaly.anomaly_id}
-                            to={`/investigations/${anomaly.anomaly_id}`}
-                            className="flex items-center gap-4 p-4 hover:bg-slate-800/30 transition-colors group"
-                          >
-                            <div className={`w-1 h-10 rounded-full ${severity.barColor}`} />
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="text-sm font-medium text-white">Device #{anomaly.device_id}</span>
-                                <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded ${severity.badgeBg} ${severity.badgeText}`}>
-                                  {severity.label}
-                                </span>
-                                <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded ${status.badgeBg} ${status.badgeText}`}>
-                                  {status.label}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-3 text-xs text-slate-500">
-                                <span className="font-mono">Score: {anomaly.anomaly_score.toFixed(4)}</span>
-                                <span>•</span>
-                                <span>{formatDistanceToNowStrict(new Date(anomaly.timestamp))} ago</span>
-                              </div>
-                            </div>
-                            <svg className="w-4 h-4 text-slate-600 group-hover:text-amber-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                            </svg>
-                          </Link>
-                        );
-                      })}
-                      {groupedData.ungrouped_anomalies.length > 10 && (
-                        <div className="p-4 text-center">
-                          <button
-                            onClick={() => setViewMode('list')}
-                            className="text-xs text-amber-400 hover:text-amber-300 font-medium"
-                          >
-                            View all {groupedData.ungrouped_anomalies.length} ungrouped anomalies in list view →
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </Card>
-                </div>
-              )}
-
-              {/* Empty state */}
-              {groupedData.groups.length === 0 && groupedData.ungrouped_count === 0 && (
-                <Card className="p-12 text-center">
-                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-500/10 flex items-center justify-center">
-                    <svg className="w-8 h-8 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                  <p className="text-xl font-medium text-slate-300">No anomalies found</p>
-                  <p className="text-slate-500 mt-1">
-                    {statusFilter || severityFilter ? 'Try adjusting your filters' : 'All systems operating normally'}
-                  </p>
-                </Card>
-              )}
+              <p className="text-slate-400 text-sm">Analyzing patterns...</p>
             </div>
-          )}
-        </div>
-      ) : viewMode === 'grouped' ? (
-        /* Grouped by Device View */
-        <Card noPadding>
-          <div className="divide-y divide-slate-800/50">
+          </Card>
+        )}
+
+        {!isLoadingGroups && groupedData && (
+          <>
+            {/* Groups - First one auto-expanded */}
             <AnimatePresence mode="popLayout">
-              {deviceGroups.map((group, groupIndex) => {
-                const severityKey = getSeverityKey(group.worstScore);
-                const severity = severityConfig[severityKey];
-                const isExpanded = expandedDevices.has(group.device_id);
-                const hasMultiple = group.anomalies.length > 1;
-
-                // For single anomaly devices, make the whole row a Link
-                const DeviceRowWrapper = hasMultiple ? 'div' : Link;
-                const wrapperProps = hasMultiple
-                  ? {
-                      onClick: () => toggleDeviceExpanded(group.device_id),
-                      className: "flex items-center gap-6 p-5 transition-colors cursor-pointer hover:bg-slate-800/30 group"
-                    }
-                  : {
-                      to: `/investigations/${group.anomalies[0].id}`,
-                      className: "flex items-center gap-6 p-5 transition-colors cursor-pointer hover:bg-slate-800/30 group"
-                    };
-
-                return (
-                  <motion.div
-                    key={group.device_id}
-                    layout
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ delay: groupIndex * 0.02 }}
-                  >
-                    {/* Device Header - clickable for all devices */}
-                    <DeviceRowWrapper {...wrapperProps as any}>
-                      {/* Severity Bar */}
-                      <div className={`w-1.5 h-16 rounded-full ${severity.barColor}`} />
-
-                      {/* Expand/Collapse Icon or View Icon */}
-                      <div className="w-6 flex-shrink-0">
-                        {hasMultiple ? (
-                          <svg
-                            className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        ) : (
-                          <svg
-                            className="w-5 h-5 text-slate-500 group-hover:text-amber-400 transition-colors"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                        )}
-                      </div>
-
-                      {/* Main Content */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-3 mb-2">
-                          <span className="text-lg font-semibold text-white group-hover:text-amber-400 transition-colors">
-                            Device #{group.device_id}
-                          </span>
-                          <span className={`px-2 py-0.5 text-[10px] font-bold rounded ${severity.badgeBg} ${severity.badgeText}`}>
-                            {severity.label}
-                          </span>
-                          {hasMultiple && (
-                            <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                              {group.anomalies.length} anomalies
-                            </span>
-                          )}
-                          {group.openCount > 0 && (
-                            <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-red-500/20 text-red-400">
-                              {group.openCount} open
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Summary for grouped */}
-                        <div className="mb-2">
-                          <p className="text-sm text-slate-300 font-medium">
-                            {hasMultiple
-                              ? `${group.anomalies.length} anomalies detected - worst score: ${group.worstScore.toFixed(4)}`
-                              : getAnomalyReason(group.anomalies[0])
-                            }
-                          </p>
-                        </div>
-
-                        <div className="flex items-center gap-4 text-sm text-slate-500">
-                          <span>Latest: {format(new Date(group.latestTimestamp), 'MMM d, HH:mm')}</span>
-                          <span>•</span>
-                          <span>{formatDistanceToNowStrict(new Date(group.latestTimestamp))} ago</span>
-                        </div>
-                      </div>
-
-                      {/* Action indicator */}
-                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <span className="text-xs text-amber-400 font-medium">
-                          {hasMultiple ? (isExpanded ? 'Collapse' : 'Expand') : 'Investigate'}
-                        </span>
-                        <svg className="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </div>
-                    </DeviceRowWrapper>
-
-                    {/* Expanded Anomalies List */}
-                    <AnimatePresence>
-                      {isExpanded && hasMultiple && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          className="bg-slate-900/50 border-l-2 border-amber-500/30 ml-8"
-                        >
-                          {group.anomalies.map((anomaly) => {
-                            const anomalySeverity = severityConfig[getSeverityKey(anomaly.anomaly_score)];
-                            const status = statusConfig[anomaly.status as keyof typeof statusConfig] || statusConfig.open;
-
-                            return (
-                              <Link
-                                key={anomaly.id}
-                                to={`/investigations/${anomaly.id}`}
-                                className="flex items-center gap-4 px-5 py-3 hover:bg-slate-800/30 transition-colors group border-b border-slate-800/30 last:border-b-0"
-                              >
-                                <div className={`w-1 h-8 rounded-full ${anomalySeverity.barColor}`} />
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded ${anomalySeverity.badgeBg} ${anomalySeverity.badgeText}`}>
-                                      {anomalySeverity.label}
-                                    </span>
-                                    <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded ${status.badgeBg} ${status.badgeText}`}>
-                                      {status.label}
-                                    </span>
-                                    <span className="text-xs text-slate-500 font-mono">
-                                      Score: {anomaly.anomaly_score.toFixed(4)}
-                                    </span>
-                                  </div>
-                                  <p className="text-xs text-slate-400">{getAnomalyReason(anomaly)}</p>
-                                  <p className="text-xs text-slate-600 mt-1">
-                                    {format(new Date(anomaly.timestamp), 'MMM d, HH:mm')} • {formatDistanceToNowStrict(new Date(anomaly.timestamp))} ago
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <span className="text-xs text-amber-400 font-medium">View</span>
-                                  <svg className="w-3 h-3 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                  </svg>
-                                </div>
-                              </Link>
-                            );
-                          })}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </motion.div>
-                );
-              })}
+              {groups.map((group, index) => (
+                <motion.div
+                  key={group.group_id}
+                  id={`group-${group.group_id}`}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ delay: index * 0.02 }}
+                  className={index === focusedGroupIndex ? 'ring-2 ring-amber-500/40 rounded-xl' : ''}
+                >
+                  <AnomalyGroupCard
+                    group={group}
+                    isExpanded={expandedGroups.has(group.group_id)}
+                    onToggle={() => { toggleGroupExpanded(group.group_id); setFocusedGroupIndex(index); }}
+                    selectedAnomalies={getSelectedForGroup(group.group_id)}
+                    onSelectAnomaly={(id, selected) => handleSelectAnomaly(group.group_id, id, selected)}
+                    onSelectAll={(selected) => handleSelectAllInGroup(group.group_id, group, selected)}
+                    onBulkAction={(action) => handleBulkAction(group.group_id, action)}
+                    onAnomalyClick={handleAnomalyClick}
+                    isLoading={isProcessingBulk}
+                  />
+                </motion.div>
+              ))}
             </AnimatePresence>
 
-            {deviceGroups.length === 0 && (
-              <div className="p-12 text-center">
-                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-500/10 flex items-center justify-center">
-                  <svg className="w-8 h-8 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            {/* Unique Cases - Collapsed by default */}
+            {groupedData.ungrouped_anomalies && groupedData.ungrouped_anomalies.length > 0 && (
+              <details className="group mt-6">
+                <summary className="flex items-center gap-2 cursor-pointer list-none text-slate-500 hover:text-slate-300 transition-colors">
+                  <svg className="w-4 h-4 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
-                </div>
-                <p className="text-xl font-medium text-slate-300">No anomalies found</p>
-                <p className="text-slate-500 mt-1">
-                  {statusFilter || severityFilter ? 'Try adjusting your filters' : 'All systems operating normally'}
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Pagination */}
-          {data && data.total_pages > 1 && (
-            <div className="px-5 py-4 border-t border-slate-800/50 flex items-center justify-between">
-              <p className="text-sm text-slate-500 font-mono">
-                {deviceGroups.length} devices with {data.total} total anomalies
-              </p>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setPage(Math.max(1, page - 1))}
-                  disabled={page === 1}
-                  className="btn-ghost text-sm disabled:opacity-30 disabled:cursor-not-allowed"
-                >
-                  Previous
-                </button>
-                <span className="px-3 py-1.5 text-sm text-slate-500 font-mono">
-                  {page} / {data.total_pages}
-                </span>
-                <button
-                  onClick={() => setPage(Math.min(data.total_pages, page + 1))}
-                  disabled={page === data.total_pages}
-                  className="btn-ghost text-sm disabled:opacity-30 disabled:cursor-not-allowed"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
-        </Card>
-      ) : viewMode === 'list' ? (
-        <Card noPadding>
-          <div className="divide-y divide-slate-800/50">
-            <AnimatePresence mode="popLayout">
-              {data?.anomalies.map((anomaly, index) => {
-                const severityKey = getSeverityKey(anomaly.anomaly_score);
-                const severity = severityConfig[severityKey];
-                const status = statusConfig[anomaly.status as keyof typeof statusConfig] || statusConfig.open;
-
-                return (
-                  <motion.div
-                    key={anomaly.id}
-                    layout
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ delay: index * 0.02 }}
-                  >
-                    <Link
-                      to={`/investigations/${anomaly.id}`}
-                      className="flex items-center gap-6 p-5 hover:bg-slate-800/30 transition-colors group"
-                    >
-                      {/* Severity Bar */}
-                      <div className={`w-1.5 h-16 rounded-full ${severity.barColor}`} />
-
-                      {/* Main Content */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-3 mb-2">
-                          <span className="text-lg font-semibold text-white">
-                            Device #{anomaly.device_id}
-                          </span>
-                          <span className={`px-2 py-0.5 text-[10px] font-bold rounded ${severity.badgeBg} ${severity.badgeText}`}>
-                            {severity.label}
-                          </span>
-                          <span className={`px-2 py-0.5 text-[10px] font-bold rounded ${status.badgeBg} ${status.badgeText}`}>
-                            {status.label}
-                          </span>
-                        </div>
-
-                        {/* Anomaly Reason */}
-                        <div className="mb-2">
-                          <p className="text-sm text-slate-300 font-medium">
-                            {getAnomalyReason(anomaly)}
-                          </p>
-                        </div>
-
-                        <div className="flex items-center gap-4 text-sm text-slate-500">
-                          <span className="font-mono">Score: {anomaly.anomaly_score.toFixed(4)}</span>
-                          <span>•</span>
-                          <span>{format(new Date(anomaly.timestamp), 'MMM d, HH:mm')}</span>
-                          <span>•</span>
-                          <span>{formatDistanceToNowStrict(new Date(anomaly.timestamp))} ago</span>
-                        </div>
-                      </div>
-
-                      {/* Quick Metrics Preview */}
-                      <div className="hidden lg:flex items-center gap-6 text-xs">
-                        {anomaly.total_battery_level_drop !== null && (
-                          <div className="text-center">
-                            <p className="font-mono text-slate-300">{anomaly.total_battery_level_drop?.toFixed(1)}%</p>
-                            <p className="text-slate-600">Battery</p>
-                          </div>
-                        )}
-                        {anomaly.offline_time !== null && (
-                          <div className="text-center">
-                            <p className="font-mono text-slate-300">{anomaly.offline_time?.toFixed(0)}m</p>
-                            <p className="text-slate-600">Offline</p>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Action */}
-                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <span className="text-xs text-amber-400 font-medium">Investigate</span>
-                        <svg className="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </div>
-                    </Link>
-                  </motion.div>
-                );
-              })}
-            </AnimatePresence>
-
-            {(!data || data.anomalies.length === 0) && (
-              <div className="p-12 text-center">
-                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-500/10 flex items-center justify-center">
-                  <svg className="w-8 h-8 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-                <p className="text-xl font-medium text-slate-300">No anomalies found</p>
-                <p className="text-slate-500 mt-1">
-                  {statusFilter || severityFilter ? 'Try adjusting your filters' : 'All systems operating normally'}
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Pagination */}
-          {data && data.total_pages > 1 && (
-            <div className="px-5 py-4 border-t border-slate-800/50 flex items-center justify-between">
-              <p className="text-sm text-slate-500 font-mono">
-                Showing {((page - 1) * 50) + 1}-{Math.min(page * 50, data.total)} of {data.total}
-              </p>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setPage(Math.max(1, page - 1))}
-                  disabled={page === 1}
-                  className="btn-ghost text-sm disabled:opacity-30 disabled:cursor-not-allowed"
-                >
-                  Previous
-                </button>
-                <span className="px-3 py-1.5 text-sm text-slate-500 font-mono">
-                  {page} / {data.total_pages}
-                </span>
-                <button
-                  onClick={() => setPage(Math.min(data.total_pages, page + 1))}
-                  disabled={page === data.total_pages}
-                  className="btn-ghost text-sm disabled:opacity-30 disabled:cursor-not-allowed"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
-        </Card>
-      ) : (
-        /* Kanban View */
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {(['open', 'investigating', 'resolved', 'false_positive'] as const).map((statusKey) => {
-            const status = statusConfig[statusKey];
-            const columnItems = data?.anomalies.filter(a => a.status === statusKey) || [];
-
-            return (
-              <div key={statusKey} className="space-y-3">
-                {/* Column Header */}
-                <div className={`flex items-center justify-between p-3 rounded-lg ${status.headerBg} border ${status.badgeBorder}`}>
-                  <span className={`text-sm font-semibold ${status.headerText}`}>
-                    {status.label}
-                  </span>
-                  <span className={`px-2 py-0.5 text-xs font-bold ${status.headerText}`}>
-                    {columnItems.length}
-                  </span>
-                </div>
-
-                {/* Column Content */}
-                <div className="space-y-2 min-h-[400px]">
-                  <AnimatePresence>
-                    {columnItems.slice(0, 8).map((anomaly, index) => {
+                  <span className="text-sm">{groupedData.ungrouped_count} unique cases (no pattern match)</span>
+                </summary>
+                <Card noPadding className="mt-3">
+                  <div className="divide-y divide-slate-800/50">
+                    {groupedData.ungrouped_anomalies.slice(0, 10).map((anomaly) => {
                       const severityKey = getSeverityKey(anomaly.anomaly_score);
                       const severity = severityConfig[severityKey];
-
+                      const status = statusConfig[anomaly.status as keyof typeof statusConfig] || statusConfig.open;
                       return (
-                        <motion.div
-                          key={anomaly.id}
-                          layout
-                          initial={{ opacity: 0, scale: 0.9 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          exit={{ opacity: 0, scale: 0.9 }}
-                          transition={{ delay: index * 0.02 }}
+                        <Link
+                          key={anomaly.anomaly_id}
+                          to={`/investigations/${anomaly.anomaly_id}`}
+                          className="flex items-center gap-4 p-4 hover:bg-slate-800/30 transition-colors group"
                         >
-                          <Link
-                            to={`/investigations/${anomaly.id}`}
-                            className="block p-3 stellar-card rounded-xl hover:border-amber-500/30 transition-all group"
-                          >
-                            <div className="flex items-center gap-2 mb-2">
-                              <div className={`w-2 h-2 rounded-full ${severity.barColor}`} />
-                              <span className="text-sm font-semibold text-white">
-                                Device #{anomaly.device_id}
+                          <div className={`w-1 h-8 rounded-full ${severity.barColor}`} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-white">{anomaly.device_name || `Device #${anomaly.device_id}`}</span>
+                              <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded ${severity.badgeBg} ${severity.badgeText}`}>
+                                {severity.label}
+                              </span>
+                              <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded ${status.badgeBg} ${status.badgeText}`}>
+                                {status.label}
                               </span>
                             </div>
-                            <div className="flex items-center justify-between text-xs">
-                              <span className={`font-mono ${severity.badgeText}`}>
-                                {anomaly.anomaly_score.toFixed(3)}
-                              </span>
-                              <span className="text-slate-500">
-                                {formatDistanceToNowStrict(new Date(anomaly.timestamp))}
-                              </span>
-                            </div>
-                          </Link>
-                        </motion.div>
+                            <span className="text-xs text-slate-500">{formatDistanceToNowStrict(new Date(anomaly.timestamp))} ago</span>
+                          </div>
+                          <svg className="w-4 h-4 text-slate-600 group-hover:text-amber-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </Link>
                       );
                     })}
-                  </AnimatePresence>
+                    {groupedData.ungrouped_anomalies.length > 10 && (
+                      <div className="p-3 text-center text-xs text-slate-500">
+                        +{groupedData.ungrouped_count - 10} more
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              </details>
+            )}
 
-                  {columnItems.length > 8 && (
-                    <p className="text-center text-xs text-slate-500 py-2">
-                      +{columnItems.length - 8} more
-                    </p>
-                  )}
-
-                  {columnItems.length === 0 && (
-                    <div className="p-4 text-center text-xs text-slate-600">
-                      No items
-                    </div>
-                  )}
+            {/* Empty state */}
+            {groups.length === 0 && groupedData.ungrouped_count === 0 && (
+              <Card className="p-12 text-center">
+                <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                  <svg className="w-7 h-7 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+                <p className="text-lg font-medium text-slate-300">All clear</p>
+                <p className="text-sm text-slate-500 mt-1">No anomalies need attention</p>
+              </Card>
+            )}
+          </>
+        )}
+      </div>
+
+      {successToast && (
+        <SuccessToast message={successToast.message} count={successToast.count} onClose={() => setSuccessToast(null)} />
       )}
     </motion.div>
   );

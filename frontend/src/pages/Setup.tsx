@@ -276,11 +276,11 @@ function LocationSyncPanel() {
             </div>
             <div>
               <div className="text-xs text-slate-500">Locations</div>
-              <div className="mt-1">{syncStats?.locations_count ?? '—'}</div>
+              <div className="mt-1">{String(syncStats?.locations_count ?? '—')}</div>
             </div>
             <div>
               <div className="text-xs text-slate-500">Devices Mapped</div>
-              <div className="mt-1">{syncStats?.devices_mapped ?? '—'}</div>
+              <div className="mt-1">{String(syncStats?.devices_mapped ?? '—')}</div>
             </div>
           </div>
         )}

@@ -1,3 +1,59 @@
+# Shared configurations using YAML anchors
+x-python-worker: &python-worker
+  build:
+    context: .
+    dockerfile: Dockerfile
+  networks:
+    - stellasentinal-network
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  restart: unless-stopped
+
+x-worker-environment: &worker-environment
+  APP_ENV: ${APP_ENV:-local}
+  # Redis for job coordination
+  REDIS_URL: redis://redis:6379/0
+  # PostgreSQL backend database
+  BACKEND_DB_HOST: ${BACKEND_DB_HOST:-postgres}
+  BACKEND_DB_PORT: ${BACKEND_DB_PORT:-5432}
+  BACKEND_DB_NAME: ${BACKEND_DB_NAME:-anomaly_detection}
+  BACKEND_DB_USER: ${BACKEND_DB_USER:-postgres}
+  BACKEND_DB_PASS: ${BACKEND_DB_PASS:-postgres}
+  # XSight SQL Database (Windows SQL Server)
+  DW_DB_HOST: ${DW_DB_HOST:-192.168.3.50}
+  DW_DB_NAME: ${DW_DB_NAME:-XSight_DW}
+  DW_DB_USER: ${DW_DB_USER:-}
+  DW_DB_PASS: ${DW_DB_PASS:-}
+  DW_DB_DRIVER: ${DW_DB_DRIVER:-ODBC Driver 18 for SQL Server}
+  DW_DB_PORT: ${DW_DB_PORT:-1433}
+  # MobiControl SQL Database (Windows SQL Server)
+  MC_DB_HOST: ${MC_DB_HOST:-192.168.3.50}
+  MC_DB_PORT: ${MC_DB_PORT:-1433}
+  MC_DB_NAME: ${MC_DB_NAME:-MobiControlDB}
+  MC_DB_USER: ${MC_DB_USER:-}
+  MC_DB_PASS: ${MC_DB_PASS:-}
+  MC_DB_DRIVER: ${MC_DB_DRIVER:-ODBC Driver 18 for SQL Server}
+  # Historical data support for demo/testing
+  HISTORICAL_DATA_END_DATE: ${HISTORICAL_DATA_END_DATE:-}
+  # Mock mode for development
+  MOCK_MODE: ${MOCK_MODE:-false}
+  # Training configuration
+  MIN_TRAIN_ROWS: ${MIN_TRAIN_ROWS:-50}
+  MIN_VALIDATION_ROWS: ${MIN_VALIDATION_ROWS:-20}
+  TRAINING_DATA_SOURCES: ${TRAINING_DATA_SOURCES:-}
+
+x-worker-volumes: &worker-volumes
+  - ./src:/app/src
+  - ./data:/app/data
+  - ./logs:/app/logs
+  - ./models:/app/models
+
+x-worker-depends: &worker-depends
+  postgres:
+    condition: service_healthy
+  redis:
+    condition: service_healthy
+
 services:
   # PostgreSQL database (application backend - anomalies, baselines, users)
   postgres:
@@ -17,32 +73,6 @@ services:
       timeout: 3s
       retries: 5
       start_period: 5s
-    networks:
-      - stellasentinal-network
-
-  # SQL Server database (DEPRECATED - now using external Windows SQL Server at 192.168.3.50)
-  # Keeping for reference but not required when using external server
-  sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: stellasentinal-sqlserver
-    environment:
-      - ACCEPT_EULA=Y
-      - MSSQL_SA_PASSWORD=${SQLSERVER_SA_PASSWORD:-YourStrong!Passw0rd}
-      - MSSQL_PID=Developer
-    ports:
-      - "${SQLSERVER_PORT:-1433}:1433"
-    volumes:
-      - sqlserver_data:/var/opt/mssql
-      # Mount database backup files (place BAK files in ./backups)
-      - ./backups:/var/opt/mssql/backup:ro
-      # Mount restore script
-      - ./scripts/restore-databases.sql:/var/opt/mssql/scripts/restore-databases.sql:ro
-    healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q \"SELECT 1\" || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 60s
     networks:
       - stellasentinal-network
 
@@ -185,115 +215,40 @@ services:
 
   # Scheduler worker (automated training/scoring loops)
   scheduler:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    <<: *python-worker
     container_name: stellasentinal-scheduler
     environment:
-      - APP_ENV=${APP_ENV:-local}
-      # Redis for job coordination
-      - REDIS_URL=redis://redis:6379/0
-      # PostgreSQL backend database
-      - BACKEND_DB_HOST=${BACKEND_DB_HOST:-postgres}
-      - BACKEND_DB_PORT=${BACKEND_DB_PORT:-5432}
-      - BACKEND_DB_NAME=${BACKEND_DB_NAME:-anomaly_detection}
-      - BACKEND_DB_USER=${BACKEND_DB_USER:-postgres}
-      - BACKEND_DB_PASS=${BACKEND_DB_PASS:-postgres}
-      # XSight SQL Database (Windows SQL Server)
-      - DW_DB_HOST=${DW_DB_HOST:-192.168.3.50}
-      - DW_DB_NAME=${DW_DB_NAME:-XSight_DW}
-      - DW_DB_USER=${DW_DB_USER:-}
-      - DW_DB_PASS=${DW_DB_PASS:-}
-      - DW_DB_DRIVER=${DW_DB_DRIVER:-ODBC Driver 18 for SQL Server}
-      - DW_DB_PORT=${DW_DB_PORT:-1433}
-      # MobiControl SQL Database (Windows SQL Server)
-      - MC_DB_HOST=${MC_DB_HOST:-192.168.3.50}
-      - MC_DB_PORT=${MC_DB_PORT:-1433}
-      - MC_DB_NAME=${MC_DB_NAME:-MobiControlDB}
-      - MC_DB_USER=${MC_DB_USER:-}
-      - MC_DB_PASS=${MC_DB_PASS:-}
-      - MC_DB_DRIVER=${MC_DB_DRIVER:-ODBC Driver 18 for SQL Server}
-      # Historical data support for demo/testing
-      - HISTORICAL_DATA_END_DATE=${HISTORICAL_DATA_END_DATE:-}
-      # Mock mode for development - defaults to false for real SQL Server
-      - MOCK_MODE=${MOCK_MODE:-false}
-      # Training configuration
-      - MIN_TRAIN_ROWS=${MIN_TRAIN_ROWS:-50}
-      - MIN_VALIDATION_ROWS=${MIN_VALIDATION_ROWS:-20}
-      # Multi-source training configuration
-      - TRAINING_DATA_SOURCES=${TRAINING_DATA_SOURCES:-}
-    volumes:
-      - ./src:/app/src
-      - ./data:/app/data
-      - ./logs:/app/logs
-      - ./models:/app/models
+      <<: *worker-environment
+    volumes: *worker-volumes
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - stellasentinal-network
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      <<: *worker-depends
     command: ["python", "-m", "device_anomaly.workers.scheduler"]
-    restart: unless-stopped
 
   # ML Worker (processes training jobs from queue)
   ml-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    <<: *python-worker
     container_name: stellasentinal-ml-worker
     environment:
-      - APP_ENV=${APP_ENV:-local}
-      # Redis for job queue
-      - REDIS_URL=redis://redis:6379/0
-      # PostgreSQL backend database
-      - BACKEND_DB_HOST=${BACKEND_DB_HOST:-postgres}
-      - BACKEND_DB_PORT=${BACKEND_DB_PORT:-5432}
-      - BACKEND_DB_NAME=${BACKEND_DB_NAME:-anomaly_detection}
-      - BACKEND_DB_USER=${BACKEND_DB_USER:-postgres}
-      - BACKEND_DB_PASS=${BACKEND_DB_PASS:-postgres}
-      # XSight SQL Database (Windows SQL Server)
-      - DW_DB_HOST=${DW_DB_HOST:-192.168.3.50}
-      - DW_DB_NAME=${DW_DB_NAME:-XSight_DW}
-      - DW_DB_USER=${DW_DB_USER:-}
-      - DW_DB_PASS=${DW_DB_PASS:-}
-      - DW_DB_DRIVER=${DW_DB_DRIVER:-ODBC Driver 18 for SQL Server}
-      - DW_DB_PORT=${DW_DB_PORT:-1433}
-      # MobiControl SQL Database (Windows SQL Server)
-      - MC_DB_HOST=${MC_DB_HOST:-192.168.3.50}
-      - MC_DB_PORT=${MC_DB_PORT:-1433}
-      - MC_DB_NAME=${MC_DB_NAME:-MobiControlDB}
-      - MC_DB_USER=${MC_DB_USER:-}
-      - MC_DB_PASS=${MC_DB_PASS:-}
-      - MC_DB_DRIVER=${MC_DB_DRIVER:-ODBC Driver 18 for SQL Server}
-      # Historical data support for demo/testing
-      - HISTORICAL_DATA_END_DATE=${HISTORICAL_DATA_END_DATE:-}
-      # Mock mode for development - defaults to false for real SQL Server
-      - MOCK_MODE=${MOCK_MODE:-false}
-      # Training configuration
-      - MIN_TRAIN_ROWS=${MIN_TRAIN_ROWS:-50}
-      - MIN_VALIDATION_ROWS=${MIN_VALIDATION_ROWS:-20}
-      # Multi-source training configuration
-      - TRAINING_DATA_SOURCES=${TRAINING_DATA_SOURCES:-}
-    volumes:
-      - ./src:/app/src
-      - ./data:/app/data
-      - ./logs:/app/logs
-      - ./models:/app/models
+      <<: *worker-environment
+    volumes: *worker-volumes
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - stellasentinal-network
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      <<: *worker-depends
     command: ["python", "-m", "device_anomaly.workers.ml_worker"]
-    restart: unless-stopped
+
+  # Streamlit Dashboard (legacy Python UI for power users)
+  streamlit:
+    <<: *python-worker
+    container_name: stellasentinal-streamlit
+    environment:
+      <<: *worker-environment
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434}
+      LLM_MODEL_NAME: ${LLM_MODEL_NAME:-llama3.2}
+    volumes: *worker-volumes
+    ports:
+      - "${STREAMLIT_PORT:-8501}:8501"
+    depends_on:
+      <<: *worker-depends
+    command: ["streamlit", "run", "src/device_anomaly/ui/dashboard.py", "--server.port=8501", "--server.address=0.0.0.0"]
 
   # Frontend (React/Vite with nginx)
   frontend:
@@ -317,7 +272,7 @@ services:
   frontend-dev:
     build:
       context: ./frontend
-      dockerfile: Dockerfile.dev
+      target: dev
     container_name: stellasentinal-frontend-dev
     profiles:
       - frontend-dev
@@ -335,8 +290,6 @@ services:
 
 volumes:
   postgres_data:
-    driver: local
-  sqlserver_data:
     driver: local
   redis_data:
     driver: local

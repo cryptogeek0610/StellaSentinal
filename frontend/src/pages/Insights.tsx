@@ -5,15 +5,21 @@
  * Provides pre-interpreted, contextualized, and actionable insights.
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { api, CustomerInsightResponse, DailyDigestResponse, ShiftReadinessResponse } from '../api/client';
+import { api, CustomerInsightResponse, DailyDigestResponse } from '../api/client';
 import { motion } from 'framer-motion';
 import { Card } from '../components/Card';
 import { KPICard } from '../components/KPICard';
 import { SlideOverPanel } from '../components/unified';
-import { useMockMode } from '../hooks/useMockMode';
+
+// Lazy load tab components for better performance
+const SystemHealthTab = lazy(() => import('../components/SystemHealthTab'));
+const EventsAlertsTab = lazy(() => import('../components/EventsAlertsTab'));
+const LocationIntelligenceTab = lazy(() => import('../components/LocationIntelligenceTab'));
+const TemporalAnalysisTab = lazy(() => import('../components/TemporalAnalysisTab'));
+const CorrelationsTab = lazy(() => import('../components/CorrelationsTab'));
 import {
   BarChart,
   Bar,
@@ -65,9 +71,10 @@ const CATEGORY_LABELS: Record<string, string> = {
   device_hidden_pattern: 'Hidden Devices',
 };
 
-type TabId = 'digest' | 'battery' | 'network' | 'devices' | 'apps';
+// Extended tabs for comprehensive intelligence
+type TabId = 'digest' | 'devices' | 'correlations' | 'health' | 'events' | 'location' | 'temporal';
 
-const VALID_TABS: TabId[] = ['digest', 'battery', 'network', 'devices', 'apps'];
+const VALID_TABS: TabId[] = ['digest', 'devices', 'correlations', 'health', 'events', 'location', 'temporal'];
 
 function Insights() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -75,63 +82,6 @@ function Insights() {
   const initialTab = tabFromUrl && VALID_TABS.includes(tabFromUrl) ? tabFromUrl : 'digest';
 
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
-  const { mockMode } = useMockMode();
-  
-  // Fetch devices to extract unique locations when not in mock mode
-  const { data: devicesData } = useQuery({
-    queryKey: ['devices', 'locations'],
-    queryFn: () => api.getDevices({ page: 1, page_size: 1000 }),
-    enabled: !mockMode,
-    staleTime: 300000, // Cache for 5 minutes
-  });
-
-  // Extract unique locations from devices when not in mock mode
-  const locations = useMemo(() => {
-    if (mockMode) {
-      // Mock locations
-      return [
-        { id: 'store-001', name: 'Downtown Flagship' },
-        { id: 'store-002', name: 'Westside Mall' },
-        { id: 'store-003', name: 'Harbor Point' },
-        { id: 'store-004', name: 'Tech Plaza' },
-      ];
-    }
-    
-    // Extract unique locations from devices
-    if (devicesData?.devices) {
-      const locationMap = new Map<string, string>();
-      devicesData.devices.forEach((device) => {
-        if (device.location && device.store_id) {
-          // Use store_id as the ID and location as the name
-          locationMap.set(device.store_id, device.location);
-        } else if (device.location) {
-          // Fallback: use location as both ID and name if no store_id
-          locationMap.set(device.location, device.location);
-        }
-      });
-      
-      return Array.from(locationMap.entries()).map(([id, name]) => ({
-        id,
-        name,
-      }));
-    }
-    
-    // Return empty array if no devices loaded yet
-    return [];
-  }, [mockMode, devicesData]);
-
-  // Set initial selected location when locations are available
-  const [selectedLocation, setSelectedLocation] = useState<string>(() => {
-    if (mockMode) return 'store-001';
-    return '';
-  });
-
-  // Update selected location when locations change (for non-mock mode)
-  useEffect(() => {
-    if (!mockMode && locations.length > 0 && !selectedLocation) {
-      setSelectedLocation(locations[0].id);
-    }
-  }, [mockMode, locations, selectedLocation]);
 
   // Sync tab state with URL params
   useEffect(() => {
@@ -139,7 +89,7 @@ function Insights() {
     if (urlTab && VALID_TABS.includes(urlTab) && urlTab !== activeTab) {
       setActiveTab(urlTab);
     }
-  }, [searchParams]);
+  }, [searchParams, activeTab]);
 
   // Update URL when tab changes
   const handleTabChange = (tab: TabId) => {
@@ -153,40 +103,21 @@ function Insights() {
     setSearchParams(searchParams, { replace: true });
   };
 
-  // Fetch daily digest
+  // Fetch daily digest - auto-refresh every minute for live updates
   const { data: digest, isLoading: digestLoading } = useQuery({
     queryKey: ['insights', 'daily-digest'],
     queryFn: () => api.getDailyDigest({ period_days: 7 }),
+    refetchInterval: 60000, // Auto-refresh every minute
   });
 
-  // Fetch shift readiness for selected location
-  const { data: shiftReadiness, isLoading: shiftLoading } = useQuery({
-    queryKey: ['insights', 'shift-readiness', selectedLocation],
-    queryFn: () => api.getShiftReadiness(selectedLocation),
-    enabled: activeTab === 'battery',
-  });
-
-  // Fetch network analysis
-  const { data: networkAnalysis, isLoading: networkLoading } = useQuery({
-    queryKey: ['insights', 'network-analysis'],
-    queryFn: () => api.getNetworkAnalysis(),
-    enabled: activeTab === 'network',
-  });
-
-  // Fetch device abuse analysis
+  // Fetch device abuse analysis (for Device Health tab)
   const { data: deviceAbuse, isLoading: deviceLoading } = useQuery({
     queryKey: ['insights', 'device-abuse'],
     queryFn: () => api.getDeviceAbuseAnalysis(),
     enabled: activeTab === 'devices',
   });
 
-  // Fetch app analysis
-  const { data: appAnalysis, isLoading: appLoading } = useQuery({
-    queryKey: ['insights', 'app-analysis'],
-    queryFn: () => api.getAppAnalysis(),
-    enabled: activeTab === 'apps',
-  });
-
+  // Extended tabs for comprehensive intelligence
   const tabs = [
     {
       id: 'digest',
@@ -194,24 +125,6 @@ function Insights() {
       icon: (
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-        </svg>
-      ),
-    },
-    {
-      id: 'battery',
-      label: 'Shift Readiness',
-      icon: (
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-        </svg>
-      ),
-    },
-    {
-      id: 'network',
-      label: 'Network',
-      icon: (
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
         </svg>
       ),
     },
@@ -225,11 +138,48 @@ function Insights() {
       ),
     },
     {
-      id: 'apps',
-      label: 'Apps',
+      id: 'correlations',
+      label: 'Correlations',
       icon: (
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+        </svg>
+      ),
+    },
+    {
+      id: 'health',
+      label: 'System Health',
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+        </svg>
+      ),
+    },
+    {
+      id: 'events',
+      label: 'Events & Alerts',
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+        </svg>
+      ),
+    },
+    {
+      id: 'location',
+      label: 'Location Intelligence',
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+      ),
+    },
+    {
+      id: 'temporal',
+      label: 'Temporal Analysis',
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
       ),
     },
@@ -274,22 +224,33 @@ function Insights() {
       {activeTab === 'digest' && (
         <DigestTab digest={digest} isLoading={digestLoading} />
       )}
-      {activeTab === 'battery' && (
-        <BatteryTab
-          shiftReadiness={shiftReadiness}
-          isLoading={shiftLoading}
-          selectedLocation={selectedLocation}
-          onLocationChange={setSelectedLocation}
-        />
-      )}
-      {activeTab === 'network' && (
-        <NetworkTab networkAnalysis={networkAnalysis} isLoading={networkLoading} />
-      )}
       {activeTab === 'devices' && (
         <DevicesTab deviceAbuse={deviceAbuse} isLoading={deviceLoading} />
       )}
-      {activeTab === 'apps' && (
-        <AppsTab appAnalysis={appAnalysis} isLoading={appLoading} />
+      {activeTab === 'correlations' && (
+        <Suspense fallback={<TabLoadingState message="Loading Correlations..." />}>
+          <CorrelationsTab />
+        </Suspense>
+      )}
+      {activeTab === 'health' && (
+        <Suspense fallback={<TabLoadingState message="Loading System Health..." />}>
+          <SystemHealthTab />
+        </Suspense>
+      )}
+      {activeTab === 'events' && (
+        <Suspense fallback={<TabLoadingState message="Loading Events & Alerts..." />}>
+          <EventsAlertsTab />
+        </Suspense>
+      )}
+      {activeTab === 'location' && (
+        <Suspense fallback={<TabLoadingState message="Loading Location Intelligence..." />}>
+          <LocationIntelligenceTab />
+        </Suspense>
+      )}
+      {activeTab === 'temporal' && (
+        <Suspense fallback={<TabLoadingState message="Loading Temporal Analysis..." />}>
+          <TemporalAnalysisTab />
+        </Suspense>
       )}
     </motion.div>
   );
@@ -642,393 +603,6 @@ function DigestTab({
 }
 
 // ============================================================================
-// Battery/Shift Readiness Tab
-// ============================================================================
-
-function BatteryTab({
-  shiftReadiness,
-  isLoading,
-  selectedLocation,
-  onLocationChange,
-}: {
-  shiftReadiness?: ShiftReadinessResponse;
-  isLoading: boolean;
-  selectedLocation: string;
-  onLocationChange: (loc: string) => void;
-}) {
-  const { mockMode } = useMockMode();
-  
-  // Fetch devices to extract unique locations when not in mock mode
-  const { data: devicesData } = useQuery({
-    queryKey: ['devices', 'locations'],
-    queryFn: () => api.getDevices({ page: 1, page_size: 1000 }),
-    enabled: !mockMode,
-    staleTime: 300000, // Cache for 5 minutes
-  });
-
-  // Extract unique locations from devices when not in mock mode
-  const locations = useMemo(() => {
-    if (mockMode) {
-      // Mock locations
-      return [
-        { id: 'store-001', name: 'Downtown Flagship' },
-        { id: 'store-002', name: 'Westside Mall' },
-        { id: 'store-003', name: 'Harbor Point' },
-        { id: 'store-004', name: 'Tech Plaza' },
-      ];
-    }
-    
-    // Extract unique locations from devices
-    if (devicesData?.devices) {
-      const locationMap = new Map<string, string>();
-      devicesData.devices.forEach((device) => {
-        if (device.location && device.store_id) {
-          // Use store_id as the ID and location as the name
-          locationMap.set(device.store_id, device.location);
-        } else if (device.location) {
-          // Fallback: use location as both ID and name if no store_id
-          locationMap.set(device.location, device.location);
-        }
-      });
-      
-      return Array.from(locationMap.entries()).map(([id, name]) => ({
-        id,
-        name,
-      }));
-    }
-    
-    // Return empty array if no devices loaded yet
-    return [];
-  }, [mockMode, devicesData]);
-
-  return (
-    <div className="space-y-6">
-      {/* Location Selector */}
-      <div className="flex items-center gap-4">
-        <label className="text-sm text-slate-400">Location:</label>
-        {locations.length > 0 ? (
-          <select
-            value={selectedLocation}
-            onChange={(e) => onLocationChange(e.target.value)}
-            className="input-stellar px-4 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-white"
-          >
-            {locations.map((loc) => (
-              <option key={loc.id} value={loc.id}>
-                {loc.name}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <div className="px-4 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-slate-500 text-sm">
-            No locations available. Please ensure devices have location data.
-          </div>
-        )}
-      </div>
-
-      {isLoading ? (
-        <LoadingState message="Analyzing shift readiness..." />
-      ) : !shiftReadiness ? (
-        <EmptyState message="No shift data available" />
-      ) : (
-        <>
-          {/* Readiness KPIs */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <KPICard
-              title="Shift Readiness"
-              value={`${shiftReadiness.readiness_percentage.toFixed(0)}%`}
-              color={shiftReadiness.readiness_percentage >= 80 ? 'aurora' : 'warning'}
-              progressValue={shiftReadiness.readiness_percentage}
-              icon={
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              }
-            />
-            <KPICard
-              title="Devices Ready"
-              value={`${shiftReadiness.devices_ready}/${shiftReadiness.total_devices}`}
-              color="aurora"
-              icon={
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              }
-            />
-            <KPICard
-              title="At Risk"
-              value={shiftReadiness.devices_at_risk}
-              color="warning"
-              isActive={shiftReadiness.devices_at_risk > 0}
-              icon={
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              }
-            />
-            <KPICard
-              title="Critical"
-              value={shiftReadiness.devices_critical}
-              color="danger"
-              isActive={shiftReadiness.devices_critical > 0}
-              icon={
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
-              }
-            />
-          </div>
-
-          {/* Shift Info */}
-          <Card
-            title={`${shiftReadiness.shift_name} - ${shiftReadiness.location_name}`}
-            accent="stellar"
-          >
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Stat label="Avg Battery" value={`${shiftReadiness.avg_battery_at_start.toFixed(0)}%`} />
-              <Stat label="Avg Drain Rate" value={`${shiftReadiness.avg_drain_rate.toFixed(1)}%/hr`} />
-              <Stat label="Not Fully Charged" value={shiftReadiness.devices_not_fully_charged} />
-              <Stat
-                label="vs Last Week"
-                value={
-                  shiftReadiness.vs_last_week_readiness !== null
-                    ? `${shiftReadiness.vs_last_week_readiness > 0 ? '+' : ''}${shiftReadiness.vs_last_week_readiness.toFixed(1)}%`
-                    : '—'
-                }
-                trend={
-                  shiftReadiness.vs_last_week_readiness !== null
-                    ? shiftReadiness.vs_last_week_readiness >= 0
-                      ? 'up'
-                      : 'down'
-                    : undefined
-                }
-              />
-            </div>
-          </Card>
-
-          {/* Device Details */}
-          <Card title="Device Readiness">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-slate-500 border-b border-slate-700">
-                    <th className="py-3 px-4">Device</th>
-                    <th className="py-3 px-4">Battery</th>
-                    <th className="py-3 px-4">Drain Rate</th>
-                    <th className="py-3 px-4">End of Shift</th>
-                    <th className="py-3 px-4">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {shiftReadiness.device_details.map((device) => (
-                    <tr
-                      key={device.device_id}
-                      className="border-b border-slate-800 hover:bg-slate-800/30"
-                    >
-                      <td className="py-3 px-4 text-white font-medium">
-                        {device.device_name}
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <div className="w-16 h-2 bg-slate-700 rounded-full overflow-hidden">
-                            <div
-                              className={clsx(
-                                'h-full rounded-full',
-                                device.current_battery >= 80
-                                  ? 'bg-green-500'
-                                  : device.current_battery >= 50
-                                  ? 'bg-amber-500'
-                                  : 'bg-red-500'
-                              )}
-                              style={{ width: `${device.current_battery}%` }}
-                            />
-                          </div>
-                          <span className="text-slate-300">{device.current_battery}%</span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 text-slate-300">
-                        {device.drain_rate_per_hour.toFixed(1)}%/hr
-                      </td>
-                      <td className="py-3 px-4">
-                        <span
-                          className={clsx(
-                            'font-mono',
-                            device.projected_end_battery >= 20
-                              ? 'text-green-400'
-                              : device.projected_end_battery >= 10
-                              ? 'text-amber-400'
-                              : 'text-red-400'
-                          )}
-                        >
-                          {device.projected_end_battery}%
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        {device.will_complete_shift ? (
-                          <span className="px-2 py-1 text-xs rounded-full bg-green-500/20 text-green-400 border border-green-500/30">
-                            Ready
-                          </span>
-                        ) : (
-                          <span className="px-2 py-1 text-xs rounded-full bg-red-500/20 text-red-400 border border-red-500/30">
-                            At Risk
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-
-          {/* Recommendations */}
-          {shiftReadiness.recommendations.length > 0 && (
-            <Card title="Recommendations" accent="aurora">
-              <ul className="space-y-2">
-                {shiftReadiness.recommendations.map((rec, i) => (
-                  <li key={i} className="flex items-start gap-3 text-slate-300">
-                    <span className="text-amber-400">→</span>
-                    {rec}
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-// ============================================================================
-// Network Tab
-// ============================================================================
-
-function NetworkTab({
-  networkAnalysis,
-  isLoading,
-}: {
-  networkAnalysis?: ReturnType<typeof api.getNetworkAnalysis> extends Promise<infer T> ? T : never;
-  isLoading: boolean;
-}) {
-  if (isLoading) {
-    return <LoadingState message="Analyzing network patterns..." />;
-  }
-
-  if (!networkAnalysis) {
-    return <EmptyState message="No network data available" />;
-  }
-
-  return (
-    <div className="space-y-6">
-      {/* Network KPIs */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KPICard
-          title="WiFi Roaming Issues"
-          value={networkAnalysis.wifi_summary.devices_with_roaming_issues}
-          color="warning"
-          icon={
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
-            </svg>
-          }
-        />
-        <KPICard
-          title="Potential Dead Zones"
-          value={networkAnalysis.wifi_summary.potential_dead_zones}
-          color="danger"
-          icon={
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-            </svg>
-          }
-        />
-        <KPICard
-          title="Total Disconnects"
-          value={networkAnalysis.disconnect_summary.total_disconnects}
-          color="warning"
-          icon={
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414" />
-            </svg>
-          }
-        />
-        <KPICard
-          title="Hidden Devices"
-          value={networkAnalysis.hidden_devices_count}
-          color={networkAnalysis.hidden_devices_count > 0 ? 'danger' : 'aurora'}
-          icon={
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-            </svg>
-          }
-        />
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        {/* WiFi Summary */}
-        <Card title="WiFi Analysis" accent="stellar">
-          <div className="space-y-4">
-            <Stat label="Total Devices" value={networkAnalysis.wifi_summary.total_devices} />
-            <Stat
-              label="Roaming Issues"
-              value={networkAnalysis.wifi_summary.devices_with_roaming_issues}
-            />
-            <Stat
-              label="AP Stickiness"
-              value={networkAnalysis.wifi_summary.devices_with_stickiness}
-            />
-            <Stat
-              label="Avg APs/Device"
-              value={networkAnalysis.wifi_summary.avg_aps_per_device.toFixed(1)}
-            />
-          </div>
-        </Card>
-
-        {/* Disconnect Summary */}
-        <Card title="Disconnect Patterns" accent="warning">
-          <div className="space-y-4">
-            <Stat
-              label="Avg Disconnects/Device"
-              value={networkAnalysis.disconnect_summary.avg_disconnects_per_device.toFixed(2)}
-            />
-            <Stat
-              label="Total Offline Hours"
-              value={networkAnalysis.disconnect_summary.total_offline_hours.toFixed(1)}
-            />
-            <div className="p-3 bg-slate-800/30 rounded-lg">
-              <p className="text-sm text-slate-400 mb-1">Pattern Detected:</p>
-              <p className="text-slate-300">{networkAnalysis.disconnect_summary.pattern_description}</p>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* Financial Impact */}
-      {networkAnalysis.financial_impact && (
-        <FinancialImpactCard
-          impact={networkAnalysis.financial_impact}
-          title="Network Issues - Financial Impact"
-        />
-      )}
-
-      {/* Recommendations */}
-      {networkAnalysis.recommendations.length > 0 && (
-        <Card title="Recommendations" accent="aurora">
-          <ul className="space-y-2">
-            {networkAnalysis.recommendations.map((rec, i) => (
-              <li key={i} className="flex items-start gap-3 text-slate-300">
-                <span className="text-amber-400">→</span>
-                {rec}
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
-    </div>
-  );
-}
-
-// ============================================================================
 // Devices Tab
 // ============================================================================
 
@@ -1148,6 +722,108 @@ function DevicesTab({
         </Card>
       </div>
 
+      {/* People with Excessive Drops - Carl's requirement */}
+      {deviceAbuse.worst_users && deviceAbuse.worst_users.length > 0 && (
+        <Card title="People with Excessive Drops" accent="warning">
+          <p className="text-sm text-slate-400 mb-4">
+            Users ranked by device drop count. Users with {'>'}2x fleet average are flagged as excessive.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-700/50">
+                  <th className="text-left py-2 px-3 text-slate-400 font-medium">User</th>
+                  <th className="text-right py-2 px-3 text-slate-400 font-medium">Drops</th>
+                  <th className="text-right py-2 px-3 text-slate-400 font-medium">Devices</th>
+                  <th className="text-right py-2 px-3 text-slate-400 font-medium">Per Device</th>
+                  <th className="text-right py-2 px-3 text-slate-400 font-medium">vs Fleet</th>
+                  <th className="text-center py-2 px-3 text-slate-400 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {deviceAbuse.worst_users.map((user, index) => (
+                  <tr
+                    key={user.user_id}
+                    className={clsx(
+                      'border-b border-slate-800/50',
+                      user.is_excessive && 'bg-red-500/5'
+                    )}
+                  >
+                    <td className="py-3 px-3">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={clsx(
+                            'w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold',
+                            index === 0
+                              ? 'bg-red-500/20 text-red-400'
+                              : index === 1
+                              ? 'bg-orange-500/20 text-orange-400'
+                              : index === 2
+                              ? 'bg-amber-500/20 text-amber-400'
+                              : 'bg-slate-700/50 text-slate-400'
+                          )}
+                        >
+                          {index + 1}
+                        </div>
+                        <div>
+                          <div className="font-medium text-white">
+                            {user.user_name || user.user_id}
+                          </div>
+                          {user.user_email && (
+                            <div className="text-xs text-slate-500">{user.user_email}</div>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      <span className="font-mono font-bold text-amber-400">{user.total_drops}</span>
+                    </td>
+                    <td className="py-3 px-3 text-right text-slate-300">{user.device_count}</td>
+                    <td className="py-3 px-3 text-right text-slate-300">
+                      {user.drops_per_device.toFixed(1)}
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      <span
+                        className={clsx(
+                          'font-mono font-bold',
+                          user.vs_fleet_multiplier >= 3
+                            ? 'text-red-400'
+                            : user.vs_fleet_multiplier >= 2
+                            ? 'text-orange-400'
+                            : 'text-slate-300'
+                        )}
+                      >
+                        {user.vs_fleet_multiplier.toFixed(1)}x
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 text-center">
+                      {user.is_excessive ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-red-500/20 text-red-400 border border-red-500/30">
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                          </svg>
+                          Excessive
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-500">Normal</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {deviceAbuse.worst_users.filter(u => u.is_excessive).length > 0 && (
+            <div className="mt-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+              <p className="text-sm text-amber-300">
+                <strong>{deviceAbuse.worst_users.filter(u => u.is_excessive).length} user(s)</strong> have
+                significantly higher drop rates than fleet average. Consider targeted device handling training.
+              </p>
+            </div>
+          )}
+        </Card>
+      )}
+
       {/* Financial Impact */}
       {deviceAbuse.financial_impact && (
         <FinancialImpactCard
@@ -1161,164 +837,6 @@ function DevicesTab({
         <Card title="Recommendations" accent="aurora">
           <ul className="space-y-2">
             {deviceAbuse.recommendations.map((rec, i) => (
-              <li key={i} className="flex items-start gap-3 text-slate-300">
-                <span className="text-amber-400">→</span>
-                {rec}
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
-    </div>
-  );
-}
-
-// ============================================================================
-// Apps Tab
-// ============================================================================
-
-function AppsTab({
-  appAnalysis,
-  isLoading,
-}: {
-  appAnalysis?: ReturnType<typeof api.getAppAnalysis> extends Promise<infer T> ? T : never;
-  isLoading: boolean;
-}) {
-  if (isLoading) {
-    return <LoadingState message="Analyzing app performance..." />;
-  }
-
-  if (!appAnalysis) {
-    return <EmptyState message="No app data available" />;
-  }
-
-  return (
-    <div className="space-y-6">
-      {/* App KPIs */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KPICard
-          title="Apps Analyzed"
-          value={appAnalysis.total_apps_analyzed}
-          color="stellar"
-          icon={
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-            </svg>
-          }
-        />
-        <KPICard
-          title="Apps with Issues"
-          value={appAnalysis.apps_with_issues}
-          color="warning"
-          icon={
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-          }
-        />
-        <KPICard
-          title="Total Crashes"
-          value={appAnalysis.total_crashes}
-          color="danger"
-          icon={
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-            </svg>
-          }
-        />
-        <KPICard
-          title="ANRs"
-          value={appAnalysis.total_anrs}
-          color="warning"
-          icon={
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          }
-        />
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        {/* Power Consumers */}
-        <Card title="Top Power Consumers" accent="warning">
-          <div className="space-y-3">
-            {appAnalysis.top_power_consumers.map((app, index) => (
-              <div
-                key={app.package_name}
-                className="flex items-center gap-4 p-3 bg-slate-800/30 rounded-lg"
-              >
-                <span
-                  className={clsx(
-                    'w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold',
-                    index === 0
-                      ? 'bg-red-500/20 text-red-400'
-                      : index === 1
-                      ? 'bg-orange-500/20 text-orange-400'
-                      : 'bg-slate-700 text-slate-400'
-                  )}
-                >
-                  {index + 1}
-                </span>
-                <div className="flex-1">
-                  <p className="font-medium text-white">{app.app_name}</p>
-                  <p className="text-xs text-slate-500">{app.package_name}</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-mono text-amber-400">{app.battery_drain_percent.toFixed(1)}%</p>
-                  <p className="text-xs text-slate-500">{app.drain_per_hour.toFixed(1)}%/hr</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        {/* Top Crashers */}
-        <Card title="Top Crashers" accent="danger">
-          <div className="space-y-3">
-            {appAnalysis.top_crashers.map((app, index) => (
-              <div
-                key={app.package_name}
-                className="flex items-center gap-4 p-3 bg-slate-800/30 rounded-lg"
-              >
-                <span
-                  className={clsx(
-                    'w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold',
-                    index === 0
-                      ? 'bg-red-500/20 text-red-400'
-                      : index === 1
-                      ? 'bg-orange-500/20 text-orange-400'
-                      : 'bg-slate-700 text-slate-400'
-                  )}
-                >
-                  {index + 1}
-                </span>
-                <div className="flex-1">
-                  <p className="font-medium text-white">{app.app_name}</p>
-                  <p className="text-xs text-slate-500">{app.devices_affected} devices affected</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-mono text-red-400">{app.crash_count} crashes</p>
-                  <p className="text-xs text-slate-500">{app.anr_count} ANRs</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
-
-      {/* Financial Impact */}
-      {appAnalysis.financial_impact && (
-        <FinancialImpactCard
-          impact={appAnalysis.financial_impact}
-          title="App Issues - Financial Impact"
-        />
-      )}
-
-      {/* Recommendations */}
-      {appAnalysis.recommendations.length > 0 && (
-        <Card title="Recommendations" accent="aurora">
-          <ul className="space-y-2">
-            {appAnalysis.recommendations.map((rec, i) => (
               <li key={i} className="flex items-start gap-3 text-slate-300">
                 <span className="text-amber-400">→</span>
                 {rec}
@@ -1502,27 +1020,6 @@ function InsightDetailCard({ insight }: { insight: CustomerInsightResponse }) {
   );
 }
 
-function Stat({
-  label,
-  value,
-  trend,
-}: {
-  label: string;
-  value: string | number;
-  trend?: 'up' | 'down';
-}) {
-  return (
-    <div className="p-3 bg-slate-800/30 rounded-lg">
-      <p className="text-xs text-slate-500 mb-1">{label}</p>
-      <p className="text-lg font-bold text-white flex items-center gap-1">
-        {value}
-        {trend === 'up' && <span className="text-green-400 text-sm">↑</span>}
-        {trend === 'down' && <span className="text-red-400 text-sm">↓</span>}
-      </p>
-    </div>
-  );
-}
-
 function LoadingState({ message }: { message: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-16">
@@ -1531,6 +1028,9 @@ function LoadingState({ message }: { message: string }) {
     </div>
   );
 }
+
+// Alias for Suspense fallback
+const TabLoadingState = LoadingState;
 
 function EmptyState({ message }: { message: string }) {
   return (

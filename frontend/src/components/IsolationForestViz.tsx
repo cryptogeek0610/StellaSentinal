@@ -45,6 +45,9 @@ export function IsolationForestViz({ days = 30 }: IsolationForestVizProps) {
     );
   }
 
+  const defaults = stats.defaults;
+  const showDefaults = Boolean(defaults);
+
   // Prepare histogram data
   const histogramData = stats.score_distribution.bins.map((bin) => ({
     bin_center: (bin.bin_start + bin.bin_end) / 2,
@@ -93,6 +96,11 @@ export function IsolationForestViz({ days = 30 }: IsolationForestVizProps) {
             <p className="text-2xl font-bold font-mono text-cyber-blue">
               {stats.config.n_estimators}
             </p>
+            {showDefaults && (
+              <p className="text-xs text-slate-500">
+                Default: {defaults?.n_estimators}
+              </p>
+            )}
           </motion.div>
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -105,6 +113,11 @@ export function IsolationForestViz({ days = 30 }: IsolationForestVizProps) {
             <p className="text-2xl font-bold font-mono text-cyber-orange">
               {(stats.config.contamination * 100).toFixed(1)}%
             </p>
+            {showDefaults && (
+              <p className="text-xs text-slate-500">
+                Default: {((defaults?.contamination ?? 0) * 100).toFixed(1)}%
+              </p>
+            )}
           </motion.div>
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -117,6 +130,11 @@ export function IsolationForestViz({ days = 30 }: IsolationForestVizProps) {
             <p className="text-2xl font-bold text-slate-200">
               {stats.config.scale_features ? 'Yes' : 'No'}
             </p>
+            {showDefaults && (
+              <p className="text-xs text-slate-500">
+                Default: {defaults?.scale_features ? 'Yes' : 'No'}
+              </p>
+            )}
           </motion.div>
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -129,6 +147,11 @@ export function IsolationForestViz({ days = 30 }: IsolationForestVizProps) {
             <p className="text-lg font-semibold text-slate-200 capitalize">
               {stats.config.model_type.replace('_', ' ')}
             </p>
+            {showDefaults && defaults?.model_type && (
+              <p className="text-xs text-slate-500 capitalize">
+                Default: {defaults.model_type.replace('_', ' ')}
+              </p>
+            )}
           </motion.div>
         </div>
       </Card>

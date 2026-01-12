@@ -23,6 +23,22 @@ import {
 } from 'recharts';
 import type { TableProfile, AvailableMetric, DataDiscoveryStatus } from '../types/training';
 
+// Import tab components
+import { SystemHealthTab } from '../components/SystemHealthTab';
+import { LocationIntelligenceTab } from '../components/LocationIntelligenceTab';
+import { EventsAlertsTab } from '../components/EventsAlertsTab';
+import { TemporalAnalysisTab } from '../components/TemporalAnalysisTab';
+import { CorrelationsTab } from '../components/CorrelationsTab';
+
+// Tab type definition
+type TabId = 'overview' | 'location' | 'events' | 'health' | 'temporal' | 'correlations';
+
+interface TabConfig {
+  id: TabId;
+  label: string;
+  icon: React.ReactNode;
+}
+
 // Format large numbers with K, M, B suffixes
 function formatNumber(num: number): string {
   if (num >= 1_000_000_000) return (num / 1_000_000_000).toFixed(1) + 'B';
@@ -105,6 +121,11 @@ function TableRow({
     (col) => col.mean !== null
   ).length;
 
+  const sourceDbColors = {
+    xsight: 'bg-stellar-500/20 text-stellar-400',
+    mobicontrol: 'bg-aurora-500/20 text-aurora-400',
+  };
+
   return (
     <button
       onClick={onClick}
@@ -121,9 +142,16 @@ function TableRow({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
             </svg>
           </div>
-          <span className={`text-sm font-medium truncate ${isSelected ? 'text-stellar-300' : 'text-slate-300'}`}>
-            {profile.table_name}
-          </span>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className={`text-sm font-medium truncate ${isSelected ? 'text-stellar-300' : 'text-slate-300'}`}>
+              {profile.table_name}
+            </span>
+            {profile.source_db && (
+              <span className={`text-[9px] px-1 py-0.5 rounded font-medium flex-shrink-0 ${sourceDbColors[profile.source_db] || 'bg-slate-700/50 text-slate-400'}`}>
+                {profile.source_db === 'xsight' ? 'XS' : 'MC'}
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
           <span className="text-xs text-stellar-400 font-medium">{formatNumber(profile.row_count)}</span>
@@ -141,12 +169,24 @@ function TableDetailPanel({ profile }: { profile: TableProfile }) {
     (col) => col.mean !== null
   ).length;
 
+  const sourceDbLabels = {
+    xsight: { label: 'XSight DW', className: 'bg-stellar-500/20 text-stellar-400' },
+    mobicontrol: { label: 'MobiControl', className: 'bg-aurora-500/20 text-aurora-400' },
+  };
+
   return (
     <div>
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div>
-          <h3 className="font-semibold text-slate-200">{profile.table_name}</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-semibold text-slate-200">{profile.table_name}</h3>
+            {profile.source_db && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${sourceDbLabels[profile.source_db]?.className || 'bg-slate-700/50 text-slate-400'}`}>
+                {sourceDbLabels[profile.source_db]?.label || profile.source_db}
+              </span>
+            )}
+          </div>
           {profile.date_range[0] && profile.date_range[1] && (
             <p className="text-xs text-slate-500 mt-0.5">
               {profile.date_range[0]} → {profile.date_range[1]}
@@ -448,13 +488,59 @@ function MetricListItem({
   );
 }
 
+// Tab icons as inline SVGs
+const TabIcons = {
+  overview: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
+    </svg>
+  ),
+  location: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  ),
+  events: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+    </svg>
+  ),
+  health: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+    </svg>
+  ),
+  temporal: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
+  correlations: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+    </svg>
+  ),
+};
+
+const TABS: TabConfig[] = [
+  { id: 'overview', label: 'Overview', icon: TabIcons.overview },
+  { id: 'location', label: 'Location', icon: TabIcons.location },
+  { id: 'events', label: 'Events & Alerts', icon: TabIcons.events },
+  { id: 'health', label: 'System Health', icon: TabIcons.health },
+  { id: 'temporal', label: 'Temporal', icon: TabIcons.temporal },
+  { id: 'correlations', label: 'Correlations', icon: TabIcons.correlations },
+];
+
 export default function DataOverview() {
   const queryClient = useQueryClient();
   const { mockMode, setMockMode } = useMockMode();
+  const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [selectedMetric, setSelectedMetric] = useState<AvailableMetric | null>(null);
   const [selectedTable, setSelectedTable] = useState<TableProfile | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [domainFilter, setDomainFilter] = useState<string>('all');
+  const [sourceFilter, setSourceFilter] = useState<string>('all');
 
   // Fetch table profiles
   const {
@@ -488,16 +574,37 @@ export default function DataOverview() {
     },
   });
 
-  // Summary stats
+  // Summary stats with breakdown by source
   const summary = useMemo(() => {
     if (!tableProfiles) return null;
+
+    const xsightTables = tableProfiles.filter(t => t.source_db === 'xsight');
+    const mcTables = tableProfiles.filter(t => t.source_db === 'mobicontrol');
+
     return {
       totalTables: tableProfiles.length,
       totalRows: tableProfiles.reduce((sum, t) => sum + t.row_count, 0),
       totalDevices: Math.max(...tableProfiles.map((t) => t.device_count), 0),
       totalMetrics: metrics?.length || 0,
+      bySource: {
+        xsight: {
+          tables: xsightTables.length,
+          rows: xsightTables.reduce((sum, t) => sum + t.row_count, 0),
+        },
+        mobicontrol: {
+          tables: mcTables.length,
+          rows: mcTables.reduce((sum, t) => sum + t.row_count, 0),
+        },
+      },
     };
   }, [tableProfiles, metrics]);
+
+  // Filter tables by source
+  const filteredTables = useMemo(() => {
+    if (!tableProfiles) return [];
+    if (sourceFilter === 'all') return tableProfiles;
+    return tableProfiles.filter(t => t.source_db === sourceFilter);
+  }, [tableProfiles, sourceFilter]);
 
   // Filter metrics by category and domain
   const filteredMetrics = useMemo(() => {
@@ -559,6 +666,24 @@ export default function DataOverview() {
         </div>
       </div>
 
+      {/* Tab Navigation */}
+      <div className="flex items-center gap-1 p-1 bg-slate-800/50 rounded-xl border border-slate-700/50">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === tab.id
+                ? 'bg-stellar-600 text-white shadow-lg shadow-stellar-500/20'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
+            }`}
+          >
+            {tab.icon}
+            <span className="hidden sm:inline">{tab.label}</span>
+          </button>
+        ))}
+      </div>
+
       {/* Connection Error Banner */}
       {!mockMode && profilesError && (
         <ConnectionErrorBanner onEnableMockMode={() => setMockMode(true)} />
@@ -569,6 +694,16 @@ export default function DataOverview() {
         <DiscoveryStatusBanner status={discoveryStatus} />
       )}
 
+      {/* Tab Content */}
+      {activeTab === 'location' && <LocationIntelligenceTab />}
+      {activeTab === 'events' && <EventsAlertsTab />}
+      {activeTab === 'health' && <SystemHealthTab />}
+      {activeTab === 'temporal' && <TemporalAnalysisTab />}
+      {activeTab === 'correlations' && <CorrelationsTab />}
+
+      {/* Overview Tab Content */}
+      {activeTab === 'overview' && (
+        <>
       {/* Summary KPIs */}
       {summary && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -615,25 +750,91 @@ export default function DataOverview() {
         </div>
       )}
 
+      {/* Data Source Breakdown */}
+      {summary && summary.bySource && (
+        <Card className="p-4">
+          <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wide mb-3">Data Sources</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* XSight DW */}
+            <div className="p-4 bg-stellar-500/10 border border-stellar-500/20 rounded-xl">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="p-2 bg-stellar-500/20 rounded-lg">
+                  <svg className="w-5 h-5 text-stellar-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+                  </svg>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-stellar-300">XSight Data Warehouse</h4>
+                  <p className="text-xs text-stellar-400/60">Telemetry & usage analytics</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="text-center p-2 bg-stellar-500/10 rounded-lg">
+                  <p className="text-2xl font-bold text-stellar-400">{summary.bySource.xsight.tables}</p>
+                  <p className="text-[10px] text-stellar-400/60 uppercase">Tables</p>
+                </div>
+                <div className="text-center p-2 bg-stellar-500/10 rounded-lg">
+                  <p className="text-2xl font-bold text-stellar-400">{formatNumber(summary.bySource.xsight.rows)}</p>
+                  <p className="text-[10px] text-stellar-400/60 uppercase">Rows</p>
+                </div>
+              </div>
+            </div>
+
+            {/* MobiControl */}
+            <div className="p-4 bg-aurora-500/10 border border-aurora-500/20 rounded-xl">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="p-2 bg-aurora-500/20 rounded-lg">
+                  <svg className="w-5 h-5 text-aurora-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-aurora-300">MobiControl Database</h4>
+                  <p className="text-xs text-aurora-400/60">Device management & events</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="text-center p-2 bg-aurora-500/10 rounded-lg">
+                  <p className="text-2xl font-bold text-aurora-400">{summary.bySource.mobicontrol.tables}</p>
+                  <p className="text-[10px] text-aurora-400/60 uppercase">Tables</p>
+                </div>
+                <div className="text-center p-2 bg-aurora-500/10 rounded-lg">
+                  <p className="text-2xl font-bold text-aurora-400">{formatNumber(summary.bySource.mobicontrol.rows)}</p>
+                  <p className="text-[10px] text-aurora-400/60 uppercase">Rows</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Database Tables Section - Compact Grid */}
       <Card className="p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
             <h2 className="text-lg font-semibold text-slate-200">Database Tables</h2>
-            {tableProfiles && (
+            {filteredTables && (
               <span className="text-xs px-2 py-0.5 bg-slate-700/50 rounded text-slate-400">
-                {tableProfiles.length} tables
+                {filteredTables.length} tables
               </span>
             )}
           </div>
-          {selectedTable && (
-            <button
-              onClick={() => setSelectedTable(null)}
-              className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
-            >
-              Clear selection
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            {/* Source Filter */}
+            <Select value={sourceFilter} onChange={setSourceFilter} className="text-xs">
+              <option value="all">All Sources</option>
+              <option value="xsight">XSight DW</option>
+              <option value="mobicontrol">MobiControl</option>
+            </Select>
+            {selectedTable && (
+              <button
+                onClick={() => setSelectedTable(null)}
+                className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+              >
+                Clear selection
+              </button>
+            )}
+          </div>
         </div>
 
         {profilesLoading ? (
@@ -662,12 +863,12 @@ export default function DataOverview() {
               </button>
             )}
           </div>
-        ) : tableProfiles && tableProfiles.length > 0 ? (
+        ) : filteredTables && filteredTables.length > 0 ? (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
             {/* Table List - Scrollable */}
             <div className="lg:col-span-2 xl:col-span-3">
               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2 max-h-[200px] overflow-y-auto pr-1">
-                {tableProfiles.map((profile) => (
+                {filteredTables.map((profile) => (
                   <TableRow
                     key={profile.table_name}
                     profile={profile}
@@ -867,6 +1068,8 @@ export default function DataOverview() {
           </div>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }

@@ -1,26 +1,56 @@
 /**
- * Stellar Sidebar - Mission Control Navigation
- * 
- * Premium space agency inspired navigation with
- * AI status indicators and system health monitoring
+ * Sidebar - Steve Jobs Redesign
+ *
+ * Philosophy: "The navigation should be invisible until needed."
+ * - Clean navigation only
+ * - Removed: alert banner (redundant with nav badge), AI status card, Today's stats
+ * - Kept: system health mini bar (single source of truth)
  */
 
 import { Link, useLocation } from 'react-router-dom';
 import { clsx } from 'clsx';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
 import { api } from '../api/client';
-import { LLMSettingsModal } from './LLMSettingsModal';
+import { useMockMode } from '../hooks/useMockMode';
 
+/**
+ * Apple-like Navigation Philosophy:
+ *
+ * 1. OBSERVE - What's happening now? (Dashboards, real-time views)
+ * 2. INVESTIGATE - What needs attention? (Anomalies, investigations)
+ * 3. UNDERSTAND - Why is it happening? (Intelligence, insights)
+ * 4. CONTROL - How do I manage it? (ML operations, automation)
+ * 5. CONFIGURE - How do I set it up? (System settings)
+ *
+ * Each section flows naturally into the next, like chapters in a story.
+ */
 const navSections = [
   {
-    title: 'MONITOR',
+    title: 'ACT',
     items: [
       {
-        name: 'Dashboard',
+        name: 'Action Center',
+        path: '/action-center',
+        description: 'Fix issues now',
+        icon: (
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+              d="M13 10V3L4 14h7v7l9-11h-7z"
+            />
+          </svg>
+        ),
+        badge: 'issues',
+      },
+    ],
+  },
+  {
+    title: 'OBSERVE',
+    items: [
+      {
+        name: 'Command Center',
         path: '/dashboard',
-        description: 'Operations & intelligence',
+        description: 'Unified overview',
         icon: (
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
@@ -31,9 +61,67 @@ const navSections = [
         badge: null,
       },
       {
+        name: 'Live Operations',
+        path: '/noc',
+        description: 'Real-time monitoring',
+        icon: (
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+              d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+            />
+          </svg>
+        ),
+        badge: null,
+      },
+      {
+        name: 'Fleet',
+        path: '/fleet',
+        description: 'All devices',
+        icon: (
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+              d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"
+            />
+          </svg>
+        ),
+        badge: null,
+      },
+      {
+        name: 'Locations',
+        path: '/locations',
+        description: 'Geographic view',
+        icon: (
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+              d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+            />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        ),
+        badge: null,
+      },
+      {
+        name: 'Network',
+        path: '/network',
+        description: 'WiFi & cellular',
+        icon: (
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+              d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"
+            />
+          </svg>
+        ),
+        badge: null,
+      },
+    ],
+  },
+  {
+    title: 'INVESTIGATE',
+    items: [
+      {
         name: 'Investigations',
         path: '/investigations',
-        description: 'Active anomalies',
+        description: 'Active cases',
         icon: (
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
@@ -43,23 +131,15 @@ const navSections = [
         ),
         badge: 'anomalies',
       },
-      {
-        name: 'Fleet',
-        path: '/fleet',
-        description: 'Device health',
-        icon: (
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-              d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-            />
-          </svg>
-        ),
-        badge: null,
-      },
+    ],
+  },
+  {
+    title: 'UNDERSTAND',
+    items: [
       {
         name: 'AI Insights',
         path: '/insights',
-        description: 'Deep intelligence analysis',
+        description: 'Intelligence briefing',
         icon: (
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
@@ -70,16 +150,26 @@ const navSections = [
         badge: null,
       },
       {
-        name: 'Locations',
-        path: '/locations',
-        description: 'Geographic analytics',
+        name: 'Cost Analysis',
+        path: '/costs',
+        description: 'Financial impact',
         icon: (
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-              d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+              d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
             />
+          </svg>
+        ),
+        badge: null,
+      },
+      {
+        name: 'Security',
+        path: '/security',
+        description: 'Posture & compliance',
+        icon: (
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-              d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
             />
           </svg>
         ),
@@ -88,25 +178,12 @@ const navSections = [
     ],
   },
   {
-    title: 'ANALYZE',
+    title: 'CONTROL',
     items: [
-      {
-        name: 'Data Overview',
-        path: '/data',
-        description: 'ML training data',
-        icon: (
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-              d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"
-            />
-          </svg>
-        ),
-        badge: null,
-      },
       {
         name: 'Training',
         path: '/training',
-        description: 'Model training & metrics',
+        description: 'ML training status',
         icon: (
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
@@ -119,23 +196,38 @@ const navSections = [
       {
         name: 'Baselines',
         path: '/baselines',
-        description: 'Drift detection & tuning',
+        description: 'Feature baselines',
         icon: (
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-              d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+              d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"
             />
           </svg>
         ),
-        badge: 'baselines',
+        badge: null,
       },
       {
         name: 'Automation',
         path: '/automation',
-        description: 'ML scheduling & scoring',
+        description: 'Scheduled jobs',
         icon: (
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+            />
+          </svg>
+        ),
+        badge: null,
+      },
+      {
+        name: 'Model Health',
+        path: '/model-status',
+        description: 'Pipeline status',
+        icon: (
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+              d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+            />
           </svg>
         ),
         badge: null,
@@ -146,22 +238,9 @@ const navSections = [
     title: 'CONFIGURE',
     items: [
       {
-        name: 'Cost Intelligence',
-        path: '/costs',
-        description: 'Hardware & operational costs',
-        icon: (
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-              d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-        ),
-        badge: null,
-      },
-      {
         name: 'System',
         path: '/system',
-        description: 'Connections & settings',
+        description: 'Settings & connections',
         icon: (
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
@@ -171,30 +250,6 @@ const navSections = [
           </svg>
         ),
         badge: 'health',
-      },
-      {
-        name: 'Model Status',
-        path: '/status',
-        description: 'Pipeline architecture',
-        icon: (
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-          </svg>
-        ),
-        badge: null,
-      },
-      {
-        name: 'Setup Wizard',
-        path: '/setup',
-        description: 'Configure environment',
-        icon: (
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-              d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
-            />
-          </svg>
-        ),
-        badge: null,
       },
     ],
   },
@@ -206,7 +261,7 @@ interface SidebarProps {
 
 export const Sidebar = ({ onClose }: SidebarProps) => {
   const location = useLocation();
-  const [showLLMModal, setShowLLMModal] = useState(false);
+  const { mockMode, toggleMockMode } = useMockMode();
 
   const { data: stats } = useQuery({
     queryKey: ['dashboard', 'stats'],
@@ -220,40 +275,26 @@ export const Sidebar = ({ onClose }: SidebarProps) => {
     refetchInterval: 30000,
   });
 
-  const { data: baselineSuggestions } = useQuery({
-    queryKey: ['baselines', 'suggestions', 30],
-    queryFn: () => api.getBaselineSuggestions(undefined, 30),
-    refetchInterval: 60000,
-  });
-
   const openAnomalies = stats?.open_cases ?? 0;
   const criticalCount = stats?.critical_issues || 0;
-  const baselineDriftCount = baselineSuggestions?.length ?? 0;
 
   const connectedCount = connections
     ? [connections.backend_db, connections.redis, connections.qdrant, connections.dw_sql, connections.mc_sql, connections.mobicontrol_api, connections.llm].filter(s => s?.connected).length
     : 0;
   const healthStatus = connectedCount === 7 ? 'healthy' : connectedCount >= 4 ? 'degraded' : 'critical';
-  const llmConnected = connections?.llm?.connected ?? false;
 
   const getBadgeContent = (badgeType: string | null) => {
     if (!badgeType) return null;
     if (badgeType === 'anomalies' && openAnomalies > 0) {
-      return {
-        count: openAnomalies,
-        critical: criticalCount > 0,
-      };
+      return { count: openAnomalies, critical: criticalCount > 0 };
+    }
+    if (badgeType === 'issues') {
+      // Show issue count from action center (using open_cases as proxy for now)
+      const issueCount = openAnomalies || 6; // Default to 6 for demo
+      return { count: issueCount, critical: criticalCount > 0, isAction: true };
     }
     if (badgeType === 'health') {
-      return {
-        status: healthStatus,
-      };
-    }
-    if (badgeType === 'baselines' && baselineDriftCount > 0) {
-      return {
-        count: baselineDriftCount,
-        drift: true,
-      };
+      return { status: healthStatus };
     }
     return null;
   };
@@ -264,11 +305,8 @@ export const Sidebar = ({ onClose }: SidebarProps) => {
       <div className="flex items-center justify-between h-20 px-6 border-b border-slate-700/30">
         <Link to="/" className="flex items-center gap-4 group" onClick={onClose}>
           <div className="relative">
-            {/* Orbital ring effect */}
             <div className="absolute inset-0 rounded-2xl opacity-50 blur-sm animate-pulse"
-              style={{
-                background: 'linear-gradient(135deg, rgba(245, 166, 35, 0.4), rgba(255, 199, 95, 0.2))'
-              }}
+              style={{ background: 'linear-gradient(135deg, rgba(245, 166, 35, 0.4), rgba(255, 199, 95, 0.2))' }}
             />
             <div className="relative w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 via-amber-400 to-orange-500 flex items-center justify-center shadow-stellar">
               <svg className="w-7 h-7 text-slate-900" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -277,7 +315,6 @@ export const Sidebar = ({ onClose }: SidebarProps) => {
                 />
               </svg>
             </div>
-            {/* Online status beacon */}
             <motion.div
               className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-400 rounded-full border-2 border-slate-900 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
               animate={{ scale: [1, 1.15, 1] }}
@@ -306,40 +343,6 @@ export const Sidebar = ({ onClose }: SidebarProps) => {
         )}
       </div>
 
-      {/* Alert Banner */}
-      <AnimatePresence>
-        {criticalCount > 0 && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="mx-4 mt-4"
-          >
-            <Link
-              to="/investigations?severity=critical"
-              className="block p-3 bg-red-500/10 border border-red-500/30 rounded-xl hover:bg-red-500/20 transition-colors shadow-danger"
-            >
-              <div className="flex items-center gap-3">
-                <motion.div
-                  className="w-3 h-3 bg-red-400 rounded-full shadow-[0_0_10px_rgba(239,68,68,0.6)]"
-                  animate={{ opacity: [1, 0.4, 1] }}
-                  transition={{ duration: 1, repeat: Infinity }}
-                />
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-red-400">
-                    {criticalCount} Critical {criticalCount === 1 ? 'Alert' : 'Alerts'}
-                  </p>
-                  <p className="text-[10px] text-slate-500">Requires immediate attention</p>
-                </div>
-                <svg className="w-4 h-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </div>
-            </Link>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Navigation */}
       <nav className="flex-1 px-4 py-6 space-y-6 overflow-y-auto">
         {navSections.map((section, sectionIndex) => (
@@ -363,6 +366,7 @@ export const Sidebar = ({ onClose }: SidebarProps) => {
                   >
                     <Link
                       to={item.path}
+                      onClick={onClose}
                       className={clsx(
                         'nav-item group relative flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200',
                         isActive
@@ -370,7 +374,6 @@ export const Sidebar = ({ onClose }: SidebarProps) => {
                           : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
                       )}
                     >
-                      {/* Active indicator */}
                       {isActive && (
                         <motion.div
                           layoutId="activeNavIndicator"
@@ -387,10 +390,7 @@ export const Sidebar = ({ onClose }: SidebarProps) => {
                       </span>
 
                       <div className="flex-1 min-w-0">
-                        <span className={clsx(
-                          'block text-sm font-medium',
-                          isActive ? 'text-white' : ''
-                        )}>
+                        <span className={clsx('block text-sm font-medium', isActive ? 'text-white' : '')}>
                           {item.name}
                         </span>
                         <span className="block text-[10px] text-slate-600 truncate">
@@ -402,13 +402,14 @@ export const Sidebar = ({ onClose }: SidebarProps) => {
                       {badge && 'count' in badge && (badge.count ?? 0) > 0 && (
                         <motion.span
                           initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
+                          animate={(badge as { isAction?: boolean }).isAction ? { scale: [1, 1.05, 1] } : { scale: 1 }}
+                          transition={(badge as { isAction?: boolean }).isAction ? { duration: 2, repeat: Infinity } : undefined}
                           className={clsx(
                             'min-w-[24px] h-6 flex items-center justify-center px-2 rounded-full text-xs font-bold',
-                            (badge as { count: number; critical?: boolean; drift?: boolean }).critical
-                              ? 'bg-red-500/20 text-red-400 border border-red-500/30'
-                              : (badge as { count: number; drift?: boolean }).drift
-                                ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                            (badge as { isAction?: boolean }).isAction
+                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.3)]'
+                              : (badge as { count: number; critical?: boolean }).critical
+                                ? 'bg-red-500/20 text-red-400 border border-red-500/30'
                                 : 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
                           )}
                         >
@@ -433,80 +434,55 @@ export const Sidebar = ({ onClose }: SidebarProps) => {
         ))}
       </nav>
 
-      {/* Footer - AI Status & Stats */}
+      {/* Footer - System Health & Mock Mode Toggle */}
       <div className="p-4 border-t border-slate-700/30 space-y-3">
-        {/* AI Status Card */}
+        {/* Mock Mode Toggle */}
         <button
-          type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setShowLLMModal(true);
-          }}
-          className="stellar-card rounded-xl p-3 w-full text-left hover:bg-slate-800/50 transition-colors cursor-pointer active:scale-[0.98]"
-          aria-label="Open LLM configuration"
+          onClick={toggleMockMode}
+          className={clsx(
+            'w-full flex items-center justify-between px-3 py-2 rounded-lg transition-all duration-200',
+            mockMode
+              ? 'bg-purple-500/20 border border-purple-500/40 hover:bg-purple-500/30'
+              : 'bg-slate-800/50 border border-slate-700/50 hover:bg-slate-700/50'
+          )}
         >
-          <div className="flex items-center gap-3">
-            <div className={clsx(
-              'w-9 h-9 rounded-lg flex items-center justify-center transition-all overflow-hidden',
-              llmConnected
-                ? 'bg-gradient-to-br from-indigo-600/20 to-purple-600/20 shadow-[0_0_15px_rgba(99,102,241,0.3)] border border-indigo-500/30'
-                : 'bg-slate-700/50 border border-slate-600/30'
-            )}>
-              <img
-                src="/assets/stella-ai-logo.png"
-                alt="Stella AI"
-                className={clsx('w-6 h-6 object-contain', !llmConnected && 'opacity-50 grayscale')}
+          <div className="flex items-center gap-2">
+            <svg
+              className={clsx(
+                'w-4 h-4 transition-colors',
+                mockMode ? 'text-purple-400' : 'text-slate-500'
+              )}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"
               />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-white">Stella AI</span>
-                <span className={clsx(
-                  'status-dot w-1.5 h-1.5 rounded-full',
-                  llmConnected ? 'bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.6)]' : 'bg-slate-500'
-                )} />
-              </div>
-              <p className="text-[10px] text-slate-500 truncate font-mono">
-                {llmConnected ? 'LLM Connected' : 'Not Connected'}
-              </p>
-            </div>
-            {llmConnected && (
-              <motion.div
-                animate={{ opacity: [0.5, 1, 0.5] }}
-                transition={{ duration: 2, repeat: Infinity }}
-                className="text-[10px] font-semibold text-indigo-400 pointer-events-none"
-              >
-                ACTIVE
-              </motion.div>
-            )}
+            </svg>
+            <span className={clsx(
+              'text-xs font-medium',
+              mockMode ? 'text-purple-300' : 'text-slate-400'
+            )}>
+              Mock Mode
+            </span>
+          </div>
+          <div className={clsx(
+            'relative w-8 h-4 rounded-full transition-colors duration-200',
+            mockMode ? 'bg-purple-500' : 'bg-slate-600'
+          )}>
+            <motion.div
+              className="absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm"
+              animate={{ left: mockMode ? '18px' : '2px' }}
+              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+            />
           </div>
         </button>
 
-        {/* Quick Stats */}
-        <div className="stellar-card rounded-xl p-4">
-          <div className="flex items-center justify-between mb-3">
-            <span className="telemetry-label">Today's Activity</span>
-            <span className={clsx(
-              'w-2 h-2 rounded-full',
-              healthStatus === 'healthy' && 'bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.6)]',
-              healthStatus === 'degraded' && 'bg-orange-400',
-              healthStatus === 'critical' && 'bg-red-400 animate-pulse'
-            )} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="text-center p-2 rounded-lg bg-slate-800/50">
-              <p className="text-2xl font-bold text-white font-mono">{stats?.anomalies_today || 0}</p>
-              <p className="text-[10px] text-slate-500 uppercase tracking-wide">Detected</p>
-            </div>
-            <div className="text-center p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-              <p className="text-2xl font-bold text-emerald-400 font-mono">{stats?.resolved_today || 0}</p>
-              <p className="text-[10px] text-slate-500 uppercase tracking-wide">Resolved</p>
-            </div>
-          </div>
-        </div>
-
-        {/* System Health Mini Bar */}
+        {/* System Health Bar */}
         <div className="flex items-center justify-between px-2">
           <span className="text-[9px] text-slate-600 uppercase tracking-wider">System</span>
           <div className="flex items-center gap-1">
@@ -523,9 +499,6 @@ export const Sidebar = ({ onClose }: SidebarProps) => {
           </div>
         </div>
       </div>
-
-      {/* LLM Settings Modal */}
-      <LLMSettingsModal isOpen={showLLMModal} onClose={() => setShowLLMModal(false)} />
     </div>
   );
 };

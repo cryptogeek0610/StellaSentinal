@@ -65,6 +65,7 @@ class TrainingArtifactsResponse(BaseModel):
     model_path: Optional[str] = None
     onnx_path: Optional[str] = None
     baselines_path: Optional[str] = None
+    cohort_stats_path: Optional[str] = None
     metadata_path: Optional[str] = None
 
 
@@ -163,6 +164,100 @@ def _get_training_state_copy() -> Dict[str, Any]:
     """Thread-safe copy of training state."""
     with _training_state_lock:
         return dict(_training_state)
+
+
+# Stage names in order of execution
+TRAINING_STAGE_NAMES = [
+    "Initialize",
+    "Load Data",
+    "Feature Engineering",
+    "Training",
+    "Validation",
+    "Export",
+]
+
+# Map stage identifiers to display names
+STAGE_NAME_MAP = {
+    "initialize": "Initialize",
+    "load_data": "Load Data",
+    "features": "Feature Engineering",
+    "split": "Feature Engineering",
+    "cohort_stats": "Feature Engineering",
+    "baselines": "Feature Engineering",
+    "training": "Training",
+    "validation": "Validation",
+    "export": "Export",
+}
+
+
+def _build_stages_from_status(status: Dict[str, Any]) -> Optional[List[TrainingStageInfo]]:
+    """Build stages list from current training status.
+
+    Creates a stages representation based on current progress and stage information.
+    Returns None for idle status.
+    """
+    job_status = status.get("status", "idle")
+    if job_status == "idle":
+        return None
+
+    current_stage = status.get("stage", "")
+    progress = status.get("progress", 0.0)
+    started_at = status.get("started_at")
+    completed_at = status.get("completed_at")
+
+    # Map current stage to display name
+    current_stage_name = STAGE_NAME_MAP.get(current_stage, current_stage.replace("_", " ").title() if current_stage else "")
+
+    stages = []
+    found_current = False
+
+    for stage_name in TRAINING_STAGE_NAMES:
+        if job_status == "completed":
+            # All stages completed
+            stages.append(TrainingStageInfo(
+                name=stage_name,
+                status="completed",
+            ))
+        elif job_status == "failed":
+            # Mark stages up to current as completed, current as failed
+            if stage_name == current_stage_name:
+                stages.append(TrainingStageInfo(
+                    name=stage_name,
+                    status="failed",
+                    message=status.get("error"),
+                ))
+                found_current = True
+            elif not found_current:
+                stages.append(TrainingStageInfo(
+                    name=stage_name,
+                    status="completed",
+                ))
+            else:
+                stages.append(TrainingStageInfo(
+                    name=stage_name,
+                    status="pending",
+                ))
+        else:  # running or pending
+            if stage_name == current_stage_name:
+                stages.append(TrainingStageInfo(
+                    name=stage_name,
+                    status="running",
+                    started_at=started_at,
+                    message=status.get("message"),
+                ))
+                found_current = True
+            elif not found_current:
+                stages.append(TrainingStageInfo(
+                    name=stage_name,
+                    status="completed",
+                ))
+            else:
+                stages.append(TrainingStageInfo(
+                    name=stage_name,
+                    status="pending",
+                ))
+
+    return stages
 
 
 # ============================================================================
@@ -603,6 +698,8 @@ def get_training_status(
     if USE_REDIS:
         status = _get_status_from_redis()
         if status:
+            # Build stages from current status
+            stages = _build_stages_from_status(status)
             return TrainingRunResponse(
                 run_id=status.get("run_id", "unknown"),
                 status=status.get("status", "idle"),
@@ -616,12 +713,14 @@ def get_training_status(
                 artifacts=TrainingArtifactsResponse(**status["artifacts"]) if status.get("artifacts") else None,
                 model_version=status.get("model_version"),
                 error=status.get("error"),
+                stages=stages,
             )
 
     # Fallback to in-memory state (thread-safe access)
     state = _get_training_state_copy()
     if state.get("current_run"):
         run = state["current_run"]
+        stages = _build_stages_from_status(state)
         return TrainingRunResponse(
             run_id=run.get("run_id", "unknown"),
             status=run.get("status", state.get("status", "idle")),
@@ -635,6 +734,7 @@ def get_training_status(
             artifacts=TrainingArtifactsResponse(**run["artifacts"]) if run.get("artifacts") else None,
             model_version=run.get("model_version"),
             error=run.get("error"),
+            stages=stages,
         )
 
     return TrainingRunResponse(
@@ -645,6 +745,7 @@ def get_training_status(
         stage=state.get("stage"),
         started_at=state.get("started_at"),
         completed_at=state.get("completed_at"),
+        stages=None,  # No stages for idle state
     )
 
 
@@ -728,15 +829,33 @@ def get_queue_status(
             queue_length=0,
             worker_available=True,
             last_job_completed_at=(datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(),
+            next_scheduled=(datetime.now(timezone.utc) + timedelta(hours=6)).isoformat(),
         )
 
     redis_client = get_redis()
     if redis_client:
         try:
             queue_length = redis_client.llen(QUEUE_KEY)
+
+            # Get next scheduled training time from scheduler status
+            next_scheduled = None
+            last_completed = None
+            try:
+                scheduler_status_raw = redis_client.get("scheduler:status")
+                if scheduler_status_raw:
+                    scheduler_status = json.loads(scheduler_status_raw)
+                    next_scheduled = scheduler_status.get("next_training_time")
+                    # Get last completed from training history
+                    if scheduler_status.get("last_training_result"):
+                        last_completed = scheduler_status["last_training_result"].get("completed_at")
+            except Exception as e:
+                logger.debug(f"Could not get scheduler status: {e}")
+
             return TrainingQueueStatus(
                 queue_length=queue_length,
                 worker_available=True,  # TODO: Add worker health check
+                last_job_completed_at=last_completed,
+                next_scheduled=next_scheduled,
             )
         except Exception as e:
             logger.warning(f"Failed to get queue status: {e}")

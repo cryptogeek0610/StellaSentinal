@@ -4,6 +4,7 @@
  * Manages user role state with localStorage persistence.
  * Used for frontend role-based access control to hide admin-only features.
  */
+/* eslint-disable react-refresh/only-export-components */
 
 import {
   createContext,

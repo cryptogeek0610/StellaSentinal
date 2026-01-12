@@ -14,6 +14,13 @@ import { CollapsibleSection } from '../CollapsibleSection';
 import { SlideOverPanel } from '../SlideOverPanel';
 import { AnomalyGroupCard } from '../AnomalyGroupCard';
 import type { Anomaly, AnomalyGroup, AnomalyGroupMember } from '../../../types/anomaly';
+import {
+  SEVERITY_CONFIGS,
+  STATUS_CONFIGS,
+  getSeverityFromScore as getSeverityConfig,
+  type SeverityLevel,
+  type StatusLevel,
+} from '../../../utils/severity';
 
 type ViewMode = 'groups' | 'list';
 
@@ -30,26 +37,24 @@ interface InvestigationsSectionProps {
   onBulkAction?: (action: string, anomalyIds: number[]) => Promise<void>;
 }
 
-const severityConfig = {
-  critical: { label: 'CRITICAL', color: 'text-red-400', bg: 'bg-red-500/20', border: 'border-red-500/30' },
-  high: { label: 'HIGH', color: 'text-orange-400', bg: 'bg-orange-500/20', border: 'border-orange-500/30' },
-  medium: { label: 'MEDIUM', color: 'text-amber-400', bg: 'bg-amber-500/20', border: 'border-amber-500/30' },
-  low: { label: 'LOW', color: 'text-slate-400', bg: 'bg-slate-700/50', border: 'border-slate-600/50' },
+// Derived configs from centralized source for local component use
+const severityConfig = Object.fromEntries(
+  Object.entries(SEVERITY_CONFIGS).map(([key, cfg]) => [
+    key,
+    { label: cfg.label, color: cfg.color.text, bg: cfg.color.bg, border: cfg.color.border },
+  ])
+) as Record<SeverityLevel, { label: string; color: string; bg: string; border: string }>;
+
+const getSeverityFromScore = (score: number): SeverityLevel => {
+  return getSeverityConfig(score).level;
 };
 
-const getSeverityFromScore = (score: number): keyof typeof severityConfig => {
-  if (score <= -0.7) return 'critical';
-  if (score <= -0.5) return 'high';
-  if (score <= -0.3) return 'medium';
-  return 'low';
-};
-
-const statusConfig = {
-  open: { label: 'Open', color: 'text-red-400', bg: 'bg-red-500/10' },
-  investigating: { label: 'Investigating', color: 'text-orange-400', bg: 'bg-orange-500/10' },
-  resolved: { label: 'Resolved', color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-  false_positive: { label: 'False Positive', color: 'text-slate-400', bg: 'bg-slate-700/30' },
-};
+const statusConfig = Object.fromEntries(
+  Object.entries(STATUS_CONFIGS).map(([key, cfg]) => [
+    key,
+    { label: cfg.label, color: cfg.color, bg: cfg.bg },
+  ])
+) as Record<StatusLevel, { label: string; color: string; bg: string }>;
 
 function AnomalyRow({ anomaly, onClick }: { anomaly: Anomaly; onClick: () => void }) {
   const severity = getSeverityFromScore(anomaly.anomaly_score);
@@ -68,7 +73,7 @@ function AnomalyRow({ anomaly, onClick }: { anomaly: Anomaly; onClick: () => voi
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-white font-medium text-sm">
-            Device #{anomaly.device_id}
+            {anomaly.device_name || `Device #${anomaly.device_id}`}
           </span>
           <span className={clsx(
             'px-1.5 py-0.5 rounded text-xs font-medium',
@@ -89,11 +94,16 @@ function AnomalyRow({ anomaly, onClick }: { anomaly: Anomaly; onClick: () => voi
         </div>
       </div>
 
-      {/* Score */}
+      {/* Score and Cost */}
       <div className="text-right">
         <span className={clsx('font-mono text-sm', severityStyle.color)}>
           {anomaly.anomaly_score.toFixed(3)}
         </span>
+        {anomaly.cost_impact && anomaly.cost_impact.hourly_cost > 0 && (
+          <div className="text-xs text-amber-400 mt-0.5">
+            ${anomaly.cost_impact.hourly_cost.toFixed(0)}/hr
+          </div>
+        )}
       </div>
 
       {/* Arrow */}

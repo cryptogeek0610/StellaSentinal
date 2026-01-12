@@ -194,10 +194,10 @@ export function CompactActivityFeed({
             {/* View all link */}
             <div className="pt-3 mt-2 border-t border-slate-700/50">
               <Link
-                to="/dashboard/detailed"
+                to="/investigations"
                 className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white font-medium transition-colors group"
               >
-                <span>View full activity log</span>
+                <span>View all investigations</span>
                 <svg
                   className="w-4 h-4 transform group-hover:translate-x-0.5 transition-transform"
                   fill="none"

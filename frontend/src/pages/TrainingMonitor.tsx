@@ -466,12 +466,18 @@ function TrainingConfigForm({
   isSubmitting: boolean;
   onCancel: () => void;
 }) {
+  // Optimal Isolation Forest defaults for device anomaly detection:
+  // - 90 days training window: captures behavioral patterns without data staleness
+  // - 14 validation days: proper temporal separation for time-series data
+  // - 0.05 contamination: balanced false positive/negative rate (industry standard 1-10%)
+  // - 200 estimators: optimal accuracy/speed tradeoff (diminishing returns beyond 200)
+  // - ONNX export: enables edge deployment and faster inference
   const [config, setConfig] = useState<TrainingConfigRequest>({
     start_date: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     end_date: new Date().toISOString().split('T')[0],
-    validation_days: 7,
-    contamination: 0.03,
-    n_estimators: 300,
+    validation_days: 14,
+    contamination: 0.05,
+    n_estimators: 200,
     export_onnx: true,
   });
 
@@ -518,13 +524,13 @@ function TrainingConfigForm({
               type="number"
               value={config.validation_days}
               onChange={(e) =>
-                setConfig({ ...config, validation_days: parseInt(e.target.value) || 7 })
+                setConfig({ ...config, validation_days: parseInt(e.target.value) || 14 })
               }
-              min={1}
+              min={7}
               max={30}
               className="w-full p-3 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:border-stellar-500 focus:outline-none focus:ring-1 focus:ring-stellar-500"
             />
-            <p className="text-[10px] text-slate-600 mt-1">Days held for validation</p>
+            <p className="text-[10px] text-slate-600 mt-1">Days held for validation (7-30)</p>
           </div>
           <div>
             <label className="block text-xs text-slate-500 mb-1">Contamination</label>
@@ -532,14 +538,14 @@ function TrainingConfigForm({
               type="number"
               value={config.contamination}
               onChange={(e) =>
-                setConfig({ ...config, contamination: parseFloat(e.target.value) || 0.03 })
+                setConfig({ ...config, contamination: parseFloat(e.target.value) || 0.05 })
               }
               step={0.01}
-              min={0.001}
-              max={0.1}
+              min={0.01}
+              max={0.10}
               className="w-full p-3 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:border-stellar-500 focus:outline-none focus:ring-1 focus:ring-stellar-500"
             />
-            <p className="text-[10px] text-slate-600 mt-1">Expected anomaly rate</p>
+            <p className="text-[10px] text-slate-600 mt-1">Expected anomaly rate (1-10%)</p>
           </div>
           <div>
             <label className="block text-xs text-slate-500 mb-1">Estimators</label>
@@ -547,13 +553,13 @@ function TrainingConfigForm({
               type="number"
               value={config.n_estimators}
               onChange={(e) =>
-                setConfig({ ...config, n_estimators: parseInt(e.target.value) || 300 })
+                setConfig({ ...config, n_estimators: parseInt(e.target.value) || 200 })
               }
-              min={50}
-              max={1000}
+              min={100}
+              max={500}
               className="w-full p-3 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:border-stellar-500 focus:outline-none focus:ring-1 focus:ring-stellar-500"
             />
-            <p className="text-[10px] text-slate-600 mt-1">Trees in forest</p>
+            <p className="text-[10px] text-slate-600 mt-1">Trees in forest (100-500)</p>
           </div>
         </div>
       </div>

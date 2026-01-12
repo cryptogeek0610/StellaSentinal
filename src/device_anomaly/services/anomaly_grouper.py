@@ -104,6 +104,7 @@ class ClassifiedAnomaly:
     primary_metric: Optional[str]
     primary_category: Optional[InsightCategory]
     suggested_remediation_title: Optional[str]
+    device_name: Optional[str]
     device_model: Optional[str]
     location: Optional[str]
     grouped: bool = False
@@ -233,6 +234,7 @@ class AnomalyGrouper:
 
         # Get device metadata
         device = self._device_metadata.get(anomaly.device_id)
+        device_name = device.device_name if device else None
         device_model = device.device_model if device else None
         location = device.location if device else None
 
@@ -242,6 +244,7 @@ class AnomalyGrouper:
             primary_metric=primary_metric,
             primary_category=primary_category,
             suggested_remediation_title=remediation_title,
+            device_name=device_name,
             device_model=device_model,
             location=location,
         )
@@ -255,6 +258,7 @@ class AnomalyGrouper:
             severity=classified.severity,
             status=classified.anomaly.status,
             timestamp=classified.anomaly.timestamp,
+            device_name=classified.device_name,
             device_model=classified.device_model,
             location=classified.location,
             primary_metric=classified.primary_metric,
@@ -380,7 +384,8 @@ class AnomalyGrouper:
             anomalies.sort(key=lambda c: (_get_severity_rank(c.severity), c.anomaly.anomaly_score))
 
             group_id = hashlib.md5(f"remediation:{title}".encode()).hexdigest()[:12]
-            group_name = f"{title} ({len(anomalies)} devices)"
+            device_count = len(set(c.anomaly.device_id for c in anomalies))
+            group_name = f"{title} ({device_count} devices)"
 
             groups.append(self._build_group(
                 group_id=group_id,
@@ -417,17 +422,18 @@ class AnomalyGrouper:
 
             category_name = CATEGORY_DISPLAY_NAMES.get(category, category.value)
             group_id = hashlib.md5(f"category:{category.value}".encode()).hexdigest()[:12]
+            device_count = len(set(c.anomaly.device_id for c in anomalies))
 
             # Check for common location
             locations = [c.location for c in anomalies if c.location]
             if locations and all(l == locations[0] for l in locations):
-                group_name = f"{category_name} at {locations[0]} ({len(anomalies)} devices)"
+                group_name = f"{category_name} at {locations[0]} ({device_count} devices)"
                 grouping_factors = [
                     f"Same category: {category_name}",
                     f"Same location: {locations[0]}",
                 ]
             else:
-                group_name = f"{category_name} ({len(anomalies)} devices)"
+                group_name = f"{category_name} ({device_count} devices)"
                 grouping_factors = [f"Same category: {category_name}"]
 
             groups.append(self._build_group(
@@ -471,7 +477,8 @@ class AnomalyGrouper:
                 anomalies.sort(key=lambda c: (_get_severity_rank(c.severity), c.anomaly.anomaly_score))
 
                 group_id = hashlib.md5(f"cohort:{model}".encode()).hexdigest()[:12]
-                group_name = f"Issues on {model} ({len(anomalies)} devices)"
+                device_count = len(set(c.anomaly.device_id for c in anomalies))
+                group_name = f"Issues on {model} ({device_count} devices)"
 
                 groups.append(self._build_group(
                     group_id=group_id,
@@ -511,7 +518,8 @@ class AnomalyGrouper:
             anomalies.sort(key=lambda c: (_get_severity_rank(c.severity), c.anomaly.anomaly_score))
 
             group_id = hashlib.md5(f"location:{location}".encode()).hexdigest()[:12]
-            group_name = f"Multiple Issues at {location} ({len(anomalies)} devices)"
+            device_count = len(set(c.anomaly.device_id for c in anomalies))
+            group_name = f"Multiple Issues at {location} ({device_count} devices)"
 
             groups.append(self._build_group(
                 group_id=group_id,
@@ -582,8 +590,33 @@ class AnomalyGrouper:
         # Sort groups by severity, then by count
         all_groups.sort(key=lambda g: (_get_severity_rank(g.severity), -g.total_count))
 
-        # Collect ungrouped anomalies
-        ungrouped = [self._create_group_member(c) for c in classified if not c.grouped]
+        # Collect ungrouped anomalies, deduplicated by device_id (keep worst score per device)
+        ungrouped_classified = [c for c in classified if not c.grouped]
+        seen_devices: Dict[int, ClassifiedAnomaly] = {}
+        for c in ungrouped_classified:
+            device_id = c.anomaly.device_id
+            if device_id not in seen_devices:
+                seen_devices[device_id] = c
+            else:
+                # Keep the one with worse score (more negative = more anomalous)
+                if c.anomaly.anomaly_score < seen_devices[device_id].anomaly.anomaly_score:
+                    seen_devices[device_id] = c
+
+        ungrouped = [self._create_group_member(c) for c in seen_devices.values()]
+
+        # Calculate impact metrics for hero card
+        grouped_count = len(anomalies) - len(ungrouped_classified)
+        coverage_percent = (grouped_count / len(anomalies) * 100) if anomalies else 0.0
+
+        # Find top impact group (count * severity weight)
+        severity_weights = {"critical": 4, "high": 3, "medium": 2, "low": 1}
+        top_impact_group = None
+        top_impact_score = 0
+        for group in all_groups:
+            impact = group.total_count * severity_weights.get(group.severity, 1)
+            if impact > top_impact_score:
+                top_impact_score = impact
+                top_impact_group = group
 
         return GroupedAnomaliesResponse(
             groups=all_groups,
@@ -593,4 +626,7 @@ class AnomalyGrouper:
             ungrouped_anomalies=ungrouped[:20],  # Limit ungrouped to 20 for response size
             grouping_method="smart_auto",
             computed_at=datetime.now(timezone.utc),
+            coverage_percent=round(coverage_percent, 1),
+            top_impact_group_id=top_impact_group.group_id if top_impact_group else None,
+            top_impact_group_name=top_impact_group.group_name if top_impact_group else None,
         )

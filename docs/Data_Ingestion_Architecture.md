@@ -762,6 +762,223 @@ class TenantAwareIngestion:
 
 ---
 
-**Document Status:** Design - Ready for implementation planning  
-**Last Updated:** December 2024
+## Production Hardening (January 2025)
+
+This section documents the production-hardened data ingestion implementation with safety guarantees.
+
+### Feature Flags and Safe Defaults
+
+All extended data ingestion features are **OFF by default** to prevent accidental production impact.
+
+```bash
+# Core ingestion (safe, always available)
+ENABLE_SCHEMA_DISCOVERY=true         # Metadata discovery only, no table scans
+
+# Extended ingestion (OFF by default - enable explicitly)
+ENABLE_MC_TIMESERIES=false           # MobiControl DeviceStatInt, DeviceStatLocation, etc.
+ENABLE_XSIGHT_HOURLY=false           # XSight hourly tables (HIGH VOLUME - 6M+ rows)
+ENABLE_XSIGHT_EXTENDED=false         # XSight extended tables (cs_WiFiLocation, etc.)
+
+# Watermark configuration
+ENABLE_FILE_WATERMARK_FALLBACK=false # File fallback disabled in production
+
+# Observability (ON by default)
+ENABLE_INGESTION_METRICS=true        # Per-table metrics to PostgreSQL
+ENABLE_DAILY_COVERAGE_REPORT=true    # Daily aggregated report
+```
+
+### Table Allowlists
+
+For fine-grained control, use allowlists to enable specific tables only:
+
+```bash
+# Only ingest these specific tables (comma-separated)
+XSIGHT_TABLE_ALLOWLIST="cs_DataUsageByHour,cs_BatteryStat,cs_Offline"
+MC_TABLE_ALLOWLIST="DeviceStatInt,DeviceStatLocation"
+```
+
+When an allowlist is set, only tables in that list will be ingested, even if broader feature flags are enabled.
+
+### Monotonic Watermarks
+
+Watermarks are **monotonic** - they can only move forward, never backward.
+
+**Key Behaviors:**
+- PostgreSQL is the **single source of truth** for watermarks
+- Redis is an optional write-through cache only
+- `set_watermark()` rejects any watermark < current watermark
+- To move backward (e.g., for backfill), use `reset_watermark()` explicitly
+
+```python
+from device_anomaly.data_access.watermark_store import get_watermark_store
+
+store = get_watermark_store()
+
+# Normal operation - only moves forward
+success, error = store.set_watermark("xsight", "cs_DataUsageByHour", new_watermark)
+if not success:
+    logger.warning(f"Watermark rejected: {error}")
+
+# Explicit backfill - resets watermark
+new_wm, ok = store.reset_watermark("xsight", "cs_DataUsageByHour", lookback_hours=72)
+```
+
+### Idempotent Event IDs
+
+All canonical events have a stable `event_id` computed via SHA256 from:
+- source_db, source_table, device_id, event_time, metric_name, metric_value, dimensions
+
+This ensures:
+- Re-ingesting the same data produces identical event IDs
+- Deduplication on write prevents duplicate records
+- Backfills don't create duplicates
+
+```python
+from device_anomaly.data_access.canonical_events import dedupe_events
+
+# Dedupe events before writing
+unique_events, seen_ids = dedupe_events(events)
+```
+
+### Keyset Pagination (No OFFSET)
+
+Large table loads use **keyset pagination** instead of OFFSET for stable, efficient pagination:
+
+```sql
+-- Instead of: SELECT ... OFFSET 50000 LIMIT 50000 (slow, unstable)
+-- We use keyset pagination:
+SELECT TOP 50000 * FROM cs_DataUsageByHour
+WHERE CollectedDate > @last_date
+  OR (CollectedDate = @last_date AND Hour > @last_hour)
+ORDER BY CollectedDate, Hour
+```
+
+Benefits:
+- O(1) pagination regardless of offset
+- Stable results even if data changes during pagination
+- Works efficiently with SQL Server clustered indexes
+
+### Weight-Based Parallelism Throttling
+
+Concurrent table loads are throttled via a **weighted semaphore**:
+
+| Table Category | Weight | Effect |
+|----------------|--------|--------|
+| XSight hourly huge (cs_DataUsageByHour, cs_WiFiLocation) | 5 | Only 1 at a time |
+| XSight extended tables | 2 | Max 2 concurrent |
+| MobiControl time-series | 2 | Max 2 concurrent |
+| Small tables (Alert, Events) | 1 | Max 5 concurrent |
+
+Default `MAX_INGEST_WEIGHT=5` ensures SQL Server isn't overwhelmed.
+
+```python
+from device_anomaly.services import IngestionOrchestrator
+
+orchestrator = IngestionOrchestrator(max_weight=5)
+result = await orchestrator.run_batch(tables, loader_func)
+```
+
+### Observability
+
+**Per-Table Metrics** (stored in `ingestion_metrics` table):
+- rows_fetched, rows_inserted, rows_deduped
+- watermark_start, watermark_end
+- lag_seconds (how far behind current time)
+- duration_ms, query_time_ms, transform_time_ms
+- success/error status
+
+**Daily Coverage Report** (stored in `telemetry_coverage_report` table):
+- Tables loaded/failed per source database
+- Total rows processed
+- Average and max lag
+- Tables with errors, high lag (>1hr), or high dedupe ratio (>20%)
+
+```python
+from device_anomaly.services import generate_daily_coverage_report
+
+# Run daily (e.g., via scheduler)
+report = generate_daily_coverage_report()
+```
+
+### Recommended SQL Server Indexes
+
+For optimal keyset pagination performance, ensure these indexes exist:
+
+```sql
+-- XSight hourly tables
+CREATE CLUSTERED INDEX IX_cs_DataUsageByHour_CollectedDate_Hour
+ON cs_DataUsageByHour (CollectedDate, Hour);
+
+CREATE CLUSTERED INDEX IX_cs_WiFiLocation_CollectedDate_Hour
+ON cs_WiFiLocation (CollectedDate, Hour);
+
+-- MobiControl time-series tables
+CREATE CLUSTERED INDEX IX_DeviceStatInt_ServerDateTime
+ON DeviceStatInt (ServerDateTime);
+
+CREATE CLUSTERED INDEX IX_DeviceStatLocation_ServerDateTime
+ON DeviceStatLocation (ServerDateTime);
+
+-- For device filtering
+CREATE NONCLUSTERED INDEX IX_DeviceStatInt_DeviceId_ServerDateTime
+ON DeviceStatInt (DeviceId, ServerDateTime);
+```
+
+### Graceful Degradation
+
+The system gracefully handles missing or unavailable tables:
+
+- Missing tables: Logged as warning, skipped without error
+- Missing columns: Query uses only available columns
+- Schema changes: Cache invalidated on table modification date change
+- Database unavailable: Returns empty results with structured warning
+
+```python
+# Schema discovery caches valid tables
+from device_anomaly.data_access.schema_discovery import get_curated_table_list
+
+tables = get_curated_table_list(engine)  # Only returns existing, valid tables
+```
+
+### StatType Mapping
+
+MobiControl `DeviceStatInt` uses integer StatType codes. Use the discovery function to get human-readable names:
+
+```python
+from device_anomaly.data_access.stat_type_mapper import (
+    get_stat_type_name,
+    discover_stat_types,
+)
+
+# Get name for known type
+name = get_stat_type_name(3)  # Returns "AvailableStorage"
+
+# Discover all types from database
+types = discover_stat_types(engine)
+```
+
+### Configuration Reference
+
+Full environment variable reference:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ENABLE_MC_TIMESERIES` | `false` | Enable MobiControl time-series ingestion |
+| `ENABLE_XSIGHT_HOURLY` | `false` | Enable XSight hourly tables (HIGH VOLUME) |
+| `ENABLE_XSIGHT_EXTENDED` | `false` | Enable XSight extended tables |
+| `ENABLE_SCHEMA_DISCOVERY` | `true` | Enable runtime schema discovery caching |
+| `XSIGHT_TABLE_ALLOWLIST` | `` | Comma-separated list of allowed XSight tables |
+| `MC_TABLE_ALLOWLIST` | `` | Comma-separated list of allowed MC tables |
+| `INGEST_LOOKBACK_HOURS` | `24` | Default lookback for new tables |
+| `INGEST_BATCH_SIZE` | `50000` | Max rows per batch |
+| `INGEST_MAX_TABLES_PARALLEL` | `3` | Max concurrent table loads (weight) |
+| `MAX_BACKFILL_DAYS_HOURLY` | `2` | Max days to backfill for hourly tables |
+| `ENABLE_FILE_WATERMARK_FALLBACK` | `false` | Enable file-based watermark fallback |
+| `ENABLE_INGESTION_METRICS` | `true` | Enable per-table metrics |
+| `ENABLE_DAILY_COVERAGE_REPORT` | `true` | Enable daily coverage report |
+
+---
+
+**Document Status:** Implementation Complete - Production Ready
+**Last Updated:** January 2025
 

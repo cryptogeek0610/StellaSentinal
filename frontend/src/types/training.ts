@@ -26,6 +26,7 @@ export interface TableProfile {
   device_count: number;
   column_stats: Record<string, ColumnStats>;
   profiled_at: string | null;
+  source_db?: 'xsight' | 'mobicontrol' | null; // Which database the table is from
 }
 
 export interface TemporalPattern {
@@ -107,6 +108,7 @@ export interface TrainingArtifacts {
   model_path?: string | null;
   onnx_path?: string | null;
   baselines_path?: string | null;
+  cohort_stats_path?: string | null;
   metadata_path?: string | null;
 }
 

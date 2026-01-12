@@ -533,8 +533,8 @@ class AnomalyDetectorIsolationForest:
             logger.warning("Models directory not found: %s", models_dir)
             return None
 
-        # Find all model files
-        model_files = list(models_dir.glob("*.pkl"))
+        # Find isolation forest model files specifically (not other .pkl files like cohort_detector.pkl)
+        model_files = list(models_dir.glob("isolation_forest.pkl"))
         if not model_files:
             # Also check subdirectories (for versioned models)
             model_files = list(models_dir.glob("**/isolation_forest.pkl"))

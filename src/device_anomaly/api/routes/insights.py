@@ -125,6 +125,34 @@ class NetworkAnalysisResponse(BaseModel):
     recommendations: List[str]
 
 
+class UserAbuseItem(BaseModel):
+    """User abuse item for by-user analysis."""
+
+    user_id: str
+    user_name: Optional[str]
+    user_email: Optional[str]
+    total_drops: int
+    total_reboots: int
+    device_count: int
+    drops_per_device: float
+    drops_per_day: float
+    vs_fleet_multiplier: float
+    is_excessive: bool
+
+
+class UserAbuseResponse(BaseModel):
+    """User abuse analysis response (Carl's 'People with excessive drops')."""
+
+    tenant_id: str
+    period_days: int
+    total_users: int
+    total_drops: int
+    fleet_avg_drops_per_device: float
+    users_with_excessive_drops: int
+    worst_users: List[UserAbuseItem]
+    recommendations: List[str]
+
+
 class DeviceAbuseResponse(BaseModel):
     """Device abuse analysis response."""
 
@@ -137,8 +165,10 @@ class DeviceAbuseResponse(BaseModel):
     devices_with_excessive_reboots: int
     worst_locations: List[Dict[str, Any]]
     worst_cohorts: List[Dict[str, Any]]
+    worst_users: Optional[List[UserAbuseItem]] = None
     problem_combinations: List[Dict[str, Any]]
     recommendations: List[str]
+    financial_impact: Optional[Dict[str, Any]] = None
 
 
 class AppAnalysisResponse(BaseModel):
@@ -569,6 +599,7 @@ def get_network_analysis(
 @router.get("/device-abuse", response_model=DeviceAbuseResponse)
 def get_device_abuse_analysis(
     period_days: int = Query(7, ge=1, le=30),
+    include_user_analysis: bool = Query(True, description="Include by-user analysis"),
     db: Session = Depends(get_db),
 ):
     """Get device abuse analysis (drops, reboots, problem combinations).
@@ -586,6 +617,51 @@ def get_device_abuse_analysis(
     reboot_report = analyzer.analyze_reboots(period_days)
     combo_report = analyzer.identify_problem_combinations(period_days)
 
+    # By-user analysis (Carl's "People with excessive drops")
+    worst_users = None
+    if include_user_analysis:
+        user_analysis = analyzer.analyze_drops_by_user(period_days, top_n=10)
+        if user_analysis.get("worst_users"):
+            worst_users = [
+                UserAbuseItem(
+                    user_id=u["user_id"],
+                    user_name=u.get("user_name"),
+                    user_email=u.get("user_email"),
+                    total_drops=u["total_drops"],
+                    total_reboots=u.get("total_reboots", 0),
+                    device_count=u["device_count"],
+                    drops_per_device=u["drops_per_device"],
+                    drops_per_day=u["drops_per_day"],
+                    vs_fleet_multiplier=u["vs_fleet_multiplier"],
+                    is_excessive=u["is_excessive"],
+                )
+                for u in user_analysis["worst_users"]
+            ]
+
+    # Financial impact estimation (simplified)
+    financial_impact = None
+    if drop_report.total_drops > 0 or reboot_report.total_reboots > 0:
+        # Rough cost estimation
+        drop_cost = drop_report.total_drops * 150  # $150 per drop (repair/replacement)
+        reboot_downtime_cost = reboot_report.total_reboots * 25  # $25 per reboot (productivity)
+        total_cost = drop_cost + reboot_downtime_cost
+        financial_impact = {
+            "total_estimated_cost": total_cost,
+            "cost_breakdown": [
+                {
+                    "category": "Device Repairs",
+                    "amount": drop_cost,
+                    "description": f"{drop_report.total_drops} drops x $150 avg repair cost",
+                },
+                {
+                    "category": "Downtime from Reboots",
+                    "amount": reboot_downtime_cost,
+                    "description": f"{reboot_report.total_reboots} reboots x $25 productivity loss",
+                },
+            ],
+            "potential_savings": int(total_cost * 0.6),  # 60% reduction if addressed
+        }
+
     return DeviceAbuseResponse(
         tenant_id=tenant_id,
         analysis_period_days=period_days,
@@ -602,6 +678,7 @@ def get_device_abuse_analysis(
             {"cohort_id": cohort, "reboots": reboots, "rate_per_device": rate}
             for cohort, reboots, rate in reboot_report.worst_cohorts
         ],
+        worst_users=worst_users,
         problem_combinations=[
             {
                 "cohort_id": combo.cohort_id,
@@ -620,6 +697,52 @@ def get_device_abuse_analysis(
             reboot_report.recommendations +
             combo_report.recommendations
         ),
+        financial_impact=financial_impact,
+    )
+
+
+@router.get("/device-abuse/by-user", response_model=UserAbuseResponse)
+def get_drops_by_user_analysis(
+    period_days: int = Query(7, ge=1, le=30),
+    top_n: int = Query(10, ge=1, le=50),
+    db: Session = Depends(get_db),
+):
+    """Get drops analysis grouped by assigned user.
+
+    Carl's requirement: "People with excessive drops"
+
+    Returns users ranked by drop count with comparison to fleet average.
+    """
+    tenant_id = get_tenant_id()
+
+    analyzer = DeviceAbuseAnalyzer(db, tenant_id)
+    result = analyzer.analyze_drops_by_user(period_days, top_n)
+
+    worst_users = [
+        UserAbuseItem(
+            user_id=u["user_id"],
+            user_name=u.get("user_name"),
+            user_email=u.get("user_email"),
+            total_drops=u["total_drops"],
+            total_reboots=u.get("total_reboots", 0),
+            device_count=u["device_count"],
+            drops_per_device=u["drops_per_device"],
+            drops_per_day=u["drops_per_day"],
+            vs_fleet_multiplier=u["vs_fleet_multiplier"],
+            is_excessive=u["is_excessive"],
+        )
+        for u in result.get("worst_users", [])
+    ]
+
+    return UserAbuseResponse(
+        tenant_id=result.get("tenant_id", tenant_id),
+        period_days=result.get("period_days", period_days),
+        total_users=result.get("total_users", 0),
+        total_drops=result.get("total_drops", 0),
+        fleet_avg_drops_per_device=result.get("fleet_avg_drops_per_device", 0.0),
+        users_with_excessive_drops=result.get("users_with_excessive_drops", 0),
+        worst_users=worst_users,
+        recommendations=result.get("recommendations", []),
     )
 
 
@@ -690,3 +813,155 @@ def get_insights_by_category(
         )
         for i in insights
     ]
+
+
+# ============================================
+# Insight Devices Endpoint
+# ============================================
+
+
+@router.get("/insight/{insight_id}/devices")
+def get_insight_devices(
+    insight_id: str,
+    include_ai_grouping: bool = Query(False, description="Include AI pattern similarity grouping"),
+    db: Session = Depends(get_db),
+):
+    """Get all devices affected by a specific insight with grouping options.
+
+    Returns the full list of devices impacted by an insight, grouped by:
+    - Location
+    - Device model
+    - AI-detected patterns (if include_ai_grouping=True)
+
+    This enables drill-down from insight cards to see exactly which devices
+    are affected and take targeted action.
+    """
+    import json
+    from device_anomaly.api.models import (
+        DeviceGroupingResponse,
+        ImpactedDeviceResponse,
+        InsightDevicesResponse,
+    )
+    from device_anomaly.database.schema import DeviceMetadata
+    from device_anomaly.services.device_grouper import DeviceGrouper
+
+    tenant_id = get_tenant_id()
+
+    # Find the insight
+    insight = (
+        db.query(AggregatedInsight)
+        .filter(
+            AggregatedInsight.tenant_id == tenant_id,
+            AggregatedInsight.id == int(insight_id),
+        )
+        .first()
+    )
+
+    if not insight:
+        raise HTTPException(status_code=404, detail="Insight not found")
+
+    # Parse affected device IDs from JSON
+    device_ids: List[int] = []
+    if insight.affected_devices_json:
+        try:
+            device_ids = json.loads(insight.affected_devices_json)
+        except json.JSONDecodeError:
+            pass
+
+    # If no device list stored, return empty response
+    if not device_ids:
+        return InsightDevicesResponse(
+            insight_id=insight_id,
+            insight_headline=insight.headline or "",
+            insight_category=insight.insight_category,
+            insight_severity=insight.severity,
+            total_devices=0,
+            devices=[],
+            groupings={
+                "by_location": [],
+                "by_model": [],
+                "by_pattern": [],
+            },
+            ai_pattern_analysis=None,
+            generated_at=datetime.utcnow(),
+        )
+
+    # Fetch device metadata
+    device_records = (
+        db.query(DeviceMetadata)
+        .filter(
+            DeviceMetadata.tenant_id == tenant_id,
+            DeviceMetadata.device_id.in_(device_ids),
+        )
+        .all()
+    )
+
+    # Build device response list
+    devices: List[ImpactedDeviceResponse] = []
+    for d in device_records:
+        devices.append(
+            ImpactedDeviceResponse(
+                device_id=d.device_id,
+                device_name=d.device_name,
+                device_model=d.device_model,
+                location=d.location,
+                status=d.status or "unknown",
+                last_seen=d.last_seen,
+                os_version=d.os_version,
+                anomaly_count=0,  # Could be enriched with anomaly data
+                severity=insight.severity,
+                primary_metric=None,
+            )
+        )
+
+    # Include devices that were in the list but not found in metadata
+    found_ids = {d.device_id for d in device_records}
+    for device_id in device_ids:
+        if device_id not in found_ids:
+            devices.append(
+                ImpactedDeviceResponse(
+                    device_id=device_id,
+                    device_name=f"Device-{device_id}",
+                    device_model=None,
+                    location=None,
+                    status="unknown",
+                    last_seen=None,
+                    os_version=None,
+                    anomaly_count=0,
+                    severity=insight.severity,
+                    primary_metric=None,
+                )
+            )
+
+    # Build groupings
+    grouper = DeviceGrouper(enable_ai_grouping=include_ai_grouping)
+
+    by_location = grouper.group_by_location(devices)
+    by_model = grouper.group_by_model(devices)
+
+    # AI pattern grouping (only if requested)
+    by_pattern: List[DeviceGroupingResponse] = []
+    ai_analysis: Optional[str] = None
+
+    if include_ai_grouping and len(devices) >= 3:
+        by_pattern, ai_analysis = grouper.group_by_pattern_similarity(
+            devices,
+            insight_category=insight.insight_category,
+            insight_headline=insight.headline,
+        )
+
+    return InsightDevicesResponse(
+        insight_id=insight_id,
+        insight_headline=insight.headline or "",
+        insight_category=insight.insight_category,
+        insight_severity=insight.severity,
+        total_devices=len(devices),
+        devices=devices,
+        groupings={
+            "by_location": by_location,
+            "by_model": by_model,
+            "by_pattern": by_pattern,
+        },
+        ai_pattern_analysis=ai_analysis,
+        generated_at=datetime.utcnow(),
+    )

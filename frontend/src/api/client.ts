@@ -35,6 +35,7 @@ import type {
   GroupedAnomaliesResponse,
   BulkActionRequest,
   BulkActionResponse,
+  InsightDevicesResponse,
 } from '../types/anomaly';
 import type {
   TableProfile,
@@ -124,6 +125,7 @@ import {
   getMockAppAnalysis,
   getMockInsightsByCategory,
   getMockLocationComparison,
+  getMockInsightDevices,
   // Smart Grouping mock data
   getMockGroupedAnomalies,
   // System Health mock data
@@ -224,6 +226,11 @@ const hasSqlConnection = (connections: AllConnectionsStatus | null): boolean => 
 
 const shouldReturnEmptyLiveData = (): boolean => {
   if (getMockModeFromStorage()) {
+    return false;
+  }
+  // Only return empty if we've confirmed no SQL connection.
+  // If lastConnectionStatus is null, we haven't checked yet - let the API call proceed.
+  if (lastConnectionStatus === null) {
     return false;
   }
   return !hasSqlConnection(lastConnectionStatus);
@@ -334,6 +341,11 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
 }
 
 export const api = {
+  // Generic fetch helper for direct API access
+  fetchAPI: <T>(endpoint: string, options?: RequestInit): Promise<T> => {
+    return fetchAPI<T>(endpoint, options);
+  },
+
   // Dashboard
   getDashboardStats: (): Promise<DashboardStats> => {
     // Return mock data when mock mode is enabled
@@ -1743,6 +1755,21 @@ export const api = {
     return fetchAPI<CustomerInsightResponse[]>(`/insights/by-category/${category}${query}`);
   },
 
+  getInsightDevices: (
+    insightId: string,
+    params?: { include_ai_grouping?: boolean }
+  ): Promise<InsightDevicesResponse> => {
+    if (getMockModeFromStorage()) {
+      return Promise.resolve(getMockInsightDevices(insightId, params?.include_ai_grouping));
+    }
+    const queryParams = new URLSearchParams();
+    if (params?.include_ai_grouping) {
+      queryParams.append('include_ai_grouping', 'true');
+    }
+    const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return fetchAPI<InsightDevicesResponse>(`/insights/insight/${insightId}/devices${query}`);
+  },
+
   compareLocations: (
     locationAId: string,
     locationBId: string,
@@ -2797,6 +2824,306 @@ export const api = {
       `/correlations/time-lagged?max_lag=${maxLag}&min_correlation=${minCorrelation}`
     );
   },
+
+  // ============================================================================
+  // NETWORK INTELLIGENCE API
+  // ============================================================================
+
+  /**
+   * Get DeviceGroup hierarchy tree for navigation.
+   */
+  getNetworkHierarchy: (): Promise<DeviceGroupHierarchyResponse> => {
+    return fetchAPI<DeviceGroupHierarchyResponse>('/network/hierarchy');
+  },
+
+  /**
+   * Get fleet network intelligence summary.
+   * @param params.device_group_id - Optional DeviceGroup ID to filter by
+   */
+  getNetworkSummary: (params?: { device_group_id?: number }): Promise<NetworkSummaryResponse> => {
+    const queryParams = new URLSearchParams();
+    if (params?.device_group_id != null) {
+      queryParams.append('device_group_id', params.device_group_id.toString());
+    }
+    const query = queryParams.toString();
+    return fetchAPI<NetworkSummaryResponse>(`/network/summary${query ? '?' + query : ''}`);
+  },
+
+  /**
+   * Get WiFi access point quality metrics.
+   * @param params.limit - Max number of APs to return
+   * @param params.min_device_count - Minimum device count filter
+   * @param params.device_group_id - Optional DeviceGroup ID to filter by
+   */
+  getAPQuality: (params?: {
+    limit?: number;
+    min_device_count?: number;
+    device_group_id?: number;
+  }): Promise<APListResponse> => {
+    const queryParams = new URLSearchParams();
+    queryParams.append('limit', (params?.limit ?? 50).toString());
+    queryParams.append('min_device_count', (params?.min_device_count ?? 1).toString());
+    if (params?.device_group_id != null) {
+      queryParams.append('device_group_id', params.device_group_id.toString());
+    }
+    return fetchAPI<APListResponse>(`/network/aps?${queryParams.toString()}`);
+  },
+
+  /**
+   * Get per-application network usage statistics.
+   * @param params.period_days - Number of days to aggregate
+   * @param params.device_group_id - Optional DeviceGroup ID to filter by
+   */
+  getPerAppUsage: (params?: {
+    period_days?: number;
+    device_group_id?: number;
+  }): Promise<AppUsageListResponse> => {
+    const queryParams = new URLSearchParams();
+    queryParams.append('period_days', (params?.period_days ?? 7).toString());
+    if (params?.device_group_id != null) {
+      queryParams.append('device_group_id', params.device_group_id.toString());
+    }
+    return fetchAPI<AppUsageListResponse>(`/network/apps?${queryParams.toString()}`);
+  },
+
+  /**
+   * Get carrier performance statistics.
+   * @param params.device_group_id - Optional DeviceGroup ID to filter by
+   */
+  getCarrierStats: (params?: { device_group_id?: number }): Promise<CarrierListResponse> => {
+    const queryParams = new URLSearchParams();
+    if (params?.device_group_id != null) {
+      queryParams.append('device_group_id', params.device_group_id.toString());
+    }
+    const query = queryParams.toString();
+    return fetchAPI<CarrierListResponse>(`/network/carriers${query ? '?' + query : ''}`);
+  },
+
+  /**
+   * Get geographic dead zones based on signal quality.
+   * @param params.signal_threshold_dbm - Signal below this is considered dead zone
+   * @param params.device_group_id - Optional DeviceGroup ID to filter by
+   */
+  getNetworkDeadZones: (params?: {
+    signal_threshold_dbm?: number;
+    device_group_id?: number;
+  }): Promise<NetworkDeadZoneResponse> => {
+    const queryParams = new URLSearchParams();
+    queryParams.append('signal_threshold_dbm', (params?.signal_threshold_dbm ?? -85).toString());
+    if (params?.device_group_id != null) {
+      queryParams.append('device_group_id', params.device_group_id.toString());
+    }
+    return fetchAPI<NetworkDeadZoneResponse>(`/network/dead-zones?${queryParams.toString()}`);
+  },
+
+  // ============================================================================
+  // SECURITY POSTURE API
+  // ============================================================================
+
+  /**
+   * Get fleet security posture summary.
+   */
+  getSecuritySummary: (): Promise<SecuritySummaryResponse> => {
+    return fetchAPI<SecuritySummaryResponse>('/security/summary');
+  },
+
+  /**
+   * Get per-device security status.
+   */
+  getDeviceSecurity: (
+    limit: number = 50,
+    riskLevel?: 'low' | 'medium' | 'high' | 'critical'
+  ): Promise<DeviceSecurityListResponse> => {
+    let url = `/security/devices?limit=${limit}`;
+    if (riskLevel) {
+      url += `&risk_level=${riskLevel}`;
+    }
+    return fetchAPI<DeviceSecurityListResponse>(url);
+  },
+
+  /**
+   * Get compliance breakdown by category.
+   */
+  getComplianceBreakdown: (): Promise<ComplianceListResponse> => {
+    return fetchAPI<ComplianceListResponse>('/security/compliance');
+  },
+
+  /**
+   * Get security score trends over time.
+   */
+  getSecurityTrends: (periodDays: number = 30): Promise<SecurityTrendListResponse> => {
+    return fetchAPI<SecurityTrendListResponse>(
+      `/security/trends?period_days=${periodDays}`
+    );
+  },
+
+  /**
+   * Get devices with highest security risk.
+   */
+  getAtRiskDevices: (limit: number = 20): Promise<AtRiskDevicesResponse> => {
+    return fetchAPI<AtRiskDevicesResponse>(`/security/at-risk?limit=${limit}`);
+  },
+
+  /**
+   * Get PATH hierarchy with security metrics.
+   */
+  getSecurityPathHierarchy: (): Promise<PathHierarchyResponse> => {
+    return fetchAPI<PathHierarchyResponse>('/security/paths');
+  },
+
+  /**
+   * Get security summaries grouped by PATH.
+   */
+  getSecurityByPath: (
+    path?: string,
+    depth: number = 2
+  ): Promise<PathSecurityResponse> => {
+    const params = new URLSearchParams();
+    if (path) params.append('path', path);
+    params.append('depth', depth.toString());
+    return fetchAPI<PathSecurityResponse>(`/security/by-path?${params.toString()}`);
+  },
+
+  /**
+   * Get devices grouped by security violation type (risk clusters).
+   */
+  getRiskClusters: (violationTypes?: string[]): Promise<RiskClustersResponse> => {
+    const params = new URLSearchParams();
+    if (violationTypes && violationTypes.length > 0) {
+      params.append('violation_types', violationTypes.join(','));
+    }
+    const queryString = params.toString();
+    return fetchAPI<RiskClustersResponse>(
+      `/security/risk-clusters${queryString ? `?${queryString}` : ''}`
+    );
+  },
+
+  /**
+   * Compare security posture across multiple PATHs.
+   */
+  compareSecurityByPath: (paths: string[]): Promise<PathComparisonResponse> => {
+    return fetchAPI<PathComparisonResponse>(
+      `/security/path-comparison?paths=${encodeURIComponent(paths.join(','))}`
+    );
+  },
+
+  /**
+   * Find devices with correlated security issues appearing around the same time.
+   */
+  getTemporalClusters: (windowHours: number = 72): Promise<TemporalClustersResponse> => {
+    return fetchAPI<TemporalClustersResponse>(
+      `/security/temporal-clusters?window_hours=${windowHours}`
+    );
+  },
+
+  // ============================================================================
+  // Action Center API
+  // ============================================================================
+
+  /**
+   * Get executive summary of all fleet issues.
+   */
+  getActionCenterSummary: (): Promise<ActionCenterSummary> => {
+    return fetchAPI<ActionCenterSummary>('/action-center/summary');
+  },
+
+  /**
+   * Get all issues sorted by business impact.
+   */
+  getActionCenterIssues: (params?: {
+    category?: string;
+    automatable_only?: boolean;
+    limit?: number;
+  }): Promise<ActionCenterIssueListResponse> => {
+    const queryParams = new URLSearchParams();
+    if (params?.category) queryParams.append('category', params.category);
+    if (params?.automatable_only) queryParams.append('automatable_only', 'true');
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    const query = queryParams.toString();
+    return fetchAPI<ActionCenterIssueListResponse>(`/action-center/issues${query ? '?' + query : ''}`);
+  },
+
+  /**
+   * Execute a fix for an issue.
+   */
+  fixIssue: (issueId: string): Promise<ActionCenterFixResult> => {
+    return fetchAPI<ActionCenterFixResult>(`/action-center/fix/${issueId}`, {
+      method: 'POST',
+    });
+  },
+
+  /**
+   * One-click fix for all automatable issues.
+   */
+  fixAllAutomated: (): Promise<ActionCenterFixResult[]> => {
+    return fetchAPI<ActionCenterFixResult[]>('/action-center/fix-all-automated', {
+      method: 'POST',
+    });
+  },
+
+  // ============================================================================
+  // Cross-Device Analysis API
+  // ============================================================================
+
+  /**
+   * Get fleet-wide systemic issues (e.g., "Samsung S21 has 2.3x higher crash rate").
+   */
+  getSystemicIssues: (): Promise<SystemicIssuesResponse> => {
+    return fetchAPI<SystemicIssuesResponse>('/cross-device/systemic-issues');
+  },
+
+  /**
+   * Get device model reliability rankings.
+   */
+  getModelReliability: (): Promise<ModelReliabilityResponse> => {
+    return fetchAPI<ModelReliabilityResponse>('/cross-device/model-reliability');
+  },
+
+  /**
+   * Get OS version stability analysis.
+   */
+  getOSStability: (): Promise<OSStabilityResponse> => {
+    return fetchAPI<OSStabilityResponse>('/cross-device/os-stability');
+  },
+
+  /**
+   * Get firmware impact analysis.
+   */
+  getFirmwareImpact: (): Promise<FirmwareImpactResponse> => {
+    return fetchAPI<FirmwareImpactResponse>('/cross-device/firmware-impact');
+  },
+
+  /**
+   * Get cross-device summary statistics.
+   */
+  getCrossDeviceSummary: (): Promise<CrossDeviceSummaryResponse> => {
+    return fetchAPI<CrossDeviceSummaryResponse>('/cross-device/summary');
+  },
+
+  // ============================================================================
+  // Data Quality API
+  // ============================================================================
+
+  /**
+   * Get data quality summary.
+   */
+  getDataQualitySummary: (): Promise<DataQualitySummaryResponse> => {
+    return fetchAPI<DataQualitySummaryResponse>('/data-quality/summary');
+  },
+
+  /**
+   * Get data freshness by source.
+   */
+  getDataFreshness: (): Promise<DataFreshnessResponse> => {
+    return fetchAPI<DataFreshnessResponse>('/data-quality/freshness');
+  },
+
+  /**
+   * Get data reconciliation report.
+   */
+  getDataReconciliation: (): Promise<DataReconciliationResponse> => {
+    return fetchAPI<DataReconciliationResponse>('/data-quality/reconciliation');
+  },
 };
 
 // Device action response types
@@ -3396,4 +3723,440 @@ export interface WeekOverWeekResponse {
   metric: string;
   comparisons: WeeklyComparisonPointResponse[];
   generated_at: string;
+}
+
+// ============================================================================
+// NETWORK INTELLIGENCE API Response Types
+// ============================================================================
+
+export interface APQualityResponse {
+  ssid: string;
+  bssid?: string;
+  avg_signal_dbm: number;
+  drop_rate: number;
+  device_count: number;
+  quality_score: number;
+  location?: string;
+}
+
+export interface PerAppUsageResponse {
+  app_name: string;
+  app_id?: number;
+  data_download_mb: number;
+  data_upload_mb: number;
+  device_count: number;
+  is_background: boolean;
+}
+
+export interface CarrierStatsResponse {
+  carrier_name: string;
+  device_count: number;
+  avg_signal: number;
+  avg_latency_ms?: number;
+  reliability_score: number;
+}
+
+export interface NetworkSummaryResponse {
+  tenant_id: string;
+  device_group_id?: number | null;
+  device_group_name?: string | null;
+  device_group_path?: string | null;
+  total_devices?: number;
+  total_aps: number;
+  good_aps: number;
+  problematic_aps: number;
+  avg_signal_strength: number;
+  avg_drop_rate: number;
+  fleet_network_score: number;
+  wifi_vs_cellular_ratio: number;
+  devices_in_dead_zones: number;
+  recommendations: string[];
+  generated_at: string;
+}
+
+export interface DeviceGroupNode {
+  device_group_id: number;
+  group_name: string;
+  parent_device_group_id: number | null;
+  device_count: number;
+  full_path: string;
+  children: DeviceGroupNode[];
+}
+
+export interface DeviceGroupHierarchyResponse {
+  groups: DeviceGroupNode[];
+  total_groups: number;
+}
+
+export interface APListResponse {
+  aps: APQualityResponse[];
+  total_count: number;
+}
+
+export interface AppUsageListResponse {
+  apps: PerAppUsageResponse[];
+  total_download_mb: number;
+  total_upload_mb: number;
+}
+
+export interface CarrierListResponse {
+  carriers: CarrierStatsResponse[];
+}
+
+export interface NetworkDeadZoneResponse {
+  dead_zones: Array<{
+    latitude: number;
+    longitude: number;
+    avg_signal_dbm: number;
+    device_count: number;
+  }>;
+  total_count: number;
+  signal_threshold_dbm: number;
+}
+
+// ============================================================================
+// SECURITY POSTURE API Response Types
+// ============================================================================
+
+export interface DeviceSecurityStatusResponse {
+  device_id: number;
+  device_name: string;
+  security_score: number;
+  is_encrypted: boolean;
+  is_rooted: boolean;
+  has_passcode: boolean;
+  patch_age_days: number;
+  usb_debugging: boolean;
+  developer_mode: boolean;
+  risk_level: 'low' | 'medium' | 'high' | 'critical';
+  violations: string[];
+}
+
+export interface ComplianceBreakdownResponse {
+  category: string;
+  compliant: number;
+  non_compliant: number;
+  total: number;
+  compliance_pct: number;
+}
+
+export interface SecurityTrendResponse {
+  date: string;
+  score: number;
+  compliant_pct: number;
+}
+
+export interface SecuritySummaryResponse {
+  tenant_id: string;
+  fleet_security_score: number;
+  total_devices: number;
+  compliant_devices: number;
+  at_risk_devices: number;
+  critical_risk_devices: number;
+  encrypted_devices: number;
+  rooted_devices: number;
+  outdated_patch_devices: number;
+  usb_debugging_enabled: number;
+  developer_mode_enabled: number;
+  no_passcode_devices: number;
+  recommendations: string[];
+  generated_at: string;
+}
+
+export interface DeviceSecurityListResponse {
+  devices: DeviceSecurityStatusResponse[];
+  total_count: number;
+}
+
+export interface ComplianceListResponse {
+  categories: ComplianceBreakdownResponse[];
+}
+
+export interface SecurityTrendListResponse {
+  trends: SecurityTrendResponse[];
+  period_days: number;
+}
+
+export interface AtRiskDevicesResponse {
+  at_risk_devices: DeviceSecurityStatusResponse[];
+  total_at_risk: number;
+  critical_count: number;
+}
+
+// Security PATH hierarchy types
+export interface PathNodeResponse {
+  path_id: string;
+  path_name: string;
+  full_path: string;
+  device_count: number;
+  security_score: number;
+  compliant_count: number;
+  at_risk_count: number;
+  critical_count: number;
+  children: PathNodeResponse[];
+}
+
+export interface PathHierarchyResponse {
+  tenant_id: string;
+  hierarchy: PathNodeResponse[];
+  total_paths: number;
+  total_devices: number;
+}
+
+export interface PathSecuritySummaryResponse {
+  path: string;
+  path_name: string;
+  device_count: number;
+  security_score: number;
+  compliant_count: number;
+  at_risk_count: number;
+  critical_count: number;
+  rooted_count: number;
+  unencrypted_count: number;
+  no_passcode_count: number;
+  outdated_patch_count: number;
+  usb_debugging_count: number;
+  developer_mode_count: number;
+}
+
+export interface PathSecurityResponse {
+  tenant_id: string;
+  summaries: PathSecuritySummaryResponse[];
+  selected_path: string | null;
+  depth: number;
+}
+
+// Risk Clusters types
+export interface RiskCluster {
+  violation_type: string;
+  device_count: number;
+  avg_security_score: number;
+  device_ids: number[];
+  common_paths: string[];
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  recommendation: string;
+}
+
+export interface RiskClustersResponse {
+  tenant_id: string;
+  clusters: RiskCluster[];
+  total_devices_affected: number;
+  coverage_percent: number;
+}
+
+// Path Comparison types
+export interface PathComparisonDataResponse {
+  path: string;
+  path_name: string;
+  security_score: number;
+  device_count: number;
+  compliance_pct: number;
+  vs_fleet_delta: number;
+}
+
+export interface PathComparisonResponse {
+  tenant_id: string;
+  paths: PathComparisonDataResponse[];
+  fleet_average_score: number;
+  insights: string[];
+}
+
+// Temporal Clusters types
+export interface TemporalCluster {
+  cluster_id: string;
+  violation_type: string;
+  device_count: number;
+  first_seen: string;
+  last_seen: string;
+  paths_affected: string[];
+  is_ongoing: boolean;
+}
+
+export interface TemporalClustersResponse {
+  tenant_id: string;
+  clusters: TemporalCluster[];
+  window_hours: number;
+}
+
+// ============================================================================
+// Action Center Types
+// ============================================================================
+
+export interface ActionCenterIssueImpact {
+  affected_devices: number;
+  affected_users: number;
+  hourly_cost: number;
+  priority_score: number;
+}
+
+export interface ActionCenterRemediation {
+  action_type: string;
+  description: string;
+  automated: boolean;
+  estimated_minutes: number;
+  success_rate: number;
+}
+
+export interface ActionCenterIssue {
+  id: string;
+  category: 'productivity_loss' | 'security_risk' | 'cost_waste' | 'impending_failure';
+  title: string;
+  root_cause: string;
+  one_liner: string;
+  impact: ActionCenterIssueImpact;
+  remediation: ActionCenterRemediation;
+  device_ids: number[];
+  detected_at: string;
+  related_dashboard?: string;
+  investigation_id?: string;
+}
+
+export interface ActionCenterSummary {
+  tenant_id: string;
+  total_issues: number;
+  total_hourly_cost: number;
+  daily_cost: number;
+  monthly_cost: number;
+  automatable_count: number;
+  automatable_savings: number;
+  by_category: Record<string, { count: number; hourly_cost: number; devices: number }>;
+  top_3_issues: string[];
+  recommended_action: string;
+  generated_at: string;
+}
+
+export interface ActionCenterIssueListResponse {
+  issues: ActionCenterIssue[];
+  total_count: number;
+  can_auto_fix: number;
+}
+
+export interface ActionCenterFixResult {
+  issue_id: string;
+  success: boolean;
+  message: string;
+  devices_fixed: number;
+  devices_failed: number;
+}
+
+// ============================================================================
+// Cross-Device Analysis Types
+// ============================================================================
+
+export interface SystemicIssue {
+  issue_id: string;
+  issue_type: 'model_issue' | 'os_issue' | 'firmware_issue' | 'carrier_issue' | 'location_issue';
+  cohort_description: string;
+  metric: string;
+  deviation_multiplier: number;
+  affected_device_count: number;
+  severity: 'critical' | 'high' | 'medium' | 'low';
+  recommendation: string;
+  first_detected?: string;
+}
+
+export interface SystemicIssuesResponse {
+  issues: SystemicIssue[];
+  total_count: number;
+  highest_impact_cohort?: string;
+}
+
+export interface ModelReliabilityEntry {
+  manufacturer: string;
+  model: string;
+  device_count: number;
+  failure_rate: number;
+  avg_anomaly_rate: number;
+  vs_fleet_average: number;
+  top_issues: string[];
+  reliability_score: number;
+}
+
+export interface ModelReliabilityResponse {
+  models: ModelReliabilityEntry[];
+  fleet_average_anomaly_rate: number;
+  total_models: number;
+}
+
+export interface OSStabilityEntry {
+  os_name: string;
+  os_version: string;
+  device_count: number;
+  crash_rate: number;
+  anr_rate: number;
+  stability_score: number;
+  vs_fleet_average: number;
+  common_issues: string[];
+}
+
+export interface OSStabilityResponse {
+  os_versions: OSStabilityEntry[];
+  fleet_average_stability: number;
+  total_versions: number;
+}
+
+export interface FirmwareImpactEntry {
+  firmware_version: string;
+  manufacturer: string;
+  device_count: number;
+  issue_rate: number;
+  battery_impact: number;
+  connectivity_impact: number;
+  recommendation: string;
+}
+
+export interface FirmwareImpactResponse {
+  firmware_versions: FirmwareImpactEntry[];
+  total_versions: number;
+  versions_with_issues: number;
+}
+
+export interface CrossDeviceSummaryResponse {
+  total_systemic_issues: number;
+  affected_device_percentage: number;
+  most_common_pattern: string;
+  estimated_fleet_impact: number;
+  top_issue_categories: { category: string; count: number }[];
+}
+
+// ============================================================================
+// Data Quality Types
+// ============================================================================
+
+export interface DataQualitySummaryResponse {
+  match_rate: number;
+  quality_score: number;
+  quality_grade: 'A' | 'B' | 'C' | 'D' | 'F';
+  xsight_staleness_hours: number;
+  mobicontrol_staleness_hours: number;
+  issues_count: number;
+  status: 'healthy' | 'warning' | 'critical';
+  generated_at: string;
+}
+
+export interface DataFreshnessEntry {
+  source: string;
+  last_updated: string;
+  staleness_hours: number;
+  record_count: number;
+  status: 'fresh' | 'stale' | 'critical';
+}
+
+export interface DataFreshnessResponse {
+  sources: DataFreshnessEntry[];
+  overall_freshness: 'fresh' | 'stale' | 'critical';
+}
+
+export interface DataReconciliationResponse {
+  report_date: string;
+  xsight_device_count: number;
+  mobicontrol_device_count: number;
+  matched_devices: number;
+  xsight_only: number;
+  mobicontrol_only: number;
+  match_rate: number;
+  quality_score: number;
+  quality_grade: string;
+  issues: string[];
+  recommendations: string[];
 }

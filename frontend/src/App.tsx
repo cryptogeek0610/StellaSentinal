@@ -2,20 +2,22 @@ import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-
 import { Toaster } from 'react-hot-toast'
 import UnifiedDashboard from './pages/UnifiedDashboard'
 import Dashboard from './pages/Dashboard'
+import Insights from './pages/Insights'
+import CostManagement from './pages/CostManagement'
 import Investigations from './pages/Investigations'
 import InvestigationDetail from './pages/InvestigationDetail'
-import Fleet from './pages/Fleet'
 import DeviceDetail from './pages/DeviceDetail'
-import Insights from './pages/Insights'
+import Fleet from './pages/Fleet'
 import LocationCenter from './pages/LocationCenter'
-import System from './pages/System'
-import ModelStatus from './pages/ModelStatus'
-import DataOverview from './pages/DataOverview'
 import TrainingMonitor from './pages/TrainingMonitor'
 import Baselines from './pages/Baselines'
 import Automation from './pages/Automation'
-import CostManagement from './pages/CostManagement'
-import Setup from './pages/Setup'
+import ModelStatus from './pages/ModelStatus'
+import System from './pages/System'
+import DataOverview from './pages/DataOverview'
+import NetworkIntelligence from './pages/NetworkIntelligence'
+import SecurityPosture from './pages/SecurityPosture'
+import ActionCenter from './pages/ActionCenter'
 import NotFound from './pages/NotFound'
 import { Layout } from './components/Layout'
 import { MockModeProvider } from './hooks/useMockMode'
@@ -59,44 +61,52 @@ function App() {
           />
           <Layout>
             <Routes>
-              {/* Unified Command Center - Primary Entry Point */}
-              <Route path="/" element={<UnifiedDashboard />} />
-              <Route path="/dashboard" element={<UnifiedDashboard />} />
+              {/* Action Center - The One Screen That Matters */}
+              <Route path="/" element={<ActionCenter />} />
+              <Route path="/action-center" element={<ActionCenter />} />
 
-              {/* Detailed Operations Dashboard (formerly Command Center) */}
-              <Route path="/dashboard/detailed" element={<Dashboard />} />
+              {/* Command Center - Observability Dashboard */}
+              <Route path="/dashboard" element={<UnifiedDashboard />} />
 
               {/* Investigations */}
               <Route path="/investigations" element={<Investigations />} />
               <Route path="/investigations/:id" element={<InvestigationDetail />} />
 
-              {/* Legacy routes - redirect to new structure */}
-              <Route path="/anomalies" element={<Navigate to="/investigations" replace />} />
-              <Route path="/anomalies/:id" element={<LegacyAnomalyRedirect />} />
-
-              {/* Fleet */}
-              <Route path="/fleet" element={<Fleet />} />
+              {/* Device Detail (from investigation drill-down) */}
               <Route path="/devices/:id" element={<DeviceDetail />} />
 
-              {/* Insights */}
-              <Route path="/insights" element={<Insights />} />
+              {/* System - Consolidated admin (connections, ML pipeline, config) */}
+              <Route path="/system" element={<System />} />
 
-              {/* Location Center */}
+              {/* Debug route for ML engineers (hidden from nav) */}
+              <Route path="/debug/data" element={<DataOverview />} />
+
+              {/* Restored dashboards */}
+              <Route path="/noc" element={<Dashboard />} />
+              <Route path="/insights" element={<Insights />} />
+              <Route path="/costs" element={<CostManagement />} />
+
+              {/* Fleet & Location Intelligence */}
+              <Route path="/fleet" element={<Fleet />} />
               <Route path="/locations" element={<LocationCenter />} />
 
-              {/* ML Training */}
-              <Route path="/data" element={<DataOverview />} />
+              {/* Network & Security Intelligence */}
+              <Route path="/network" element={<NetworkIntelligence />} />
+              <Route path="/security" element={<SecurityPosture />} />
+
+              {/* ML Operations */}
               <Route path="/training" element={<TrainingMonitor />} />
               <Route path="/baselines" element={<Baselines />} />
               <Route path="/automation" element={<Automation />} />
+              <Route path="/model-status" element={<ModelStatus />} />
 
-              {/* Cost Intelligence */}
-              <Route path="/costs" element={<CostManagement />} />
-
-              {/* System */}
-              <Route path="/system" element={<System />} />
-              <Route path="/status" element={<ModelStatus />} />
-              <Route path="/setup" element={<Setup />} />
+              {/* Legacy redirects */}
+              <Route path="/anomalies" element={<Navigate to="/investigations" replace />} />
+              <Route path="/anomalies/:id" element={<LegacyAnomalyRedirect />} />
+              <Route path="/dashboard/detailed" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/data" element={<Navigate to="/debug/data" replace />} />
+              <Route path="/status" element={<Navigate to="/model-status" replace />} />
+              <Route path="/setup" element={<Navigate to="/system" replace />} />
               <Route path="/settings" element={<Navigate to="/system" replace />} />
 
               {/* 404 - Catch all unmatched routes */}

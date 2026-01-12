@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
@@ -35,6 +36,7 @@ from device_anomaly.api.models import (
 from device_anomaly.database.schema import (
     AnomalyExplanationCache,
     AnomalyResult,
+    DeviceMetadata,
     LearnedRemediation,
     RemediationOutcome,
 )
@@ -88,6 +90,13 @@ FEATURE_EXPLANATIONS = {
     "connection_time": "Duration of network connectivity",
 }
 
+# Metrics where HIGH values are GOOD (benign) - should not be flagged as anomalous
+# when deviating upward from baseline. Only low values would be problematic.
+BENIGN_HIGH_METRICS = {
+    "total_free_storage_kb",
+    "wifi_signal_strength",
+}
+
 
 def _get_severity(score: float) -> str:
     """Convert anomaly score to severity level."""
@@ -113,6 +122,48 @@ def _format_value(feature_name: str, value: float) -> str:
     if isinstance(value, float):
         return f"{value:.1f} {unit}".strip()
     return f"{value} {unit}".strip()
+
+
+def _filter_benign_evidence(text: str) -> str:
+    """Remove lines from LLM response that mention benign-high features as problems.
+
+    High free storage, high battery level, and strong signal are GOOD, not problems.
+    This filter removes evidence lines that incorrectly flag these as issues.
+    """
+    if not text:
+        return text
+
+    # Patterns for benign-high features being mentioned as anomalies
+    # We want to remove lines that mention these with positive deviation context
+    benign_patterns = [
+        # Free Storage mentioned as high/above baseline (benign)
+        r'Free\s*Storage.*(?:above|higher|increased|significant|large|high).*(?:baseline|normal|typical)',
+        r'Free\s*Storage.*\d+\.?\d*\s*(?:GB|MB|TB).*(?:above|higher|deviation)',
+        r'(?:High|Large|Significant|Elevated).*[Ff]ree\s*[Ss]torage',
+        r'Free\s*Storage.*(?:\+|\bpositive\b).*deviation',
+        r'Free\s*Storage.*(?:11\.1|[5-9]\d*\.?\d*)\s*σ',  # High positive sigma
+        # Memory mentioned as high (benign)
+        r'(?:Free|Available)\s*Memory.*(?:above|higher|high)',
+        # Battery level high (benign)
+        r'Battery\s*Level.*(?:high|above|good)',
+        # Signal strength strong (benign)
+        r'Signal\s*Strength.*(?:strong|high|good|above)',
+    ]
+
+    lines = text.split('\n')
+    filtered_lines = []
+
+    for line in lines:
+        is_benign = False
+        for pattern in benign_patterns:
+            if re.search(pattern, line, re.IGNORECASE):
+                is_benign = True
+                logger.debug(f"Filtering benign evidence line: {line[:100]}")
+                break
+        if not is_benign:
+            filtered_lines.append(line)
+
+    return '\n'.join(filtered_lines)
 
 
 def _calculate_baseline_stats(db: Session, tenant_id: str, device_id: int, days: int = 30) -> dict:
@@ -201,6 +252,11 @@ def _build_feature_contributions(anomaly: AnomalyResult, baseline_stats: dict) -
     total_z = sum(x[1] for x in z_scores if x[5]) or 1
 
     for feature, abs_z, z, value, stats, has_value in z_scores:
+        # Skip benign-high metrics with positive deviation - they're not problems
+        # (e.g., high free storage, strong WiFi signal)
+        if feature in BENIGN_HIGH_METRICS and z > 0:
+            continue
+
         contribution_pct = (abs_z / total_z) * 100 if total_z > 0 and has_value else 0
 
         # Determine direction
@@ -329,6 +385,10 @@ def _build_baseline_comparison(anomaly: AnomalyResult, baseline_stats: dict) -> 
             # Handle NULL values - use baseline mean as current value for display
             current_value = value if value is not None else stats["mean"]
             z = (current_value - stats["mean"]) / stats["std"] if stats["std"] > 0 else 0
+
+            # Skip benign-high metrics with positive deviation - they're not problems
+            if feature in BENIGN_HIGH_METRICS and z > 0:
+                continue
 
             # Determine if anomalous (outside 2σ)
             is_anomalous = abs(z) >= 2 if value is not None else False
@@ -545,9 +605,14 @@ def _generate_remediation_suggestions(anomaly: AnomalyResult, contributions: Lis
 
 def _find_similar_cases(db: Session, tenant_id: str, anomaly: AnomalyResult, limit: int = 5) -> List[SimilarCase]:
     """Find similar historical anomaly cases."""
-    # Find resolved anomalies with similar characteristics
+    # Find resolved anomalies with similar characteristics, joined with device metadata
     similar = (
-        db.query(AnomalyResult)
+        db.query(AnomalyResult, DeviceMetadata.device_name)
+        .outerjoin(
+            DeviceMetadata,
+            (AnomalyResult.device_id == DeviceMetadata.device_id)
+            & (AnomalyResult.tenant_id == DeviceMetadata.tenant_id),
+        )
         .filter(AnomalyResult.tenant_id == tenant_id)
         .filter(AnomalyResult.id != anomaly.id)
         .filter(AnomalyResult.anomaly_label == -1)
@@ -558,7 +623,7 @@ def _find_similar_cases(db: Session, tenant_id: str, anomaly: AnomalyResult, lim
     )
 
     cases = []
-    for s in similar[:limit]:
+    for s, device_name in similar[:limit]:
         # Calculate simple similarity based on score proximity
         score_diff = abs(anomaly.anomaly_score - s.anomaly_score)
         similarity = max(0, 1 - score_diff)
@@ -578,6 +643,7 @@ def _find_similar_cases(db: Session, tenant_id: str, anomaly: AnomalyResult, lim
             case_id=str(uuid.uuid4()),
             anomaly_id=s.id,
             device_id=s.device_id,
+            device_name=device_name,
             detected_at=s.timestamp,
             resolved_at=s.updated_at if s.status == "resolved" else None,
             similarity_score=min(1.0, similarity),
@@ -826,8 +892,25 @@ def get_ai_analysis(
     # Generate analysis using LLM
     llm_client = get_default_llm_client()
 
-    # Build prompt
-    top_features = contributions[:5] if contributions else []
+    # Features where HIGH values are benign (not problems)
+    # Only low values of these metrics are issues
+    benign_high_features = {
+        "freestorage", "free_storage", "totalfreestoragekb", "total_free_storage_kb",
+        "availablestorage", "available_storage", "freememory", "free_memory",
+        "availablememory", "available_memory", "batterylevel", "battery_level",
+        "batterycapacity", "battery_capacity", "signalstrength", "signal_strength",
+        "wifisignalstrength", "wifi_signal_strength",
+    }
+
+    def is_benign_high_deviation(fc) -> bool:
+        """Check if this is a benign high deviation (e.g., high free storage is good)."""
+        feature_lower = fc.feature_name.lower().replace("_", "")
+        is_benign_high = any(benign in feature_lower for benign in benign_high_features)
+        # If it's a benign-high feature and the deviation is positive (higher than baseline), ignore it
+        return is_benign_high and fc.deviation_sigma > 0
+
+    # Build prompt - filter out benign high deviations
+    top_features = [fc for fc in contributions if not is_benign_high_deviation(fc)][:5]
     feature_summary = "\n".join([
         f"- {fc.feature_display_name}: {fc.current_value_display} (baseline: {fc.baseline_value_display}, deviation: {fc.deviation_sigma:.1f}σ)"
         for fc in top_features
@@ -892,12 +975,20 @@ Top Contributing Factors (metrics most different from normal):
 3. Confidence should reflect how clearly the evidence points to the cause
 4. Actions should be specific to what an IT admin can actually do
 5. Keep total response under 300 words
+6. IMPORTANT: Some metrics are GOOD when high - do NOT flag these as problems:
+   - High free storage (only LOW storage is a problem)
+   - High free memory (only LOW memory is a problem)
+   - High battery level (only LOW battery is a problem)
+   - Strong signal strength (only WEAK signal is a problem)
+   If these metrics show HIGH values, ignore them in your analysis - they are benign.
 </instructions>"""
 
     try:
         raw_llm_response = llm_client.generate(prompt, max_tokens=500, temperature=0.3)
         # Strip <think> tags from models like DeepSeek R1 that include internal reasoning
         llm_response = strip_thinking_tags(raw_llm_response)
+        # Filter out benign-high evidence (e.g., high free storage is good, not a problem)
+        llm_response = _filter_benign_evidence(llm_response)
         model_used = llm_client.model_name or "unknown"
     except Exception as e:
         logger.warning(f"LLM generation failed: {e}")

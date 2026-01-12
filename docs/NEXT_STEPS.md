@@ -18,17 +18,17 @@ cd /Users/yannickweijenberg/Documents/GitHub/AnomalyDetection
 # Build and start all services
 make up
 
-# Expected output: 4 containers starting (sqlserver, ollama, qdrant, app)
-# Wait ~60 seconds for SQL Server health check
+# Expected output: containers starting (postgres, redis, ollama, qdrant, app)
 
 # Verify all services are running
 docker-compose ps
 
 # Should show:
-# - device-anomaly-db (healthy)
-# - device-anomaly-ollama (healthy)
-# - device-anomaly-qdrant (healthy)
-# - device-anomaly-app (running)
+# - stellasentinal-postgres (healthy)
+# - stellasentinal-redis (healthy)
+# - stellasentinal-ollama (healthy)
+# - stellasentinal-qdrant (healthy)
+# - stellasentinal-app (running)
 ```
 
 ### 2. Test Synthetic Experiment (2 minutes)
@@ -185,11 +185,9 @@ DROP TABLE IF EXISTS tenants;
 
 **Test**:
 ```bash
-# Initialize backend database
-docker-compose exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "DevAnomalyStrong!Pass123" -Q "CREATE DATABASE SOTI_AnomalyDetection;"
-
-# Run schema creation
-docker-compose exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "DevAnomalyStrong!Pass123" -i /app/scripts/init_backend_schema.sql
+# Backend database (PostgreSQL) is automatically initialized by Docker
+# Check that the API can connect:
+curl http://localhost:8000/api/dashboard/stats
 ```
 
 ---
@@ -416,11 +414,6 @@ test-api: ## Test API endpoints
 	@curl -f http://localhost:8000/health || echo "API not ready"
 	@echo "\nTesting API root..."
 	@curl http://localhost:8000/
-
-# Database commands
-init-backend-db: ## Initialize backend database schema
-	docker-compose exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "$${DW_DB_PASS}" -Q "IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = 'SOTI_AnomalyDetection') CREATE DATABASE SOTI_AnomalyDetection;"
-	@echo "Backend database created. Run schema script next."
 
 # Full test suite
 test-all: test-synthetic test-api test-qdrant test-ollama ## Run all tests

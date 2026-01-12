@@ -164,22 +164,34 @@ class TrainingJobProcessor:
             df_features = pipeline.prepare_features(df)
             self.update_progress(run_id, 40, f"Created {len(df_features.columns)} features", "features")
 
-            # Stage 4: Compute baselines (40-50%)
-            self.update_progress(run_id, 45, "Computing data-driven baselines...", "baselines")
-            pipeline.compute_baselines(df_features)
-            self.update_progress(run_id, 50, "Baselines computed", "baselines")
-
-            # Stage 5: Train/validation split (50-55%)
-            self.update_progress(run_id, 52, "Splitting data for validation...", "split")
+            # Stage 4: Train/validation split (40-50%)
+            self.update_progress(run_id, 45, "Splitting data for validation...", "split")
             df_train, df_val = pipeline.train_validation_split(df_features)
             self.update_progress(
-                run_id, 55,
+                run_id, 50,
                 f"Train: {len(df_train):,} rows, Val: {len(df_val):,} rows",
                 "split",
             )
 
-            # Stage 6: Training (55-80%)
-            self.update_progress(run_id, 60, "Training IsolationForest model...", "training")
+            # Stage 5: Compute cohort stats on train-only split (50-60%)
+            from device_anomaly.features.cohort_stats import apply_cohort_stats
+
+            self.update_progress(run_id, 52, "Computing cohort statistics...", "cohort_stats")
+            cohort_stats = pipeline.compute_cohort_stats(df_train)
+            if cohort_stats is not None:
+                df_train = apply_cohort_stats(df_train, cohort_stats)
+                df_val = apply_cohort_stats(df_val, cohort_stats)
+                pipeline._df_train = df_train
+                pipeline._df_val = df_val
+            self.update_progress(run_id, 55, "Cohort stats computed", "cohort_stats")
+
+            # Stage 6: Compute baselines (train-only to avoid leakage) (60-70%)
+            self.update_progress(run_id, 55, "Computing data-driven baselines...", "baselines")
+            pipeline.compute_baselines(df_train)
+            self.update_progress(run_id, 60, "Baselines computed", "baselines")
+
+            # Stage 7: Training (70-85%)
+            self.update_progress(run_id, 65, "Training IsolationForest model...", "training")
             detector = pipeline.train_model(df_train)
             self.update_progress(
                 run_id, 80,
@@ -187,7 +199,7 @@ class TrainingJobProcessor:
                 "training",
             )
 
-            # Stage 7: Validation (80-90%)
+            # Stage 8: Validation (85-95%)
             self.update_progress(run_id, 85, "Evaluating model on validation set...", "validation")
             metrics = pipeline.evaluate_model(detector, df_val)
             self.update_progress(
@@ -201,15 +213,20 @@ class TrainingJobProcessor:
             # Sanitize run_id to prevent path traversal attacks
             safe_run_id = re.sub(r'[^a-zA-Z0-9_-]', '', run_id)
             output_dir = f"models/production/{safe_run_id}"
-            artifacts = pipeline.export_artifacts(detector, metrics, output_dir)
+            model_version = pipeline.get_model_version()
+            artifacts = pipeline.export_artifacts(
+                detector,
+                metrics,
+                output_dir,
+                model_version=model_version,
+            )
 
             # Create result
             completed_at = datetime.now(timezone.utc).isoformat()
-            version = datetime.now(timezone.utc).strftime("v%Y%m%d_%H%M%S")
 
             result = TrainingResult(
                 run_id=run_id,
-                model_version=version,
+                model_version=model_version,
                 config=config,
                 metrics=metrics,
                 artifacts=artifacts,

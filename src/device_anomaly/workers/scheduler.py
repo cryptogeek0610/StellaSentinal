@@ -105,6 +105,11 @@ class SchedulerConfig:
     location_baseline_day_of_week: int = 0  # Monday for weekly baseline computation
     location_baseline_hour: int = 3  # 3 AM for baseline computation
 
+    # Device metadata sync settings
+    device_metadata_sync_enabled: bool = True
+    device_metadata_sync_interval_minutes: int = 30  # Every 30 minutes
+    device_metadata_sync_since_days: int = 30  # Only sync devices active in last N days
+
     # General
     timezone: str = "UTC"
     last_training_time: Optional[str] = None
@@ -113,6 +118,7 @@ class SchedulerConfig:
     last_daily_digest_time: Optional[str] = None
     last_shift_readiness_time: Optional[str] = None
     last_location_baseline_time: Optional[str] = None
+    last_device_metadata_sync_time: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON storage."""
@@ -263,6 +269,10 @@ class AutomationScheduler:
             location_baseline_enabled=os.getenv("SCHEDULER_LOCATION_BASELINE_ENABLED", "true").lower() == "true",
             location_baseline_day_of_week=int(os.getenv("SCHEDULER_LOCATION_BASELINE_DAY", "0")),
             location_baseline_hour=int(os.getenv("SCHEDULER_LOCATION_BASELINE_HOUR", "3")),
+            # Device metadata sync settings
+            device_metadata_sync_enabled=os.getenv("DEVICE_METADATA_SYNC_ENABLED", "true").lower() == "true",
+            device_metadata_sync_interval_minutes=int(os.getenv("DEVICE_METADATA_SYNC_INTERVAL_MINUTES", "30")),
+            device_metadata_sync_since_days=int(os.getenv("DEVICE_METADATA_SYNC_SINCE_DAYS", "30")),
         )
 
     def load_config(self, force: bool = False) -> SchedulerConfig:
@@ -519,11 +529,38 @@ class AutomationScheduler:
             return {"success": True, "scored": mock_scored, "anomalies": mock_anomalies, "mock_mode": True}
 
         from device_anomaly.data_access.unified_loader import load_unified_device_dataset
-        from device_anomaly.features.device_features import DeviceFeatureBuilder
+        from device_anomaly.features.device_features import (
+            build_feature_builder_from_metadata,
+            load_feature_metadata,
+        )
+        from device_anomaly.features.cohort_stats import apply_cohort_stats, load_latest_cohort_stats
         from device_anomaly.models.anomaly_detector import AnomalyDetector
         from device_anomaly.data_access.anomaly_persistence import persist_anomaly_results
+        from device_anomaly.data_access.watermark_store import get_watermark_store
 
         try:
+            # Check if there's new source data to score
+            # This prevents anomaly count inflation on static/backup databases
+            watermark_store = get_watermark_store()
+            has_new_data, source_timestamp, freshness_reason = watermark_store.check_source_data_freshness()
+
+            if not has_new_data:
+                logger.info(f"Skipping scoring: {freshness_reason}")
+                self.update_status(
+                    scoring_status="idle",
+                    last_scoring_result={
+                        "success": True,
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "total_scored": 0,
+                        "anomalies_detected": 0,
+                        "skipped": True,
+                        "reason": freshness_reason,
+                    },
+                )
+                return {"success": True, "scored": 0, "skipped": True, "reason": freshness_reason}
+
+            logger.info(f"Proceeding with scoring: {freshness_reason}")
+
             # Use historical end date if configured (for demo with backup data)
             # Otherwise use current time
             historical_end = get_historical_end_date()
@@ -553,8 +590,11 @@ class AutomationScheduler:
                 return {"success": True, "scored": 0}
 
             # Build features
-            builder = DeviceFeatureBuilder()
+            metadata = load_feature_metadata()
+            builder = build_feature_builder_from_metadata(metadata, compute_cohort=False)
             df_features = builder.transform(df)
+            cohort_stats = load_latest_cohort_stats()
+            df_features = apply_cohort_stats(df_features, cohort_stats)
 
             # Load model and score
             detector = AnomalyDetector.load_latest()
@@ -572,6 +612,12 @@ class AutomationScheduler:
 
             # Persist results (sync function, run in thread pool)
             await asyncio.to_thread(persist_anomaly_results, scored_df)
+
+            # Record scoring watermark to prevent re-scoring same data
+            # This is critical for preventing anomaly inflation on static databases
+            scoring_timestamp = source_timestamp or datetime.utcnow()
+            watermark_store.set_last_scoring_watermark(scoring_timestamp)
+            logger.info(f"Recorded scoring watermark: {scoring_timestamp.isoformat()}")
 
             # Update status
             self._config.last_scoring_time = datetime.utcnow().isoformat()
@@ -951,6 +997,35 @@ class AutomationScheduler:
             )
             return {"success": False, "error": str(e)}
 
+    async def run_device_metadata_sync_job(self) -> Dict[str, Any]:
+        """Execute device metadata sync from MobiControl to PostgreSQL."""
+        logger.info("Starting device metadata sync job...")
+
+        # In mock mode, skip real sync
+        if is_mock_mode():
+            logger.info("Mock mode enabled - skipping real device metadata sync")
+            self._config.last_device_metadata_sync_time = datetime.utcnow().isoformat()
+            self.save_config(self._config)
+            return {"success": True, "synced_count": 0, "mock_mode": True}
+
+        try:
+            from device_anomaly.services.device_metadata_sync import sync_device_metadata
+
+            result = await asyncio.to_thread(
+                sync_device_metadata,
+                since_days=self._config.device_metadata_sync_since_days,
+            )
+
+            self._config.last_device_metadata_sync_time = datetime.utcnow().isoformat()
+            self.save_config(self._config)
+
+            logger.info(f"Device metadata sync completed: {result.get('synced_count', 0)} devices")
+            return result
+
+        except Exception as e:
+            logger.error(f"Device metadata sync failed: {e}")
+            return {"success": False, "error": str(e)}
+
     def _get_shift_times(self, shift_name: str) -> Tuple[int, int]:
         """Get start hour and end hour for a shift."""
         shift_times = {
@@ -1009,10 +1084,22 @@ class AutomationScheduler:
 
     async def _training_loop(self) -> None:
         """Background loop for scheduled training."""
+        loop_iteration = 0
         while self._running:
+            loop_iteration += 1
             try:
                 # Reload config from Redis to pick up any changes from API
                 self._config = self.load_config()
+                now = datetime.utcnow()
+
+                # Log loop status periodically (every 10 iterations = ~5 minutes at 30s sleep)
+                if loop_iteration % 10 == 1:
+                    logger.info(
+                        f"[Training Loop] iteration={loop_iteration}, "
+                        f"enabled={self._config.training_enabled}, "
+                        f"interval={self._config.training_interval.value}, "
+                        f"last_training={self._config.last_training_time or 'never'}"
+                    )
 
                 # Check for manual training jobs in the queue first (if Redis available)
                 if self.redis is not None:
@@ -1030,6 +1117,7 @@ class AutomationScheduler:
                         logger.warning(f"Failed to check training queue: {e}")
 
                 if not self._config.training_enabled:
+                    logger.info("[Training Loop] Training is DISABLED - skipping")
                     self.update_status(next_training_time=None)
                     await asyncio.sleep(60)
                     continue
@@ -1039,7 +1127,16 @@ class AutomationScheduler:
                     self.update_status(next_training_time=next_time.isoformat())
 
                     # Wait until next training time
-                    wait_seconds = (next_time - datetime.utcnow()).total_seconds()
+                    wait_seconds = (next_time - now).total_seconds()
+
+                    # Log next training time on first iteration and periodically
+                    if loop_iteration % 10 == 1 or loop_iteration == 1:
+                        hours_until = wait_seconds / 3600
+                        logger.info(
+                            f"[Training Loop] Next training: {next_time.isoformat()} "
+                            f"({hours_until:.1f} hours from now)"
+                        )
+
                     if wait_seconds > 0:
                         # Sleep in shorter intervals to allow config reload and quick response
                         # Use smaller sleep to ensure we don't miss the training window
@@ -1052,20 +1149,22 @@ class AutomationScheduler:
                             continue
 
                     # Time to train!
-                    logger.info(f"Training time reached, starting scheduled training job...")
+                    logger.info(f"[Training Loop] Training time reached! Starting scheduled training job...")
                     await self.run_training_job()
 
                     # After training, sleep briefly to avoid immediate re-trigger
                     await asyncio.sleep(5)
 
                 else:
+                    logger.info(f"[Training Loop] No next training time (interval={self._config.training_interval.value})")
                     self.update_status(next_training_time=None)
                     await asyncio.sleep(60)
 
             except asyncio.CancelledError:
+                logger.info("[Training Loop] Cancelled, exiting loop")
                 break
             except Exception as e:
-                logger.error(f"Training loop error: {e}")
+                logger.error(f"[Training Loop] Error: {e}", exc_info=True)
                 await asyncio.sleep(60)
 
     async def _scoring_loop(self) -> None:
@@ -1281,22 +1380,90 @@ class AutomationScheduler:
                 logger.error(f"Insights loop error: {e}")
                 await asyncio.sleep(60)
 
+    async def _device_metadata_sync_loop(self) -> None:
+        """Background loop for periodic device metadata sync from MobiControl."""
+        # Run initial sync shortly after startup
+        await asyncio.sleep(15)
+
+        while self._running:
+            try:
+                # Reload config from Redis
+                self._config = self.load_config()
+
+                # Check for manually queued sync jobs
+                if self.redis is not None:
+                    try:
+                        manual_job = self.redis.lpop("scheduler:device_sync:queue")
+                        if manual_job:
+                            logger.info("Processing manual device metadata sync job")
+                            await self.run_device_metadata_sync_job()
+                            continue
+                    except Exception as e:
+                        logger.warning(f"Failed to check device sync queue: {e}")
+
+                if not self._config.device_metadata_sync_enabled:
+                    await asyncio.sleep(60)
+                    continue
+
+                # Run sync job
+                logger.info("Running scheduled device metadata sync...")
+                await self.run_device_metadata_sync_job()
+
+                # Wait for configured interval
+                interval_seconds = self._config.device_metadata_sync_interval_minutes * 60
+                await asyncio.sleep(interval_seconds)
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Device metadata sync loop error: {e}")
+                await asyncio.sleep(300)  # Wait 5 min on error
+
     async def start(self) -> None:
         """Start the scheduler service."""
-        logger.info("Starting Automation Scheduler...")
+        logger.info("=" * 60)
+        logger.info("AUTOMATION SCHEDULER STARTING")
+        logger.info("=" * 60)
+
         self._running = True
         self._start_time = datetime.utcnow()
         self._config = self.load_config(force=True)
 
-        # Log configuration
-        logger.info(
-            f"Scheduler config: training_enabled={self._config.training_enabled}, "
-            f"training_interval={self._config.training_interval.value}, "
-            f"scoring_enabled={self._config.scoring_enabled}, "
-            f"scoring_interval_minutes={self._config.scoring_interval_minutes}, "
-            f"insights_enabled={self._config.insights_enabled}, "
-            f"shift_readiness_enabled={self._config.shift_readiness_enabled}"
-        )
+        # Detailed startup banner
+        logger.info(f"Start time: {self._start_time.isoformat()}")
+        logger.info(f"Mock mode: {is_mock_mode()}")
+        logger.info(f"Redis URL: {self.redis_url}")
+        logger.info(f"Redis connected: {self._redis_available}")
+
+        # Training config
+        logger.info("-" * 40)
+        logger.info("TRAINING CONFIG:")
+        logger.info(f"  enabled: {self._config.training_enabled}")
+        logger.info(f"  interval: {self._config.training_interval.value}")
+        logger.info(f"  training_hour: {self._config.training_hour} (for daily/weekly)")
+        logger.info(f"  lookback_days: {self._config.training_lookback_days}")
+        logger.info(f"  last_training_time: {self._config.last_training_time or 'never'}")
+
+        # Calculate and show next training time
+        next_training = self.calculate_next_training_time()
+        if next_training:
+            wait_hours = (next_training - datetime.utcnow()).total_seconds() / 3600
+            logger.info(f"  NEXT TRAINING: {next_training.isoformat()} ({wait_hours:.1f}h from now)")
+        else:
+            logger.info(f"  NEXT TRAINING: None (disabled or manual)")
+
+        # Scoring config
+        logger.info("-" * 40)
+        logger.info("SCORING CONFIG:")
+        logger.info(f"  enabled: {self._config.scoring_enabled}")
+        logger.info(f"  interval_minutes: {self._config.scoring_interval_minutes}")
+
+        # Insights config
+        logger.info("-" * 40)
+        logger.info("INSIGHTS CONFIG:")
+        logger.info(f"  enabled: {self._config.insights_enabled}")
+        logger.info(f"  shift_readiness_enabled: {self._config.shift_readiness_enabled}")
+        logger.info("=" * 60)
 
         # Update initial status
         self.update_status(
@@ -1312,9 +1479,10 @@ class AutomationScheduler:
             asyncio.create_task(self._scoring_loop()),
             asyncio.create_task(self._auto_retrain_loop()),
             asyncio.create_task(self._insights_loop()),
+            asyncio.create_task(self._device_metadata_sync_loop()),
         ]
 
-        logger.info("Scheduler started successfully with insight generation enabled")
+        logger.info("Scheduler started successfully with insight generation and device metadata sync enabled")
 
     async def stop(self) -> None:
         """Stop the scheduler service."""

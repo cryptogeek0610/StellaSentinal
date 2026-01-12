@@ -75,7 +75,7 @@ class AnomalyStreamProcessor:
         self,
         engine: StreamingEngine,
         model_path: Optional[str] = None,
-        anomaly_threshold: float = -0.5,  # IsolationForest decision boundary
+        anomaly_threshold: Optional[float] = None,  # Override model threshold if set
         alert_cooldown_seconds: float = 300,  # 5 minutes between alerts per device
     ):
         self.engine = engine
@@ -200,6 +200,11 @@ class AnomalyStreamProcessor:
         """Score features and create result."""
         import pandas as pd
 
+        if self._model.impute_values is None:
+            self._model.impute_values = pd.Series(
+                {col: 0.0 for col in self._model.feature_cols}
+            )
+
         # Build feature vector matching model's expected features
         feature_vector = {}
         missing_features = []
@@ -224,18 +229,22 @@ class AnomalyStreamProcessor:
         # Create DataFrame for scoring
         df = pd.DataFrame([feature_vector])
 
-        # Get anomaly score
-        scores = self._model.score(df)
-        anomaly_score = float(scores[0])
+        # Get anomaly score + label using model logic
+        df_scored = self._model.score_dataframe(df)
+        anomaly_score = float(df_scored["anomaly_score"].iloc[0])
+        model_label = int(df_scored["anomaly_label"].iloc[0])
 
-        # Determine if anomaly
-        is_anomaly = anomaly_score < self.anomaly_threshold
+        threshold = self.anomaly_threshold if self.anomaly_threshold is not None else 0.0
+        if self.anomaly_threshold is None:
+            is_anomaly = model_label == -1
+        else:
+            is_anomaly = anomaly_score < threshold
 
         # Calculate confidence (how far from threshold)
-        confidence = self._calculate_confidence(anomaly_score)
+        confidence = self._calculate_confidence(anomaly_score, threshold)
 
         # Determine severity
-        severity = self._determine_severity(anomaly_score)
+        severity = self._determine_severity(anomaly_score, threshold)
 
         # Find contributing features (highest z-scores)
         contributing = self._find_contributing_features(features)
@@ -252,22 +261,22 @@ class AnomalyStreamProcessor:
             tenant_id=tenant_id,
         )
 
-    def _calculate_confidence(self, score: float) -> float:
+    def _calculate_confidence(self, score: float, threshold: float) -> float:
         """Calculate confidence based on distance from threshold."""
         # Score ranges roughly from -0.5 (anomaly) to 0.5 (normal)
         # Map to 0-1 confidence
-        distance = abs(score - self.anomaly_threshold)
+        distance = abs(score - threshold)
         return min(1.0, distance / 0.3)  # Max confidence at 0.3 distance
 
-    def _determine_severity(self, score: float) -> str:
+    def _determine_severity(self, score: float, threshold: float) -> str:
         """Determine anomaly severity from score."""
-        if score > self.anomaly_threshold:
+        if score > threshold:
             return "none"
-        elif score > self.anomaly_threshold - 0.1:
+        elif score > threshold - 0.1:
             return "low"
-        elif score > self.anomaly_threshold - 0.2:
+        elif score > threshold - 0.2:
             return "medium"
-        elif score > self.anomaly_threshold - 0.3:
+        elif score > threshold - 0.3:
             return "high"
         else:
             return "critical"

@@ -207,6 +207,7 @@ export interface AnomalyImpactResponse {
   overall_confidence: number;
   confidence_explanation: string;
   impact_level: ImpactLevel;
+  using_defaults: boolean;
   calculated_at: string;
 }
 
@@ -298,6 +299,8 @@ export interface FinancialImpactSummary {
 // BATTERY FORECASTING MODELS
 // =============================================================================
 
+export type DataQuality = 'real' | 'estimated' | 'mixed';
+
 export interface BatteryForecastEntry {
   device_model: string;
   device_count: number;
@@ -310,6 +313,8 @@ export interface BatteryForecastEntry {
   estimated_cost_90_days: number;
   avg_battery_age_months: number;
   oldest_battery_months?: number;
+  avg_battery_health_percent?: number;
+  data_quality: DataQuality;
 }
 
 export interface BatteryForecastResponse {
@@ -320,6 +325,8 @@ export interface BatteryForecastResponse {
   total_replacements_due_30_days: number;
   total_replacements_due_90_days: number;
   forecast_generated_at: string;
+  data_quality: DataQuality;
+  devices_with_health_data: number;
 }
 
 // =============================================================================

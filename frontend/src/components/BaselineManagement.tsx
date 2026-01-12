@@ -87,7 +87,9 @@ export function BaselineManagement() {
     refetchLLM();
   };
 
-  const displaySuggestions = llmSuggestions || suggestions || [];
+  const displaySuggestions = llmSuggestions && llmSuggestions.length > 0
+    ? llmSuggestions
+    : suggestions || [];
 
   return (
     <div className="space-y-6">
@@ -199,8 +201,9 @@ export function BaselineManagement() {
           <div className="space-y-4" role="list" aria-label="Baseline suggestions">
             <AnimatePresence>
               {displaySuggestions.map((suggestion, idx) => {
-                const maxVal = Math.max(suggestion.baseline_median, suggestion.observed_median, suggestion.proposed_new_median) * 1.2;
-                const getPercent = (val: number) => Math.min(100, (val / maxVal) * 100);
+                const maxVal = Math.max(suggestion.baseline_median, suggestion.observed_median, suggestion.proposed_new_median);
+                const scaledMax = maxVal > 0 ? maxVal * 1.2 : 1;
+                const getPercent = (val: number) => Math.min(100, (val / scaledMax) * 100);
 
                 return (
                   <motion.div

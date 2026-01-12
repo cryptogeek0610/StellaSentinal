@@ -5,8 +5,9 @@
 -- application. It supports multi-tenant data isolation, multiple data sources
 -- (XSight, MobiControl), and LLM-powered explanations.
 --
--- Usage:
---   docker-compose exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "YourPassword" -i /app/scripts/init_backend_schema.sql
+-- Note: This schema is for reference only. The application now uses PostgreSQL
+-- for backend storage (anomalies, baselines, etc.). XSight and MobiControl
+-- source data remains on the external Windows SQL Server.
 -- ============================================================================
 
 -- Create database if it doesn't exist
@@ -31,6 +32,7 @@ GO
 -- Drop existing tables (in reverse dependency order) for clean recreation
 -- WARNING: This will delete all data! Comment out for production.
 -- ============================================================================
+IF OBJECT_ID('device_assignments', 'U') IS NOT NULL DROP TABLE device_assignments;
 IF OBJECT_ID('alert_notifications', 'U') IS NOT NULL DROP TABLE alert_notifications;
 IF OBJECT_ID('alerts', 'U') IS NOT NULL DROP TABLE alerts;
 IF OBJECT_ID('alert_rules', 'U') IS NOT NULL DROP TABLE alert_rules;
@@ -441,6 +443,34 @@ CREATE INDEX idx_notif_alert ON alert_notifications(alert_id);
 CREATE INDEX idx_notif_status ON alert_notifications(status, sent_at);
 CREATE INDEX idx_notif_channel ON alert_notifications(channel);
 PRINT 'Table alert_notifications created.';
+GO
+
+-- ============================================================================
+-- User Assignment Tables (Carl Requirement: People with excessive drops)
+-- ============================================================================
+
+-- Device Assignments (Device-to-user mapping from MC labels)
+CREATE TABLE device_assignments (
+    id BIGINT IDENTITY(1,1) PRIMARY KEY,
+    tenant_id VARCHAR(100) NOT NULL,
+    device_id VARCHAR(100) NOT NULL,
+    user_id VARCHAR(100),  -- User identifier (from label value or attribute)
+    user_name NVARCHAR(200),  -- Display name
+    user_email NVARCHAR(200),  -- Email if available
+    team_id VARCHAR(100),  -- For team-level aggregation
+    team_name NVARCHAR(200),
+    assignment_type VARCHAR(50) DEFAULT 'owner',  -- owner, user, operator, manager
+    valid_from DATETIME2 DEFAULT GETUTCDATE() NOT NULL,
+    valid_to DATETIME2,  -- NULL = currently valid
+    source VARCHAR(50) NOT NULL,  -- mc_label, mc_attribute, manual, ad_sync
+    source_label_type VARCHAR(100),  -- e.g., "Owner", "AssignedUser"
+    created_at DATETIME2 DEFAULT GETUTCDATE() NOT NULL,
+    updated_at DATETIME2 DEFAULT GETUTCDATE() NOT NULL
+);
+CREATE INDEX idx_da_tenant_device ON device_assignments(tenant_id, device_id, valid_to);
+CREATE INDEX idx_da_user ON device_assignments(tenant_id, user_id, valid_to);
+CREATE INDEX idx_da_team ON device_assignments(tenant_id, team_id, valid_to);
+PRINT 'Table device_assignments created.';
 GO
 
 -- ============================================================================

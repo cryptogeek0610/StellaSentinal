@@ -58,7 +58,7 @@ from device_anomaly.api.models_cost import (
     NFFSummaryResponse,
     ScopeType,
 )
-from device_anomaly.database.schema import AnomalyResult, DeviceMetadata
+from device_anomaly.database.schema import AnomalyResult, DeviceFeature, DeviceMetadata
 from device_anomaly.db.models_cost import (
     CostAuditLog,
     CostCalculationCache,
@@ -1324,18 +1324,71 @@ def get_battery_forecast(
     db: Session = Depends(get_backend_db),
     results_db: Session = Depends(get_db),
 ) -> BatteryForecastResponse:
-    """Forecast battery replacement costs using available device metadata."""
+    """Forecast battery replacement costs using real battery health data when available."""
     tenant_id = get_tenant_id()
 
+    # Get device counts by model
     device_query = (
-        results_db.query(DeviceMetadata.device_model, func.count(DeviceMetadata.device_id))
+        results_db.query(
+            DeviceMetadata.device_model,
+            DeviceMetadata.device_id,
+        )
         .filter(DeviceMetadata.tenant_id == tenant_id)
     )
     if device_id is not None:
         device_query = device_query.filter(DeviceMetadata.device_id == device_id)
-    device_query = device_query.group_by(DeviceMetadata.device_model)
-    device_counts = {model: count for model, count in device_query.all() if model}
 
+    devices = device_query.all()
+    device_ids_by_model: Dict[str, List[int]] = {}
+    for model, dev_id in devices:
+        if model:
+            device_ids_by_model.setdefault(model, []).append(dev_id)
+
+    # Try to get real battery health data from DeviceFeature
+    # Get the most recent feature snapshot for each device
+    from sqlalchemy import distinct
+    from sqlalchemy.orm import aliased
+
+    battery_health_by_device: Dict[int, Optional[float]] = {}
+    devices_with_health = 0
+
+    # Query latest DeviceFeature per device
+    all_device_ids = [d for ids in device_ids_by_model.values() for d in ids]
+    if all_device_ids:
+        # Get latest feature record for each device
+        subq = (
+            results_db.query(
+                DeviceFeature.device_id,
+                func.max(DeviceFeature.computed_at).label("latest")
+            )
+            .filter(
+                DeviceFeature.tenant_id == tenant_id,
+                DeviceFeature.device_id.in_(all_device_ids)
+            )
+            .group_by(DeviceFeature.device_id)
+            .subquery()
+        )
+
+        latest_features = (
+            results_db.query(DeviceFeature)
+            .join(subq, (DeviceFeature.device_id == subq.c.device_id) & (DeviceFeature.computed_at == subq.c.latest))
+            .filter(DeviceFeature.tenant_id == tenant_id)
+            .all()
+        )
+
+        for feature in latest_features:
+            if feature.feature_values_json:
+                try:
+                    features = json.loads(feature.feature_values_json)
+                    # Look for BatteryHealth in the feature data
+                    health = features.get("BatteryHealth") or features.get("battery_health")
+                    if health is not None and isinstance(health, (int, float)) and 0 <= health <= 100:
+                        battery_health_by_device[feature.device_id] = float(health)
+                        devices_with_health += 1
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+    # Get cost entries
     cost_entries = (
         db.query(DeviceTypeCost)
         .filter(
@@ -1352,34 +1405,79 @@ def get_battery_forecast(
     total_due_30 = 0
     total_due_90 = 0
     total_devices = 0
+    overall_data_quality = "estimated"
+    any_real_data = False
+    all_real_data = True
 
-    for model, count in device_counts.items():
+    for model, dev_ids in device_ids_by_model.items():
+        count = len(dev_ids)
         cost_entry = cost_map.get(model)
+
         if cost_entry:
             base_cost = (
                 cents_to_dollars(cost_entry.replacement_cost)
                 if cost_entry.replacement_cost
                 else cents_to_dollars(cost_entry.purchase_cost)
             )
-            lifespan = cost_entry.warranty_months or cost_entry.depreciation_months or 24
+            lifespan = cost_entry.battery_lifespan_months or cost_entry.warranty_months or cost_entry.depreciation_months or 24
+            battery_cost = cost_entry.battery_replacement_cost
+            if battery_cost:
+                battery_replacement_cost = cents_to_dollars(battery_cost)
+            else:
+                battery_replacement_cost = (base_cost * Decimal("0.2")).quantize(Decimal("0.01"))
         else:
             base_cost = Decimal(200)
             lifespan = 24
+            battery_replacement_cost = Decimal("40.00")
 
-        battery_replacement_cost = (base_cost * Decimal("0.2")).quantize(Decimal("0.01"))
-        # Round to avoid floating point display issues (e.g., 16.799999... -> 17)
-        avg_age = round(lifespan * 0.7)
-        age_ratio = min(avg_age / lifespan, 1.0) if lifespan else 0.0
+        # Check if we have real battery health data for this model
+        health_values = [battery_health_by_device.get(d) for d in dev_ids if battery_health_by_device.get(d) is not None]
 
-        due_30 = int(count * 0.1 * age_ratio)
-        due_next = int(count * 0.08 * age_ratio)
-        due_90 = max(due_30, int(count * 0.25 * age_ratio))
+        if health_values:
+            # Use real battery health data
+            any_real_data = True
+            avg_health = sum(health_values) / len(health_values)
+            model_data_quality = "real" if len(health_values) == count else "mixed"
 
-        cost_30 = battery_replacement_cost * due_30
-        cost_90 = battery_replacement_cost * due_90
+            # Devices needing replacement based on health:
+            # - Health < 60% = needs replacement now (due this month)
+            # - Health 60-80% = due soon (next 1-2 months)
+            # - Health < 80% = within 90 days
+            due_now = sum(1 for h in health_values if h < 60)
+            due_soon = sum(1 for h in health_values if 60 <= h < 70)
+            due_90 = sum(1 for h in health_values if h < 80)
 
-        # Calculate oldest battery age (capped at 120% of lifespan or lifespan + 6 months)
+            # For devices without health data in this model, estimate
+            devices_without_health = count - len(health_values)
+            if devices_without_health > 0:
+                # Estimate based on average fleet aging
+                est_ratio = 0.7  # Assume 70% through lifespan
+                due_now += int(devices_without_health * 0.05)
+                due_soon += int(devices_without_health * 0.03)
+                due_90 += int(devices_without_health * 0.15)
+
+            # Convert health to "age equivalent" for display
+            # 100% health = 0 months, 60% health = lifespan months
+            avg_age = round(lifespan * (1 - avg_health / 100))
+        else:
+            # Fall back to estimated ages
+            all_real_data = False
+            model_data_quality = "estimated"
+            avg_health = None
+
+            # Estimate based on lifespan
+            avg_age = round(lifespan * 0.7)
+            age_ratio = min(avg_age / lifespan, 1.0) if lifespan else 0.0
+
+            due_now = int(count * 0.1 * age_ratio)
+            due_soon = int(count * 0.08 * age_ratio)
+            due_90 = max(due_now, int(count * 0.25 * age_ratio))
+
+        # Calculate oldest battery age
         oldest_age = round(min(lifespan * 1.2, lifespan + 6))
+
+        cost_30 = battery_replacement_cost * due_now
+        cost_90 = battery_replacement_cost * due_90
 
         forecasts.append(
             BatteryForecastEntry(
@@ -1387,21 +1485,31 @@ def get_battery_forecast(
                 device_count=count,
                 battery_replacement_cost=battery_replacement_cost,
                 battery_lifespan_months=lifespan,
-                devices_due_this_month=due_30,
-                devices_due_next_month=due_next,
+                devices_due_this_month=due_now,
+                devices_due_next_month=due_soon,
                 devices_due_in_90_days=due_90,
                 estimated_cost_30_days=cost_30,
                 estimated_cost_90_days=cost_90,
                 avg_battery_age_months=avg_age,
                 oldest_battery_months=oldest_age,
+                avg_battery_health_percent=round(avg_health, 1) if avg_health is not None else None,
+                data_quality=model_data_quality,
             )
         )
 
         total_devices += count
         total_cost_30 += cost_30
         total_cost_90 += cost_90
-        total_due_30 += due_30
+        total_due_30 += due_now
         total_due_90 += due_90
+
+    # Determine overall data quality
+    if any_real_data and all_real_data:
+        overall_data_quality = "real"
+    elif any_real_data:
+        overall_data_quality = "mixed"
+    else:
+        overall_data_quality = "estimated"
 
     return BatteryForecastResponse(
         forecasts=forecasts,
@@ -1411,6 +1519,8 @@ def get_battery_forecast(
         total_replacements_due_30_days=total_due_30,
         total_replacements_due_90_days=total_due_90,
         forecast_generated_at=datetime.now(timezone.utc),
+        data_quality=overall_data_quality,
+        devices_with_health_data=devices_with_health,
     )
 
 

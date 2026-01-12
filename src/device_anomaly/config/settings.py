@@ -74,6 +74,23 @@ class LLMSettings(BaseModel):
     api_version: str | None = None
 
 
+class LocalLLMSettings(BaseModel):
+    """Settings for local LLM services (Ollama, LM Studio, vLLM).
+
+    These settings are used by the LocalLLMClient for enterprise on-prem
+    deployments where a local LLM is preferred over cloud APIs.
+    """
+
+    provider: str = "ollama"  # ollama, lmstudio, vllm
+    base_url: str = "http://ollama:11434"
+    model_name: str | None = None  # Auto-discovered if not set
+    fallback_model: str = "llama3.2:1b"  # Smaller model for fallback
+    enable_caching: bool = True  # Cache responses (15 min TTL)
+    fallback_to_rules: bool = True  # Use rule-based analysis if LLM unavailable
+    max_retries: int = 3
+    timeout_seconds: int = 30
+
+
 class MobiControlSettings(BaseModel):
     server_url: str
     client_id: str | None = None
@@ -81,6 +98,14 @@ class MobiControlSettings(BaseModel):
     username: str | None = None
     password: str | None = None
     tenant_id: str | None = None
+
+    # Custom Attribute names for battery status sync
+    # These map to the Custom Attributes in MobiControl that will display battery info
+    attr_battery_health: str = "BatteryHealthPercent"
+    attr_battery_status: str = "BatteryStatus"
+    attr_replacement_due: str = "BatteryReplacementDue"
+    attr_replacement_urgency: str = "BatteryReplacementUrgency"
+    attr_replacement_date: str = "BatteryReplacementDate"
 
 
 class ResultsDBSettings(BaseModel):
@@ -119,11 +144,46 @@ class AppSettings(BaseModel):
 
     results_db: ResultsDBSettings = Field(default_factory=lambda: ResultsDBSettings())
     llm: LLMSettings = Field(default_factory=lambda: LLMSettings())
+    local_llm: LocalLLMSettings = Field(default_factory=lambda: LocalLLMSettings())
     mobicontrol: MobiControlSettings = Field(default_factory=lambda: MobiControlSettings(server_url=""))
 
     # Feature flags
     enable_llm: bool = False
     enable_mobicontrol: bool = False
+
+    # Extended data ingestion feature flags (ON by default for full data coverage)
+    enable_mc_timeseries: bool = True  # MobiControl time-series tables (DeviceStatInt, etc.)
+    enable_xsight_hourly: bool = True  # XSight hourly tables (cs_DataUsageByHour, etc.) - HIGH VOLUME
+    enable_xsight_extended: bool = True  # Extended XSight tables (cs_WiFiLocation, etc.)
+    enable_schema_discovery: bool = True  # Runtime schema discovery caching (safe, metadata only)
+
+    # ML Training expansion flags
+    enable_hourly_training: bool = False  # Include hourly granularity tables in ML training
+    enable_training_discovery: bool = False  # Auto-discover high-value tables for ML training
+    hourly_max_days: int = 7  # Limit hourly data to recent N days (memory management)
+
+    # Table allowlists - if set, only these tables are ingested even when broader flags enabled
+    # Comma-separated list of table names
+    xsight_table_allowlist: List[str] = Field(default_factory=list)
+    mc_table_allowlist: List[str] = Field(default_factory=list)
+
+    # Ingestion configuration
+    ingest_lookback_hours: int = 24  # Default lookback for new tables
+    ingest_batch_size: int = 50000  # Max rows per batch
+    ingest_max_tables_parallel: int = 3  # Max concurrent table loads (weight-based)
+    max_backfill_days_hourly: int = 2  # Max days to backfill for hourly tables
+
+    # Watermark configuration
+    enable_file_watermark_fallback: bool = False  # File fallback for dev only
+
+    # Canonical event storage (heavy, OFF by default)
+    enable_canonical_event_storage: bool = False
+    auto_create_canonical_events_tables: bool = False
+
+    # Observability
+    enable_ingestion_metrics: bool = True  # Emit per-table metrics
+    enable_daily_coverage_report: bool = True  # Generate daily coverage report
+    auto_create_metrics_tables: bool = False  # Create metrics tables on startup (safe default: off)
 
     # API settings
     api_host: str = "0.0.0.0"
@@ -135,6 +195,31 @@ class AppSettings(BaseModel):
     # Vector database (Qdrant)
     qdrant_host: str = "localhost"
     qdrant_port: int = 6333
+
+    # ==========================================================================
+    # Carl's Requirements: Location and User Assignment Label Configuration
+    # ==========================================================================
+    # These settings control how device data is enriched with location and user
+    # information from MobiControl labels. Enables:
+    # - "Warehouse A vs Warehouse B" comparisons
+    # - "People with excessive drops" by-user analysis
+
+    # MobiControl label types that represent physical locations
+    # Devices with these labels will be mapped to location_metadata for location-based analysis
+    location_label_types: List[str] = Field(
+        default_factory=lambda: ["Store", "Warehouse", "Site", "Building", "Location", "Branch", "Facility"]
+    )
+
+    # MobiControl label types that represent user assignments
+    # Devices with these labels will enable by-user analysis (drops, reboots)
+    user_assignment_label_types: List[str] = Field(
+        default_factory=lambda: ["Owner", "User", "AssignedUser", "Operator", "Employee", "Worker"]
+    )
+
+    # Reboot detection patterns for MainLog EventClass search
+    reboot_event_patterns: List[str] = Field(
+        default_factory=lambda: ["reboot", "restart", "boot", "power cycle", "device started"]
+    )
 
     @model_validator(mode='before')
     @classmethod
@@ -205,6 +290,19 @@ class AppSettings(BaseModel):
                 api_version=os.getenv("LLM_API_VERSION"),
             )
 
+        # Local LLM Settings (Ollama, LM Studio, vLLM)
+        if 'local_llm' not in data:
+            data['local_llm'] = LocalLLMSettings(
+                provider=os.getenv("LOCAL_LLM_PROVIDER", "ollama"),
+                base_url=os.getenv("LOCAL_LLM_BASE_URL", "http://ollama:11434"),
+                model_name=os.getenv("LOCAL_LLM_MODEL_NAME"),
+                fallback_model=os.getenv("LOCAL_LLM_FALLBACK_MODEL", "llama3.2:1b"),
+                enable_caching=os.getenv("LOCAL_LLM_ENABLE_CACHING", "true").lower() == "true",
+                fallback_to_rules=os.getenv("LOCAL_LLM_FALLBACK_TO_RULES", "true").lower() == "true",
+                max_retries=int(os.getenv("LOCAL_LLM_MAX_RETRIES", "3")),
+                timeout_seconds=int(os.getenv("LOCAL_LLM_TIMEOUT_SECONDS", "30")),
+            )
+
         # MobiControl API Settings
         if 'mobicontrol' not in data:
             data['mobicontrol'] = MobiControlSettings(
@@ -214,6 +312,12 @@ class AppSettings(BaseModel):
                 username=os.getenv("MOBICONTROL_USERNAME"),
                 password=os.getenv("MOBICONTROL_PASSWORD"),
                 tenant_id=os.getenv("MOBICONTROL_TENANT_ID"),
+                # Custom Attribute names (can customize to match your MobiControl setup)
+                attr_battery_health=os.getenv("MC_ATTR_BATTERY_HEALTH", "BatteryHealthPercent"),
+                attr_battery_status=os.getenv("MC_ATTR_BATTERY_STATUS", "BatteryStatus"),
+                attr_replacement_due=os.getenv("MC_ATTR_REPLACEMENT_DUE", "BatteryReplacementDue"),
+                attr_replacement_urgency=os.getenv("MC_ATTR_REPLACEMENT_URGENCY", "BatteryReplacementUrgency"),
+                attr_replacement_date=os.getenv("MC_ATTR_REPLACEMENT_DATE", "BatteryReplacementDate"),
             )
 
         # Feature flags
@@ -221,6 +325,62 @@ class AppSettings(BaseModel):
             data['enable_llm'] = os.getenv("ENABLE_LLM", "false").lower() == "true"
         if 'enable_mobicontrol' not in data:
             data['enable_mobicontrol'] = os.getenv("ENABLE_MOBICONTROL", "false").lower() == "true"
+
+        # Extended data ingestion feature flags (ON by default for full data coverage)
+        if 'enable_mc_timeseries' not in data:
+            data['enable_mc_timeseries'] = os.getenv("ENABLE_MC_TIMESERIES", "true").lower() == "true"
+        if 'enable_xsight_hourly' not in data:
+            data['enable_xsight_hourly'] = os.getenv("ENABLE_XSIGHT_HOURLY", "true").lower() == "true"
+        if 'enable_xsight_extended' not in data:
+            data['enable_xsight_extended'] = os.getenv("ENABLE_XSIGHT_EXTENDED", "true").lower() == "true"
+        if 'enable_schema_discovery' not in data:
+            data['enable_schema_discovery'] = os.getenv("ENABLE_SCHEMA_DISCOVERY", "true").lower() == "true"
+
+        # ML Training expansion flags
+        if 'enable_hourly_training' not in data:
+            data['enable_hourly_training'] = os.getenv("ENABLE_HOURLY_TRAINING", "false").lower() == "true"
+        if 'enable_training_discovery' not in data:
+            data['enable_training_discovery'] = os.getenv("ENABLE_TRAINING_DISCOVERY", "false").lower() == "true"
+        if 'hourly_max_days' not in data:
+            data['hourly_max_days'] = int(os.getenv("HOURLY_MAX_DAYS", "7"))
+
+        # Table allowlists (comma-separated)
+        if 'xsight_table_allowlist' not in data:
+            allowlist = os.getenv("XSIGHT_TABLE_ALLOWLIST", "")
+            data['xsight_table_allowlist'] = [t.strip() for t in allowlist.split(",") if t.strip()]
+        if 'mc_table_allowlist' not in data:
+            allowlist = os.getenv("MC_TABLE_ALLOWLIST", "")
+            data['mc_table_allowlist'] = [t.strip() for t in allowlist.split(",") if t.strip()]
+
+        # Ingestion configuration
+        if 'ingest_lookback_hours' not in data:
+            data['ingest_lookback_hours'] = int(os.getenv("INGEST_LOOKBACK_HOURS", "24"))
+        if 'ingest_batch_size' not in data:
+            data['ingest_batch_size'] = int(os.getenv("INGEST_BATCH_SIZE", "50000"))
+        if 'ingest_max_tables_parallel' not in data:
+            data['ingest_max_tables_parallel'] = int(os.getenv("INGEST_MAX_TABLES_PARALLEL", "3"))
+        if 'enable_canonical_event_storage' not in data:
+            data['enable_canonical_event_storage'] = os.getenv(
+                "ENABLE_CANONICAL_EVENT_STORAGE", "false"
+            ).lower() == "true"
+        if 'auto_create_canonical_events_tables' not in data:
+            data['auto_create_canonical_events_tables'] = os.getenv(
+                "AUTO_CREATE_CANONICAL_EVENTS_TABLES", "false"
+            ).lower() == "true"
+        if 'max_backfill_days_hourly' not in data:
+            data['max_backfill_days_hourly'] = int(os.getenv("MAX_BACKFILL_DAYS_HOURLY", "2"))
+
+        # Watermark configuration
+        if 'enable_file_watermark_fallback' not in data:
+            data['enable_file_watermark_fallback'] = os.getenv("ENABLE_FILE_WATERMARK_FALLBACK", "false").lower() == "true"
+
+        # Observability
+        if 'enable_ingestion_metrics' not in data:
+            data['enable_ingestion_metrics'] = os.getenv("ENABLE_INGESTION_METRICS", "true").lower() == "true"
+        if 'enable_daily_coverage_report' not in data:
+            data['enable_daily_coverage_report'] = os.getenv("ENABLE_DAILY_COVERAGE_REPORT", "true").lower() == "true"
+        if 'auto_create_metrics_tables' not in data:
+            data['auto_create_metrics_tables'] = os.getenv("AUTO_CREATE_METRICS_TABLES", "false").lower() == "true"
 
         # API settings
         if 'api_host' not in data:
@@ -233,6 +393,17 @@ class AppSettings(BaseModel):
             data['qdrant_host'] = os.getenv("QDRANT_HOST", "localhost")
         if 'qdrant_port' not in data:
             data['qdrant_port'] = int(os.getenv("QDRANT_PORT", "6333"))
+
+        # Carl's Requirements: Location and User Assignment Labels
+        if 'location_label_types' not in data:
+            labels = os.getenv("LOCATION_LABEL_TYPES", "Store,Warehouse,Site,Building,Location,Branch,Facility")
+            data['location_label_types'] = [t.strip() for t in labels.split(",") if t.strip()]
+        if 'user_assignment_label_types' not in data:
+            labels = os.getenv("USER_ASSIGNMENT_LABEL_TYPES", "Owner,User,AssignedUser,Operator,Employee,Worker")
+            data['user_assignment_label_types'] = [t.strip() for t in labels.split(",") if t.strip()]
+        if 'reboot_event_patterns' not in data:
+            patterns = os.getenv("REBOOT_EVENT_PATTERNS", "reboot,restart,boot,power cycle,device started")
+            data['reboot_event_patterns'] = [p.strip() for p in patterns.split(",") if p.strip()]
 
         # Training data sources
         if 'training_data_sources' not in data:

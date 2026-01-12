@@ -1,3 +1,12 @@
+/**
+ * Layout Component - Steve Jobs Redesign
+ *
+ * Philosophy: "Simple can be harder than complex."
+ * - Clean header: title, search, system health only
+ * - Mock mode banner remains (important user feedback)
+ * - Removed: duplicate critical badges, mock toggle, notifications bell
+ */
+
 import React, { useState, useEffect } from 'react';
 import { Sidebar } from './Sidebar';
 import { useQuery } from '@tanstack/react-query';
@@ -6,7 +15,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useMockMode } from '../hooks/useMockMode';
 import { usePageTitle } from '../hooks/usePageTitle';
-import { ToggleSwitch } from './ui';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -27,12 +35,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     refetchInterval: 30000,
   });
 
-  const { data: stats } = useQuery({
-    queryKey: ['dashboard', 'stats'],
-    queryFn: () => api.getDashboardStats(),
-    refetchInterval: 30000,
-  });
-
   const connectedCount = connectionStatus
     ? [
       connectionStatus.backend_db,
@@ -45,10 +47,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     ].filter((s) => s?.connected).length
     : 0;
 
-  const totalConnections = 7;
   const healthStatus = connectedCount === 7 ? 'healthy' : connectedCount >= 4 ? 'degraded' : 'critical';
-
-  const criticalCount = stats?.critical_issues || 0;
 
   // Close mobile menu on route change
   useEffect(() => {
@@ -105,7 +104,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      // If it looks like a device ID, go to that device
       const deviceId = parseInt(searchQuery);
       if (!isNaN(deviceId)) {
         navigate(`/devices/${deviceId}`);
@@ -117,14 +115,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     }
   };
 
-  // Handler to set mock mode - query invalidation is handled by MockModeProvider
-  const handleMockModeToggle = (enabled: boolean) => {
-    setMockMode(enabled);
-  };
-
   return (
     <div className="flex h-screen overflow-hidden flex-col">
-      {/* Mock Mode Banner */}
+      {/* Mock Mode Banner - Keep this, it's important user feedback */}
       <AnimatePresence>
         {mockMode && (
           <motion.div
@@ -138,10 +131,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
               </svg>
-              <span>Mock Mode Active — Data is simulated for demonstration purposes</span>
+              <span>Mock Mode Active — Data is simulated</span>
             </span>
             <button
-              onClick={() => handleMockModeToggle(false)}
+              onClick={() => setMockMode(false)}
               className="ml-2 px-2 py-0.5 bg-white/20 hover:bg-white/30 rounded text-xs font-medium transition-colors"
             >
               Disable
@@ -160,7 +153,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         <AnimatePresence>
           {isMobileMenuOpen && (
             <>
-              {/* Backdrop */}
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -169,8 +161,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 onClick={() => setIsMobileMenuOpen(false)}
                 aria-hidden="true"
               />
-
-              {/* Mobile Sidebar Drawer */}
               <motion.div
                 initial={{ x: '-100%' }}
                 animate={{ x: 0 }}
@@ -185,11 +175,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </AnimatePresence>
 
         <div className="flex flex-col flex-1 overflow-hidden">
-          {/* Header */}
+          {/* Header - Simplified: title, search, system health */}
           <header className="h-16 stellar-glass border-b border-slate-700/30 flex items-center px-4 lg:px-6 justify-between relative z-10">
-            {/* Left - Mobile Menu Button & Breadcrumb/Title */}
+            {/* Left - Mobile Menu Button & Title */}
             <div className="flex items-center gap-3">
-              {/* Mobile Menu Button */}
               <button
                 onClick={() => setIsMobileMenuOpen(true)}
                 className="lg:hidden p-2 -ml-2 text-slate-400 hover:text-white hover:bg-slate-800/50 rounded-lg transition-colors"
@@ -200,128 +189,33 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
               </button>
-
               <h2 className="text-lg font-semibold text-white truncate">{pageTitle}</h2>
             </div>
 
-            {/* Right - Actions */}
-            <div className="flex items-center gap-2 sm:gap-4">
-              {/* Critical Alert Badge */}
-              <AnimatePresence>
-                {criticalCount > 0 && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                    className="hidden sm:block"
-                  >
-                    <Link
-                      to="/investigations?severity=critical"
-                      className="flex items-center gap-2 px-3 py-1.5 bg-red-500/10 border border-red-500/30 rounded-lg hover:bg-red-500/20 transition-colors shadow-danger"
-                      aria-label={`${criticalCount} critical alerts, click to view`}
-                    >
-                      <motion.div
-                        className="w-2 h-2 bg-red-400 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.6)]"
-                        animate={{ opacity: [1, 0.4, 1] }}
-                        transition={{ duration: 1, repeat: Infinity }}
-                        aria-hidden="true"
-                      />
-                      <span className="text-xs font-bold text-red-400">
-                        {criticalCount} Critical
-                      </span>
-                    </Link>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Mobile Critical Badge (compact) */}
-              <AnimatePresence>
-                {criticalCount > 0 && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                    className="sm:hidden"
-                  >
-                    <Link
-                      to="/investigations?severity=critical"
-                      className="flex items-center justify-center w-8 h-8 bg-red-500/10 border border-red-500/30 rounded-lg"
-                      aria-label={`${criticalCount} critical alerts`}
-                    >
-                      <motion.div
-                        className="w-2 h-2 bg-red-400 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.6)]"
-                        animate={{ opacity: [1, 0.4, 1] }}
-                        transition={{ duration: 1, repeat: Infinity }}
-                        aria-hidden="true"
-                      />
-                    </Link>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Mock Mode Toggle */}
-              <div
-                className={`flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-lg border transition-colors ${mockMode
-                  ? 'border-orange-500/30 bg-orange-500/10'
-                  : 'border-slate-600/30 bg-slate-700/30'
-                  }`}
-                title={mockMode ? 'Mock Mode Enabled' : 'Mock Mode Disabled'}
-              >
-                <svg
-                  className={`w-4 h-4 ${mockMode ? 'text-orange-400' : 'text-slate-400'}`}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  aria-hidden="true"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"
-                  />
-                </svg>
-                <ToggleSwitch
-                  enabled={mockMode}
-                  onChange={handleMockModeToggle}
-                  size="sm"
-                  variant="stellar"
-                  aria-label={`Mock mode is ${mockMode ? 'enabled' : 'disabled'}. Click to toggle.`}
-                />
-                <span className={`text-xs font-medium hidden sm:inline ${mockMode ? 'text-orange-400' : 'text-slate-400'}`}>
-                  {mockMode ? 'Mock' : 'Live'}
-                </span>
-              </div>
-
-              {/* System Health */}
+            {/* Right - Search & System Health (just a dot) */}
+            <div className="flex items-center gap-3">
+              {/* System Health - Just a dot. Users care about "is it working", not "7/7" */}
               <Link
                 to="/system"
-                className={`flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-lg border transition-colors ${healthStatus === 'healthy'
-                  ? 'border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/10'
-                  : healthStatus === 'degraded'
-                    ? 'border-orange-500/30 bg-orange-500/5 hover:bg-orange-500/10'
-                    : 'border-red-500/30 bg-red-500/5 hover:bg-red-500/10'
-                  }`}
-                aria-label={`System health: ${connectedCount} of ${totalConnections} services connected. Click to view system settings.`}
+                className="p-2 rounded-lg hover:bg-slate-800/50 transition-colors"
+                aria-label={`System ${healthStatus}. Click to view details.`}
+                title={healthStatus === 'healthy' ? 'All systems operational' : healthStatus === 'degraded' ? 'Some services degraded' : 'Critical issues'}
               >
                 <div
-                  className={`w-2 h-2 rounded-full ${healthStatus === 'healthy' ? 'bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.6)]' :
-                    healthStatus === 'degraded' ? 'bg-orange-400 animate-pulse shadow-[0_0_6px_rgba(251,146,60,0.6)]' :
-                      'bg-red-400 animate-pulse shadow-[0_0_6px_rgba(248,113,113,0.6)]'
-                    }`}
-                  aria-hidden="true"
+                  className={`w-2.5 h-2.5 rounded-full ${
+                    healthStatus === 'healthy'
+                      ? 'bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.6)]'
+                      : healthStatus === 'degraded'
+                        ? 'bg-orange-400 animate-pulse shadow-[0_0_8px_rgba(251,146,60,0.6)]'
+                        : 'bg-red-400 animate-pulse shadow-[0_0_8px_rgba(248,113,113,0.6)]'
+                  }`}
                 />
-                <span className="text-xs font-mono text-slate-400">
-                  {connectedCount}/{totalConnections}
-                </span>
               </Link>
 
-              {/* Search - Hidden on mobile, shown on larger screens */}
+              {/* Search - Desktop */}
               <div className="relative hidden md:block">
                 <form onSubmit={handleSearch}>
-                  <label htmlFor="header-search" className="sr-only">
-                    Search devices
-                  </label>
+                  <label htmlFor="header-search" className="sr-only">Search devices</label>
                   <input
                     id="header-search"
                     type="text"
@@ -339,16 +233,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                     stroke="currentColor"
                     aria-hidden="true"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                    />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
                 </form>
-
-                {/* Search Hint */}
                 <AnimatePresence>
                   {showSearch && searchQuery && (
                     <motion.div
@@ -371,32 +258,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 aria-label="Search devices"
               >
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                  />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
-              </button>
-
-              {/* Notifications */}
-              <button
-                onClick={() => navigate('/investigations')}
-                className="relative p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 rounded-lg transition-colors"
-                aria-label={`Notifications${(stats?.anomalies_today || 0) > 0 ? `, ${stats?.anomalies_today} new anomalies today` : ''}`}
-              >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-                  />
-                </svg>
-                {(stats?.anomalies_today || 0) > 0 && (
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-amber-400 rounded-full" aria-hidden="true" />
-                )}
               </button>
             </div>
           </header>
@@ -418,7 +281,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         <AnimatePresence>
           {showMobileSearch && (
             <>
-              {/* Backdrop */}
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -426,7 +288,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 onClick={() => setShowMobileSearch(false)}
                 className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 md:hidden"
               />
-              {/* Modal */}
               <motion.div
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -434,10 +295,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 className="fixed top-4 left-4 right-4 z-50 md:hidden"
               >
                 <div className="stellar-card p-4 rounded-2xl shadow-2xl">
-                  <form onSubmit={(e) => {
-                    handleSearch(e);
-                    setShowMobileSearch(false);
-                  }}>
+                  <form onSubmit={(e) => { handleSearch(e); setShowMobileSearch(false); }}>
                     <div className="relative">
                       <input
                         type="text"
@@ -447,18 +305,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                         autoFocus
                         className="input-stellar w-full pl-10 pr-10"
                       />
-                      <svg
-                        className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                        />
+                      <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                       </svg>
                       <button
                         type="button"
@@ -471,9 +319,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                       </button>
                     </div>
                     {searchQuery && (
-                      <p className="mt-3 text-xs text-slate-400">
-                        Press Enter to search for "{searchQuery}"
-                      </p>
+                      <p className="mt-3 text-xs text-slate-400">Press Enter to search for "{searchQuery}"</p>
                     )}
                   </form>
                 </div>

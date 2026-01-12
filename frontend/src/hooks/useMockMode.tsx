@@ -8,6 +8,7 @@
  * IMPORTANT: When mock mode is toggled, all React Query caches are invalidated
  * to ensure fresh data is fetched from the correct source.
  */
+/* eslint-disable react-refresh/only-export-components */
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';

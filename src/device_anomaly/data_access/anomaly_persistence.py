@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 import pandas as pd
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from device_anomaly.api.dependencies import get_tenant_id
 from device_anomaly.database.connection import get_results_db_session
@@ -15,13 +17,49 @@ from device_anomaly.database.schema import AnomalyResult, AnomalyStatus, DeviceM
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class PersistenceResult:
+    """Result of anomaly persistence operation."""
+
+    total_processed: int = 0
+    new_inserted: int = 0
+    existing_updated: int = 0
+    errors: List[str] = field(default_factory=list)
+
+_FEATURE_TOKENS = (
+    "_roll_",
+    "_delta",
+    "_pct_change",
+    "_trend_",
+    "_cohort_z",
+    "_z_",
+    "_cv",
+)
+
+
+def _select_feature_columns(df: pd.DataFrame) -> list[str]:
+    """Select derived feature columns worth persisting for explanations/baselines."""
+    return [
+        col
+        for col in df.columns
+        if any(token in col for token in _FEATURE_TOKENS)
+    ]
+
+
 def _get_str_value(row: pd.Series, *col_names: str) -> Optional[str]:
-    """Get string value from row, trying multiple column names."""
+    """Get string value from row, trying multiple column names.
+
+    Returns the first non-empty value found. Skips empty strings and
+    common placeholder values like 'null', 'none', 'n/a'.
+    """
+    placeholder_values = ("null", "none", "n/a", "unknown", "")
     for col in col_names:
         if col in row.index:
             val = row[col]
             if pd.notna(val):
-                return str(val)
+                str_val = str(val).strip()
+                if str_val.lower() not in placeholder_values:
+                    return str_val
     return None
 
 
@@ -103,8 +141,10 @@ def upsert_device_metadata(df: pd.DataFrame, db=None, tenant_id: str = None) -> 
             row = device_rows.iloc[0]
 
             # Extract metadata from row
-            device_name = _get_str_value(row, "DevName", "DeviceName", "device_name")
-            device_model = _get_str_value(row, "Model", "ModelName", "device_model")
+            # Prefer transformed columns (device_name, device_model) which have fallback logic,
+            # then fall back to raw MobiControl columns if transformed ones aren't present
+            device_name = _get_str_value(row, "device_name", "DevName", "DeviceName")
+            device_model = _get_str_value(row, "device_model", "Model", "ModelName")
             location = _get_str_value(row, "StoreName", "SiteId", "StoreId", "Location", "location")
             os_version = _get_str_value(row, "OSVersion", "OsVersionName", "os_version")
             agent_version = _get_str_value(row, "AgentVersion", "agent_version")
@@ -170,9 +210,13 @@ def persist_anomaly_results(
     batch_size: int = 1000,
     only_anomalies: bool = True,
     update_device_metadata: bool = True,
-) -> int:
+) -> PersistenceResult:
     """
-    Persist anomaly detection results to the database.
+    Persist anomaly detection results to the database using upsert.
+
+    Uses INSERT ... ON CONFLICT DO UPDATE to prevent duplicate anomalies
+    when re-scoring the same data. This is critical for preventing anomaly
+    count inflation when running scoring on static/backup databases.
 
     Args:
         df_scored: DataFrame with anomaly scores and labels (from detector.score_dataframe())
@@ -181,10 +225,12 @@ def persist_anomaly_results(
         update_device_metadata: If True, also upsert device metadata from the DataFrame
 
     Returns:
-        Number of records persisted
+        PersistenceResult with counts of new/updated records
     """
     db = get_results_db_session()
     tenant_id = get_tenant_id()
+    result = PersistenceResult()
+
     try:
         # Required columns
         required_cols = ["DeviceId", "Timestamp", "anomaly_score", "anomaly_label"]
@@ -209,29 +255,15 @@ def persist_anomaly_results(
 
         if df_to_save.empty:
             logger.info("No anomalies to persist.")
-            return 0
-
-        # Metric columns (optional)
-        metric_cols = [
-            "TotalBatteryLevelDrop",
-            "TotalFreeStorageKb",
-            "Download",
-            "Upload",
-            "OfflineTime",
-            "DisconnectCount",
-            "WiFiSignalStrength",
-            "ConnectionTime",
-        ]
+            return result
 
         # Feature columns (to store as JSON)
-        feature_cols = [c for c in df_to_save.columns if any(token in c for token in ("_mean_", "_std_", "_delta"))]
-
-        records_persisted = 0
+        feature_cols = _select_feature_columns(df_to_save)
 
         # Process in batches
         for i in range(0, len(df_to_save), batch_size):
             batch = df_to_save.iloc[i : i + batch_size]
-            anomalies_to_insert = []
+            batch_records = []
 
             for _, row in batch.iterrows():
                 # Extract feature values as dict
@@ -241,37 +273,68 @@ def persist_anomaly_results(
                         if col in row:
                             feature_values[col] = float(row[col]) if pd.notna(row[col]) else None
 
-                anomaly = AnomalyResult(
-                    tenant_id=tenant_id,
-                    device_id=int(row["DeviceId"]),
-                    timestamp=pd.to_datetime(row["Timestamp"]),
-                    anomaly_score=float(row["anomaly_score"]),
-                    anomaly_label=int(row["anomaly_label"]),
-                    total_battery_level_drop=float(row.get("TotalBatteryLevelDrop", 0)) if pd.notna(row.get("TotalBatteryLevelDrop")) else None,
-                    total_free_storage_kb=float(row.get("TotalFreeStorageKb", 0)) if pd.notna(row.get("TotalFreeStorageKb")) else None,
-                    download=float(row.get("Download", 0)) if pd.notna(row.get("Download")) else None,
-                    upload=float(row.get("Upload", 0)) if pd.notna(row.get("Upload")) else None,
-                    offline_time=float(row.get("OfflineTime", 0)) if pd.notna(row.get("OfflineTime")) else None,
-                    disconnect_count=float(row.get("DisconnectCount", 0)) if pd.notna(row.get("DisconnectCount")) else None,
-                    wifi_signal_strength=float(row.get("WiFiSignalStrength", 0)) if pd.notna(row.get("WiFiSignalStrength")) else None,
-                    connection_time=float(row.get("ConnectionTime", 0)) if pd.notna(row.get("ConnectionTime")) else None,
-                    feature_values_json=json.dumps(feature_values) if feature_values else None,
-                    status=AnomalyStatus.OPEN.value,
-                )
-                anomalies_to_insert.append(anomaly)
+                record = {
+                    "tenant_id": tenant_id,
+                    "device_id": int(row["DeviceId"]),
+                    "timestamp": pd.to_datetime(row["Timestamp"]),
+                    "anomaly_score": float(row["anomaly_score"]),
+                    "anomaly_label": int(row["anomaly_label"]),
+                    "total_battery_level_drop": float(row.get("TotalBatteryLevelDrop", 0)) if pd.notna(row.get("TotalBatteryLevelDrop")) else None,
+                    "total_free_storage_kb": float(row.get("TotalFreeStorageKb", 0)) if pd.notna(row.get("TotalFreeStorageKb")) else None,
+                    "download": float(row.get("Download", 0)) if pd.notna(row.get("Download")) else None,
+                    "upload": float(row.get("Upload", 0)) if pd.notna(row.get("Upload")) else None,
+                    "offline_time": float(row.get("OfflineTime", 0)) if pd.notna(row.get("OfflineTime")) else None,
+                    "disconnect_count": float(row.get("DisconnectCount", 0)) if pd.notna(row.get("DisconnectCount")) else None,
+                    "wifi_signal_strength": float(row.get("WiFiSignalStrength", 0)) if pd.notna(row.get("WiFiSignalStrength")) else None,
+                    "connection_time": float(row.get("ConnectionTime", 0)) if pd.notna(row.get("ConnectionTime")) else None,
+                    "feature_values_json": json.dumps(feature_values) if feature_values else None,
+                    "status": AnomalyStatus.OPEN.value,
+                    "created_at": datetime.utcnow(),
+                    "updated_at": datetime.utcnow(),
+                }
+                batch_records.append(record)
 
-            # Bulk insert
-            db.add_all(anomalies_to_insert)
+            # Use PostgreSQL upsert (INSERT ... ON CONFLICT DO UPDATE)
+            # This prevents duplicates when re-scoring the same data
+            stmt = pg_insert(AnomalyResult).values(batch_records)
+
+            # On conflict with unique index (tenant_id, device_id, timestamp),
+            # update the score and metrics but preserve investigation status.
+            # We must use index_elements with string column names for the unique index.
+            update_dict = {
+                "anomaly_score": stmt.excluded.anomaly_score,
+                "anomaly_label": stmt.excluded.anomaly_label,
+                "total_battery_level_drop": stmt.excluded.total_battery_level_drop,
+                "total_free_storage_kb": stmt.excluded.total_free_storage_kb,
+                "download": stmt.excluded.download,
+                "upload": stmt.excluded.upload,
+                "offline_time": stmt.excluded.offline_time,
+                "disconnect_count": stmt.excluded.disconnect_count,
+                "wifi_signal_strength": stmt.excluded.wifi_signal_strength,
+                "connection_time": stmt.excluded.connection_time,
+                "feature_values_json": stmt.excluded.feature_values_json,
+                "updated_at": datetime.utcnow(),
+                # NOTE: status, assigned_to, notes are NOT updated to preserve
+                # investigation state from previous scoring runs
+            }
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["tenant_id", "device_id", "timestamp"],
+                set_=update_dict,
+            )
+
+            db.execute(stmt)
             db.commit()
-            records_persisted += len(anomalies_to_insert)
-            logger.info(f"Persisted batch: {len(anomalies_to_insert)} anomalies (total: {records_persisted})")
 
-        logger.info(f"Successfully persisted {records_persisted} anomaly records to database.")
-        return records_persisted
+            result.total_processed += len(batch_records)
+            logger.info(f"Upserted batch: {len(batch_records)} anomalies (total: {result.total_processed})")
+
+        logger.info(f"Successfully persisted {result.total_processed} anomaly records (upsert mode).")
+        return result
 
     except Exception as e:
         db.rollback()
         logger.error(f"Error persisting anomaly results: {e}", exc_info=True)
+        result.errors.append(str(e))
         raise
     finally:
         db.close()

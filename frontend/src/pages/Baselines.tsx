@@ -153,7 +153,9 @@ export default function Baselines() {
     }
   };
 
-  const displaySuggestions = llmSuggestions || suggestions || [];
+  const displaySuggestions = llmSuggestions && llmSuggestions.length > 0
+    ? llmSuggestions
+    : suggestions || [];
 
   // Calculate stats from fetched data
   const stats = useMemo(() => {
@@ -400,7 +402,12 @@ export default function Baselines() {
             ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {baselineFeatures.map((feature) => {
-              const driftPercent = ((feature.observed - feature.baseline) / feature.baseline) * 100;
+              const driftPercent = Number.isFinite(feature.drift_percent) ? feature.drift_percent : 0;
+              const baselineValue = feature.baseline;
+              const observedValue = feature.observed;
+              const barWidth = baselineValue > 0
+                ? Math.min(100, Math.max(0, (observedValue / baselineValue) * 100))
+                : 0;
               const isSelected = selectedFeature === feature.feature;
 
               return (
@@ -451,7 +458,7 @@ export default function Baselines() {
                         Math.abs(driftPercent) < 10 ? 'text-emerald-400' :
                         Math.abs(driftPercent) < 25 ? 'text-amber-400' : 'text-red-400'
                       }`}>
-                        {feature.observed} {feature.unit}
+                        {observedValue} {feature.unit}
                       </span>
                     </div>
 
@@ -466,7 +473,7 @@ export default function Baselines() {
                           feature.status === 'stable' ? 'bg-emerald-500' :
                           feature.status === 'warning' ? 'bg-amber-500' : 'bg-red-500'
                         }`}
-                        style={{ width: `${Math.min(100, (feature.observed / feature.baseline) * 100)}%` }}
+                        style={{ width: `${barWidth}%` }}
                       />
                       {/* Baseline marker */}
                       <div
@@ -482,7 +489,7 @@ export default function Baselines() {
                       }`}>
                         {driftPercent > 0 ? '+' : ''}{driftPercent.toFixed(1)}% drift
                       </span>
-                      <span className="text-slate-600">{(feature.baseline * 1.5).toFixed(0)}</span>
+                      <span className="text-slate-600">{(baselineValue * 1.5).toFixed(0)}</span>
                     </div>
                   </div>
 
@@ -559,8 +566,9 @@ export default function Baselines() {
                   )}
 
                   {displaySuggestions.map((suggestion, idx) => {
-                    const maxVal = Math.max(suggestion.baseline_median, suggestion.observed_median, suggestion.proposed_new_median) * 1.2;
-                    const getPercent = (val: number) => Math.min(100, (val / maxVal) * 100);
+                    const maxVal = Math.max(suggestion.baseline_median, suggestion.observed_median, suggestion.proposed_new_median);
+                    const scaledMax = maxVal > 0 ? maxVal * 1.2 : 1;
+                    const getPercent = (val: number) => Math.min(100, (val / scaledMax) * 100);
 
                     return (
                       <motion.div

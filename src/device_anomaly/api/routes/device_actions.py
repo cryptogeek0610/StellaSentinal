@@ -532,3 +532,155 @@ def get_device_action_history(
         logger.error(f"Failed to get action history for device {device_id}: {e}")
         # Return empty history if table doesn't exist yet
         return {"device_id": device_id, "total": 0, "actions": []}
+
+
+# =============================================================================
+# Battery Status Sync to MobiControl Custom Attributes
+# =============================================================================
+
+
+class BatterySyncRequest(BaseModel):
+    """Request to sync battery status to MobiControl."""
+    device_ids: Optional[list[int]] = Field(
+        None,
+        description="Specific device IDs to sync (all devices if not provided)"
+    )
+    dry_run: bool = Field(
+        False,
+        description="If true, return what would be updated without making changes"
+    )
+
+
+class BatterySyncResponse(BaseModel):
+    """Response from battery status sync."""
+    success: bool
+    devices_processed: int
+    devices_updated: int
+    devices_failed: int
+    message: str
+    dry_run: bool
+    duration_seconds: Optional[float] = None
+    errors: list[dict] = []
+    updates: Optional[list[dict]] = None
+
+
+@router.post("/battery-status/sync", response_model=BatterySyncResponse)
+def sync_battery_status_to_mobicontrol(
+    request: BatterySyncRequest,
+    db: Session = Depends(get_db),
+    mock_mode: bool = Depends(get_mock_mode),
+):
+    """Sync battery health status to MobiControl Custom Attributes.
+
+    This endpoint pushes battery health data to SOTI MobiControl as Custom Attributes,
+    enabling visibility of battery replacement status directly in the web console.
+
+    Custom Attributes set:
+    - BatteryHealthPercent: Battery health as percentage (e.g., "72%")
+    - BatteryStatus: Status string ("Good", "Plan Replacement", "Replace Soon", "Replace Now")
+    - BatteryReplacementDue: Whether replacement is needed ("Yes" or "No")
+    - BatteryReplacementUrgency: Urgency level ("None", "Medium", "High", "Immediate")
+
+    Use dry_run=true to preview changes without updating MobiControl.
+    """
+    tenant_id = get_tenant_id()
+
+    if mock_mode:
+        # Return mock response
+        return BatterySyncResponse(
+            success=True,
+            devices_processed=5,
+            devices_updated=5,
+            devices_failed=0,
+            message="Mock: 5 devices updated",
+            dry_run=request.dry_run,
+            duration_seconds=0.5,
+            errors=[],
+            updates=[
+                {"device_id": "1001", "status": "Good", "health": 85},
+                {"device_id": "1002", "status": "Plan Replacement", "health": 75},
+                {"device_id": "1003", "status": "Replace Soon", "health": 65},
+                {"device_id": "1004", "status": "Replace Now", "health": 55},
+                {"device_id": "1005", "status": "Good", "health": 92},
+            ] if request.dry_run else None,
+        )
+
+    try:
+        from device_anomaly.services.battery_status_sync import BatteryStatusSyncService
+
+        service = BatteryStatusSyncService(db, tenant_id)
+        result = service.sync_battery_status(
+            device_ids=request.device_ids,
+            dry_run=request.dry_run,
+        )
+
+        return BatterySyncResponse(
+            success=result.get("success", False),
+            devices_processed=result.get("devices_processed", 0),
+            devices_updated=result.get("devices_updated", 0),
+            devices_failed=result.get("devices_failed", 0),
+            message=result.get("message", ""),
+            dry_run=request.dry_run,
+            duration_seconds=result.get("duration_seconds"),
+            errors=result.get("errors", []),
+            updates=result.get("updates") if request.dry_run else None,
+        )
+
+    except ValueError as e:
+        # Configuration error (e.g., MobiControl not configured)
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("Battery status sync failed")
+        raise HTTPException(status_code=500, detail=f"Sync failed: {e}")
+
+
+@router.post("/{device_id}/battery-status/sync", response_model=BatterySyncResponse)
+def sync_single_device_battery_status(
+    device_id: int,
+    dry_run: bool = False,
+    db: Session = Depends(get_db),
+    mock_mode: bool = Depends(get_mock_mode),
+):
+    """Sync battery status for a single device to MobiControl.
+
+    Args:
+        device_id: Device ID to sync
+        dry_run: If true, return what would be updated without making changes
+    """
+    tenant_id = get_tenant_id()
+
+    if mock_mode:
+        return BatterySyncResponse(
+            success=True,
+            devices_processed=1,
+            devices_updated=1,
+            devices_failed=0,
+            message=f"Mock: Device {device_id} updated",
+            dry_run=dry_run,
+            duration_seconds=0.1,
+            errors=[],
+        )
+
+    try:
+        from device_anomaly.services.battery_status_sync import BatteryStatusSyncService
+
+        service = BatteryStatusSyncService(db, tenant_id)
+        result = service.sync_single_device(device_id, dry_run=dry_run)
+
+        return BatterySyncResponse(
+            success=result.get("success", False),
+            devices_processed=result.get("devices_processed", 0),
+            devices_updated=result.get("devices_updated", 0),
+            devices_failed=result.get("devices_failed", 0),
+            message=result.get("message", ""),
+            dry_run=dry_run,
+            duration_seconds=result.get("duration_seconds"),
+            errors=result.get("errors", []),
+            updates=result.get("updates") if dry_run else None,
+        )
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Battery status sync failed for device {device_id}")
+        raise HTTPException(status_code=500, detail=f"Sync failed: {e}")

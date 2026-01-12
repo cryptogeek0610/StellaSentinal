@@ -38,6 +38,10 @@ import {
   SlideOverPanel,
 } from '../components/unified';
 import { LiveAlerts } from '../components/streaming/LiveAlerts';
+import { SystemicIssuesCard } from '../components/unified-dashboard/SystemicIssuesCard';
+import { CorrelationInsightsCard } from '../components/unified-dashboard/CorrelationInsightsCard';
+import { PredictiveWarningsCard } from '../components/unified-dashboard/PredictiveWarningsCard';
+import { DataQualityIndicator } from '../components/DataQualityIndicator';
 import type { Anomaly } from '../types/anomaly';
 import type { CustomerInsightResponse } from '../api/client';
 
@@ -308,7 +312,7 @@ function ActivityFeed({
         id: `anomaly-${a.id}`,
         type: 'anomaly',
         timestamp: new Date(a.timestamp),
-        content: `Anomaly detected on Device #${a.device_id}`,
+        content: `Anomaly detected on ${a.device_name || `Device #${a.device_id}`}`,
         link: `/investigations/${a.id}`,
       });
     });
@@ -747,6 +751,8 @@ export default function UnifiedDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {/* Data Quality */}
+          <DataQualityIndicator showTooltip={true} size="sm" />
           {/* System Health */}
           <SystemHealthIndicator
             connections={data.connections}
@@ -785,7 +791,7 @@ export default function UnifiedDashboard() {
         emptyMessage="No dashboard data available yet."
         onRetry={data.refetch.stats}
       >
-        <div className="grid grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           <KPICard
             title="Open Cases"
             value={data.stats?.open_cases ?? '—'}
@@ -838,6 +844,13 @@ export default function UnifiedDashboard() {
         digest={data.digest}
         isLoading={data.isLoading.digest}
       />
+
+      {/* Intelligence Cards Grid - Cross-Device, Correlations, Predictions */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <SystemicIssuesCard maxIssues={4} />
+        <CorrelationInsightsCard maxInsights={3} />
+        <PredictiveWarningsCard maxPredictions={3} />
+      </div>
 
       {/* ================================================================== */}
       {/* LEVEL 3: OPERATIONAL DOMAINS - Expandable Sections                */}

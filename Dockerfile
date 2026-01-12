@@ -1,11 +1,14 @@
 FROM python:3.11-slim
 
-# Install system dependencies for pyodbc and SQL Server
+# Install system dependencies for pyodbc, SQL Server, and Python packages that need compilation
 RUN apt-get update && apt-get install -y \
     curl \
     gnupg \
     unixodbc \
     unixodbc-dev \
+    gcc \
+    g++ \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Microsoft ODBC Driver for SQL Server

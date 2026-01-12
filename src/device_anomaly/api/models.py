@@ -12,6 +12,7 @@ class AnomalyResponse(BaseModel):
 
     id: int
     device_id: int
+    device_name: Optional[str] = None
     timestamp: datetime
     anomaly_score: float
     anomaly_label: int
@@ -87,6 +88,9 @@ class DashboardStatsResponse(BaseModel):
     resolved_today: int
     open_cases: int = 0
     total_anomalies: int = 0  # Total count of all anomalies in database
+    # Fleet size breakdown
+    total_devices: int = 0  # Total devices in database (all time)
+    active_devices: int = 0  # Devices active in last 30 days
 
 
 class DashboardTrendResponse(BaseModel):
@@ -187,6 +191,16 @@ class ScoreDistributionResponse(BaseModel):
     std_score: float
 
 
+class FeedbackStatsResponse(BaseModel):
+    """Response model for model feedback statistics."""
+
+    total_feedback: int
+    false_positives: int
+    confirmed_anomalies: int
+    projected_accuracy_gain: float
+    last_retrain: Optional[str] = None
+
+
 class IsolationForestStatsResponse(BaseModel):
     """Response model for Isolation Forest statistics."""
 
@@ -195,6 +209,7 @@ class IsolationForestStatsResponse(BaseModel):
     score_distribution: ScoreDistributionResponse
     total_predictions: int
     anomaly_rate: float
+    feedback_stats: Optional[FeedbackStatsResponse] = None
 
 
 class LocationDataResponse(BaseModel):
@@ -386,6 +401,7 @@ class SimilarCase(BaseModel):
     case_id: str
     anomaly_id: int
     device_id: int
+    device_name: Optional[str] = None
     detected_at: datetime
     resolved_at: Optional[datetime] = None
     similarity_score: float
@@ -538,3 +554,46 @@ class BulkActionResponse(BaseModel):
     affected_count: int
     failed_ids: List[int] = Field(default_factory=list)
     message: str
+
+
+# ============================================
+# Insight Impacted Devices Types
+# ============================================
+
+
+class ImpactedDeviceResponse(BaseModel):
+    """Device affected by an insight."""
+
+    device_id: int
+    device_name: Optional[str] = None
+    device_model: Optional[str] = None
+    location: Optional[str] = None
+    status: str = "unknown"
+    last_seen: Optional[datetime] = None
+    os_version: Optional[str] = None
+    anomaly_count: int = 0
+    severity: Optional[str] = None
+    primary_metric: Optional[str] = None
+
+
+class DeviceGroupingResponse(BaseModel):
+    """A grouping of devices."""
+
+    group_key: str
+    group_label: str
+    device_count: int
+    devices: List[ImpactedDeviceResponse]
+
+
+class InsightDevicesResponse(BaseModel):
+    """Response containing devices affected by an insight with grouping options."""
+
+    insight_id: str
+    insight_headline: str
+    insight_category: Optional[str] = None
+    insight_severity: Optional[str] = None
+    total_devices: int
+    devices: List[ImpactedDeviceResponse]
+    groupings: dict[str, List[DeviceGroupingResponse]]
+    ai_pattern_analysis: Optional[str] = None
+    generated_at: datetime

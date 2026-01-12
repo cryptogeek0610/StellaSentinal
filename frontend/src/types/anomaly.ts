@@ -1,6 +1,14 @@
+export interface AnomalyCostImpact {
+  hourly_cost: number
+  daily_cost: number
+  category: 'productivity_loss' | 'security_risk' | 'cost_waste' | 'impending_failure'
+  impact_description?: string
+}
+
 export interface Anomaly {
   id: number
   device_id: number
+  device_name: string | null
   timestamp: string
   anomaly_score: number
   anomaly_label: number
@@ -17,6 +25,8 @@ export interface Anomaly {
   feature_values_json: string | null
   created_at: string
   updated_at: string
+  // Cost impact analysis (optional, populated when available)
+  cost_impact?: AnomalyCostImpact
 }
 
 export interface AnomalyDetail extends Anomaly {
@@ -87,6 +97,9 @@ export interface DashboardStats {
   resolved_today: number
   open_cases?: number
   total_anomalies?: number  // Total count of all anomalies in database
+  // Fleet size breakdown
+  total_devices?: number  // Total devices in database (all time)
+  active_devices?: number  // Devices active in last 30 days
 }
 
 export interface DashboardTrend {
@@ -595,6 +608,7 @@ export interface SimilarCase {
   case_id: string;
   anomaly_id: number;
   device_id: number;
+  device_name?: string;
   detected_at: string;
   resolved_at: string | null;
   similarity_score: number;
@@ -738,4 +752,44 @@ export interface BulkActionResponse {
   affected_count: number;
   failed_ids: number[];
   message: string;
+}
+
+// ==========================================
+// Insight Impacted Devices Types
+// ==========================================
+
+export interface ImpactedDevice {
+  device_id: number;
+  device_name: string | null;
+  device_model: string | null;
+  location: string | null;
+  status: string;
+  last_seen: string | null;
+  os_version: string | null;
+  anomaly_count: number;
+  severity: Severity | null;
+  primary_metric: string | null;
+}
+
+export interface DeviceGrouping {
+  group_key: string;
+  group_label: string;
+  device_count: number;
+  devices: ImpactedDevice[];
+}
+
+export interface InsightDevicesResponse {
+  insight_id: string;
+  insight_headline: string;
+  insight_category: string | null;
+  insight_severity: string | null;
+  total_devices: number;
+  devices: ImpactedDevice[];
+  groupings: {
+    by_location: DeviceGrouping[];
+    by_model: DeviceGrouping[];
+    by_pattern: DeviceGrouping[];
+  };
+  ai_pattern_analysis: string | null;
+  generated_at: string;
 }

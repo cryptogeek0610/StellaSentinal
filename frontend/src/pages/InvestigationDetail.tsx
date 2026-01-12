@@ -18,6 +18,7 @@ import { format, formatDistanceToNowStrict } from 'date-fns';
 import type { AnomalyImpactResponse } from '../types/cost';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../components/Card';
+import { AIAnalysisDisplay } from '../components/AIAnalysisDisplay';
 import { useMockMode } from '../hooks/useMockMode';
 import { showSuccess, showError } from '../utils/toast';
 import {
@@ -31,25 +32,29 @@ import type {
   RemediationSuggestion,
   SimilarCase,
   LearnFromFix,
+  InvestigationNote,
 } from '../types/anomaly';
+import {
+  SEVERITY_CONFIGS,
+  STATUS_CONFIGS,
+  type SeverityLevel,
+  type StatusLevel,
+} from '../utils/severity';
 
-// ============================================================================
-// Severity & Status Config
-// ============================================================================
+// Create local configs that match expected shapes (for backwards compatibility)
+const severityConfig = Object.fromEntries(
+  Object.entries(SEVERITY_CONFIGS).map(([key, cfg]) => [
+    key,
+    { label: cfg.label, color: cfg.color.text, bg: cfg.color.bg, border: cfg.color.border },
+  ])
+) as Record<SeverityLevel, { label: string; color: string; bg: string; border: string }>;
 
-const severityConfig = {
-  critical: { label: 'CRITICAL', color: 'text-red-400', bg: 'bg-red-500/20', border: 'border-red-500/30' },
-  high: { label: 'HIGH', color: 'text-orange-400', bg: 'bg-orange-500/20', border: 'border-orange-500/30' },
-  medium: { label: 'MEDIUM', color: 'text-amber-400', bg: 'bg-amber-500/20', border: 'border-amber-500/30' },
-  low: { label: 'LOW', color: 'text-slate-400', bg: 'bg-slate-700/50', border: 'border-slate-600/50' },
-};
-
-const statusConfig = {
-  open: { label: 'Open', color: 'text-red-400', bg: 'bg-red-500/10', icon: '●' },
-  investigating: { label: 'Investigating', color: 'text-orange-400', bg: 'bg-orange-500/10', icon: '◉' },
-  resolved: { label: 'Resolved', color: 'text-emerald-400', bg: 'bg-emerald-500/10', icon: '✓' },
-  false_positive: { label: 'False Positive', color: 'text-slate-400', bg: 'bg-slate-700/30', icon: '✕' },
-};
+const statusConfig = Object.fromEntries(
+  Object.entries(STATUS_CONFIGS).map(([key, cfg]) => [
+    key,
+    { label: cfg.label, color: cfg.color, bg: cfg.bg, icon: cfg.icon },
+  ])
+) as Record<StatusLevel, { label: string; color: string; bg: string; icon: string }>;
 
 // ============================================================================
 // Data Size Formatting Utility
@@ -120,12 +125,6 @@ const WrenchIcon = () => (
 const DeviceIcon = () => (
   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-  </svg>
-);
-
-const RefreshIcon = () => (
-  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
   </svg>
 );
 
@@ -264,53 +263,21 @@ const AIAnalysisPanel = ({
 
   if (!hypothesis) {
     return (
-      <div className="p-6 rounded-xl bg-slate-800/30 border border-slate-700/50 text-center">
-        <div className="flex justify-center mb-2"><BrainIcon /></div>
-        <p className="text-slate-400 mt-2">No AI analysis available</p>
-        <button onClick={onRegenerate} className="mt-3 btn-ghost text-sm">
-          Generate Analysis
-        </button>
+      <div className="p-6 rounded-xl bg-gradient-to-br from-indigo-500/10 to-purple-500/10 border border-indigo-500/20">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full border-2 border-indigo-500/30 border-t-indigo-500 animate-spin" />
+          <div>
+            <p className="text-indigo-400 font-medium">Generating AI analysis...</p>
+            <p className="text-xs text-slate-500">This may take a moment</p>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="p-6 rounded-xl bg-gradient-to-br from-indigo-500/10 to-purple-500/10 border border-indigo-500/20">
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
-            <BrainIcon />
-          </div>
-          <div>
-            <p className="text-sm text-indigo-400 font-medium">AI Root Cause Analysis</p>
-            <p className="text-xs text-slate-500">{(hypothesis.likelihood * 100).toFixed(0)}% confidence</p>
-          </div>
-        </div>
-        <button
-          onClick={onRegenerate}
-          className="p-2 text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-colors"
-          title="Regenerate analysis"
-        >
-          <RefreshIcon />
-        </button>
-      </div>
-
-      <h4 className="text-lg font-bold text-white mb-2">{hypothesis.title}</h4>
-      <p className="text-sm text-slate-300 mb-4">{hypothesis.description}</p>
-
-      {hypothesis.recommended_actions && hypothesis.recommended_actions.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-indigo-500/20">
-          <p className="text-xs text-indigo-400 font-medium mb-2">Recommended Actions:</p>
-          <ul className="space-y-1">
-            {hypothesis.recommended_actions.map((action, i) => (
-              <li key={i} className="text-xs text-slate-400 flex items-start gap-2">
-                <span className="text-indigo-400 mt-0.5">→</span>
-                {action}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <AIAnalysisDisplay hypothesis={hypothesis} onRegenerate={onRegenerate} />
     </div>
   );
 };
@@ -395,14 +362,14 @@ const CostImpactCard = ({
     );
   }
 
-  if (!costImpact) {
+  if (!costImpact || costImpact.using_defaults) {
     return (
       <div className="p-6 rounded-xl bg-slate-800/30 border border-slate-700/50 text-center">
         <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-slate-700/50 flex items-center justify-center text-slate-400">
           <DollarIcon />
         </div>
-        <p className="text-slate-400 text-sm">No cost data available</p>
-        <p className="text-xs text-slate-500 mt-1">Configure hardware costs to see impact</p>
+        <p className="text-slate-400 text-sm">No cost data configured</p>
+        <p className="text-xs text-slate-500 mt-1">Configure your labor rates and device costs to see financial impact</p>
         <Link
           to="/costs"
           className="mt-3 inline-block text-xs text-amber-400 hover:text-amber-300 transition-colors"
@@ -646,7 +613,7 @@ const SimilarCasesList = ({ cases }: { cases: SimilarCase[] }) => {
             <div>
               <span className="text-xs text-slate-500">Case #{c.anomaly_id}</span>
               <p className="text-sm text-slate-300 group-hover:text-white transition-colors">
-                Device #{c.device_id}
+                {c.device_name || `Device #${c.device_id}`}
               </p>
             </div>
             <div className="text-right">
@@ -906,7 +873,7 @@ function InvestigationDetail() {
               </span>
             </div>
             <p className="text-slate-500 text-sm mt-1">
-              Device #{anomaly.device_id} • Detected {formatDistanceToNowStrict(new Date(anomaly.timestamp))} ago
+              {anomaly.device_name || `Device #${anomaly.device_id}`} • Detected {formatDistanceToNowStrict(new Date(anomaly.timestamp))} ago
             </p>
           </div>
         </div>
@@ -1054,7 +1021,7 @@ function InvestigationDetail() {
                       <DeviceIcon />
                     </div>
                     <div>
-                      <p className="text-lg font-bold text-white">Device #{anomaly.device_id}</p>
+                      <p className="text-lg font-bold text-white">{anomaly.device_name || `Device #${anomaly.device_id}`}</p>
                       <p className="text-sm text-slate-400">Telemetry snapshot at anomaly detection</p>
                     </div>
                   </div>
@@ -1524,7 +1491,7 @@ function InvestigationDetail() {
           <Card title="Investigation Log">
             <div className="space-y-3 max-h-[300px] overflow-y-auto mb-4">
               {anomaly.investigation_notes && anomaly.investigation_notes.length > 0 ? (
-                anomaly.investigation_notes.map((note: any) => (
+                anomaly.investigation_notes.map((note: InvestigationNote) => (
                   <div
                     key={note.id}
                     className="relative pl-4 border-l-2 border-amber-500/30"

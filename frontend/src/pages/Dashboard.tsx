@@ -243,7 +243,7 @@ function Dashboard() {
       events.push({
         id: `anomaly-${a.id}`,
         type: 'anomaly',
-        message: `Device #${a.device_id} flagged`,
+        message: `${a.device_name || `Device #${a.device_id}`} flagged`,
         timestamp: a.timestamp,
         severity: severity.label,
       });
@@ -254,7 +254,7 @@ function Dashboard() {
       events.push({
         id: `resolved-${a.id}`,
         type: 'resolved',
-        message: `Device #${a.device_id} resolved`,
+        message: `${a.device_name || `Device #${a.device_id}`} resolved`,
         timestamp: a.timestamp,
       });
     });
@@ -473,6 +473,7 @@ function Dashboard() {
         <MetricCard
           label="Fleet Size"
           value={stats?.devices_monitored || 0}
+          subValue={stats?.active_devices ? `${stats.active_devices} active` : undefined}
           icon={<DeviceIcon />}
           variant="info"
           onClick={() => navigate('/fleet')}
@@ -975,7 +976,7 @@ function AnomalyRow({ anomaly, index }: { anomaly: Anomaly; index: number }) {
         <div className={`w-1.5 h-10 rounded-full ${severity.color.dot}`} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-slate-200">Device #{anomaly.device_id}</span>
+            <span className="text-sm font-medium text-slate-200">{anomaly.device_name || `Device #${anomaly.device_id}`}</span>
             <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded ${severity.color.bg} ${severity.color.text}`}>
               {severity.label}
             </span>

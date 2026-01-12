@@ -65,7 +65,7 @@ def _build_connect_args(settings) -> dict:
 def create_dw_engine() -> Engine:
     """
     Create a SQLAlchemy engine for the DW database.
-    Handles both regular hosts and SQL Server named instances (server\instance).
+    Handles both regular hosts and SQL Server named instances (server\\instance).
     """
     settings = get_settings().dw
 
@@ -128,7 +128,7 @@ def create_dw_engine() -> Engine:
 def create_mc_engine() -> Engine:
     """
     Create a SQLAlchemy engine for the MobiControl database.
-    Handles both regular hosts and SQL Server named instances (server\instance).
+    Handles both regular hosts and SQL Server named instances (server\\instance).
     """
     settings = get_settings().mc
 

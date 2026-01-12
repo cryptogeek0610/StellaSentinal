@@ -6,8 +6,7 @@ This document describes the smoke tests to validate the local setup is working c
 
 - Docker and Docker Compose installed
 - Services started: `make up` or `docker-compose up -d`
-- `DW_DB_PASS` set in your environment (from `.env`)
-- Wait 30-60 seconds for SQL Server to fully initialize
+- `.env` file configured with your settings
 
 ## Automated Smoke Tests
 
@@ -22,9 +21,15 @@ chmod +x scripts/smoke_test.sh
 
 ### 1. Container Health
 
-- [ ] SQL Server container is running
+- [ ] PostgreSQL container is running
   ```bash
-  docker-compose ps sqlserver
+  docker-compose ps postgres
+  # Should show "Up" status
+  ```
+
+- [ ] Redis container is running
+  ```bash
+  docker-compose ps redis
   # Should show "Up" status
   ```
 
@@ -35,19 +40,19 @@ chmod +x scripts/smoke_test.sh
 
 ### 2. Database Connectivity
 
-- [ ] SQL Server accepts connections
+- [ ] PostgreSQL accepts connections
   ```bash
-  docker-compose exec sqlserver /opt/mssql-tools/bin/sqlcmd \
-    -S localhost -U sa -P "$DW_DB_PASS" \
-    -Q "SELECT 1"
-  # Expected: Returns "1"
+  docker-compose exec postgres pg_isready -U postgres
+  # Expected: "accepting connections"
   ```
 
-- [ ] Can create database (if needed)
+- [ ] External SQL Server connectivity (if configured)
   ```bash
-  docker-compose exec sqlserver /opt/mssql-tools/bin/sqlcmd \
-    -S localhost -U sa -P "$DW_DB_PASS" \
-    -Q "CREATE DATABASE SOTI_XSight_dw;"
+  # This tests the external XSight/MobiControl SQL Server
+  docker-compose exec app python -c \
+    "from device_anomaly.data_access.db_connection import create_dw_engine; \
+     e = create_dw_engine(); \
+     print('DW connection OK')"
   ```
 
 ### 3. Python Environment
@@ -61,7 +66,7 @@ chmod +x scripts/smoke_test.sh
 - [ ] All required packages are installed
   ```bash
   docker-compose exec app python -c \
-    "import pandas, numpy, sklearn, sqlalchemy, pyodbc; print('OK')"
+    "import pandas, numpy, sklearn, sqlalchemy; print('OK')"
   # Expected: "OK"
   ```
 
@@ -83,20 +88,11 @@ chmod +x scripts/smoke_test.sh
 - [ ] Synthetic experiment runs successfully
   ```bash
   docker-compose run --rm app python -m device_anomaly.cli.synthetic_experiment
-  # Expected: 
+  # Expected:
   # - Logs "Running synthetic experiment"
   # - Shows synthetic data shape and feature engineering
   # - Shows anomaly detection results
   # - Shows evaluation metrics (precision, recall)
-  ```
-
-- [ ] DW experiment attempts to connect (may fail if DB has no data)
-  ```bash
-  docker-compose run --rm app python -m device_anomaly.cli.dw_experiment
-  # Expected:
-  # - Logs "Running DW experiment"
-  # - Either connects and loads data, or shows connection error
-  # - Should NOT show Python import errors
   ```
 
 ### 5. Configuration
@@ -106,8 +102,8 @@ chmod +x scripts/smoke_test.sh
   docker-compose exec app python -c \
     "from device_anomaly.config.settings import get_settings; \
      s = get_settings(); \
-     print(f'DB Host: {s.dw.host}, DB Name: {s.dw.database}')"
-  # Expected: Shows DB host and database name from .env
+     print(f'DW Host: {s.dw.host}, Backend DB: {s.backend_db.host}')"
+  # Expected: Shows configured hosts
   ```
 
 ### 6. Expected Outputs
@@ -148,25 +144,18 @@ No experiments defined yet. This is just a skeleton.
 
 ## Common Issues and Solutions
 
-### Issue: SQL Server container keeps restarting
+### Issue: PostgreSQL container keeps restarting
 
 **Solution:**
-- Check password complexity (min 8 chars, mixed case, numbers, special chars)
-- Check logs: `make logs-db`
-- Increase wait time in health check
+- Check logs: `docker-compose logs postgres`
+- Ensure volume permissions are correct
 
-### Issue: "ODBC Driver not found"
-
-**Solution:**
-- Rebuild image: `docker-compose build --no-cache`
-- Verify driver name in `.env`: `ODBC Driver 18 for SQL Server`
-
-### Issue: "Connection refused" or "Cannot connect to database"
+### Issue: "Cannot connect to external SQL Server"
 
 **Solution:**
-- Ensure SQL Server health check passed: `docker-compose ps`
-- Check `DW_DB_HOST=sqlserver` in `.env` (for Docker networking)
-- Wait longer for SQL Server to initialize (can take 30-60 seconds)
+- Verify `DW_DB_HOST`, `DW_DB_USER`, `DW_DB_PASS` in `.env`
+- Ensure the external SQL Server is reachable from Docker (check firewall, network)
+- For Docker Desktop, use `host.docker.internal` to reach host machine
 
 ### Issue: Import errors for device_anomaly package
 
@@ -190,7 +179,7 @@ No experiments defined yet. This is just a skeleton.
 
 All smoke tests pass when:
 - ✅ All containers start successfully
-- ✅ SQL Server accepts connections
+- ✅ PostgreSQL accepts connections
 - ✅ Python environment has all dependencies
 - ✅ Main entry point runs
 - ✅ Synthetic experiment completes with results

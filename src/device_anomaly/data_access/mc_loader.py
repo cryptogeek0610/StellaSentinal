@@ -803,6 +803,484 @@ def enrich_devices_for_location_mapping(
     return df
 
 
+# =============================================================================
+# Reboot/Restart Event Extraction
+# =============================================================================
+
+
+def load_reboot_events(
+    start_dt: str,
+    end_dt: str,
+    device_ids: Iterable[int] | None = None,
+    limit: int | None = 100_000,
+) -> pd.DataFrame:
+    """
+    Extract reboot/restart events from MobiControl MainLog table.
+
+    Identifies reboots via:
+    1. EventClass containing reboot/restart keywords
+    2. ResTxt containing device restarted messages
+
+    Args:
+        start_dt: Start datetime for event search
+        end_dt: End datetime for event search
+        device_ids: Optional list of device IDs to filter
+        limit: Maximum rows to return
+
+    Returns:
+        DataFrame with columns: DeviceId, reboot_time, EventClass, reboot_reason, Severity
+    """
+    engine = create_mc_engine()
+    top_clause = f"TOP ({int(limit)})" if limit is not None else ""
+
+    device_filter_clause = ""
+    params: dict[str, object] = {"start_dt": start_dt, "end_dt": end_dt}
+    if device_ids:
+        device_filter_clause = "AND ml.DeviceId IN :device_ids"
+        params["device_ids"] = [int(x) for x in device_ids]
+
+    sql = f"""
+SELECT {top_clause}
+    ml.DeviceId,
+    ml.DateTime AS reboot_time,
+    ml.EventClass,
+    ml.ResTxt AS reboot_reason,
+    ml.Severity
+FROM dbo.MainLog ml
+WHERE ml.DateTime >= :start_dt
+  AND ml.DateTime < :end_dt
+  AND (
+      LOWER(ml.EventClass) LIKE '%reboot%'
+      OR LOWER(ml.EventClass) LIKE '%restart%'
+      OR LOWER(ml.EventClass) LIKE '%boot%'
+      OR LOWER(ml.EventClass) LIKE '%power cycle%'
+      OR LOWER(ml.EventClass) LIKE '%device started%'
+      OR LOWER(ml.ResTxt) LIKE '%device restarted%'
+      OR LOWER(ml.ResTxt) LIKE '%system reboot%'
+      OR LOWER(ml.ResTxt) LIKE '%device rebooted%'
+      OR LOWER(ml.ResTxt) LIKE '%power on%'
+  )
+  {device_filter_clause}
+ORDER BY ml.DeviceId, ml.DateTime;
+"""
+
+    query = text(sql)
+    if device_ids:
+        query = query.bindparams(bindparam("device_ids", expanding=True))
+
+    try:
+        with engine.connect() as conn:
+            df = pd.read_sql(query, conn, params=params)
+        logger.info(f"Loaded {len(df):,} reboot events from MC MainLog")
+        return df
+    except Exception as e:
+        logger.warning(f"Could not load reboot events: {e}")
+        return pd.DataFrame(columns=["DeviceId", "reboot_time", "EventClass", "reboot_reason", "Severity"])
+
+
+def calculate_reboots_from_boot_time(
+    start_dt: str,
+    end_dt: str,
+    device_ids: Iterable[int] | None = None,
+) -> pd.DataFrame:
+    """
+    Detect reboots by analyzing changes in LastBootTime for Windows devices.
+
+    When LastBootTime changes between consecutive snapshots, a reboot occurred.
+
+    Args:
+        start_dt: Start datetime
+        end_dt: End datetime
+        device_ids: Optional device filter
+
+    Returns:
+        DataFrame with DeviceId, reboot_time (approximated), detected_from columns
+    """
+    engine = create_mc_engine()
+
+    device_filter_clause = ""
+    params: dict[str, object] = {"start_dt": start_dt, "end_dt": end_dt}
+    if device_ids:
+        device_filter_clause = "AND d.DeviceId IN :device_ids"
+        params["device_ids"] = [int(x) for x in device_ids]
+
+    # Query Windows devices with LastBootTime changes
+    # This uses a window function to detect when LastBootTime changes
+    sql = f"""
+WITH boot_times AS (
+    SELECT
+        d.DeviceId,
+        d.LastCheckInTime AS snapshot_time,
+        w.LastBootTime,
+        LAG(w.LastBootTime) OVER (PARTITION BY d.DeviceId ORDER BY d.LastCheckInTime) AS prev_boot_time
+    FROM dbo.DevInfo d
+    JOIN dbo.WindowsDevice w ON w.DeviceId = d.DeviceId
+    WHERE d.LastCheckInTime >= :start_dt
+      AND d.LastCheckInTime < :end_dt
+      AND w.LastBootTime IS NOT NULL
+      {device_filter_clause}
+)
+SELECT
+    DeviceId,
+    snapshot_time AS detected_at,
+    LastBootTime AS reboot_time,
+    'boot_time_change' AS detected_from
+FROM boot_times
+WHERE LastBootTime != prev_boot_time
+  AND prev_boot_time IS NOT NULL
+ORDER BY DeviceId, reboot_time;
+"""
+
+    query = text(sql)
+    if device_ids:
+        query = query.bindparams(bindparam("device_ids", expanding=True))
+
+    try:
+        with engine.connect() as conn:
+            df = pd.read_sql(query, conn, params=params)
+        logger.info(f"Detected {len(df):,} reboots from LastBootTime changes")
+        return df
+    except Exception as e:
+        logger.warning(f"Could not detect reboots from boot time: {e}")
+        return pd.DataFrame(columns=["DeviceId", "detected_at", "reboot_time", "detected_from"])
+
+
+def load_all_reboot_events(
+    start_dt: str,
+    end_dt: str,
+    device_ids: Iterable[int] | None = None,
+    limit: int | None = 100_000,
+) -> pd.DataFrame:
+    """
+    Load reboot events from all available sources and combine.
+
+    Sources:
+    1. MainLog events with reboot keywords
+    2. LastBootTime changes (Windows devices)
+
+    Returns combined DataFrame with:
+        DeviceId, reboot_time, source (event_log or boot_time_change)
+    """
+    # Load from MainLog
+    event_df = load_reboot_events(start_dt, end_dt, device_ids, limit)
+    if not event_df.empty:
+        event_df["source"] = "event_log"
+        event_df = event_df.rename(columns={"reboot_time": "reboot_time"})
+        event_df = event_df[["DeviceId", "reboot_time", "source"]]
+
+    # Load from boot time changes
+    boot_df = calculate_reboots_from_boot_time(start_dt, end_dt, device_ids)
+    if not boot_df.empty:
+        boot_df["source"] = "boot_time_change"
+        boot_df = boot_df[["DeviceId", "reboot_time", "source"]]
+
+    # Combine and deduplicate (events within 5 minutes are considered same reboot)
+    if event_df.empty and boot_df.empty:
+        return pd.DataFrame(columns=["DeviceId", "reboot_time", "source"])
+
+    combined = pd.concat([event_df, boot_df], ignore_index=True)
+
+    if combined.empty:
+        return combined
+
+    # Sort by device and time
+    combined = combined.sort_values(["DeviceId", "reboot_time"])
+
+    # Deduplicate: keep first event per device within 5-minute windows
+    combined["reboot_time"] = pd.to_datetime(combined["reboot_time"])
+    combined["time_group"] = combined.groupby("DeviceId")["reboot_time"].transform(
+        lambda x: (x - x.iloc[0]).dt.total_seconds() // 300  # 5-minute groups
+    )
+
+    deduped = combined.groupby(["DeviceId", "time_group"]).first().reset_index()
+    deduped = deduped[["DeviceId", "reboot_time", "source"]]
+
+    logger.info(f"Combined {len(deduped):,} unique reboot events")
+    return deduped
+
+
+def aggregate_reboot_counts(
+    start_dt: str,
+    end_dt: str,
+    device_ids: Iterable[int] | None = None,
+) -> pd.DataFrame:
+    """
+    Aggregate reboot counts per device for the specified period.
+
+    Returns DataFrame with:
+        DeviceId, reboot_count, first_reboot, last_reboot, avg_hours_between_reboots
+    """
+    reboots = load_all_reboot_events(start_dt, end_dt, device_ids)
+
+    if reboots.empty:
+        return pd.DataFrame(columns=[
+            "DeviceId", "reboot_count", "first_reboot", "last_reboot",
+            "avg_hours_between_reboots", "consecutive_reboot_count"
+        ])
+
+    # Calculate aggregates per device
+    def compute_device_reboot_stats(group: pd.DataFrame) -> pd.Series:
+        """Compute reboot statistics for a single device."""
+        count = len(group)
+        first = group["reboot_time"].min()
+        last = group["reboot_time"].max()
+
+        # Average hours between reboots
+        if count > 1:
+            sorted_times = group["reboot_time"].sort_values()
+            time_diffs = sorted_times.diff().dropna()
+            avg_hours = time_diffs.mean().total_seconds() / 3600 if len(time_diffs) > 0 else 0
+        else:
+            avg_hours = 0
+
+        # Count consecutive reboots (within 1 hour of each other)
+        consecutive = 0
+        if count > 1:
+            sorted_times = group["reboot_time"].sort_values().reset_index(drop=True)
+            for i in range(1, len(sorted_times)):
+                diff_hours = (sorted_times[i] - sorted_times[i-1]).total_seconds() / 3600
+                if diff_hours < 1:
+                    consecutive += 1
+
+        return pd.Series({
+            "reboot_count": count,
+            "first_reboot": first,
+            "last_reboot": last,
+            "avg_hours_between_reboots": avg_hours,
+            "consecutive_reboot_count": consecutive,
+        })
+
+    result = reboots.groupby("DeviceId").apply(compute_device_reboot_stats).reset_index()
+    logger.info(f"Aggregated reboot counts for {len(result):,} devices")
+
+    return result
+
+
+# =============================================================================
+# User Assignment Extraction (Carl's requirement: "People with excessive drops")
+# =============================================================================
+
+
+def load_device_user_assignments(
+    label_types: list[str] | None = None,
+    device_ids: Iterable[int] | None = None,
+    limit: int | None = 100_000,
+) -> pd.DataFrame:
+    """
+    Extract device-to-user mappings from MobiControl labels.
+
+    Supports Carl's requirement: "People with excessive drops" by enabling
+    aggregation of device abuse metrics by the assigned user.
+
+    Args:
+        label_types: Label type names to treat as user assignments.
+                    Default: ["Owner", "User", "AssignedUser", "Operator"]
+        device_ids: Optional device filter
+        limit: Maximum rows to return
+
+    Returns:
+        DataFrame with columns:
+            DeviceId, user_id, user_name, assignment_type, source_label_type
+    """
+    engine = create_mc_engine()
+    top_clause = f"TOP ({int(limit)})" if limit is not None else ""
+
+    # Default user assignment label types
+    if label_types is None:
+        label_types = ["Owner", "User", "AssignedUser", "Operator", "Employee", "Worker"]
+
+    device_filter_clause = ""
+    params: dict[str, object] = {"label_types": label_types}
+    if device_ids:
+        device_filter_clause = "AND ld.DeviceId IN :device_ids"
+        params["device_ids"] = [int(x) for x in device_ids]
+
+    sql = f"""
+SELECT {top_clause}
+    ld.DeviceId,
+    CONVERT(nvarchar(4000), ld.Value) AS user_id,
+    CONVERT(nvarchar(4000), ld.Value) AS user_name,
+    lt.Name AS assignment_type,
+    lt.Name AS source_label_type
+FROM dbo.LabelDevice ld
+JOIN dbo.LabelType lt ON lt.Id = ld.LabelTypeId
+WHERE lt.Name IN :label_types
+  {device_filter_clause}
+ORDER BY ld.DeviceId, lt.Name;
+"""
+
+    query = text(sql).bindparams(bindparam("label_types", expanding=True))
+    if device_ids:
+        query = query.bindparams(bindparam("device_ids", expanding=True))
+
+    try:
+        with engine.connect() as conn:
+            df = pd.read_sql(query, conn, params=params)
+        logger.info(f"Loaded {len(df):,} user assignments from MC labels")
+        return df
+    except Exception as e:
+        logger.warning(f"Could not load user assignments from labels: {e}")
+        return pd.DataFrame(columns=[
+            "DeviceId", "user_id", "user_name", "assignment_type", "source_label_type"
+        ])
+
+
+def load_device_user_assignments_from_devinfo(
+    device_ids: Iterable[int] | None = None,
+    limit: int | None = 100_000,
+) -> pd.DataFrame:
+    """
+    Extract device-to-user mappings from DevInfo table (built-in fields).
+
+    MobiControl stores user info in DevInfo fields:
+    - AssignedUserId, UserName, UserEmail, CurrentPersonId
+
+    Args:
+        device_ids: Optional device filter
+        limit: Maximum rows to return
+
+    Returns:
+        DataFrame with columns:
+            DeviceId, user_id, user_name, user_email, assignment_type, source
+    """
+    engine = create_mc_engine()
+    top_clause = f"TOP ({int(limit)})" if limit is not None else ""
+
+    device_filter_clause = ""
+    params: dict[str, object] = {}
+    if device_ids:
+        device_filter_clause = "WHERE d.DeviceId IN :device_ids"
+        params["device_ids"] = [int(x) for x in device_ids]
+
+    sql = f"""
+SELECT {top_clause}
+    d.DeviceId,
+    d.AssignedUserId AS user_id,
+    d.UserName AS user_name,
+    d.UserEmail AS user_email,
+    'devinfo' AS assignment_type,
+    'mc_devinfo' AS source
+FROM dbo.DevInfo d
+{device_filter_clause}
+    AND (d.AssignedUserId IS NOT NULL OR d.UserName IS NOT NULL OR d.UserEmail IS NOT NULL);
+"""
+
+    # Fix WHERE clause if no device filter
+    if not device_ids:
+        sql = sql.replace("AND (d.AssignedUserId", "WHERE (d.AssignedUserId")
+
+    query = text(sql)
+    if device_ids:
+        query = query.bindparams(bindparam("device_ids", expanding=True))
+
+    try:
+        with engine.connect() as conn:
+            df = pd.read_sql(query, conn, params=params)
+        logger.info(f"Loaded {len(df):,} user assignments from DevInfo")
+        return df
+    except Exception as e:
+        logger.warning(f"Could not load user assignments from DevInfo: {e}")
+        return pd.DataFrame(columns=[
+            "DeviceId", "user_id", "user_name", "user_email", "assignment_type", "source"
+        ])
+
+
+def load_all_user_assignments(
+    label_types: list[str] | None = None,
+    device_ids: Iterable[int] | None = None,
+    limit: int | None = 100_000,
+) -> pd.DataFrame:
+    """
+    Load user assignments from all available sources and combine.
+
+    Sources:
+    1. LabelDevice table (user assignment labels)
+    2. DevInfo table (AssignedUserId, UserName, UserEmail)
+
+    Priority: DevInfo fields take precedence over labels if both exist.
+
+    Args:
+        label_types: Label types to treat as user assignments
+        device_ids: Optional device filter
+        limit: Maximum rows per source
+
+    Returns:
+        DataFrame with columns:
+            DeviceId, user_id, user_name, user_email, assignment_type, source
+    """
+    # Load from labels
+    label_df = load_device_user_assignments(label_types, device_ids, limit)
+    if not label_df.empty:
+        label_df["source"] = "mc_label"
+        label_df["user_email"] = None  # Labels typically don't have email
+
+    # Load from DevInfo
+    devinfo_df = load_device_user_assignments_from_devinfo(device_ids, limit)
+
+    # Combine with DevInfo taking priority
+    if label_df.empty and devinfo_df.empty:
+        return pd.DataFrame(columns=[
+            "DeviceId", "user_id", "user_name", "user_email", "assignment_type", "source"
+        ])
+
+    # Get devices that have DevInfo assignments
+    devinfo_devices = set(devinfo_df["DeviceId"].unique()) if not devinfo_df.empty else set()
+
+    # Filter labels to only include devices without DevInfo assignments
+    if not label_df.empty and devinfo_devices:
+        label_df = label_df[~label_df["DeviceId"].isin(devinfo_devices)]
+
+    # Combine
+    combined = pd.concat([devinfo_df, label_df], ignore_index=True)
+
+    # Normalize columns
+    expected_cols = ["DeviceId", "user_id", "user_name", "user_email", "assignment_type", "source"]
+    for col in expected_cols:
+        if col not in combined.columns:
+            combined[col] = None
+
+    combined = combined[expected_cols]
+
+    logger.info(f"Combined {len(combined):,} user assignments from all sources")
+    return combined
+
+
+def get_user_assignment_dict(
+    label_types: list[str] | None = None,
+    device_ids: Iterable[int] | None = None,
+) -> dict[int, dict[str, str]]:
+    """
+    Get user assignments as a dictionary for easy lookup.
+
+    Returns:
+        Dict mapping device_id -> {
+            "user_id": str,
+            "user_name": str,
+            "user_email": str | None,
+            "assignment_type": str,
+            "source": str,
+        }
+    """
+    df = load_all_user_assignments(label_types, device_ids)
+
+    if df.empty:
+        return {}
+
+    result: dict[int, dict[str, str]] = {}
+    for _, row in df.iterrows():
+        device_id = int(row["DeviceId"])
+        result[device_id] = {
+            "user_id": str(row["user_id"]) if row["user_id"] else None,
+            "user_name": str(row["user_name"]) if row["user_name"] else None,
+            "user_email": str(row["user_email"]) if row["user_email"] else None,
+            "assignment_type": str(row["assignment_type"]) if row["assignment_type"] else "owner",
+            "source": str(row["source"]) if row["source"] else "unknown",
+        }
+
+    logger.info(f"Built user assignment lookup for {len(result)} devices")
+    return result
+
+
 def get_device_security_summary(device_ids: Iterable[int] | None = None) -> pd.DataFrame:
     """
     Get a security-focused summary for devices.

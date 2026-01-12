@@ -157,6 +157,16 @@ PYTHONPATH=src python -m device_anomaly.cli.dw_experiment \
   --config configs/dw.yaml
 ```
 
+### Batch Ingestion (entrypoint)
+
+```bash
+# Dry run (mock data, no DB writes)
+PYTHONPATH=src python -m device_anomaly.cli.ingestion \
+  --dry-run \
+  --xsight-table cs_BatteryStat \
+  --mc-table DeviceStatInt
+```
+
 ### Local Development (without Docker)
 
 ```bash
@@ -173,6 +183,34 @@ uvicorn device_anomaly.api.main:app --reload
 # In another terminal, start the frontend
 cd frontend && npm install && npm run dev
 ```
+
+### Bootstrap (clean environment)
+
+```bash
+# Backend (Python)
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
+
+# Frontend (Node)
+cd frontend
+npm install
+```
+
+### Streaming feature modes and state
+
+- `STREAMING_FEATURE_MODE=canonical` (default) for batch/stream parity.
+- `STREAMING_FEATURE_MODE=incremental` for lower latency (parity reduced; warning logged).
+- `STREAMING_STATE_PATH=/path/to/state.json` to persist streaming buffers on shutdown/startup.
+- `STREAMING_STATE_MAX_BYTES=10000000` to cap snapshot size (skip on overflow).
+- `STREAMING_FEATURE_COMPUTE_WARN_MS=250` to warn if canonical feature compute exceeds a threshold (set to `0` to disable).
+  - Note: the process must have write permission for `STREAMING_STATE_PATH`; unreadable or corrupt files are skipped with a warning.
+
+### Streaming drift metrics
+
+- `STREAMING_DRIFT_ENABLED=true` (default): emit `streaming_drift_metrics` logs.
+- `STREAMING_DRIFT_WINDOW_SIZE`, `STREAMING_DRIFT_INTERVAL_SEC`, `STREAMING_DRIFT_BINS`, `STREAMING_DRIFT_WARN_PSI` tune frequency and thresholds.
+- `STREAMING_DRIFT_FEATURES=MetricA,MetricB` overrides the default feature list used for drift monitoring.
 
 ### Docker Frontend Dev (hot reload)
 
@@ -197,6 +235,19 @@ pytest tests/ --cov=src/device_anomaly --cov-report=html
 pytest tests/test_anomaly_detection.py -v
 ```
 
+### Verify (backend + frontend)
+
+```bash
+# Run backend tests + frontend lint/typecheck/build
+make verify
+
+# Or check prerequisites only
+python scripts/verify.py --check
+
+# Frontend API contract checks only
+npm --prefix frontend run test:contracts
+```
+
 ---
 
 ## 🔧 Configuration
@@ -211,6 +262,11 @@ See [`env.template`](env.template) for all available configuration options:
 | `DW_DB_*` | XSight SQL Server connection | For DW experiments |
 | `MC_DB_*` | MobiControl SQL Server connection | Optional |
 | `LLM_*` | LLM provider configuration | For explanations |
+
+Key ingestion toggles (safe defaults):
+- `ENABLE_XSIGHT_EXTENDED=false`, `ENABLE_XSIGHT_HOURLY=false`, `ENABLE_MC_TIMESERIES=false`
+- `AUTO_CREATE_METRICS_TABLES=false` (set true to auto-create ingestion metrics tables)
+- `ENABLE_CANONICAL_EVENT_STORAGE=false` and `AUTO_CREATE_CANONICAL_EVENTS_TABLES=false`
 
 ### Experiment Configuration
 

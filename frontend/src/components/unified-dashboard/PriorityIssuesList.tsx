@@ -6,12 +6,14 @@
  * with the specific insight highlighted.
  */
 
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 import { Card } from '../Card';
 import { CustomerInsightResponse } from '../../api/client';
 import { buildInsightDeepLink } from '../../types/unified-dashboard';
+import { ImpactedDevicesPanel } from './ImpactedDevicesPanel';
 
 interface PriorityIssuesListProps {
   issues: CustomerInsightResponse[];
@@ -71,7 +73,15 @@ const CATEGORY_LABELS: Record<string, string> = {
   device_hidden_pattern: 'Device',
 };
 
-function PriorityIssueCard({ issue, rank }: { issue: CustomerInsightResponse; rank: number }) {
+function PriorityIssueCard({
+  issue,
+  rank,
+  onDevicesClick,
+}: {
+  issue: CustomerInsightResponse;
+  rank: number;
+  onDevicesClick: (issue: CustomerInsightResponse) => void;
+}) {
   const navigate = useNavigate();
   const config = SEVERITY_CONFIG[issue.severity] || SEVERITY_CONFIG.info;
   const trend = TREND_ICONS[issue.trend_direction] || TREND_ICONS.stable;
@@ -79,6 +89,11 @@ function PriorityIssueCard({ issue, rank }: { issue: CustomerInsightResponse; ra
 
   const handleClick = () => {
     navigate(buildInsightDeepLink(issue.insight_id, 'digest'));
+  };
+
+  const handleDevicesClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Don't trigger card navigation
+    onDevicesClick(issue);
   };
 
   return (
@@ -150,13 +165,22 @@ function PriorityIssueCard({ issue, rank }: { issue: CustomerInsightResponse; ra
               {categoryLabel}
             </span>
 
-            {/* Affected devices */}
+            {/* Affected devices - clickable */}
             {issue.affected_device_count > 0 && (
               <>
                 <span className="text-slate-700">|</span>
-                <span className="text-xs text-slate-500">
-                  <span className="font-mono text-slate-400">{issue.affected_device_count}</span> devices
-                </span>
+                <button
+                  onClick={handleDevicesClick}
+                  className="text-xs text-slate-500 hover:text-amber-400 transition-colors group/devices"
+                >
+                  <span className="font-mono text-slate-400 group-hover/devices:text-amber-400">
+                    {issue.affected_device_count}
+                  </span>{' '}
+                  devices
+                  <span className="opacity-0 group-hover/devices:opacity-100 ml-1 transition-opacity">
+                    →
+                  </span>
+                </button>
               </>
             )}
           </div>
@@ -214,45 +238,69 @@ export function PriorityIssuesList({
   maxItems = 3,
   isLoading = false,
 }: PriorityIssuesListProps) {
+  const [devicePanelOpen, setDevicePanelOpen] = useState(false);
+  const [selectedIssue, setSelectedIssue] = useState<CustomerInsightResponse | null>(null);
+
   const displayIssues = issues.slice(0, maxItems);
   const hasMore = issues.length > maxItems;
 
-  return (
-    <Card title="Priority Issues" accent="danger">
-      <div className="space-y-3">
-        {isLoading ? (
-          <LoadingSkeleton />
-        ) : displayIssues.length === 0 ? (
-          <EmptyState />
-        ) : (
-          <>
-            {displayIssues.map((issue, index) => (
-              <PriorityIssueCard key={issue.insight_id} issue={issue} rank={index + 1} />
-            ))}
+  const handleDevicesClick = (issue: CustomerInsightResponse) => {
+    setSelectedIssue(issue);
+    setDevicePanelOpen(true);
+  };
 
-            {/* View all link */}
-            {hasMore && (
-              <div className="pt-2 border-t border-slate-700/50">
-                <Link
-                  to={buildInsightDeepLink(undefined, 'digest')}
-                  className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white font-medium transition-colors group"
-                >
-                  <span>View all {issues.length} insights</span>
-                  <svg
-                    className="w-4 h-4 transform group-hover:translate-x-0.5 transition-transform"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
+  return (
+    <>
+      <Card title="Priority Issues" accent="danger">
+        <div className="space-y-3">
+          {isLoading ? (
+            <LoadingSkeleton />
+          ) : displayIssues.length === 0 ? (
+            <EmptyState />
+          ) : (
+            <>
+              {displayIssues.map((issue, index) => (
+                <PriorityIssueCard
+                  key={issue.insight_id}
+                  issue={issue}
+                  rank={index + 1}
+                  onDevicesClick={handleDevicesClick}
+                />
+              ))}
+
+              {/* View all link */}
+              {hasMore && (
+                <div className="pt-2 border-t border-slate-700/50">
+                  <Link
+                    to={buildInsightDeepLink(undefined, 'digest')}
+                    className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white font-medium transition-colors group"
                   >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                  </svg>
-                </Link>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </Card>
+                    <span>View all {issues.length} insights</span>
+                    <svg
+                      className="w-4 h-4 transform group-hover:translate-x-0.5 transition-transform"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                    </svg>
+                  </Link>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </Card>
+
+      {/* Impacted Devices Panel */}
+      {selectedIssue && (
+        <ImpactedDevicesPanel
+          isOpen={devicePanelOpen}
+          onClose={() => setDevicePanelOpen(false)}
+          insight={selectedIssue}
+        />
+      )}
+    </>
   );
 }
 

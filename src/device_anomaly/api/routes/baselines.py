@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import logging
 from typing import Dict, List, Optional
 from pathlib import Path
 import json
@@ -18,6 +19,12 @@ from device_anomaly.models.baseline import (
     save_baselines,
     apply_feedback,
     suggest_baseline_adjustments,
+)
+from device_anomaly.models.baseline_store import (
+    resolve_baselines,
+    load_legacy_frames,
+    update_data_driven_baseline,
+    save_baseline_payload,
 )
 from device_anomaly.llm.client import get_default_llm_client, strip_thinking_tags
 from device_anomaly.llm.prompt_utils import translate_metric, NO_THINKING_INSTRUCTION
@@ -36,6 +43,19 @@ def _normalize_source(source: str) -> str:
             detail="Invalid source. Allowed values: dw, synthetic",
         )
     return normalized
+
+
+def _load_baseline_resolution(source: str):
+    resolution = resolve_baselines(source)
+    if resolution is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No baselines found in production artifacts or legacy store.",
+        )
+    legacy_frames = load_legacy_frames(resolution)
+    if not legacy_frames:
+        raise HTTPException(status_code=404, detail="Resolved baselines are empty.")
+    return resolution, legacy_frames
 
 
 class BaselineSuggestionResponse(BaseModel):
@@ -102,14 +122,7 @@ def get_baseline_suggestions(
     """
     source = _normalize_source(source)
     tenant_id = get_tenant_id()
-    # Load baselines
-    baselines_path = Path("artifacts") / f"{source}_baselines.json"
-    if not baselines_path.exists():
-        return []
-    
-    baselines = load_baselines(baselines_path)
-    if not baselines:
-        return []
+    resolution, baselines = _load_baseline_resolution(source)
     
     # Get recent anomalies
     now = datetime.now(timezone.utc)
@@ -153,17 +166,11 @@ def get_baseline_suggestions(
         return []
     
     # Define baseline levels (should match experiment config)
-    baseline_levels = [
-        BaselineLevel(name="global", group_columns=["__all__"], min_rows=10),
-    ]
-    
-    # Add hardware cohort level if we have the columns
-    if "ManufacturerId" in anomalies_df.columns and "ModelId" in anomalies_df.columns:
+    baseline_levels = [BaselineLevel(name="global", group_columns=["__all__"], min_rows=10)]
+
+    if resolution.device_type_col and resolution.device_type_col in anomalies_df.columns:
         baseline_levels.append(
-            BaselineLevel(
-                name="hardware",
-                group_columns=["ManufacturerId", "ModelId", "OsVersionId"],
-            )
+            BaselineLevel(name="device_type", group_columns=[resolution.device_type_col])
         )
     
     # Add __all__ column for global baseline
@@ -177,6 +184,10 @@ def get_baseline_suggestions(
         z_threshold=z_threshold,
     )
     
+    if not suggestions and resolution.kind == "data_driven":
+        logger = logging.getLogger(__name__)
+        logger.info("No baseline suggestions generated from production baselines.")
+
     return [BaselineSuggestionResponse(**s) for s in suggestions]
 
 
@@ -342,14 +353,7 @@ def apply_baseline_adjustment(
     This applies the feedback to baselines and can trigger model retraining.
     """
     source = _normalize_source(source)
-    # Load current baselines
-    baselines_path = Path("artifacts") / f"{source}_baselines.json"
-    if not baselines_path.exists():
-        raise HTTPException(status_code=404, detail="Baseline file not found")
-    
-    baselines = load_baselines(baselines_path)
-    if not baselines:
-        raise HTTPException(status_code=404, detail="No baselines found")
+    resolution, baselines = _load_baseline_resolution(source)
     
     # Create feedback object
     feedback = BaselineFeedback(
@@ -360,11 +364,26 @@ def apply_baseline_adjustment(
         reason=request.reason,
     )
     
-    # Apply feedback
-    updated_baselines = apply_feedback(baselines, [feedback], learning_rate=0.3)
-    
-    # Save updated baselines
-    save_baselines(updated_baselines, baselines_path)
+    if resolution.kind == "data_driven":
+        group_key = request.group_key
+        if isinstance(group_key, dict):
+            group_key = group_key.get(resolution.device_type_col or "", group_key)
+        group_key = str(group_key)
+        payload = update_data_driven_baseline(
+            resolution.payload,
+            request.level,
+            group_key,
+            request.feature,
+            request.adjustment,
+            resolution.device_type_col,
+        )
+        payload["updated_at"] = datetime.now(timezone.utc).isoformat()
+        save_baseline_payload(payload, resolution.path)
+    else:
+        # Apply feedback
+        updated_baselines = apply_feedback(baselines, [feedback], learning_rate=0.3)
+        # Save updated baselines
+        save_baselines(updated_baselines, resolution.path)
     
     # Optionally trigger retraining
     model_retrained = False
@@ -413,14 +432,7 @@ def get_baseline_features(
     source = _normalize_source(source)
     tenant_id = get_tenant_id()
 
-    # Load baselines
-    baselines_path = Path("artifacts") / f"{source}_baselines.json"
-    if not baselines_path.exists():
-        return []
-
-    baselines = load_baselines(baselines_path)
-    if not baselines:
-        return []
+    resolution, baselines = _load_baseline_resolution(source)
 
     # Get recent anomaly data to compute observed values
     now = datetime.now(timezone.utc)
@@ -453,41 +465,26 @@ def get_baseline_features(
     # Build response from baselines
     features: List[BaselineFeatureResponse] = []
 
-    # Process each baseline level (prefer 'global' level)
-    for level_name in ['global', 'hardware', 'cohort']:
-        level_baselines = baselines.get(level_name)
-        if level_baselines is None or level_baselines.empty:
-            continue
+    if resolution.kind == "data_driven":
+        data_driven = resolution.payload.get("baselines", {})
+        for feature_name, data in data_driven.items():
+            global_stats = data.get("global") or {}
+            baseline_median = float(global_stats.get("median", 0))
+            mad = float(global_stats.get("mad", 1e-6)) or 1e-6
 
-        for _, row in level_baselines.iterrows():
-            feature_name = row.get('feature', '')
-            if not feature_name:
-                continue
-
-            # Skip if we already processed this feature from a more specific level
-            if any(f.feature == feature_name for f in features):
-                continue
-
-            baseline_median = float(row.get('median', 0))
-            mad = float(row.get('mad', 1e-6)) or 1e-6
-
-            # Get observed value from recent data
             observed_values = feature_values.get(feature_name, [])
             if observed_values:
                 observed = float(pd.Series(observed_values).median())
                 sample_count = len(observed_values)
             else:
-                # No recent data - use baseline as observed
                 observed = baseline_median
                 sample_count = 0
 
-            # Calculate drift
             if baseline_median != 0:
                 drift_percent = ((observed - baseline_median) / baseline_median) * 100
             else:
                 drift_percent = 0.0
 
-            # Determine status based on drift and MAD
             z_score = abs(observed - baseline_median) / mad if mad > 0 else 0
             if z_score < 2:
                 status = "stable"
@@ -496,7 +493,6 @@ def get_baseline_features(
             else:
                 status = "drift"
 
-            # Get unit for display
             unit = _FEATURE_UNITS.get(feature_name, "units")
 
             features.append(BaselineFeatureResponse(
@@ -508,8 +504,66 @@ def get_baseline_features(
                 drift_percent=round(drift_percent, 1),
                 mad=round(mad, 4),
                 sample_count=sample_count,
-                last_updated=None,  # Could track this in baseline file
+                last_updated=None,
             ))
+    else:
+        # Process each baseline level (prefer 'global' level)
+        for level_name in ["global", "hardware", "cohort", "device_type"]:
+            level_baselines = baselines.get(level_name)
+            if level_baselines is None or level_baselines.empty:
+                continue
+
+            for _, row in level_baselines.iterrows():
+                feature_name = row.get("feature", "")
+                if not feature_name:
+                    continue
+
+                # Skip if we already processed this feature from a more specific level
+                if any(f.feature == feature_name for f in features):
+                    continue
+
+                baseline_median = float(row.get("median", 0))
+                mad = float(row.get("mad", 1e-6)) or 1e-6
+
+                # Get observed value from recent data
+                observed_values = feature_values.get(feature_name, [])
+                if observed_values:
+                    observed = float(pd.Series(observed_values).median())
+                    sample_count = len(observed_values)
+                else:
+                    # No recent data - use baseline as observed
+                    observed = baseline_median
+                    sample_count = 0
+
+                # Calculate drift
+                if baseline_median != 0:
+                    drift_percent = ((observed - baseline_median) / baseline_median) * 100
+                else:
+                    drift_percent = 0.0
+
+                # Determine status based on drift and MAD
+                z_score = abs(observed - baseline_median) / mad if mad > 0 else 0
+                if z_score < 2:
+                    status = "stable"
+                elif z_score < 3:
+                    status = "warning"
+                else:
+                    status = "drift"
+
+                # Get unit for display
+                unit = _FEATURE_UNITS.get(feature_name, "units")
+
+                features.append(BaselineFeatureResponse(
+                    feature=feature_name,
+                    baseline=round(baseline_median, 2),
+                    observed=round(observed, 2),
+                    unit=unit,
+                    status=status,
+                    drift_percent=round(drift_percent, 1),
+                    mad=round(mad, 4),
+                    sample_count=sample_count,
+                    last_updated=None,
+                ))
 
     return features
 

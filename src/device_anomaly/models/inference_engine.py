@@ -28,6 +28,7 @@ class EngineType(str, Enum):
 
     SKLEARN = "sklearn"
     ONNX = "onnx"
+    PYTORCH = "pytorch"  # Deep Learning models (VAE, Autoencoder)
 
 
 class ExecutionProvider(str, Enum):
@@ -349,7 +350,7 @@ def create_inference_engine(
     Factory function to create the appropriate inference engine.
 
     Args:
-        model_path: Path to model file (.pkl for sklearn, .onnx for ONNX)
+        model_path: Path to model file (.pkl for sklearn, .onnx for ONNX, .pt for PyTorch)
         engine_type: Type of engine to create
         config: Engine configuration (optional)
 
@@ -364,6 +365,9 @@ def create_inference_engine(
         )
         engine = create_inference_engine("model.onnx", config=config)
 
+        # Create PyTorch engine for VAE model
+        engine = create_inference_engine("vae.pt", engine_type=EngineType.PYTORCH)
+
         # Use for inference
         scores = engine.score_samples(features)
     """
@@ -374,8 +378,48 @@ def create_inference_engine(
         return ONNXInferenceEngine(model_path, config)
     elif engine_type == EngineType.SKLEARN:
         return ScikitLearnEngine(model_path, config)
+    elif engine_type == EngineType.PYTORCH:
+        return create_pytorch_engine(model_path, config)
     else:
         raise ValueError(f"Unknown engine type: {engine_type}")
+
+
+def create_pytorch_engine(
+    model_path: str | Path,
+    config: Optional[EngineConfig] = None,
+) -> InferenceEngine:
+    """
+    Create a PyTorch inference engine for Deep Learning models.
+
+    Args:
+        model_path: Path to PyTorch model file (.pt)
+        config: Engine configuration
+
+    Returns:
+        PyTorch inference engine
+
+    Example:
+        engine = create_pytorch_engine("vae.pt")
+        scores = engine.score_samples(features)
+    """
+    try:
+        from device_anomaly.models.pytorch_inference import (
+            PyTorchInferenceEngine,
+            PyTorchEngineConfig,
+        )
+    except ImportError as e:
+        raise ImportError(
+            "PyTorch is required for PyTorch engine. "
+            "Install with: pip install torch"
+        ) from e
+
+    # Convert EngineConfig to PyTorchEngineConfig
+    pytorch_config = PyTorchEngineConfig(
+        device="cpu",  # Default to CPU
+        collect_metrics=config.collect_metrics if config else True,
+    )
+
+    return PyTorchInferenceEngine.from_checkpoint(model_path, pytorch_config)
 
 
 class FallbackInferenceEngine(InferenceEngine):

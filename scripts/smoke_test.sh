@@ -18,15 +18,11 @@ NC='\033[0m' # No Color
 TESTS_PASSED=0
 TESTS_FAILED=0
 
-if [ -z "${DW_DB_PASS:-}" ] && [ -f .env ]; then
+# Load .env if it exists
+if [ -f .env ]; then
     set -a
     . ./.env
     set +a
-fi
-
-if [ -z "${DW_DB_PASS:-}" ]; then
-    echo "Error: DW_DB_PASS must be set in the environment."
-    exit 1
 fi
 
 test_command() {
@@ -59,19 +55,22 @@ test_command() {
 # Test 1: Check if containers are running
 echo "1. Container Health Checks"
 echo "---------------------------"
-test_command "SQL Server container running" \
-    "docker-compose ps sqlserver | grep -q 'Up'"
+test_command "PostgreSQL container running" \
+    "docker-compose ps postgres | grep -q 'Up'"
 
 test_command "App container exists" \
     "docker-compose ps app | grep -q 'Up\|Exit'"
 
-# Test 2: SQL Server connectivity
+test_command "Redis container running" \
+    "docker-compose ps redis | grep -q 'Up'"
+
+# Test 2: Database connectivity
 echo ""
 echo "2. Database Connectivity"
 echo "---------------------------"
-test_command "SQL Server accepts connections" \
-    "docker-compose exec -T sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P \"\${DW_DB_PASS}\" -Q 'SELECT 1' -h -1" \
-    "1"
+test_command "PostgreSQL accepts connections" \
+    "docker-compose exec -T postgres pg_isready -U postgres" \
+    "accepting connections"
 
 # Test 3: Python environment
 echo ""

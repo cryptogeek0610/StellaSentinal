@@ -10,10 +10,12 @@ Handles incoming device telemetry with:
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
-from collections import defaultdict
+import os
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Optional
 
 import numpy as np
@@ -92,7 +94,7 @@ class DeviceBuffer:
     max_age_hours: int = 168  # 7 days
 
     events: list[TelemetryEvent] = field(default_factory=list)
-    last_update: datetime = field(default_factory=datetime.utcnow)
+    last_update: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Running statistics for incremental computation
     _running_sums: dict[str, float] = field(default_factory=dict)
@@ -102,11 +104,11 @@ class DeviceBuffer:
     def add_event(self, event: TelemetryEvent) -> None:
         """Add a new telemetry event to the buffer."""
         self.events.append(event)
-        self.last_update = datetime.utcnow()
+        self.last_update = datetime.now(timezone.utc)
 
         # Update running statistics
         for metric, value in event.metrics.items():
-            if value is not None and not np.isnan(value):
+            if value is not None and isinstance(value, (int, float)) and np.isfinite(value):
                 self._running_sums[metric] = self._running_sums.get(metric, 0) + value
                 self._running_sq_sums[metric] = self._running_sq_sums.get(metric, 0) + value ** 2
                 self._counts[metric] = self._counts.get(metric, 0) + 1
@@ -116,10 +118,15 @@ class DeviceBuffer:
 
     def _prune(self) -> None:
         """Remove old events from buffer."""
-        cutoff = datetime.utcnow() - timedelta(hours=self.max_age_hours)
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=self.max_age_hours)
 
-        # Remove by age
-        while self.events and self.events[0].timestamp < cutoff:
+        # Remove by age (handle timezone-naive timestamps by treating them as UTC)
+        def _ensure_aware(ts: datetime) -> datetime:
+            if ts.tzinfo is None:
+                return ts.replace(tzinfo=timezone.utc)
+            return ts
+
+        while self.events and _ensure_aware(self.events[0].timestamp) < cutoff:
             removed = self.events.pop(0)
             self._subtract_from_running_stats(removed)
 
@@ -131,7 +138,7 @@ class DeviceBuffer:
     def _subtract_from_running_stats(self, event: TelemetryEvent) -> None:
         """Subtract an event from running statistics."""
         for metric, value in event.metrics.items():
-            if value is not None and not np.isnan(value):
+            if value is not None and isinstance(value, (int, float)) and np.isfinite(value):
                 self._running_sums[metric] = self._running_sums.get(metric, 0) - value
                 self._running_sq_sums[metric] = self._running_sq_sums.get(metric, 0) - value ** 2
                 self._counts[metric] = max(0, self._counts.get(metric, 0) - 1)
@@ -199,6 +206,27 @@ class DeviceBuffer:
 
         return curr_value - prev_value
 
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize buffer state for persistence."""
+        return {
+            "device_id": self.device_id,
+            "max_events": self.max_events,
+            "max_age_hours": self.max_age_hours,
+            "events": [event.to_dict() for event in self.events],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "DeviceBuffer":
+        """Rehydrate buffer from serialized state."""
+        buffer = cls(
+            device_id=int(data["device_id"]),
+            max_events=int(data.get("max_events", 100)),
+            max_age_hours=int(data.get("max_age_hours", 168)),
+        )
+        for event_data in data.get("events", []):
+            buffer.add_event(TelemetryEvent.from_dict(event_data))
+        return buffer
+
 
 class TelemetryBuffer:
     """
@@ -221,6 +249,8 @@ class TelemetryBuffer:
         self.max_age_hours = max_age_hours
         self._buffers: dict[int, DeviceBuffer] = {}
         self._lock = asyncio.Lock()
+        self.restored_at: Optional[datetime] = None
+        self.restore_source: Optional[str] = None
 
     async def add_event(self, event: TelemetryEvent) -> DeviceBuffer:
         """Add a telemetry event to the appropriate buffer."""
@@ -263,6 +293,76 @@ class TelemetryBuffer:
     def get_total_events(self) -> int:
         """Get total number of events across all buffers."""
         return sum(len(b.events) for b in self._buffers.values())
+
+    def snapshot(self) -> dict[str, Any]:
+        """Serialize all device buffers for persistence."""
+        return {
+            "max_devices": self.max_devices,
+            "buffer_size": self.buffer_size,
+            "max_age_hours": self.max_age_hours,
+            "buffers": {str(device_id): buf.to_dict() for device_id, buf in self._buffers.items()},
+        }
+
+    @classmethod
+    def from_snapshot(cls, snapshot: dict[str, Any]) -> "TelemetryBuffer":
+        """Restore TelemetryBuffer from a snapshot."""
+        buffer = cls(
+            max_devices=int(snapshot.get("max_devices", 10000)),
+            buffer_size_per_device=int(snapshot.get("buffer_size", 100)),
+            max_age_hours=int(snapshot.get("max_age_hours", 168)),
+        )
+        buffers = snapshot.get("buffers", {})
+        for device_id, data in buffers.items():
+            device_buffer = DeviceBuffer.from_dict(data)
+            buffer._buffers[int(device_id)] = device_buffer
+        return buffer
+
+    def save_snapshot(self, path: Path, max_bytes: int) -> bool:
+        """Persist buffer snapshot to disk using an atomic write."""
+        payload = self.snapshot()
+        data = json.dumps(payload, indent=2, default=float)
+        data_bytes = data.encode("utf-8")
+        if max_bytes > 0 and len(data_bytes) > max_bytes:
+            logger.warning(
+                "Streaming state snapshot too large (%d bytes > %d); skipping save.",
+                len(data_bytes),
+                max_bytes,
+            )
+            return False
+
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp_path = path.with_suffix(path.suffix + ".tmp")
+            tmp_path.write_bytes(data_bytes)
+            os.replace(tmp_path, path)
+            return True
+        except Exception as exc:
+            logger.warning("Failed to save streaming state to %s: %s", path, exc)
+            return False
+
+    @classmethod
+    def load_snapshot_path(cls, path: Path, max_bytes: int) -> Optional["TelemetryBuffer"]:
+        """Load buffer snapshot from disk with size/corruption guards."""
+        if not path.exists():
+            return None
+
+        try:
+            size = path.stat().st_size
+            if max_bytes > 0 and size > max_bytes:
+                logger.warning(
+                    "Streaming state snapshot too large (%d bytes > %d); skipping load.",
+                    size,
+                    max_bytes,
+                )
+                return None
+            payload = json.loads(path.read_text())
+            buffer = cls.from_snapshot(payload)
+            buffer.restored_at = datetime.now(timezone.utc)
+            buffer.restore_source = str(path)
+            return buffer
+        except Exception as exc:
+            logger.warning("Failed to load streaming state from %s: %s", path, exc)
+            return None
 
 
 class TelemetryStream:
@@ -326,7 +426,7 @@ class TelemetryStream:
             message_type=MessageType.TELEMETRY_RAW,
             payload={
                 "metrics": metrics,
-                "timestamp": (timestamp or datetime.utcnow()).isoformat(),
+                "timestamp": (timestamp or datetime.now(timezone.utc)).isoformat(),
             },
             device_id=device_id,
             tenant_id=tenant_id,
@@ -407,10 +507,39 @@ class TelemetryStream:
         return event
 
     async def _fetch_device_metadata(self, device_id: int) -> Optional[dict]:
-        """Fetch device metadata from database."""
-        # This would be implemented with actual database query
-        # For now, return None and rely on enrichment from batch process
-        return None
+        """
+        Fetch device metadata from MobiControl cache for streaming enrichment.
+
+        This provides cohort information (model, manufacturer, OS version, firmware)
+        for real-time anomaly detection without querying the database on every event.
+
+        The cache is populated by device_metadata_sync.load_mc_device_metadata_cache()
+        which should be called at startup and periodically refreshed.
+        """
+        try:
+            from device_anomaly.services.device_metadata_sync import (
+                get_mc_device_metadata,
+                refresh_mc_cache_if_stale,
+            )
+
+            # Refresh cache if stale (non-blocking check)
+            refresh_mc_cache_if_stale(max_age_minutes=30)
+
+            # Look up device in cache
+            metadata = get_mc_device_metadata(device_id)
+            if metadata:
+                return metadata
+
+            # Device not in cache - this is expected for new devices
+            # They'll be picked up on the next cache refresh
+            return None
+
+        except ImportError:
+            logger.debug("device_metadata_sync not available for streaming enrichment")
+            return None
+        except Exception as e:
+            logger.debug("Error fetching metadata for device %d: %s", device_id, e)
+            return None
 
     def get_buffer_for_device(self, device_id: int) -> Optional[DeviceBuffer]:
         """Get the telemetry buffer for a specific device."""
@@ -423,4 +552,6 @@ class TelemetryStream:
             "device_count": self.buffer.get_device_count(),
             "total_events": self.buffer.get_total_events(),
             "metadata_cache_size": len(self._device_metadata_cache),
+            "restored_at": self.buffer.restored_at.isoformat() if self.buffer.restored_at else None,
+            "restore_source": Path(self.buffer.restore_source).name if self.buffer.restore_source else None,
         }

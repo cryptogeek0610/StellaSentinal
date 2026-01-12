@@ -20,7 +20,7 @@ from device_anomaly.api.models import (
     GroupedAnomaliesResponse,
     ResolveAnomalyRequest,
 )
-from device_anomaly.database.schema import AnomalyResult, AnomalyStatus, InvestigationNote
+from device_anomaly.database.schema import AnomalyResult, AnomalyStatus, DeviceMetadata, InvestigationNote
 from device_anomaly.services.anomaly_grouper import AnomalyGrouper
 
 router = APIRouter(prefix="/anomalies", tags=["anomalies"])
@@ -41,7 +41,12 @@ def list_anomalies(
     """List anomalies with filtering and pagination."""
     tenant_id = get_tenant_id()
     query = (
-        db.query(AnomalyResult)
+        db.query(AnomalyResult, DeviceMetadata.device_name)
+        .outerjoin(
+            DeviceMetadata,
+            (AnomalyResult.device_id == DeviceMetadata.device_id)
+            & (AnomalyResult.tenant_id == DeviceMetadata.tenant_id),
+        )
         .filter(AnomalyResult.tenant_id == tenant_id)
         .filter(AnomalyResult.anomaly_label == -1)
     )
@@ -64,12 +69,19 @@ def list_anomalies(
 
     # Apply pagination
     offset = (page - 1) * page_size
-    anomalies = query.order_by(AnomalyResult.anomaly_score.asc()).offset(offset).limit(page_size).all()
+    results = query.order_by(AnomalyResult.anomaly_score.asc()).offset(offset).limit(page_size).all()
 
     total_pages = (total + page_size - 1) // page_size
 
+    # Build response with device_name from join
+    anomaly_responses = []
+    for anomaly, device_name in results:
+        response = AnomalyResponse.model_validate(anomaly)
+        response.device_name = device_name
+        anomaly_responses.append(response)
+
     return AnomalyListResponse(
-        anomalies=[AnomalyResponse.model_validate(a) for a in anomalies],
+        anomalies=anomaly_responses,
         total=total,
         page=page,
         page_size=page_size,

@@ -138,7 +138,7 @@ class AlertResponse(BaseModel):
 
 class ManualJobRequest(BaseModel):
     """Request to trigger a manual job."""
-    job_type: str = Field(..., description="Job type: 'training', 'scoring', 'daily_digest', 'shift_readiness', or 'location_baseline'")
+    job_type: str = Field(..., description="Job type: 'training', 'scoring', 'daily_digest', 'shift_readiness', 'location_baseline', or 'device_metadata_sync'")
     # Training-specific
     start_date: Optional[str] = None
     end_date: Optional[str] = None
@@ -220,15 +220,52 @@ def save_scheduler_config(config: Dict[str, Any]) -> None:
 
 
 def get_scheduler_status() -> Dict[str, Any]:
-    """Get current scheduler status from Redis."""
+    """Get current scheduler status from Redis with validation."""
+    default_status = {
+        "is_running": False,
+        "training_status": "idle",
+        "scoring_status": "idle",
+        "insights_status": "idle",
+        "last_training_result": None,
+        "last_scoring_result": None,
+        "last_insight_result": None,
+        "next_training_time": None,
+        "next_scoring_time": None,
+        "next_insight_time": None,
+        "total_anomalies_detected": 0,
+        "total_insights_generated": 0,
+        "false_positive_rate": 0.0,
+        "uptime_seconds": 0,
+        "errors": [],
+    }
+
     try:
         client = get_redis_client()
         data = client.get("scheduler:status")
         if data:
-            return json.loads(data)
+            parsed = json.loads(data)
+            # Validate and merge with defaults to ensure all fields exist
+            validated = {**default_status}
+            for key in default_status:
+                if key in parsed:
+                    value = parsed[key]
+                    # Type validation for critical fields
+                    if key == "is_running" and not isinstance(value, bool):
+                        value = bool(value)
+                    elif key in ("total_anomalies_detected", "total_insights_generated", "uptime_seconds"):
+                        value = int(value) if value is not None else 0
+                    elif key == "false_positive_rate":
+                        value = float(value) if value is not None else 0.0
+                    elif key == "errors" and not isinstance(value, list):
+                        value = [str(value)] if value else []
+                    validated[key] = value
+            return validated
+    except json.JSONDecodeError as e:
+        logger.warning(f"Invalid JSON in scheduler status: {e}")
     except Exception as e:
         logger.warning(f"Failed to get scheduler status: {e}")
-    return {"is_running": False}
+
+    return default_status
 
 
 # =============================================================================
@@ -446,10 +483,24 @@ async def trigger_manual_job(request: ManualJobRequest):
                 message="Location baseline job queued successfully",
             )
 
+        elif request.job_type == "device_metadata_sync":
+            # Queue device metadata sync from MobiControl
+            job_data = {
+                "type": "device_metadata_sync",
+                "triggered_by": "manual",
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+            client.rpush("scheduler:device_sync:queue", json.dumps(job_data))
+            return ManualJobResponse(
+                success=True,
+                job_id=f"device_sync_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}",
+                message="Device metadata sync job queued successfully",
+            )
+
         else:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid job type: {request.job_type}. Use 'training', 'scoring', 'daily_digest', 'shift_readiness', or 'location_baseline'",
+                detail=f"Invalid job type: {request.job_type}. Use 'training', 'scoring', 'daily_digest', 'shift_readiness', 'location_baseline', or 'device_metadata_sync'",
             )
 
     except HTTPException:
@@ -468,7 +519,11 @@ async def score_data(request: ScoreRequest):
     Results are returned directly and also persisted to the database.
     """
     from device_anomaly.data_access.unified_loader import load_unified_device_dataset
-    from device_anomaly.features.device_features import DeviceFeatureBuilder
+    from device_anomaly.features.device_features import (
+        build_feature_builder_from_metadata,
+        load_feature_metadata,
+    )
+    from device_anomaly.features.cohort_stats import apply_cohort_stats, load_latest_cohort_stats
     from device_anomaly.models.anomaly_detector import AnomalyDetector
 
     try:
@@ -484,8 +539,11 @@ async def score_data(request: ScoreRequest):
             return ScoreResponse(success=True, total_scored=0)
 
         # Build features
-        builder = DeviceFeatureBuilder()
+        metadata = load_feature_metadata()
+        builder = build_feature_builder_from_metadata(metadata, compute_cohort=False)
         df_features = builder.transform(df)
+        cohort_stats = load_latest_cohort_stats()
+        df_features = apply_cohort_stats(df_features, cohort_stats)
 
         # Load model and score
         detector = AnomalyDetector.load_latest()
@@ -523,6 +581,59 @@ async def score_data(request: ScoreRequest):
         raise
     except Exception as e:
         logger.error(f"Scoring failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class DeviceMetadataSyncResponse(BaseModel):
+    """Response from device metadata sync."""
+    success: bool
+    synced_count: int = 0
+    duration_seconds: float = 0.0
+    message: str = ""
+    errors: List[str] = Field(default_factory=list)
+
+
+@router.post("/sync-device-metadata", response_model=DeviceMetadataSyncResponse)
+async def sync_device_metadata_now():
+    """
+    Immediately sync device metadata from MobiControl to PostgreSQL.
+
+    This endpoint runs the sync synchronously and returns results directly.
+    Use this for on-demand refreshes from the Fleet UI.
+
+    The sync will:
+    - Query MobiControl DevInfo table for DevName, Manufacturer, Model
+    - Apply NAME fallback logic (DevName -> SerialNumber -> DeviceId)
+    - Combine Manufacturer + Model for the MODEL column
+    - Update PostgreSQL device_metadata table
+    """
+    import asyncio
+    import os
+
+    # Check mock mode
+    if os.getenv("MOCK_MODE", "false").lower() in ("true", "1", "yes"):
+        return DeviceMetadataSyncResponse(
+            success=True,
+            synced_count=0,
+            duration_seconds=0.0,
+            message="Mock mode enabled - sync skipped",
+        )
+
+    try:
+        from device_anomaly.services.device_metadata_sync import sync_device_metadata
+
+        result = await asyncio.to_thread(sync_device_metadata)
+
+        return DeviceMetadataSyncResponse(
+            success=result.get("success", False),
+            synced_count=result.get("synced_count", 0),
+            duration_seconds=result.get("duration_seconds", 0.0),
+            message=f"Synced {result.get('synced_count', 0)} devices from MobiControl",
+            errors=result.get("errors", []),
+        )
+
+    except Exception as e:
+        logger.error(f"Device metadata sync failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -733,3 +844,211 @@ async def health_check():
         "uptime_seconds": status.get("uptime_seconds", 0),
         "error_count": len(status.get("errors", [])),
     }
+
+
+@router.get("/diagnostics")
+async def get_diagnostics():
+    """
+    Get detailed diagnostics for the automation scheduler.
+
+    This endpoint provides comprehensive information to debug scheduling issues,
+    including:
+    - Current scheduler status and config from Redis
+    - Queue lengths for training/scoring jobs
+    - ML worker status
+    - Next scheduled training time calculation
+    - Time until next training
+
+    Use this endpoint to debug why scheduled training might not be running.
+    """
+    from device_anomaly.workers.scheduler import ScheduleInterval
+
+    try:
+        client = get_redis_client()
+        redis_connected = True
+    except Exception as e:
+        logger.error(f"Redis connection failed in diagnostics: {e}")
+        return {
+            "redis_connected": False,
+            "error": str(e),
+            "message": "Cannot get diagnostics without Redis connection",
+        }
+
+    # Get all relevant data from Redis
+    status = get_scheduler_status()
+    config = get_scheduler_config()
+
+    # Get queue lengths
+    try:
+        training_queue_length = client.llen("ml:training:queue")
+        scoring_queue_length = client.llen("scheduler:scoring:queue")
+        insights_queue_length = client.llen("scheduler:insights:queue")
+    except Exception as e:
+        training_queue_length = -1
+        scoring_queue_length = -1
+        insights_queue_length = -1
+        logger.warning(f"Failed to get queue lengths: {e}")
+
+    # Get ML worker status
+    try:
+        ml_status_raw = client.get("ml:training:status")
+        if ml_status_raw:
+            ml_worker_status = json.loads(ml_status_raw)
+            # Clean up status for JSON serialization (remove non-finite floats)
+            ml_worker_status = _sanitize_for_json(ml_worker_status)
+        else:
+            ml_worker_status = None
+    except Exception as e:
+        ml_worker_status = {"error": str(e)}
+
+    # Calculate next training time based on current config
+    now = datetime.utcnow()
+    training_interval = config.get("training_interval", "daily")
+    training_enabled = config.get("training_enabled", True)
+
+    next_scheduled_training = None
+    time_until_next_training_seconds = None
+
+    if training_enabled and training_interval != "manual":
+        try:
+            if training_interval == "hourly":
+                next_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+            elif training_interval == "every_6_hours":
+                hour = (now.hour // 6 + 1) * 6
+                if hour >= 24:
+                    next_time = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+                else:
+                    next_time = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+            elif training_interval == "every_12_hours":
+                hour = (now.hour // 12 + 1) * 12
+                if hour >= 24:
+                    next_time = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+                else:
+                    next_time = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+            elif training_interval == "daily":
+                training_hour = config.get("training_hour", 2)
+                next_time = now.replace(hour=training_hour, minute=0, second=0, microsecond=0)
+                if next_time <= now:
+                    next_time += timedelta(days=1)
+            elif training_interval == "weekly":
+                training_hour = config.get("training_hour", 2)
+                training_day = config.get("training_day_of_week", 0)
+                days_ahead = training_day - now.weekday()
+                if days_ahead < 0 or (days_ahead == 0 and now.hour >= training_hour):
+                    days_ahead += 7
+                next_time = now.replace(hour=training_hour, minute=0, second=0, microsecond=0)
+                next_time += timedelta(days=days_ahead)
+            else:
+                next_time = None
+
+            if next_time:
+                next_scheduled_training = next_time.isoformat()
+                time_until_next_training_seconds = (next_time - now).total_seconds()
+        except Exception as e:
+            logger.warning(f"Failed to calculate next training time: {e}")
+
+    # Format time until next training (handle NaN/Inf)
+    if time_until_next_training_seconds is not None:
+        import math
+        if math.isnan(time_until_next_training_seconds) or math.isinf(time_until_next_training_seconds):
+            time_until_next_training_seconds = None
+            time_until_human = "N/A"
+        else:
+            time_until_next_training_seconds = round(time_until_next_training_seconds, 1)
+            hours = time_until_next_training_seconds / 3600
+            time_until_human = f"{hours:.1f} hours"
+    else:
+        time_until_human = "N/A"
+
+    return {
+        "timestamp": now.isoformat(),
+        "redis_connected": redis_connected,
+
+        # Scheduler status
+        "scheduler": {
+            "is_running": status.get("is_running", False),
+            "training_status": status.get("training_status", "unknown"),
+            "scoring_status": status.get("scoring_status", "unknown"),
+            "uptime_seconds": status.get("uptime_seconds", 0),
+            "next_training_time_from_status": status.get("next_training_time"),
+            "last_training_result": status.get("last_training_result"),
+            "errors": status.get("errors", [])[-5:],  # Last 5 errors
+        },
+
+        # Config
+        "config": {
+            "training_enabled": training_enabled,
+            "training_interval": training_interval,
+            "training_hour": config.get("training_hour", 2),
+            "training_lookback_days": config.get("training_lookback_days", 90),
+            "scoring_enabled": config.get("scoring_enabled", True),
+            "scoring_interval_minutes": config.get("scoring_interval_minutes", 15),
+            "last_training_time": config.get("last_training_time"),
+            "last_scoring_time": config.get("last_scoring_time"),
+        },
+
+        # Calculated values
+        "next_scheduled_training": next_scheduled_training,
+        "time_until_next_training_seconds": time_until_next_training_seconds,
+        "time_until_next_training_human": time_until_human,
+
+        # Queue status
+        "queues": {
+            "training_queue_length": training_queue_length,
+            "scoring_queue_length": scoring_queue_length,
+            "insights_queue_length": insights_queue_length,
+        },
+
+        # ML Worker
+        "ml_worker_status": ml_worker_status,
+
+        # Debugging hints
+        "debug_hints": _get_debug_hints(status, config, training_queue_length),
+    }
+
+
+def _sanitize_for_json(obj):
+    """Recursively sanitize an object for JSON serialization.
+
+    Replaces NaN, Infinity, and -Infinity with None since they are not JSON compliant.
+    """
+    import math
+
+    if isinstance(obj, dict):
+        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_sanitize_for_json(item) for item in obj]
+    elif isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return None
+        return obj
+    return obj
+
+
+def _get_debug_hints(status: dict, config: dict, training_queue_length: int) -> List[str]:
+    """Generate debug hints based on current state."""
+    hints = []
+
+    if not status.get("is_running"):
+        hints.append("CRITICAL: Scheduler is not running. Check if scheduler container is up: docker compose ps scheduler")
+
+    if not config.get("training_enabled", True):
+        hints.append("Training is DISABLED in config. Enable it via API or UI.")
+
+    if config.get("training_interval") == "manual":
+        hints.append("Training interval is set to MANUAL - no automatic training will occur.")
+
+    if training_queue_length > 0:
+        hints.append(f"There are {training_queue_length} jobs in the training queue. Check if ML worker is running.")
+
+    if status.get("training_status") == "failed":
+        hints.append("Last training job FAILED. Check errors and logs.")
+
+    import os
+    if os.getenv("MOCK_MODE", "false").lower() in ("true", "1", "yes"):
+        hints.append("MOCK_MODE is enabled - training will use mock data, not real database.")
+
+    if not hints:
+        hints.append("No obvious issues detected. Check scheduler logs for more details.")
+
+    return hints

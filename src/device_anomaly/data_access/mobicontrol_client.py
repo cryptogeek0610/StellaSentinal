@@ -65,7 +65,7 @@ class MobiControlClient:
             total=3,
             backoff_factor=1,
             status_forcelist=[429, 500, 502, 503, 504],
-            allowed_methods=["GET", "POST"],
+            allowed_methods=["GET", "POST", "PUT"],
         )
         adapter = HTTPAdapter(max_retries=retry_strategy)
         self.session.mount("http://", adapter)
@@ -542,3 +542,159 @@ class MobiControlClient:
                 return []
             raise
 
+    # =========================================================================
+    # Custom Attributes Management
+    # =========================================================================
+
+    def get_custom_attributes(self, device_id: str) -> Dict[str, Any]:
+        """Get custom attributes for a device.
+
+        Args:
+            device_id: Device ID
+
+        Returns:
+            Dictionary of custom attribute names to values
+        """
+        endpoint = f"/MobiControl/api/devices/{device_id}/customAttributes"
+        try:
+            response = self._request("GET", endpoint)
+            # Response format: [{"name": "attr_name", "value": "attr_value"}, ...]
+            if isinstance(response, list):
+                return {attr.get("name"): attr.get("value") for attr in response}
+            return response.get("data", {}) if isinstance(response, dict) else {}
+        except MobiControlAPIError as e:
+            if e.status_code == 404:
+                return {}
+            raise
+
+    def set_custom_attribute(
+        self,
+        device_id: str,
+        attribute_name: str,
+        attribute_value: str,
+    ) -> Dict[str, Any]:
+        """Set a single custom attribute on a device.
+
+        Args:
+            device_id: Device ID
+            attribute_name: Name of the custom attribute
+            attribute_value: Value to set
+
+        Returns:
+            Dictionary with action result
+        """
+        endpoint = f"/MobiControl/api/devices/{device_id}/customAttributes"
+        return self._request(
+            "PUT",
+            endpoint,
+            json_data=[{"name": attribute_name, "value": str(attribute_value)}],
+        )
+
+    def set_custom_attributes(
+        self,
+        device_id: str,
+        attributes: Dict[str, str],
+    ) -> Dict[str, Any]:
+        """Set multiple custom attributes on a device.
+
+        Args:
+            device_id: Device ID
+            attributes: Dictionary of attribute names to values
+
+        Returns:
+            Dictionary with action result
+        """
+        endpoint = f"/MobiControl/api/devices/{device_id}/customAttributes"
+        payload = [{"name": name, "value": str(value)} for name, value in attributes.items()]
+        return self._request("PUT", endpoint, json_data=payload)
+
+    def set_battery_status_attributes(
+        self,
+        device_id: str,
+        battery_health_percent: Optional[float] = None,
+        battery_status: Optional[str] = None,
+        replacement_due: Optional[bool] = None,
+        replacement_urgency: Optional[str] = None,
+        estimated_replacement_date: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Set battery-related custom attributes on a device.
+
+        This is a convenience method for updating battery status in MobiControl.
+        Custom Attribute names are configurable via environment variables:
+        - MC_ATTR_BATTERY_HEALTH (default: BatteryHealthPercent)
+        - MC_ATTR_BATTERY_STATUS (default: BatteryStatus)
+        - MC_ATTR_REPLACEMENT_DUE (default: BatteryReplacementDue)
+        - MC_ATTR_REPLACEMENT_URGENCY (default: BatteryReplacementUrgency)
+        - MC_ATTR_REPLACEMENT_DATE (default: BatteryReplacementDate)
+
+        Args:
+            device_id: Device ID
+            battery_health_percent: Battery health as percentage (0-100)
+            battery_status: Status string (e.g., "Good", "Warning", "Replace")
+            replacement_due: Whether replacement is due
+            replacement_urgency: Urgency level (e.g., "Immediate", "Soon", "Planned")
+            estimated_replacement_date: Estimated date for replacement (YYYY-MM-DD)
+
+        Returns:
+            Dictionary with action result
+        """
+        # Get configurable attribute names from settings
+        settings = get_settings().mobicontrol
+        attributes = {}
+
+        if battery_health_percent is not None:
+            attributes[settings.attr_battery_health] = f"{battery_health_percent:.0f}%"
+
+        if battery_status is not None:
+            attributes[settings.attr_battery_status] = battery_status
+
+        if replacement_due is not None:
+            attributes[settings.attr_replacement_due] = "Yes" if replacement_due else "No"
+
+        if replacement_urgency is not None:
+            attributes[settings.attr_replacement_urgency] = replacement_urgency
+
+        if estimated_replacement_date is not None:
+            attributes[settings.attr_replacement_date] = estimated_replacement_date
+
+        if not attributes:
+            return {"message": "No attributes to set"}
+
+        return self.set_custom_attributes(device_id, attributes)
+
+    def bulk_set_custom_attributes(
+        self,
+        device_attributes: Dict[str, Dict[str, str]],
+    ) -> Dict[str, Any]:
+        """Set custom attributes on multiple devices.
+
+        Args:
+            device_attributes: Dictionary mapping device_id to attribute dictionaries
+                Example: {"device1": {"attr1": "val1"}, "device2": {"attr2": "val2"}}
+
+        Returns:
+            Dictionary with results per device
+        """
+        results = {
+            "success": [],
+            "failed": [],
+            "total": len(device_attributes),
+        }
+
+        for device_id, attributes in device_attributes.items():
+            try:
+                self.set_custom_attributes(device_id, attributes)
+                results["success"].append(device_id)
+            except MobiControlAPIError as e:
+                results["failed"].append({
+                    "device_id": device_id,
+                    "error": str(e),
+                    "status_code": e.status_code,
+                })
+            except Exception as e:
+                results["failed"].append({
+                    "device_id": device_id,
+                    "error": str(e),
+                })
+
+        return results

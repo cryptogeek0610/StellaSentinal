@@ -19,6 +19,7 @@ import pandas as pd
 from sqlalchemy import text
 
 from device_anomaly.data_access.db_connection import create_dw_engine, create_mc_engine
+from device_anomaly.data_access.db_utils import table_exists
 
 logger = logging.getLogger(__name__)
 
@@ -30,22 +31,6 @@ def _validate_identifier(name: str, label: str) -> str:
     if not name or not _IDENTIFIER_RE.match(name):
         raise ValueError(f"Invalid {label} identifier: {name!r}")
     return name
-
-
-def _table_exists(engine, table_name: str) -> bool:
-    query = text(
-        """
-        SELECT 1
-        FROM INFORMATION_SCHEMA.TABLES
-        WHERE TABLE_NAME = :table_name
-        """
-    )
-    try:
-        with engine.connect() as conn:
-            return conn.execute(query, {"table_name": table_name}).first() is not None
-    except Exception as exc:
-        logger.warning("Failed to verify table %s: %s", table_name, exc)
-        return True  # Fail open to avoid blocking non-SQL Server engines.
 
 
 def _column_exists(engine, table_name: str, column_name: str) -> bool:
@@ -78,7 +63,7 @@ def _column_exists(engine, table_name: str, column_name: str) -> bool:
 
 def _ensure_safe_table(engine, table_name: str) -> str:
     table_name = _validate_identifier(table_name, "table")
-    if not _table_exists(engine, table_name):
+    if not table_exists(engine, table_name):
         raise ValueError(f"Unknown table: {table_name}")
     return table_name
 
@@ -90,13 +75,129 @@ def _ensure_safe_column(engine, table_name: str, column_name: str) -> str:
     return column_name
 
 # Known telemetry tables in XSight DW (used as fallback if discovery fails)
-DW_TELEMETRY_TABLES = [
+# This is the LEGACY list - prefer using get_curated_xsight_tables() for dynamic discovery
+DW_TELEMETRY_TABLES_LEGACY = [
     "cs_BatteryStat",
     "cs_AppUsage",
     "cs_DataUsage",
     "cs_BatteryAppDrain",
     "cs_Heatmap",
 ]
+
+# Extended table list including high-value tables discovered via schema analysis
+DW_TELEMETRY_TABLES_EXTENDED = [
+    # Original 5 tables
+    "cs_BatteryStat",
+    "cs_AppUsage",
+    "cs_DataUsage",
+    "cs_BatteryAppDrain",
+    "cs_Heatmap",
+    # High-volume hourly tables
+    "cs_DataUsageByHour",
+    "cs_BatteryLevelDrop",
+    "cs_AppUsageListed",
+    # WiFi and location tables
+    "cs_WifiHour",
+    "cs_WiFiLocation",
+    "cs_LastKnown",
+    # App inventory
+    "cs_DeviceInstalledApp",
+    # Preset apps (high volume)
+    "cs_PresetApps",
+]
+
+# MobiControl time-series tables (high-value for ML)
+MC_TIMESERIES_TABLES = [
+    "DeviceStatInt",
+    "DeviceStatLocation",
+    "DeviceStatString",
+    "DeviceStatNetTraffic",
+    "MainLog",
+    "Alert",
+    "DeviceInstalledApp",
+]
+
+# For backward compatibility
+DW_TELEMETRY_TABLES = DW_TELEMETRY_TABLES_EXTENDED
+
+
+def get_curated_xsight_tables(
+    include_extended: bool = True,
+    include_discovered: bool = False,
+    min_rows: int = 10000,
+    engine=None,
+) -> List[str]:
+    """
+    Get curated list of XSight tables for profiling/training.
+
+    Args:
+        include_extended: Include extended table list (default True)
+        include_discovered: Also include runtime-discovered tables (slower)
+        min_rows: Minimum row count for discovered tables
+        engine: SQLAlchemy engine
+
+    Returns:
+        List of table names
+    """
+    tables = set()
+
+    if include_extended:
+        tables.update(DW_TELEMETRY_TABLES_EXTENDED)
+
+    if include_discovered:
+        try:
+            from device_anomaly.data_access.schema_discovery import (
+                SourceDatabase,
+                get_curated_table_list,
+            )
+            discovered = get_curated_table_list(
+                source_db=SourceDatabase.XSIGHT,
+                include_explicit=True,
+                include_discovered=True,
+                min_rows=min_rows,
+            )
+            tables.update(discovered)
+        except Exception as e:
+            logger.warning(f"Failed to discover XSight tables: {e}")
+
+    return sorted(tables)
+
+
+def get_curated_mc_tables(
+    include_discovered: bool = False,
+    min_rows: int = 1000,
+    engine=None,
+) -> List[str]:
+    """
+    Get curated list of MobiControl tables for profiling/training.
+
+    Args:
+        include_discovered: Also include runtime-discovered tables
+        min_rows: Minimum row count for discovered tables
+        engine: SQLAlchemy engine
+
+    Returns:
+        List of table names
+    """
+    tables = set(MC_TIMESERIES_TABLES)
+
+    if include_discovered:
+        try:
+            from device_anomaly.data_access.schema_discovery import (
+                SourceDatabase,
+                get_curated_table_list,
+            )
+            discovered = get_curated_table_list(
+                source_db=SourceDatabase.MOBICONTROL,
+                include_explicit=True,
+                include_discovered=True,
+                min_rows=min_rows,
+            )
+            tables.update(discovered)
+        except Exception as e:
+            logger.warning(f"Failed to discover MC tables: {e}")
+
+    return sorted(tables)
 
 
 # Patterns for time-sliced views that are typically not needed for ML training

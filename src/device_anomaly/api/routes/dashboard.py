@@ -26,6 +26,7 @@ from device_anomaly.api.models import (
     DashboardStatsResponse,
     DashboardTrendResponse,
     TroubleshootingAdviceResponse,
+    FeedbackStatsResponse,
     IsolationForestConfigResponse,
     IsolationForestStatsResponse,
     ScoreDistributionResponse,
@@ -136,16 +137,23 @@ def _parse_api_error(error_str: str) -> str:
 
 @router.get("/stats", response_model=DashboardStatsResponse)
 def get_dashboard_stats(
+    active_only: bool = Query(False, description="Only count devices active in last 30 days for devices_monitored"),
     mock_mode: bool = Depends(get_mock_mode),
     db: Session = Depends(get_db)
 ):
-    """Get dashboard statistics (KPIs)."""
+    """Get dashboard statistics (KPIs).
+
+    Args:
+        active_only: If True, devices_monitored only counts devices seen in last 30 days.
+                     total_devices and active_devices are always returned regardless.
+    """
     # Return mock data if Mock Mode is enabled
     if mock_mode:
         mock_data = get_mock_dashboard_stats()
         return DashboardStatsResponse(**mock_data)
-    
+
     today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
 
     tenant_id = get_tenant_id()
 
@@ -158,12 +166,23 @@ def get_dashboard_stats(
         .scalar()
     ) or 0
 
-    # Fleet size (count all registered devices)
-    devices_monitored = (
+    # Total devices (all registered devices)
+    total_devices = (
         db.query(func.count(DeviceMetadata.device_id))
         .filter(DeviceMetadata.tenant_id == tenant_id)
         .scalar()
     ) or 0
+
+    # Active devices (devices seen in last 30 days)
+    active_devices = (
+        db.query(func.count(DeviceMetadata.device_id))
+        .filter(DeviceMetadata.tenant_id == tenant_id)
+        .filter(DeviceMetadata.last_seen >= thirty_days_ago)
+        .scalar()
+    ) or 0
+
+    # devices_monitored: respects active_only filter for backward compatibility
+    devices_monitored = active_devices if active_only else total_devices
 
     # Critical issues (anomalies with very low scores, status open or investigating)
     critical_threshold = -0.7
@@ -214,6 +233,8 @@ def get_dashboard_stats(
         resolved_today=resolved_today,
         open_cases=open_cases,
         total_anomalies=total_anomalies,
+        total_devices=total_devices,
+        active_devices=active_devices,
     )
 
 
@@ -1157,13 +1178,18 @@ def get_isolation_forest_stats(
     # Extract scores and labels
     scores = [r.anomaly_score for r in results]
     labels = [r.anomaly_label for r in results]
-    
+
     # Calculate statistics
     scores_array = np.array(scores)
     total_predictions = len(scores)
     total_anomalies = sum(1 for l in labels if l == -1)
     total_normal = total_predictions - total_anomalies
-    anomaly_rate = total_anomalies / total_predictions if total_predictions > 0 else 0.0
+
+    # NOTE: Only anomalies (label == -1) are persisted to the database by default,
+    # so calculating anomaly_rate from stored data gives a misleading 100%.
+    # Use the configured contamination rate instead, which represents the expected
+    # proportion of anomalies the model is tuned to detect.
+    anomaly_rate = config.contamination if total_normal == 0 else total_anomalies / total_predictions
     
     mean_score = float(np.mean(scores_array))
     median_score = float(np.median(scores_array))
@@ -1232,13 +1258,52 @@ def get_isolation_forest_stats(
         max_score=max_score,
         std_score=std_score,
     )
-    
+
+    # Fetch feedback stats for model adaptation display
+    feedback_stats_response = None
+    try:
+        from device_anomaly.data_access.anomaly_persistence import get_feedback_stats
+        from device_anomaly.database.schema import TrainingRun
+
+        raw_stats = get_feedback_stats()
+        total_fb = raw_stats.get("total_feedback", 0)
+        false_pos = raw_stats.get("false_positives", 0)
+
+        # confirmed_anomalies = total reviewed - false positives
+        # (includes INVESTIGATING + RESOLVED statuses)
+        confirmed = total_fb - false_pos
+
+        # Get last successful training run
+        last_training = (
+            db.query(TrainingRun)
+            .filter(TrainingRun.tenant_id == tenant_id)
+            .filter(TrainingRun.status == "completed")
+            .order_by(TrainingRun.completed_at.desc())
+            .first()
+        )
+
+        # Calculate projected accuracy gain heuristic:
+        # More feedback = better model, cap at 5%
+        projected_gain = round(min(5.0, total_fb * 0.05), 2)
+
+        feedback_stats_response = FeedbackStatsResponse(
+            total_feedback=total_fb,
+            false_positives=false_pos,
+            confirmed_anomalies=confirmed,
+            projected_accuracy_gain=projected_gain,
+            last_retrain=last_training.completed_at.isoformat() if last_training and last_training.completed_at else None,
+        )
+    except Exception as e:
+        logger.warning(f"Failed to fetch feedback stats: {e}")
+        # Continue without feedback_stats (optional field)
+
     return IsolationForestStatsResponse(
         config=config,
         defaults=defaults,
         score_distribution=score_distribution,
         total_predictions=total_predictions,
         anomaly_rate=anomaly_rate,
+        feedback_stats=feedback_stats_response,
     )
 
 

@@ -12,6 +12,8 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
+DATA_DRIVEN_SCHEMA_VERSION = "data_driven_v1"
+
 
 @dataclass
 class BaselineLevel:
@@ -553,7 +555,12 @@ def save_data_driven_baselines(
     path: Path,
 ) -> None:
     """Save data-driven baselines to JSON file in the requested format."""
-    payload = {name: baseline.to_dict() for name, baseline in baselines.items()}
+    payload = {
+        "schema_version": DATA_DRIVEN_SCHEMA_VERSION,
+        "baseline_type": "data_driven",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "baselines": {name: baseline.to_dict() for name, baseline in baselines.items()},
+    }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, default=float))
     logger.info(f"Saved data-driven baselines to {path}")
@@ -563,7 +570,24 @@ def load_data_driven_baselines(path: Path) -> Dict[str, Dict[str, Any]]:
     """Load data-driven baselines from JSON file."""
     if not path.exists():
         return {}
-    return json.loads(path.read_text())
+    payload = json.loads(path.read_text())
+    if isinstance(payload, dict) and "baselines" in payload:
+        return payload.get("baselines", {})
+    return payload
+
+
+def load_data_driven_baselines_payload(path: Path) -> Dict[str, Any]:
+    """Load the full data-driven baseline payload (including schema metadata)."""
+    if not path.exists():
+        return {}
+    payload = json.loads(path.read_text())
+    if isinstance(payload, dict) and "baselines" in payload:
+        return payload
+    return {
+        "schema_version": "data_driven_v0",
+        "baseline_type": "data_driven",
+        "baselines": payload,
+    }
 
 
 def compute_cohort_baselines_from_real_data(

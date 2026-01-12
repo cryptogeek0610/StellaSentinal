@@ -121,6 +121,28 @@ const MOCK_ANOMALY_TYPES = [
     'data_spike',
 ];
 
+// Device type prefixes for realistic naming
+const DEVICE_TYPE_PREFIXES: Record<string, string> = {
+    'Samsung Galaxy Tab A8': 'Tablet',
+    'iPad Pro 11': 'iPad',
+    'Zebra TC52': 'POS',
+    'Honeywell CT60': 'Scanner',
+    'Samsung Galaxy XCover 6': 'Mobile',
+    'Panasonic Toughbook N1': 'Toughbook',
+};
+
+// Short location codes for device naming
+const LOCATION_CODES: Record<string, string> = {
+    'Downtown Flagship': 'Downtown',
+    'Westside Mall': 'Westside',
+    'Harbor Point': 'Harbor',
+    'Tech Plaza': 'TechPlaza',
+    'Central Station': 'Central',
+    'Riverside Center': 'Riverside',
+    'Airport Terminal': 'Airport',
+    'University District': 'University',
+};
+
 // ============================================================================
 // Mock Device Generation
 // ============================================================================
@@ -148,10 +170,21 @@ interface MockDevice {
 function generateMockDevices(count: number = 250): MockDevice[] {
     rng.reset();
     const devices: MockDevice[] = [];
+    const locationDeviceCounts: Record<string, number> = {};
 
     for (let i = 1; i <= count; i++) {
         const store = MOCK_STORES[i % MOCK_STORES.length];
         const model = MOCK_DEVICE_MODELS[i % MOCK_DEVICE_MODELS.length];
+
+        // Track device count per location for unique numbering
+        const locationKey = `${store.name}-${model}`;
+        locationDeviceCounts[locationKey] = (locationDeviceCounts[locationKey] || 0) + 1;
+        const deviceNum = locationDeviceCounts[locationKey];
+
+        // Generate realistic device name like "POS-Downtown-01" or "Scanner-Harbor-03"
+        const typePrefix = DEVICE_TYPE_PREFIXES[model] || 'Device';
+        const locationCode = LOCATION_CODES[store.name] || 'Store';
+        const deviceName = `${typePrefix}-${locationCode}-${String(deviceNum).padStart(2, '0')}`;
 
         // Determine status with realistic distribution
         const statusRoll = rng.next();
@@ -171,7 +204,7 @@ function generateMockDevices(count: number = 250): MockDevice[] {
 
         devices.push({
             device_id: i,
-            device_name: `Device-${String(i).padStart(4, '0')}`,
+            device_name: deviceName,
             device_model: model,
             location: store.name,
             region: store.region,
@@ -279,6 +312,7 @@ function generateMockAnomalies(count: number = 100): Anomaly[] {
         anomalies.push({
             id: i,
             device_id: device.device_id,
+            device_name: device.device_name,
             timestamp: timestamp.toISOString(),
             anomaly_score: score,
             anomaly_label: -1,
@@ -535,6 +569,7 @@ function createAnomalyDetailFromGroupMember(member: AnomalyGroupMember, groupNam
     return {
         id: member.anomaly_id,
         device_id: member.device_id,
+        device_name: member.device_name || null,
         timestamp: member.timestamp,
         anomaly_score: member.anomaly_score,
         anomaly_label: -1,
@@ -1817,6 +1852,7 @@ function generateSimilarCases(anomalyId: number): SimilarCase[] {
             case_id: 'case-2024-1205',
             anomaly_id: anomalyId - 15,
             device_id: 1042,
+            device_name: 'Store-042-POS-01',
             detected_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
             resolved_at: new Date(Date.now() - 6.5 * 24 * 60 * 60 * 1000).toISOString(),
             similarity_score: 0.94,
@@ -1832,6 +1868,7 @@ function generateSimilarCases(anomalyId: number): SimilarCase[] {
             case_id: 'case-2024-1198',
             anomaly_id: anomalyId - 28,
             device_id: 1087,
+            device_name: 'WH-North-Scanner-12',
             detected_at: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000).toISOString(),
             resolved_at: new Date(Date.now() - 11 * 24 * 60 * 60 * 1000).toISOString(),
             similarity_score: 0.87,
@@ -1847,6 +1884,7 @@ function generateSimilarCases(anomalyId: number): SimilarCase[] {
             case_id: 'case-2024-1156',
             anomaly_id: anomalyId - 45,
             device_id: 1023,
+            device_name: 'Store-018-Handheld-03',
             detected_at: new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString(),
             resolved_at: null,
             similarity_score: 0.72,
@@ -2767,6 +2805,132 @@ export function getMockLocationComparison(locationAId: string, locationBId: stri
             `${storeA.name} has 2.9x more device drops per week`,
             `${storeB.name} achieves 89% shift readiness vs 72% at ${storeA.name}`,
         ],
+    };
+}
+
+// ============================================================================
+// Insight Impacted Devices Mock Data
+// ============================================================================
+
+import type { InsightDevicesResponse, ImpactedDevice, DeviceGrouping } from '../types/anomaly';
+
+const MOCK_LOCATIONS = ['Downtown Flagship', 'Westside Mall', 'Harbor Point', 'Tech Plaza', 'Central Station'];
+const MOCK_MODELS = ['Zebra TC52', 'Samsung Galaxy Tab A8', 'iPad Pro 11', 'Honeywell CT60', 'Samsung Galaxy XCover 6'];
+const MOCK_OS_VERSIONS = ['Android 12', 'Android 13', 'iOS 16', 'iOS 17', 'Android 11'];
+const MOCK_STATUSES = ['online', 'offline', 'unknown'];
+const MOCK_SEVERITIES = ['critical', 'high', 'medium', 'low'];
+
+function seededRandom(seed: number): () => number {
+    return () => {
+        const x = Math.sin(seed++) * 10000;
+        return x - Math.floor(x);
+    };
+}
+
+function groupDevicesByKey(
+    devices: ImpactedDevice[],
+    keyFn: (d: ImpactedDevice) => string
+): DeviceGrouping[] {
+    const groups: Record<string, ImpactedDevice[]> = {};
+    for (const device of devices) {
+        const key = keyFn(device);
+        groups[key] = groups[key] || [];
+        groups[key].push(device);
+    }
+    return Object.entries(groups)
+        .sort((a, b) => b[1].length - a[1].length)
+        .map(([label, devs]) => ({
+            group_key: label.toLowerCase().replace(/\s+/g, '_'),
+            group_label: label,
+            device_count: devs.length,
+            devices: devs,
+        }));
+}
+
+export function getMockInsightDevices(
+    insightId: string,
+    includeAiGrouping?: boolean
+): InsightDevicesResponse {
+    // Use insight ID to seed random for consistent results
+    const seed = parseInt(insightId.replace(/\D/g, '') || '12345', 10);
+    const rng = seededRandom(seed);
+
+    // Generate 8-15 devices
+    const deviceCount = 8 + Math.floor(rng() * 8);
+    const devices: ImpactedDevice[] = [];
+
+    for (let i = 0; i < deviceCount; i++) {
+        const location = MOCK_LOCATIONS[Math.floor(rng() * MOCK_LOCATIONS.length)];
+        const model = MOCK_MODELS[Math.floor(rng() * MOCK_MODELS.length)];
+
+        devices.push({
+            device_id: 1000 + i,
+            device_name: `Device-${insightId.slice(0, 4)}-${String(i + 1).padStart(2, '0')}`,
+            device_model: model,
+            location: location,
+            status: MOCK_STATUSES[Math.floor(rng() * MOCK_STATUSES.length)],
+            last_seen: new Date(Date.now() - Math.floor(rng() * 86400000)).toISOString(),
+            os_version: MOCK_OS_VERSIONS[Math.floor(rng() * MOCK_OS_VERSIONS.length)],
+            anomaly_count: 1 + Math.floor(rng() * 5),
+            severity: MOCK_SEVERITIES[Math.floor(rng() * MOCK_SEVERITIES.length)] as ImpactedDevice['severity'],
+            primary_metric: rng() > 0.5 ? 'battery_drain' : 'disconnect_count',
+        });
+    }
+
+    // Build groupings
+    const byLocation = groupDevicesByKey(devices, d => d.location || 'Unknown Location');
+    const byModel = groupDevicesByKey(devices, d => d.device_model || 'Unknown Model');
+
+    // AI Pattern groupings (simulated)
+    let byPattern: DeviceGrouping[] = [];
+    let aiAnalysis: string | null = null;
+
+    if (includeAiGrouping && deviceCount >= 3) {
+        const highUsageCount = Math.ceil(deviceCount * 0.4);
+        const chargingCount = Math.ceil(deviceCount * 0.35);
+        const otherCount = deviceCount - highUsageCount - chargingCount;
+
+        byPattern = [
+            {
+                group_key: 'high_usage_shift',
+                group_label: 'High-Usage Shift Workers',
+                device_count: highUsageCount,
+                devices: devices.slice(0, highUsageCount),
+            },
+            {
+                group_key: 'shared_charging',
+                group_label: 'Shared Charging Station Users',
+                device_count: chargingCount,
+                devices: devices.slice(highUsageCount, highUsageCount + chargingCount),
+            },
+        ];
+
+        if (otherCount > 0) {
+            byPattern.push({
+                group_key: 'other_patterns',
+                group_label: 'Other Patterns',
+                device_count: otherCount,
+                devices: devices.slice(highUsageCount + chargingCount),
+            });
+        }
+
+        aiAnalysis = `Pattern Analysis: ${Math.round(highUsageCount / deviceCount * 100)}% of affected devices are used by shift workers with high-intensity usage patterns (>8 hours screen-on time daily). ${Math.round(chargingCount / deviceCount * 100)}% share charging infrastructure in Zone A, suggesting potential charging station issues or scheduling conflicts. The remaining devices show varied patterns that may require individual investigation.`;
+    }
+
+    return {
+        insight_id: insightId,
+        insight_headline: `${deviceCount} devices experiencing battery issues`,
+        insight_category: 'battery_rapid_drain',
+        insight_severity: 'high',
+        total_devices: deviceCount,
+        devices,
+        groupings: {
+            by_location: byLocation,
+            by_model: byModel,
+            by_pattern: byPattern,
+        },
+        ai_pattern_analysis: aiAnalysis,
+        generated_at: new Date().toISOString(),
     };
 }
 

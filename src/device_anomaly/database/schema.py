@@ -65,6 +65,19 @@ class AnomalyResult(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
+    # Unique constraint: prevent duplicate anomalies for same device/timestamp
+    # This ensures re-scoring the same data updates existing records rather than
+    # creating duplicates, which prevents anomaly count inflation over time.
+    __table_args__ = (
+        Index(
+            "idx_anomaly_unique_device_timestamp",
+            "tenant_id",
+            "device_id",
+            "timestamp",
+            unique=True,
+        ),
+    )
+
     def __repr__(self) -> str:
         return f"<AnomalyResult(id={self.id}, device_id={self.device_id}, timestamp={self.timestamp}, score={self.anomaly_score})>"
 
@@ -642,6 +655,56 @@ class ShiftPerformance(Base):
 
     def __repr__(self) -> str:
         return f"<ShiftPerformance(id={self.id}, device_id={self.device_id}, shift={self.shift_name}, date={self.shift_date})>"
+
+
+class DeviceAssignment(Base):
+    """Device-to-user assignment tracking.
+
+    Enables Carl's requirement: "People with excessive drops" - aggregate
+    device abuse metrics by the person assigned to the device.
+
+    Supports multiple assignment types (owner, user, operator) and
+    temporal validity for historical analysis.
+    """
+
+    __tablename__ = "device_assignments"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(String(100), nullable=False, index=True)
+    device_id = Column(String(100), nullable=False, index=True)
+
+    # User identification
+    user_id = Column(String(100), nullable=True, index=True)
+    user_name = Column(String(200), nullable=True)
+    user_email = Column(String(200), nullable=True)
+
+    # Team/group identification (for team-level aggregation)
+    team_id = Column(String(100), nullable=True, index=True)
+    team_name = Column(String(200), nullable=True)
+
+    # Assignment type: owner (primary), user (current), operator, manager
+    assignment_type = Column(String(50), default="owner")
+
+    # Temporal validity for historical tracking
+    valid_from = Column(DateTime, default=datetime.utcnow, nullable=False)
+    valid_to = Column(DateTime, nullable=True)  # NULL = currently valid
+
+    # Source of assignment data
+    source = Column(String(50), nullable=False)  # "mc_label", "mc_attribute", "manual", "ad_sync"
+    source_label_type = Column(String(100), nullable=True)  # e.g., "Owner", "AssignedUser"
+
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        Index("ix_device_assignments_lookup", "tenant_id", "device_id", "valid_to"),
+        Index("ix_device_assignments_user", "tenant_id", "user_id", "valid_to"),
+        Index("ix_device_assignments_team", "tenant_id", "team_id", "valid_to"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<DeviceAssignment(id={self.id}, device_id={self.device_id}, user_id={self.user_id}, type={self.assignment_type})>"
 
 
 def create_tables(engine):

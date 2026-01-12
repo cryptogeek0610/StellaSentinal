@@ -106,14 +106,45 @@ class ONNXModelExporter:
             if self.config.disable_class_labels:
                 options["nocl"] = True
 
-            # Convert to ONNX
-            onnx_model = convert_sklearn(
-                model,
-                initial_types=initial_type,
-                target_opset=self.config.target_opset,
-                options=options,
-                doc_string=f"{model_name} - Converted from scikit-learn",
-            )
+            # Convert to ONNX with guarded retries for unsupported options/opsets
+            options_used = options
+            opset_used: int | dict[str, int] = self.config.target_opset
+            last_exc: Exception | None = None
+
+            for _ in range(3):
+                try:
+                    onnx_model = convert_sklearn(
+                        model,
+                        initial_types=initial_type,
+                        target_opset=opset_used,
+                        options=options_used,
+                        doc_string=f"{model_name} - Converted from scikit-learn",
+                    )
+                    break
+                except NameError as exc:
+                    last_exc = exc
+                    if options_used:
+                        logger.warning(
+                            "ONNX options not supported for %s (%s). Retrying without options.",
+                            model.__class__.__name__,
+                            exc,
+                        )
+                        options_used = {}
+                        continue
+                    raise
+                except RuntimeError as exc:
+                    last_exc = exc
+                    if "ai.onnx.ml" in str(exc) and isinstance(opset_used, int):
+                        logger.warning(
+                            "ONNX opset mismatch for %s (%s). Retrying with ai.onnx.ml opset 3.",
+                            model.__class__.__name__,
+                            exc,
+                        )
+                        opset_used = {"": self.config.target_opset, "ai.onnx.ml": 3}
+                        continue
+                    raise
+            else:
+                raise last_exc or RuntimeError("ONNX export failed after retries")
 
             # Optimize graph if requested
             if self.config.optimize:
@@ -301,6 +332,13 @@ class ONNXQuantizer:
             original_size = input_path.stat().st_size / 1e6
             quantized_size = output_path.stat().st_size / 1e6
             reduction = (1 - quantized_size / original_size) * 100
+
+            if quantized_size >= original_size:
+                logger.warning(
+                    "Quantized model larger than original (%.2f MB -> %.2f MB).",
+                    original_size,
+                    quantized_size,
+                )
 
             logger.info(
                 "Quantization complete: %.2f MB -> %.2f MB (%.1f%% reduction)",

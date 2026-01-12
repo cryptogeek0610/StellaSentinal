@@ -632,7 +632,11 @@ class DeviceAbuseAnalyzer:
         period_days: int,
         location_id: Optional[str],
     ) -> pd.DataFrame:
-        """Get device data for abuse analysis."""
+        """Get device data for abuse analysis.
+
+        This method loads device features and enriches them with reboot data
+        from MobiControl if reboot counts are not in the feature data.
+        """
         end_date = datetime.utcnow()
         start_date = end_date - timedelta(days=period_days)
 
@@ -652,6 +656,8 @@ class DeviceAbuseAnalyzer:
         import json
 
         records = []
+        has_reboot_data = False
+
         for feature in query:
             try:
                 metadata = json.loads(feature.metadata_json) if feature.metadata_json else {}
@@ -668,25 +674,352 @@ class DeviceAbuseAnalyzer:
                 firmware = metadata.get("FirmwareVersion", metadata.get("OEMVersion", ""))
                 cohort_id = f"{manufacturer}_{model}_{os_version}"
 
+                # Check for reboot data in features (may be from add_reboot_features)
+                reboot_count = features.get("reboot_count", features.get("RebootCount", 0))
+                if reboot_count > 0:
+                    has_reboot_data = True
+
                 records.append({
                     "device_id": feature.device_id,
                     "device_name": metadata.get("device_name"),
                     "computed_at": feature.computed_at,
                     "location_id": metadata.get("location_id"),
                     "user_id": metadata.get("user_id"),
+                    "user_name": metadata.get("user_name"),  # For by-user analysis
+                    "user_email": metadata.get("user_email"),  # For by-user analysis
                     "cohort_id": cohort_id,
                     "manufacturer": manufacturer,
                     "model": model,
                     "os_version": os_version,
                     "firmware_version": firmware,
                     "drop_count": features.get("TotalDropCnt", 0),
-                    "reboot_count": features.get("RebootCount", 0),
+                    "reboot_count": reboot_count,
                     "crash_count": features.get("CrashCount", 0),
+                    "consecutive_reboot_count": features.get("consecutive_reboot_count", 0),
+                    "has_boot_loop_pattern": features.get("has_boot_loop_pattern", False),
                 })
             except (json.JSONDecodeError, TypeError):
                 continue
 
-        return pd.DataFrame(records)
+        df = pd.DataFrame(records)
+
+        # If no reboot data in features, try to load from MobiControl directly
+        if not df.empty and not has_reboot_data:
+            df = self._enrich_with_mc_reboot_data(df, start_date, end_date)
+
+        return df
+
+    def _enrich_with_mc_reboot_data(
+        self,
+        df: pd.DataFrame,
+        start_date: datetime,
+        end_date: datetime,
+    ) -> pd.DataFrame:
+        """Enrich device data with reboot counts from MobiControl.
+
+        Called when feature data doesn't have reboot counts.
+        """
+        try:
+            from device_anomaly.data_access.mc_loader import aggregate_reboot_counts
+
+            device_ids = df["device_id"].unique().tolist()
+
+            reboot_df = aggregate_reboot_counts(
+                start_dt=start_date.isoformat(),
+                end_dt=end_date.isoformat(),
+                device_ids=device_ids,
+            )
+
+            if reboot_df.empty:
+                logger.debug("No reboot data from MobiControl")
+                return df
+
+            # Merge reboot data
+            reboot_df = reboot_df.rename(columns={
+                "DeviceId": "device_id",
+                "reboot_count": "mc_reboot_count",
+            })
+
+            df = df.merge(
+                reboot_df[["device_id", "mc_reboot_count", "consecutive_reboot_count"]],
+                on="device_id",
+                how="left",
+                suffixes=("", "_mc"),
+            )
+
+            # Use MC reboot count if available
+            if "mc_reboot_count" in df.columns:
+                df["reboot_count"] = df["mc_reboot_count"].fillna(df["reboot_count"])
+                df = df.drop(columns=["mc_reboot_count"])
+
+            if "consecutive_reboot_count_mc" in df.columns:
+                df["consecutive_reboot_count"] = df["consecutive_reboot_count_mc"].fillna(
+                    df.get("consecutive_reboot_count", 0)
+                )
+                df = df.drop(columns=["consecutive_reboot_count_mc"])
+
+            logger.info(f"Enriched {len(df)} devices with MC reboot data")
+            return df
+
+        except ImportError:
+            logger.debug("MC loader not available for reboot enrichment")
+            return df
+        except Exception as e:
+            logger.warning(f"Failed to enrich with MC reboot data: {e}")
+            return df
+
+    def _enrich_with_user_assignments(
+        self,
+        df: pd.DataFrame,
+    ) -> pd.DataFrame:
+        """Enrich device data with user assignments from MobiControl.
+
+        Enables Carl's requirement: "People with excessive drops"
+        """
+        # Skip if user_id already populated
+        if not df.empty and "user_id" in df.columns and df["user_id"].notna().any():
+            return df
+
+        try:
+            from device_anomaly.data_access.mc_loader import get_user_assignment_dict
+
+            device_ids = df["device_id"].unique().tolist()
+            user_assignments = get_user_assignment_dict(device_ids=device_ids)
+
+            if not user_assignments:
+                logger.debug("No user assignments from MobiControl")
+                return df
+
+            # Add user data to dataframe
+            df["user_id"] = df["device_id"].apply(
+                lambda x: user_assignments.get(x, {}).get("user_id")
+            )
+            df["user_name"] = df["device_id"].apply(
+                lambda x: user_assignments.get(x, {}).get("user_name")
+            )
+            df["user_email"] = df["device_id"].apply(
+                lambda x: user_assignments.get(x, {}).get("user_email")
+            )
+
+            users_found = df["user_id"].notna().sum()
+            logger.info(f"Enriched {users_found} devices with user assignments")
+            return df
+
+        except ImportError:
+            logger.debug("MC loader not available for user assignment enrichment")
+            return df
+        except Exception as e:
+            logger.warning(f"Failed to enrich with user assignments: {e}")
+            return df
+
+    def analyze_drops_by_user(
+        self,
+        period_days: int = 7,
+        top_n: int = 10,
+    ) -> Dict[str, Any]:
+        """Analyze drops grouped by assigned user.
+
+        Carl's requirement: "People with excessive drops"
+
+        Args:
+            period_days: Days of history to analyze
+            top_n: Number of worst users to return
+
+        Returns:
+            Dict with user-level drop analysis
+        """
+        device_data = self._get_device_abuse_data(period_days, None)
+
+        if device_data.empty:
+            return {
+                "tenant_id": self.tenant_id,
+                "period_days": period_days,
+                "total_users": 0,
+                "total_drops": 0,
+                "users_with_excessive_drops": 0,
+                "worst_users": [],
+                "recommendations": [],
+            }
+
+        # Enrich with user assignments
+        device_data = self._enrich_with_user_assignments(device_data)
+
+        # Filter to devices with user assignments
+        with_user = device_data[device_data["user_id"].notna()]
+
+        if with_user.empty:
+            return {
+                "tenant_id": self.tenant_id,
+                "period_days": period_days,
+                "total_users": 0,
+                "total_drops": int(device_data["drop_count"].sum()),
+                "users_with_excessive_drops": 0,
+                "worst_users": [],
+                "recommendations": [
+                    "No user assignments found. Configure user assignment labels in MobiControl "
+                    "(e.g., Owner, AssignedUser) to enable by-user analysis."
+                ],
+            }
+
+        # Aggregate by user
+        user_agg = with_user.groupby("user_id").agg({
+            "drop_count": "sum",
+            "reboot_count": "sum",
+            "device_id": "nunique",
+            "user_name": "first",
+            "user_email": "first",
+        }).reset_index()
+
+        user_agg["drops_per_device"] = user_agg["drop_count"] / user_agg["device_id"]
+        user_agg["drops_per_day"] = user_agg["drop_count"] / period_days
+
+        # Calculate fleet average for comparison
+        fleet_avg_drops_per_device = user_agg["drops_per_device"].mean()
+
+        # Mark users with excessive drops (>2x fleet average)
+        user_agg["is_excessive"] = user_agg["drops_per_device"] > (fleet_avg_drops_per_device * 2)
+        excessive_users = int(user_agg["is_excessive"].sum())
+
+        # Get worst users
+        worst = user_agg.nlargest(top_n, "drop_count")
+
+        worst_users = []
+        for _, row in worst.iterrows():
+            multiplier = row["drops_per_device"] / fleet_avg_drops_per_device if fleet_avg_drops_per_device > 0 else 1
+
+            worst_users.append({
+                "user_id": str(row["user_id"]),
+                "user_name": row["user_name"],
+                "user_email": row["user_email"],
+                "total_drops": int(row["drop_count"]),
+                "total_reboots": int(row["reboot_count"]),
+                "device_count": int(row["device_id"]),
+                "drops_per_device": round(float(row["drops_per_device"]), 2),
+                "drops_per_day": round(float(row["drops_per_day"]), 2),
+                "vs_fleet_multiplier": round(float(multiplier), 2),
+                "is_excessive": bool(row["is_excessive"]),
+            })
+
+        # Generate recommendations
+        recommendations = []
+        if excessive_users > 0:
+            recommendations.append(
+                f"{excessive_users} user(s) have >2x the fleet average drop rate. "
+                "Consider targeted device handling training."
+            )
+        if worst_users and worst_users[0]["vs_fleet_multiplier"] > 3:
+            recommendations.append(
+                f"User '{worst_users[0]['user_name'] or worst_users[0]['user_id']}' "
+                f"has {worst_users[0]['vs_fleet_multiplier']}x the fleet average drops. "
+                "Recommend immediate intervention."
+            )
+
+        return {
+            "tenant_id": self.tenant_id,
+            "period_days": period_days,
+            "total_users": len(user_agg),
+            "total_drops": int(with_user["drop_count"].sum()),
+            "fleet_avg_drops_per_device": round(float(fleet_avg_drops_per_device), 2),
+            "users_with_excessive_drops": excessive_users,
+            "worst_users": worst_users,
+            "recommendations": recommendations,
+        }
+
+    def analyze_reboots_by_user(
+        self,
+        period_days: int = 7,
+        top_n: int = 10,
+    ) -> Dict[str, Any]:
+        """Analyze reboots grouped by assigned user.
+
+        Args:
+            period_days: Days of history to analyze
+            top_n: Number of worst users to return
+
+        Returns:
+            Dict with user-level reboot analysis
+        """
+        device_data = self._get_device_abuse_data(period_days, None)
+
+        if device_data.empty:
+            return {
+                "tenant_id": self.tenant_id,
+                "period_days": period_days,
+                "total_users": 0,
+                "total_reboots": 0,
+                "users_with_excessive_reboots": 0,
+                "worst_users": [],
+                "recommendations": [],
+            }
+
+        # Enrich with user assignments
+        device_data = self._enrich_with_user_assignments(device_data)
+
+        with_user = device_data[device_data["user_id"].notna()]
+
+        if with_user.empty:
+            return {
+                "tenant_id": self.tenant_id,
+                "period_days": period_days,
+                "total_users": 0,
+                "total_reboots": int(device_data["reboot_count"].sum()),
+                "users_with_excessive_reboots": 0,
+                "worst_users": [],
+                "recommendations": [
+                    "No user assignments found. Configure user assignment labels to enable by-user analysis."
+                ],
+            }
+
+        # Aggregate by user
+        user_agg = with_user.groupby("user_id").agg({
+            "reboot_count": "sum",
+            "crash_count": "sum",
+            "drop_count": "sum",
+            "device_id": "nunique",
+            "user_name": "first",
+            "user_email": "first",
+        }).reset_index()
+
+        user_agg["reboots_per_device"] = user_agg["reboot_count"] / user_agg["device_id"]
+        fleet_avg_reboots = user_agg["reboots_per_device"].mean()
+
+        user_agg["is_excessive"] = user_agg["reboots_per_device"] > (fleet_avg_reboots * 2)
+        excessive_users = int(user_agg["is_excessive"].sum())
+
+        worst = user_agg.nlargest(top_n, "reboot_count")
+
+        worst_users = []
+        for _, row in worst.iterrows():
+            multiplier = row["reboots_per_device"] / fleet_avg_reboots if fleet_avg_reboots > 0 else 1
+
+            worst_users.append({
+                "user_id": str(row["user_id"]),
+                "user_name": row["user_name"],
+                "user_email": row["user_email"],
+                "total_reboots": int(row["reboot_count"]),
+                "total_crashes": int(row["crash_count"]),
+                "device_count": int(row["device_id"]),
+                "reboots_per_device": round(float(row["reboots_per_device"]), 2),
+                "vs_fleet_multiplier": round(float(multiplier), 2),
+                "is_excessive": bool(row["is_excessive"]),
+            })
+
+        recommendations = []
+        if excessive_users > 0:
+            recommendations.append(
+                f"{excessive_users} user(s) have >2x the fleet average reboot rate."
+            )
+
+        return {
+            "tenant_id": self.tenant_id,
+            "period_days": period_days,
+            "total_users": len(user_agg),
+            "total_reboots": int(with_user["reboot_count"].sum()),
+            "fleet_avg_reboots_per_device": round(float(fleet_avg_reboots), 2),
+            "users_with_excessive_reboots": excessive_users,
+            "worst_users": worst_users,
+            "recommendations": recommendations,
+        }
 
     def _calculate_threshold(
         self,

@@ -11,7 +11,7 @@ from device_anomaly.config.settings import get_settings
 def create_dw_engine() -> Engine:
     """
     Create a SQLAlchemy engine for the DW database.
-    Handles both regular hosts and SQL Server named instances (server\instance).
+    Handles both regular hosts and SQL Server named instances (server\\instance).
     """
     settings = get_settings().dw
 
