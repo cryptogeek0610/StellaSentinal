@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StellaSentinal ML Models - Complete Technical Guide</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background: #fff;
+        }
+
+        @media print {
+            body {
+                padding: 20px;
+                font-size: 11pt;
+            }
+            .page-break {
+                page-break-before: always;
+            }
+            h1, h2, h3 {
+                page-break-after: avoid;
+            }
+            table, pre {
+                page-break-inside: avoid;
+            }
+        }
+
+        h1 {
+            color: #1a365d;
+            font-size: 2.2em;
+            margin-bottom: 10px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #3182ce;
+        }
+
+        h2 {
+            color: #2c5282;
+            font-size: 1.5em;
+            margin-top: 35px;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #bee3f8;
+        }
+
+        h3 {
+            color: #2b6cb0;
+            font-size: 1.2em;
+            margin-top: 25px;
+            margin-bottom: 10px;
+        }
+
+        p {
+            margin-bottom: 12px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            font-size: 0.9em;
+        }
+
+        th, td {
+            border: 1px solid #e2e8f0;
+            padding: 10px 12px;
+            text-align: left;
+        }
+
+        th {
+            background: #edf2f7;
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        tr:nth-child(even) {
+            background: #f7fafc;
+        }
+
+        pre, code {
+            font-family: 'Consolas', 'Monaco', monospace;
+            background: #f7fafc;
+            border-radius: 4px;
+        }
+
+        pre {
+            padding: 15px;
+            margin: 15px 0;
+            overflow-x: auto;
+            border: 1px solid #e2e8f0;
+            font-size: 0.85em;
+            line-height: 1.5;
+        }
+
+        code {
+            padding: 2px 6px;
+            font-size: 0.9em;
+        }
+
+        .highlight {
+            background: #fef3c7;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        .formula-box {
+            background: #ebf8ff;
+            border-left: 4px solid #3182ce;
+            padding: 15px;
+            margin: 15px 0;
+        }
+
+        .note-box {
+            background: #f0fff4;
+            border-left: 4px solid #38a169;
+            padding: 15px;
+            margin: 15px 0;
+        }
+
+        .warning-box {
+            background: #fffaf0;
+            border-left: 4px solid #dd6b20;
+            padding: 15px;
+            margin: 15px 0;
+        }
+
+        ul, ol {
+            margin: 10px 0 10px 25px;
+        }
+
+        li {
+            margin-bottom: 5px;
+        }
+
+        .toc {
+            background: #f7fafc;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .toc h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+        }
+
+        .toc ol {
+            margin: 0;
+        }
+
+        .toc li {
+            margin-bottom: 8px;
+        }
+
+        .model-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-top: 30px;
+        }
+
+        .model-header h2 {
+            color: white;
+            border: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .file-ref {
+            font-size: 0.85em;
+            color: #718096;
+            margin-top: 5px;
+        }
+
+        .architecture-diagram {
+            font-family: monospace;
+            background: #1a202c;
+            color: #68d391;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 15px 0;
+            white-space: pre;
+            overflow-x: auto;
+        }
+
+        hr {
+            border: none;
+            border-top: 1px solid #e2e8f0;
+            margin: 30px 0;
+        }
+
+        .summary-table {
+            font-size: 0.85em;
+        }
+
+        .footer {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 2px solid #e2e8f0;
+            text-align: center;
+            color: #718096;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <h1>StellaSentinal ML Models</h1>
+    <p style="font-size: 1.1em; color: #4a5568;">Complete Technical Guide to Anomaly Detection Algorithms</p>
+
+    <div class="toc">
+        <h3>Table of Contents</h3>
+        <ol>
+            <li>Isolation Forest (Primary Detector)</li>
+            <li>Local Outlier Factor (LOF)</li>
+            <li>One-Class SVM (OCSVM)</li>
+            <li>Variational Autoencoder (VAE)</li>
+            <li>DBSCAN Clustering</li>
+            <li>Ensemble Detector</li>
+            <li>Bayesian Baseline</li>
+            <li>Statistical Baseline (MAD)</li>
+            <li>Predictive Detector</li>
+            <li>Drift Detection</li>
+            <li>Model Orchestration Summary</li>
+        </ol>
+    </div>
+
+    <!-- Model 1: Isolation Forest -->
+    <div class="model-header">
+        <h2>1. Isolation Forest (Primary Detector)</h2>
+        <div class="file-ref">File: src/device_anomaly/models/anomaly_detector.py</div>
+    </div>
+
+    <h3>How It Works</h3>
+    <p>Isolation Forest is based on a simple principle: <strong>anomalies are easier to isolate than normal points</strong>.</p>
+    <ul>
+        <li><strong>Normal Point:</strong> Requires many splits to isolate</li>
+        <li><strong>Anomaly:</strong> Requires few splits to isolate (it's "different")</li>
+    </ul>
+
+    <h3>The Algorithm</h3>
+    <ol>
+        <li>Randomly select a feature</li>
+        <li>Randomly select a split value between min and max</li>
+        <li>Recursively partition data until each point is isolated</li>
+        <li>Anomaly Score = Average path length across all trees</li>
+    </ol>
+    <p><strong>Shorter path length = More anomalous</strong></p>
+
+    <h3>Configuration</h3>
+    <table>
+        <tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr>
+        <tr><td><code>n_estimators</code></td><td>300</td><td>Number of isolation trees</td></tr>
+        <tr><td><code>contamination</code></td><td>0.05</td><td>Expected 5% of data are anomalies</td></tr>
+        <tr><td><code>random_state</code></td><td>42</td><td>Reproducibility</td></tr>
+    </table>
+
+    <div class="formula-box">
+        <strong>Scoring Formula:</strong>
+        <pre>score = -(average_path_length - expected_path_length) / normalization_factor
+
+Interpretation:
+  score < 0  -->  Anomaly (shorter path than expected)
+  score > 0  -->  Normal (longer path than expected)</pre>
+    </div>
+
+    <!-- Model 2: LOF -->
+    <div class="model-header page-break">
+        <h2>2. Local Outlier Factor (LOF)</h2>
+        <div class="file-ref">Used in: ensemble_detector.py, ml_baseline_engine.py</div>
+    </div>
+
+    <h3>How It Works</h3>
+    <p>LOF measures <strong>local density deviation</strong>. A point is anomalous if its neighborhood is denser than itself.</p>
+
+    <h3>The Algorithm</h3>
+    <ol>
+        <li>Find k-nearest neighbors for each point</li>
+        <li>Calculate Local Reachability Density (LRD)</li>
+        <li>Compare each point's LRD to its neighbors' LRD</li>
+    </ol>
+
+    <div class="formula-box">
+        <strong>Mathematical Formula:</strong>
+        <pre>              SUM of LRD(neighbor)
+LOF(point) = -------------------------
+              k x LRD(point)
+
+Where:
+  LRD(p) = 1 / (average reachability distance to k neighbors)
+  Reachability Distance = max(k-distance(neighbor), actual_distance)</pre>
+    </div>
+
+    <h3>Interpretation</h3>
+    <table>
+        <tr><th>LOF Value</th><th>Meaning</th></tr>
+        <tr><td>LOF ≈ 1</td><td>Similar density to neighbors (normal)</td></tr>
+        <tr><td>LOF > 1</td><td>Lower density than neighbors (outlier)</td></tr>
+        <tr><td>LOF >> 1</td><td>Much lower density (strong anomaly)</td></tr>
+    </table>
+
+    <h3>Configuration</h3>
+    <table>
+        <tr><th>Parameter</th><th>Value</th><th>Purpose</th></tr>
+        <tr><td><code>n_neighbors</code></td><td>20</td><td>Size of local neighborhood</td></tr>
+        <tr><td><code>novelty</code></td><td>True</td><td>Enable prediction on new data</td></tr>
+    </table>
+
+    <!-- Model 3: OCSVM -->
+    <div class="model-header">
+        <h2>3. One-Class SVM (OCSVM)</h2>
+        <div class="file-ref">Used in: ensemble_detector.py</div>
+    </div>
+
+    <h3>How It Works</h3>
+    <p>OCSVM learns a <strong>decision boundary</strong> that separates normal data from the origin in a high-dimensional feature space.</p>
+
+    <h3>The Algorithm</h3>
+    <ol>
+        <li>Map data to high-dimensional space using kernel (RBF)</li>
+        <li>Find hyperplane that maximizes distance from origin</li>
+        <li>Points on the "wrong side" are anomalies</li>
+    </ol>
+
+    <div class="formula-box">
+        <strong>Mathematical Formulation:</strong>
+        <pre>Minimize: (1/2)||w||^2 + (1/vn) * SUM(xi_i) - rho
+
+Subject to: w . phi(x_i) >= rho - xi_i, xi_i >= 0
+
+Where:
+  w = normal vector to hyperplane
+  rho = offset from origin
+  xi_i = slack variables
+  v = upper bound on fraction of outliers
+  phi = kernel mapping (RBF)</pre>
+    </div>
+
+    <table>
+        <tr><th>Parameter</th><th>Value</th><th>Purpose</th></tr>
+        <tr><td><code>kernel</code></td><td>"rbf"</td><td>Radial Basis Function</td></tr>
+        <tr><td><code>nu</code></td><td>0.05</td><td>~5% of points can be outliers</td></tr>
+    </table>
+
+    <!-- Model 4: VAE -->
+    <div class="model-header page-break">
+        <h2>4. Variational Autoencoder (VAE)</h2>
+        <div class="file-ref">File: src/device_anomaly/models/vae_detector.py</div>
+    </div>
+
+    <h3>How It Works</h3>
+    <p>VAE learns to <strong>compress and reconstruct</strong> data. Anomalies have <strong>high reconstruction error</strong> because they don't fit the learned normal patterns.</p>
+
+    <h3>Architecture</h3>
+    <div class="architecture-diagram">Input (n features)
+      |
+      v
++-------------------+
+|     ENCODER       |
+|  256 -> 128 -> 64 |
++---------+---------+
+          |
+          v
++-------------------+
+|   LATENT SPACE    |
+|    mu (mean)      |---+
+|   sigma (var)     |   | z = mu + sigma * epsilon
++-------------------+   | where epsilon ~ N(0,1)
+          ^             |
+          +-------------+
+          |
+          v
++-------------------+
+|     DECODER       |
+|  64 -> 128 -> 256 |
++---------+---------+
+          |
+          v
+Output (reconstruction)</div>
+
+    <div class="formula-box">
+        <strong>Loss Function:</strong>
+        <pre>Total Loss = Reconstruction Loss + beta x KL Divergence
+
+Reconstruction Loss = MSE(input, output) = (1/n) * SUM((x_i - x_hat_i)^2)
+
+KL Divergence = -0.5 * SUM(1 + log(sigma^2) - mu^2 - sigma^2)
+
+beta (kl_weight) = 0.001</pre>
+    </div>
+
+    <h3>Configuration</h3>
+    <table>
+        <tr><th>Parameter</th><th>Value</th><th>Purpose</th></tr>
+        <tr><td><code>latent_dim</code></td><td>32</td><td>Bottleneck size</td></tr>
+        <tr><td><code>hidden_dims</code></td><td>[256, 128, 64]</td><td>Layer sizes</td></tr>
+        <tr><td><code>dropout</code></td><td>0.2</td><td>Regularization</td></tr>
+        <tr><td><code>epochs</code></td><td>100</td><td>Training iterations</td></tr>
+        <tr><td><code>learning_rate</code></td><td>0.001</td><td>Optimizer step size</td></tr>
+        <tr><td><code>kl_weight</code></td><td>0.001</td><td>Beta parameter</td></tr>
+    </table>
+
+    <!-- Model 5: DBSCAN -->
+    <div class="model-header">
+        <h2>5. DBSCAN Clustering</h2>
+        <div class="file-ref">Used in: ml_baseline_engine.py</div>
+    </div>
+
+    <h3>How It Works</h3>
+    <p>DBSCAN finds <strong>dense regions</strong> and labels points in sparse regions as <strong>noise (anomalies)</strong>.</p>
+
+    <h3>The Algorithm</h3>
+    <p>For each point:</p>
+    <ol>
+        <li>Count neighbors within radius epsilon (eps)</li>
+        <li>If neighbors >= min_samples --> Core point</li>
+        <li>If reachable from core point --> Border point</li>
+        <li>Otherwise --> Noise (ANOMALY)</li>
+    </ol>
+
+    <h3>Automatic Parameter Selection</h3>
+    <pre>distances = k_nearest_neighbor_distances(data, k=min_samples)
+eps = percentile(distances, 90)  # 90th percentile</pre>
+
+    <table>
+        <tr><th>Label</th><th>Meaning</th></tr>
+        <tr><td>-1</td><td>Noise (anomaly)</td></tr>
+        <tr><td>0, 1, 2...</td><td>Cluster membership</td></tr>
+    </table>
+
+    <!-- Model 6: Ensemble -->
+    <div class="model-header page-break">
+        <h2>6. Ensemble Detector</h2>
+        <div class="file-ref">File: src/device_anomaly/models/ensemble_detector.py</div>
+    </div>
+
+    <h3>How It Works</h3>
+    <p>Combines multiple algorithms using <strong>weighted voting</strong> to reduce false positives.</p>
+
+    <div class="formula-box">
+        <strong>Ensemble Formula:</strong>
+        <pre>                0.50 x IF_score + 0.30 x LOF_score + 0.20 x OCSVM_score
+Ensemble Score = ---------------------------------------------------------------
+                                    0.50 + 0.30 + 0.20</pre>
+    </div>
+
+    <h3>Why Use an Ensemble?</h3>
+    <table>
+        <tr><th>Single Model Problem</th><th>Ensemble Solution</th></tr>
+        <tr><td>IF misses local anomalies</td><td>LOF catches them</td></tr>
+        <tr><td>LOF struggles in high dimensions</td><td>IF handles it well</td></tr>
+        <tr><td>OCSVM sensitive to parameters</td><td>Voting averages out errors</td></tr>
+    </table>
+
+    <!-- Model 7: Bayesian -->
+    <div class="model-header">
+        <h2>7. Bayesian Baseline</h2>
+        <div class="file-ref">File: src/device_anomaly/models/ml_baseline_engine.py</div>
+    </div>
+
+    <h3>How It Works</h3>
+    <p>Uses <strong>Bayesian inference</strong> to maintain probability distributions over metric values, updating beliefs as new data arrives.</p>
+
+    <div class="formula-box">
+        <strong>Posterior Update:</strong>
+        <pre>kappa_n = kappa_0 + n
+mu_n = (kappa_0 * mu_0 + n * x_bar) / kappa_n
+alpha_n = alpha_0 + n/2
+beta_n = beta_0 + 0.5 * SUM((x_i - x_bar)^2) + (kappa_0 * n * (x_bar - mu_0)^2) / (2 * kappa_n)
+
+Posterior Mean = mu_n
+Posterior Variance = beta_n / (alpha_n x kappa_n)</pre>
+    </div>
+
+    <h3>Severity Classification</h3>
+    <table>
+        <tr><th>Probability</th><th>Severity</th></tr>
+        <tr><td>>= 0.99</td><td>Critical</td></tr>
+        <tr><td>>= 0.95</td><td>Warning</td></tr>
+        <tr><td>>= 0.80</td><td>Elevated</td></tr>
+        <tr><td>< 0.80</td><td>Normal</td></tr>
+    </table>
+
+    <!-- Model 8: MAD -->
+    <div class="model-header">
+        <h2>8. Statistical Baseline (MAD)</h2>
+        <div class="file-ref">File: src/device_anomaly/models/baseline.py</div>
+    </div>
+
+    <h3>How It Works</h3>
+    <p>Uses <strong>Median Absolute Deviation</strong> - a robust measure that isn't affected by outliers.</p>
+
+    <div class="formula-box">
+        <strong>Formula:</strong>
+        <pre>Median = middle value of sorted data
+
+MAD = median(|x_i - Median|)
+
+Z-score = (x - Median) / MAD</pre>
+    </div>
+
+    <h3>Why MAD over Standard Deviation?</h3>
+    <pre>Data: [10, 11, 12, 11, 10, 1000]  <-- outlier
+
+Standard Deviation: 403.5  <-- Destroyed by outlier
+MAD: 1.0                   <-- Robust to outlier</pre>
+
+    <!-- Model 9: Predictive -->
+    <div class="model-header page-break">
+        <h2>9. Predictive Detector</h2>
+        <div class="file-ref">File: src/device_anomaly/models/predictive_detector.py</div>
+    </div>
+
+    <h3>Battery Failure Prediction</h3>
+    <p><strong>Algorithm:</strong> Exponential Smoothing</p>
+    <pre>smoothed[0] = history[0]
+for i in range(1, n):
+    smoothed[i] = alpha x history[i] + (1-alpha) x smoothed[i-1]
+
+avg_drain_per_hour = smoothed[-1]
+predicted_level = current_level - (avg_drain_per_hour x hours_ahead)
+hours_until_critical = (current_level - 10%) / avg_drain_per_hour</pre>
+
+    <h3>Storage Exhaustion Prediction</h3>
+    <p><strong>Algorithm:</strong> Linear Regression</p>
+    <pre>slope, intercept = polyfit(time_points, storage_history, degree=1)
+
+if slope < 0:  # Storage decreasing
+    days_until_zero = -current_storage / slope</pre>
+
+    <!-- Model 10: Drift -->
+    <div class="model-header">
+        <h2>10. Drift Detection</h2>
+        <div class="file-ref">File: src/device_anomaly/models/ml_baseline_engine.py</div>
+    </div>
+
+    <p>Detects when data distribution changes, making the model stale.</p>
+
+    <h3>5 Detection Methods</h3>
+    <table>
+        <tr><th>Method</th><th>Formula / Threshold</th></tr>
+        <tr>
+            <td><strong>PSI</strong></td>
+            <td>PSI = SUM((current% - ref%) x ln(current% / ref%)) -- Alert if >= 0.15</td>
+        </tr>
+        <tr>
+            <td><strong>KS Test</strong></td>
+            <td>max|F_current(x) - F_reference(x)| -- Alert if p-value < 0.05</td>
+        </tr>
+        <tr>
+            <td><strong>JS Divergence</strong></td>
+            <td>0.5 x KL(P||M) + 0.5 x KL(Q||M) -- Alert if > 0.1</td>
+        </tr>
+        <tr>
+            <td><strong>Mean Shift</strong></td>
+            <td>z = (mean_curr - mean_ref) / std_ref -- Alert if |z| > 2.0</td>
+        </tr>
+        <tr>
+            <td><strong>Variance Ratio</strong></td>
+            <td>var_curr / var_ref -- Alert if > 2.0 or < 0.5</td>
+        </tr>
+    </table>
+
+    <div class="note-box">
+        <strong>Combined Decision:</strong> Drift is detected if 2 or more methods trigger (majority voting)
+    </div>
+
+    <!-- Summary -->
+    <div class="model-header page-break">
+        <h2>11. Model Orchestration Summary</h2>
+    </div>
+
+    <h3>Data Flow Pipeline</h3>
+    <div class="architecture-diagram">INCOMING DATA
+      |
+      v
++------------------------------------------+
+|          FEATURE ENGINEERING              |
+| - Cohort normalization (z-scores)         |
+| - Temporal features (hour, day, trends)   |
+| - Missing value imputation (median)       |
+| - StandardScaler normalization            |
++------------------------------------------+
+      |
+      +-----------+-----------+-----------+
+      |           |           |           |
+      v           v           v           v
++----------+ +----------+ +----------+ +----------+
+| Isolation| |   LOF    | |   VAE    | | DBSCAN   |
+|  Forest  | |  (25%)   | |  (25%)   | |  (15%)   |
+| (35-50%) | +----+-----+ +----+-----+ +----+-----+
++----+-----+      |           |           |
+     |            |           |           |
+     +------------+-----------+-----------+
+                  |
+                  v
+     +---------------------------+
+     |    ENSEMBLE SCORING       |
+     | weighted_score = SUM(w*s) |
+     +-------------+-------------+
+                   |
+                   v
+     +---------------------------+
+     |  SEVERITY CLASSIFICATION  |
+     | Critical/High/Medium/Low  |
+     +-------------+-------------+
+                   |
+                   v
+     +---------------------------+
+     |     LLM EXPLANATION       |
+     +---------------------------+</div>
+
+    <h3>Quick Reference Table</h3>
+    <table class="summary-table">
+        <tr>
+            <th>Model</th>
+            <th>Type</th>
+            <th>Strength</th>
+            <th>Weakness</th>
+            <th>Weight</th>
+        </tr>
+        <tr>
+            <td><strong>Isolation Forest</strong></td>
+            <td>Tree ensemble</td>
+            <td>Fast, scalable, global outliers</td>
+            <td>Misses local patterns</td>
+            <td>35-50%</td>
+        </tr>
+        <tr>
+            <td><strong>LOF</strong></td>
+            <td>Density-based</td>
+            <td>Local anomalies, clusters</td>
+            <td>Slow on large data</td>
+            <td>25-30%</td>
+        </tr>
+        <tr>
+            <td><strong>VAE</strong></td>
+            <td>Deep learning</td>
+            <td>Complex non-linear patterns</td>
+            <td>Needs lots of data</td>
+            <td>25%</td>
+        </tr>
+        <tr>
+            <td><strong>DBSCAN</strong></td>
+            <td>Clustering</td>
+            <td>Arbitrary shapes</td>
+            <td>Sensitive to eps</td>
+            <td>15%</td>
+        </tr>
+        <tr>
+            <td><strong>OCSVM</strong></td>
+            <td>Boundary</td>
+            <td>Complex decision boundaries</td>
+            <td>Slow, parameter-sensitive</td>
+            <td>20%</td>
+        </tr>
+        <tr>
+            <td><strong>Bayesian</strong></td>
+            <td>Statistical</td>
+            <td>Uncertainty, online updates</td>
+            <td>Assumes normality</td>
+            <td>N/A</td>
+        </tr>
+        <tr>
+            <td><strong>MAD Baseline</strong></td>
+            <td>Statistical</td>
+            <td>Robust, interpretable</td>
+            <td>Simple patterns only</td>
+            <td>N/A</td>
+        </tr>
+        <tr>
+            <td><strong>Predictive</strong></td>
+            <td>Time-series</td>
+            <td>Proactive alerts</td>
+            <td>Needs history</td>
+            <td>N/A</td>
+        </tr>
+    </table>
+
+    <h3>Severity Classification</h3>
+    <table>
+        <tr><th>Score Range</th><th>Severity</th><th>Action</th></tr>
+        <tr><td>score <= -0.7</td><td>Critical</td><td>Immediate alert</td></tr>
+        <tr><td>-0.7 < score <= -0.5</td><td>High</td><td>Priority alert</td></tr>
+        <tr><td>-0.5 < score <= -0.3</td><td>Medium</td><td>Standard alert</td></tr>
+        <tr><td>-0.3 < score <= 0.0</td><td>Low</td><td>Logged</td></tr>
+        <tr><td>score > 0.0</td><td>Normal</td><td>No action</td></tr>
+    </table>
+
+    <div class="footer">
+        <p><strong>StellaSentinal Anomaly Detection System</strong></p>
+        <p>This multi-model approach provides defense in depth - different algorithms catch different types of anomalies, reducing both false positives and false negatives.</p>
+    </div>
+</body>
+</html>
