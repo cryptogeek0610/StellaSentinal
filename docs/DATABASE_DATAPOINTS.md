@@ -1,865 +1,823 @@
-# Database Datapoints Reference
+# MobiControl & XSight Database Datapoints Reference
 
-This document provides a comprehensive list of all datapoints that can be read from the database.
+This document provides a comprehensive list of all datapoints that can be read from the MobiControl and XSight external data sources.
 
 ---
 
 ## Table of Contents
 
-1. [Core Tenant & Organizational Tables](#core-tenant--organizational-tables)
-2. [Metrics & Telemetry Tables](#metrics--telemetry-tables)
-3. [Baseline & Anomaly Detection Tables](#baseline--anomaly-detection-tables)
-4. [ML Model & Performance Tables](#ml-model--performance-tables)
-5. [Explanations & Investigation Tables](#explanations--investigation-tables)
-6. [Alerting & Notification Tables](#alerting--notification-tables)
-7. [Audit & Compliance Tables](#audit--compliance-tables)
-8. [Location & Insights Tables](#location--insights-tables)
-9. [Device Assignment Tables](#device-assignment-tables)
-10. [Cost Intelligence Tables](#cost-intelligence-tables)
-11. [External Data Discovery Tables](#external-data-discovery-tables)
-12. [Summary Statistics](#summary-statistics)
+1. [XSight Data Warehouse](#xsight-data-warehouse)
+2. [MobiControl Database](#mobicontrol-database)
+3. [Summary Statistics](#summary-statistics)
 
 ---
 
-## Core Tenant & Organizational Tables
+## XSight Data Warehouse
 
-### 1. TENANTS
+Database: `SOTI_XSight_dw`
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `tenant_id` | String(50) | Primary key |
-| `name` | String(255) | Tenant name |
-| `tier` | String(20) | Subscription tier (free, standard, enterprise) |
-| `created_at` | DateTime | Creation timestamp |
-| `metadata` | Text/JSON | Additional tenant metadata |
+### 1. cs_BatteryStat (Core Battery Statistics)
 
-### 2. USERS
+| Column | Type | Description |
+|--------|------|-------------|
+| `DeviceId` | int | Device identifier |
+| `CollectedDate` | date | Collection timestamp |
+| `TotalBatteryLevelDrop` | int | Battery percentage drop |
+| `TotalDischargeTime_Sec` | int | Total discharge duration in seconds |
+| `ChargePatternBadCount` | int | Count of bad charging patterns |
+| `ChargePatternGoodCount` | int | Count of good charging patterns |
+| `ChargePatternMediumCount` | int | Count of medium charging patterns |
+| `AcChargeCount` | int | Number of AC charges |
+| `UsbChargeCount` | int | Number of USB charges |
+| `WirelessChargeCount` | int | Number of wireless charges |
+| `CalculatedBatteryCapacity` | int | Calculated battery capacity (mAh) |
+| `TotalFreeStorageKb` | int | Available storage in KB |
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `user_id` | String(50) | Primary key |
-| `tenant_id` | String(50) | Foreign key to tenants |
-| `email` | String(255) | User email address (unique) |
-| `name` | String(255) | User full name |
-| `role` | String(20) | Role (viewer, analyst, admin) |
-| `password_hash` | String(255) | Hashed password |
-| `is_active` | Boolean | Active status |
-| `last_login` | DateTime | Last login timestamp |
-| `created_at` | DateTime | Creation timestamp |
-| `metadata` | Text/JSON | User preferences and settings |
-
-### 3. DEVICES
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `device_id` | String(50) | Primary key |
-| `tenant_id` | String(50) | Foreign key |
-| `source` | String(20) | Data source (xsight, mobicontrol, synthetic) |
-| `external_id` | String(100) | Original ID from source system |
-| `name` | String(255) | Device name |
-| `device_type` | String(50) | Device type (phone, tablet, laptop, etc.) |
-| `os_version` | String(50) | Operating system version |
-| `last_seen` | DateTime | Last reported timestamp |
-| `device_group_id` | String(50) | Grouping identifier |
-| `metadata` | Text/JSON | Additional device properties |
-
-### 4. DEVICE_METADATA
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `device_id` | Integer | Primary key |
-| `tenant_id` | String(50) | Foreign key |
-| `device_model` | String(100) | Device model string |
-| `device_name` | String(200) | Display name |
-| `location` | String(200) | Physical location |
-| `status` | String(20) | Status (online, offline, unknown) |
-| `last_seen` | DateTime | Last seen timestamp |
-| `os_version` | String(50) | OS version |
-| `agent_version` | String(50) | Agent software version |
-| `created_at` | DateTime | Record creation time |
-| `updated_at` | DateTime | Last update time |
+**Timestamp Column:** `CollectedDate` | **Device Column:** `DeviceId` | **Row Count:** ~700K
 
 ---
 
-## Metrics & Telemetry Tables
+### 2. cs_AppUsage (App Usage Analytics)
 
-### 5. METRIC_DEFINITIONS
+| Column | Type | Description |
+|--------|------|-------------|
+| `CollectedDate` | date | Collection date |
+| `DeviceId` | int | Device identifier |
+| `AppId` | int | Application identifier (dimension) |
+| `VisitCount` | int | Number of app visits/launches |
+| `TotalForegroundTime` | int | App foreground time in seconds |
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `metric_id` | String(50) | Primary key |
-| `name` | String(100) | Metric name |
-| `category` | String(50) | Category (battery, network, storage, cpu, memory, custom) |
-| `unit` | String(20) | Measurement unit (%, KB, bytes, etc.) |
-| `data_type` | String(20) | Data type (int, float, string, bool) |
-| `source` | String(50) | Data source (xsight, mobicontrol, custom) |
-| `is_standard` | Boolean | Whether this is a standard metric |
-| `validation_rules` | Text/JSON | Validation rules (min, max, allowed_values) |
-
-**Standard Metrics Defined:**
-
-| Metric ID | Name | Unit |
-|-----------|------|------|
-| `battery_drop` | Battery Level Drop | % |
-| `free_storage` | Free Storage | KB |
-| `download` | Download | bytes |
-| `upload` | Upload | bytes |
-| `offline_time` | Offline Time | minutes |
-| `disconnect_count` | Disconnect Count | count |
-| `wifi_signal` | WiFi Signal Strength | dBm |
-| `connection_time` | Connection Time | minutes |
-
-### 6. TELEMETRY_POINTS (Time-Series Data)
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | BigInteger | Primary key (auto-increment) |
-| `device_id` | String(50) | Foreign key |
-| `tenant_id` | String(50) | Foreign key |
-| `timestamp` | DateTime | Data point timestamp |
-| `metric_id` | String(50) | Foreign key to metrics |
-| `value` | Float | Numeric value |
-| `value_str` | String(255) | Non-numeric value (optional) |
-| `quality` | Integer | Data quality score (0-100) |
-| `ingestion_time` | DateTime | When data was ingested |
-| `source_batch_id` | String(50) | Batch tracking identifier |
-
-### 7. ANOMALY_RESULTS
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | Integer | Primary key |
-| `tenant_id` | String(50) | Foreign key |
-| `device_id` | Integer | Device identifier |
-| `timestamp` | DateTime | Anomaly detection time |
-| `anomaly_score` | Float | Anomaly score from detector |
-| `anomaly_label` | Integer | Classification (-1 for anomaly, 1 for normal) |
-| `total_battery_level_drop` | Float | Battery metric value |
-| `total_free_storage_kb` | Float | Storage metric value |
-| `download` | Float | Download metric value |
-| `upload` | Float | Upload metric value |
-| `offline_time` | Float | Offline time metric value |
-| `disconnect_count` | Float | Disconnect count metric value |
-| `wifi_signal_strength` | Float | WiFi signal metric value |
-| `connection_time` | Float | Connection time metric value |
-| `feature_values_json` | Text/JSON | All feature values |
-| `status` | String(20) | Investigation status (open, investigating, resolved, false_positive) |
-| `assigned_to` | String(100) | Assigned analyst |
-| `notes` | Text | Investigation notes |
-| `created_at` | DateTime | Creation timestamp |
-| `updated_at` | DateTime | Last update timestamp |
+**Timestamp Column:** `CollectedDate` | **Device Column:** `DeviceId` | **Row Count:** ~500K
 
 ---
 
-## Baseline & Anomaly Detection Tables
+### 3. cs_DataUsage (Network Data Consumption)
 
-### 8. BASELINES
+| Column | Type | Description |
+|--------|------|-------------|
+| `CollectedDate` | date | Collection date |
+| `DeviceId` | int | Device identifier |
+| `AppId` | int | Application identifier (dimension) |
+| `ConnectionTypeId` | int | Network type identifier: WiFi/Mobile/Roaming (dimension) |
+| `Download` | bigint | Downloaded bytes by app |
+| `Upload` | bigint | Uploaded bytes by app |
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `baseline_id` | String(50) | Primary key |
-| `tenant_id` | String(50) | Foreign key |
-| `name` | String(255) | Baseline name |
-| `scope` | String(50) | Scope level (tenant, site, device_group, device) |
-| `scope_id` | String(50) | ID of scope entity |
-| `metric_id` | String(50) | Foreign key to metric |
-| `window_config` | Text/JSON | Configuration (window_days, update_frequency, time_segmentation) |
-| `stats` | Text/JSON | Baseline statistics (mean, std, median, p5, p95, etc.) |
-| `valid_from` | DateTime | Start of validity period |
-| `valid_to` | DateTime | End of validity period (NULL = active) |
-| `created_by` | String(50) | Creator user ID or 'system' |
-
-### 9. ANOMALIES
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `anomaly_id` | String(50) | Primary key |
-| `tenant_id` | String(50) | Foreign key |
-| `device_id` | String(50) | Foreign key |
-| `event_id` | String(50) | Foreign key to anomaly_events |
-| `timestamp` | DateTime | When anomaly occurred |
-| `detector_name` | String(100) | Detection algorithm (isolation_forest, z_score, etc.) |
-| `severity` | String(20) | Severity level (low, medium, high, critical) |
-| `score` | Float | Anomaly score (0-1 or higher) |
-| `metrics_involved` | Text/JSON | Metric values at anomaly time |
-| `explanation` | Text | Human-readable explanation |
-| `explanation_cache_key` | String(100) | LLM cache key |
-| `user_feedback` | String(20) | User feedback (true_positive, false_positive, unknown) |
-| `status` | String(20) | Status (new, acknowledged, resolved, ignored) |
-| `created_at` | DateTime | Detection time |
-| `updated_at` | DateTime | Last update time |
-
-### 10. ANOMALY_EVENTS
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `event_id` | String(50) | Primary key |
-| `tenant_id` | String(50) | Foreign key |
-| `device_id` | String(50) | Foreign key |
-| `event_start` | DateTime | Event start time |
-| `event_end` | DateTime | Event end time |
-| `duration_minutes` | Integer | Event duration |
-| `anomaly_score_min` | Float | Minimum anomaly score in event |
-| `anomaly_score_max` | Float | Maximum anomaly score in event |
-| `anomaly_score_mean` | Float | Mean anomaly score in event |
-| `row_count` | Integer | Number of anomalous rows in event |
-| `severity` | String(20) | Event severity |
-| `metrics_json` | Text/JSON | Aggregated metric values |
-| `status` | String(20) | Status (new, acknowledged, resolved, ignored) |
-| `model_version` | String(50) | ML model version used |
-| `created_at` | DateTime | Creation timestamp |
-
-### 11. DEVICE_PATTERNS
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `pattern_id` | String(50) | Primary key |
-| `tenant_id` | String(50) | Foreign key |
-| `device_id` | String(50) | Foreign key |
-| `period_start` | DateTime | Period start |
-| `period_end` | DateTime | Period end |
-| `total_points` | Integer | Total data points in period |
-| `total_anomalies` | Integer | Total anomalies detected |
-| `anomaly_rate` | Float | Percentage of anomalous points |
-| `event_count` | Integer | Number of anomaly events |
-| `worst_anomaly_score` | Float | Highest anomaly score |
-| `mean_anomaly_score` | Float | Average anomaly score |
-| `pattern_json` | Text/JSON | Detailed pattern data |
-| `explanation` | Text | LLM-generated pattern explanation |
-| `model_version` | String(50) | ML model version |
-| `created_at` | DateTime | Creation timestamp |
+**Timestamp Column:** `CollectedDate` | **Device Column:** `DeviceId` | **Row Count:** ~300K
 
 ---
 
-## ML Model & Performance Tables
+### 4. cs_BatteryAppDrain (Per-App Battery Consumption)
 
-### 12. ML_MODELS
+| Column | Type | Description |
+|--------|------|-------------|
+| `CollectedDate` | date | Collection date |
+| `DeviceId` | int | Device identifier |
+| `AppId` | int | Application identifier (dimension) |
+| `BatteryDrain` | int | Battery percentage drained by app |
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `model_id` | String(50) | Primary key |
-| `tenant_id` | String(50) | Foreign key |
-| `name` | String(255) | Model name |
-| `model_type` | String(50) | Type (isolation_forest, z_score, hybrid, autoencoder, etc.) |
-| `version` | String(50) | Model version |
-| `config_json` | Text/JSON | Model configuration parameters |
-| `feature_cols_json` | Text/JSON | List of feature columns used |
-| `model_artifact` | Binary | Serialized model (optional) |
-| `status` | String(20) | Status (training, trained, deployed, archived) |
-| `trained_at` | DateTime | Training completion time |
-| `created_at` | DateTime | Creation timestamp |
-
-### 13. MODEL_REGISTRY
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | Integer | Primary key |
-| `tenant_id` | String(50) | Foreign key |
-| `model_name` | String(100) | Model name |
-| `model_version` | String(50) | Version identifier |
-| `training_run_id` | String(50) | Foreign key to training run |
-| `dataset_version_id` | Integer | Foreign key to dataset version |
-| `model_type` | String(50) | Model type |
-| `algorithm` | String(100) | Algorithm name |
-| `framework` | String(50) | Framework (sklearn, pytorch, onnx) |
-| `model_path` | String(500) | File path to model |
-| `onnx_path` | String(500) | ONNX export path |
-| `config_path` | String(500) | Config file path |
-| `baselines_path` | String(500) | Baselines file path |
-| `validation_auc` | Float | AUC score |
-| `anomaly_rate` | Float | Detected anomaly rate |
-| `feature_count` | Integer | Number of features |
-| `train_rows` | Integer | Training data rows |
-| `stage` | String(20) | Deployment stage (development, staging, production, archived) |
-| `is_active` | Boolean | Currently active flag |
-| `deployed_at` | DateTime | Deployment time |
-| `deployed_by` | String(100) | Deploying user |
-| `created_at` | DateTime | Creation time |
-| `created_by` | String(100) | Creator |
-| `archived_at` | DateTime | Archive time (if archived) |
-| `archive_reason` | Text | Reason for archiving |
-
-### 14. MODEL_DEPLOYMENTS
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `deployment_id` | String(50) | Primary key |
-| `model_id` | String(50) | Foreign key to ml_models |
-| `environment` | String(50) | Environment (production, staging, development) |
-| `is_active` | Boolean | Active flag |
-| `deployed_at` | DateTime | Deployment timestamp |
-| `deployed_by` | String(50) | Deploying user ID |
-
-### 15. MODEL_METRICS
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `metric_id` | BigInteger | Primary key |
-| `model_id` | String(50) | Foreign key |
-| `timestamp` | DateTime | Metric timestamp |
-| `precision_score` | Float | Model precision |
-| `recall_score` | Float | Model recall |
-| `f1_score` | Float | F1 score |
-| `true_positives` | Integer | TP count |
-| `false_positives` | Integer | FP count |
-| `false_negatives` | Integer | FN count |
-| `total_predictions` | Integer | Total predictions made |
-| `extra_data` | Text/JSON | Additional metrics |
-
-### 16. TRAINING_RUNS
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | Integer | Primary key |
-| `run_id` | String(50) | Run identifier |
-| `tenant_id` | String(50) | Foreign key |
-| `model_version` | String(50) | Model version trained |
-| `status` | String(20) | Run status |
-| `config_json` | Text/JSON | Training configuration |
-| `metrics_json` | Text/JSON | Training metrics |
-| `artifacts_json` | Text/JSON | Artifact locations |
-| `started_at` | DateTime | Start time |
-| `completed_at` | DateTime | Completion time |
-| `error` | Text | Error message if failed |
-| `created_at` | DateTime | Creation time |
-| `dataset_version_id` | Integer | Training dataset version |
-
-### 17. TRAINING_DATASET_VERSIONS
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | Integer | Primary key |
-| `tenant_id` | String(50) | Foreign key |
-| `version_tag` | String(100) | Version identifier |
-| `data_source` | String(50) | Source (xsight, mobicontrol, unified) |
-| `start_date` | DateTime | Data range start |
-| `end_date` | DateTime | Data range end |
-| `row_count` | Integer | Total rows in dataset |
-| `column_count` | Integer | Number of columns |
-| `device_count` | Integer | Number of unique devices |
-| `feature_columns_json` | Text/JSON | Column names |
-| `data_hash` | String(64) | SHA256 dataset hash |
-| `schema_hash` | String(64) | SHA256 schema hash |
-| `description` | Text | Description |
-| `query_used` | Text | SQL query or parameters |
-| `parameters_json` | Text/JSON | Loading parameters |
-| `is_active` | Boolean | Active flag |
-| `superseded_by_id` | Integer | Newer version ID |
-| `created_at` | DateTime | Creation time |
-| `created_by` | String(100) | Creator |
+**Timestamp Column:** `CollectedDate` | **Device Column:** `DeviceId` | **Row Count:** ~200K
 
 ---
 
-## Explanations & Investigation Tables
+### 5. cs_Heatmap (RF/Signal Quality Metrics)
 
-### 18. EXPLANATIONS
+| Column | Type | Description |
+|--------|------|-------------|
+| `CollectedDate` | date | Collection date |
+| `DeviceId` | int | Device identifier |
+| `NetworkTypeId` | int | Network type (WiFi/Cellular/etc) (dimension) |
+| `SignalStrengthBucketId` | int | Signal strength classification (dimension) |
+| `ReadingCount` | int | Number of signal readings taken |
+| `DropCnt` | int | Count of network drops/disconnections |
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `explanation_id` | String(50) | Primary key |
-| `anomaly_id` | String(50) | Foreign key to anomalies |
-| `llm_model` | String(100) | LLM model used (ollama/llama3.2, claude-3-haiku, etc.) |
-| `prompt_version` | String(20) | Prompt version for reproducibility |
-| `generated_text` | Text | Generated explanation |
-| `confidence` | Float | LLM confidence score (0-1) |
-| `tokens_used` | Integer | Token count for cost tracking |
-| `generation_time_ms` | Integer | Generation latency |
-| `context_used` | Text/JSON | Retrieved RAG context |
-| `created_at` | DateTime | Generation timestamp |
-
-### 19. ANOMALY_EXPLANATION_CACHE
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | Integer | Primary key |
-| `tenant_id` | String(50) | Foreign key |
-| `anomaly_id` | Integer | Anomaly identifier |
-| `summary_text` | Text | One-liner explanation |
-| `detailed_explanation` | Text | Full explanation |
-| `feature_contributions_json` | Text/JSON | Feature impact analysis |
-| `top_contributing_features` | Text/JSON | Top factors |
-| `ai_analysis_json` | Text/JSON | Full AI analysis |
-| `ai_model_used` | String(100) | AI model name |
-| `feedback_rating` | String(20) | User feedback (helpful, not_helpful) |
-| `feedback_text` | Text | Feedback comment |
-| `actual_root_cause` | Text | Correct root cause if provided |
-| `created_at` | DateTime | Creation time |
-| `updated_at` | DateTime | Update time |
-
-### 20. INVESTIGATION_NOTES
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | Integer | Primary key |
-| `tenant_id` | String(50) | Foreign key |
-| `anomaly_id` | Integer | Anomaly identifier |
-| `user` | String(100) | User who added note |
-| `note` | Text | Note content |
-| `action_type` | String(50) | Action type (status_change, assignment, note) |
-| `created_at` | DateTime | Creation time |
-
-### 21. TROUBLESHOOTING_CACHE
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | Integer | Primary key |
-| `tenant_id` | String(50) | Foreign key |
-| `error_signature` | String(255) | Hash of error pattern |
-| `error_pattern` | Text/JSON | Error details |
-| `advice` | Text | LLM-generated troubleshooting advice |
-| `summary` | String(500) | Brief summary |
-| `service_type` | String(50) | Service (sql, api, llm) |
-| `use_count` | Integer | Reuse count |
-| `last_used` | DateTime | Last used timestamp |
-| `created_at` | DateTime | Creation time |
-
-### 22. LEARNED_REMEDIATIONS
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | Integer | Primary key |
-| `tenant_id` | String(50) | Foreign key |
-| `pattern_name` | String(255) | Pattern name |
-| `pattern_hash` | String(64) | Pattern hash for matching |
-| `anomaly_types` | Text/JSON | Applicable anomaly types |
-| `severity_range` | Text/JSON | Severity range |
-| `feature_conditions_json` | Text/JSON | Matching conditions |
-| `event_patterns_json` | Text/JSON | Event patterns |
-| `remediation_title` | String(255) | Remediation title |
-| `remediation_description` | Text | Full description |
-| `remediation_steps_json` | Text/JSON | Step-by-step instructions |
-| `automation_config_json` | Text/JSON | Automation settings |
-| `times_suggested` | Integer | Number of times suggested |
-| `times_applied` | Integer | Number of times applied |
-| `success_count` | Integer | Successful applications |
-| `failure_count` | Integer | Failed applications |
-| `initial_confidence` | Float | Initial confidence (0-1) |
-| `current_confidence` | Float | Current confidence (0-1) |
-| `confidence_history_json` | Text/JSON | Confidence over time |
-| `learned_from_cases_json` | Text/JSON | Source anomalies |
-| `last_successful_case_id` | Integer | Last success reference |
-| `is_active` | Boolean | Active flag |
-| `deactivation_reason` | Text | Reason if deactivated |
-| `created_at` | DateTime | Creation time |
-| `updated_at` | DateTime | Update time |
-
-### 23. REMEDIATION_OUTCOMES
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | Integer | Primary key |
-| `tenant_id` | String(50) | Foreign key |
-| `anomaly_id` | Integer | Anomaly identifier |
-| `learned_remediation_id` | Integer | Remediation applied |
-| `remediation_title` | String(255) | Title |
-| `remediation_source` | String(50) | Source (learned, ai_generated, policy, manual) |
-| `applied_at` | DateTime | Application time |
-| `applied_by` | String(100) | Applying user |
-| `outcome` | String(50) | Outcome (resolved, partially_resolved, no_effect, made_worse) |
-| `outcome_recorded_at` | DateTime | Outcome timestamp |
-| `outcome_notes` | Text | Notes on outcome |
-| `anomaly_context_json` | Text/JSON | Snapshot of anomaly state |
-| `created_at` | DateTime | Creation time |
-
-### 24. DEVICE_ACTION_LOGS
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | Integer | Primary key |
-| `tenant_id` | String(50) | Foreign key |
-| `device_id` | Integer | Device identifier |
-| `action_type` | String(50) | Action type (lock, restart, wipe, message, locate, sync) |
-| `initiated_by` | String(100) | User who initiated action |
-| `reason` | Text | Reason for action |
-| `success` | Boolean | Success flag |
-| `error_message` | Text | Error if failed |
-| `mobicontrol_action_id` | String(100) | MobiControl API ID |
-| `timestamp` | DateTime | Action time |
-| `created_at` | DateTime | Record creation time |
+**Timestamp Column:** `CollectedDate` | **Device Column:** `DeviceId` | **Row Count:** ~150K
 
 ---
 
-## Alerting & Notification Tables
+### 6. cs_DataUsageByHour (Hourly Data Usage)
 
-### 25. ALERT_RULES
+| Column | Type | Description |
+|--------|------|-------------|
+| `CollectedDate` | date | Collection date |
+| `Hour` | int | Hour of day (0-23) (dimension) |
+| `DeviceId` | int | Device identifier |
+| `AppId` | int | Application identifier (dimension) |
+| `ConnectionTypeId` | int | Network type (dimension) |
+| `Download` | bigint | Hourly download bytes |
+| `Upload` | bigint | Hourly upload bytes |
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `rule_id` | String(50) | Primary key |
-| `tenant_id` | String(50) | Foreign key |
-| `name` | String(255) | Rule name |
-| `rule_type` | String(50) | Type (anomaly_severity, anomaly_count, pattern_detected, etc.) |
-| `conditions_json` | Text/JSON | Rule conditions |
-| `severity` | String(20) | Rule severity (low, medium, high, critical) |
-| `actions_json` | Text/JSON | Notification actions (email, webhook, etc.) |
-| `is_enabled` | Boolean | Enabled flag |
-| `created_at` | DateTime | Creation time |
-| `updated_at` | DateTime | Update time |
-
-### 26. ALERTS
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `alert_id` | String(50) | Primary key |
-| `rule_id` | String(50) | Foreign key to alert_rules |
-| `tenant_id` | String(50) | Foreign key |
-| `anomaly_id` | String(50) | Foreign key (optional) |
-| `device_id` | String(50) | Foreign key (optional) |
-| `event_id` | String(50) | Foreign key (optional) |
-| `severity` | String(20) | Alert severity |
-| `status` | String(20) | Status (open, acknowledged, resolved, suppressed) |
-| `message` | Text | Alert message |
-| `triggered_at` | DateTime | Trigger time |
-| `acknowledged_at` | DateTime | Acknowledgment time |
-| `acknowledged_by` | String(50) | Acknowledging user |
-| `resolved_at` | DateTime | Resolution time |
-| `extra_data` | Text/JSON | Additional context |
-
-### 27. ALERT_NOTIFICATIONS
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `notification_id` | BigInteger | Primary key |
-| `alert_id` | String(50) | Foreign key |
-| `channel` | String(50) | Channel (email, webhook, sms, slack) |
-| `recipient` | String(255) | Email, URL, or phone |
-| `status` | String(20) | Status (pending, sent, failed, delivered) |
-| `response_json` | Text/JSON | Service response |
-| `sent_at` | DateTime | Send time |
+**Timestamp Column:** `CollectedDate` | **Device Column:** `DeviceId` | **Row Count:** ~104M (Large Table)
 
 ---
 
-## Audit & Compliance Tables
+### 7. cs_BatteryLevelDrop (Hourly Battery Drain)
 
-### 28. AUDIT_LOGS
+| Column | Type | Description |
+|--------|------|-------------|
+| `CollectedDate` | date | Collection date |
+| `Hour` | int | Hour of day (0-23) (dimension) |
+| `DeviceId` | int | Device identifier |
+| `BatteryLevel` | int | Battery percentage at hour |
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `log_id` | BigInteger | Primary key |
-| `timestamp` | DateTime | Event timestamp |
-| `user_id` | String(50) | User identifier |
-| `tenant_id` | String(50) | Foreign key |
-| `action` | String(50) | Action (view, create, update, delete, export) |
-| `resource_type` | String(50) | Resource type (anomaly, device, baseline, etc.) |
-| `resource_id` | String(50) | Resource identifier |
-| `ip_address` | String(45) | IPv6 address |
-| `metadata` | Text/JSON | Request details and changes |
-
-### 29. CHANGE_LOG
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `change_id` | String(50) | Primary key |
-| `tenant_id` | String(50) | Foreign key |
-| `timestamp` | DateTime | Change timestamp |
-| `change_type` | String(50) | Type (policy, os_version, app_version, ap_added, etc.) |
-| `description` | Text | Change description |
-| `affected_devices` | Text/JSON | List of affected device IDs |
-| `source` | String(50) | Source (xsight, mobicontrol, manual, api) |
-| `metadata` | Text/JSON | Additional details |
+**Timestamp Column:** `CollectedDate` | **Device Column:** `DeviceId` | **Row Count:** ~14.8M (Large Table)
 
 ---
 
-## Location & Insights Tables
+### 8. cs_AppUsageListed (Hourly App Usage)
 
-### 30. LOCATION_METADATA
+| Column | Type | Description |
+|--------|------|-------------|
+| `CollectedDate` | date | Collection date |
+| `Hour` | int | Hour of day (0-23) (dimension) |
+| `DeviceId` | int | Device identifier |
+| `AppId` | int | Application identifier (dimension) |
+| `VisitCount` | int | Hourly app visits |
+| `TotalForegroundTime` | int | Hourly foreground time in seconds |
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | Integer | Primary key |
-| `tenant_id` | String(50) | Foreign key |
-| `location_id` | String(100) | Location identifier (warehouse-1, store-a101) |
-| `location_name` | String(255) | Display name |
-| `parent_region` | String(100) | Parent region (Northeast, Region-1) |
-| `timezone` | String(50) | Timezone (default UTC) |
-| `mapping_type` | String(50) | Mapping method (custom_attribute, label, device_group, geo_fence) |
-| `mapping_attribute` | String(100) | Attribute name (Store, Warehouse) |
-| `mapping_value` | String(255) | Attribute value (A101, WH-North) |
-| `device_group_id` | Integer | Device group identifier |
-| `geo_fence_json` | Text/JSON | Geofence data (lat, lon, radius_m) |
-| `shift_schedules_json` | Text/JSON | Shift information |
-| `baseline_battery_drain_per_hour` | Float | Computed baseline |
-| `baseline_disconnect_rate` | Float | Computed baseline |
-| `baseline_drop_rate` | Float | Computed baseline |
-| `baseline_computed_at` | DateTime | Baseline computation time |
-| `is_active` | Boolean | Active flag |
-| `created_at` | DateTime | Creation time |
-| `updated_at` | DateTime | Update time |
-
-### 31. AGGREGATED_INSIGHTS
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | Integer | Primary key |
-| `tenant_id` | String(50) | Foreign key |
-| `entity_type` | String(50) | Entity type (location, user, cohort, device_model, app) |
-| `entity_id` | String(100) | Entity identifier |
-| `entity_name` | String(255) | Entity display name |
-| `insight_category` | String(100) | Insight category |
-| `severity` | String(20) | Severity (critical, warning, info) |
-| `headline` | Text | Customer-facing headline |
-| `impact_statement` | Text | Business impact |
-| `comparison_context` | Text | Comparative context |
-| `recommended_actions_json` | Text/JSON | Recommended actions |
-| `insight_data_json` | Text/JSON | Full insight payload |
-| `affected_device_count` | Integer | Number of affected devices |
-| `affected_devices_json` | Text/JSON | Device list |
-| `trend_direction` | String(20) | Trend (improving, stable, worsening) |
-| `previous_value` | Float | Previous metric value |
-| `current_value` | Float | Current metric value |
-| `change_percent` | Float | Percentage change |
-| `confidence_score` | Float | Confidence (0-1) |
-| `data_quality_score` | Float | Quality score (0-1) |
-| `computed_at` | DateTime | Computation time |
-| `valid_until` | DateTime | Validity end |
-| `is_active` | Boolean | Active flag |
-| `acknowledged_at` | DateTime | Acknowledgment time |
-| `acknowledged_by` | String(100) | Acknowledging user |
-
-### 32. DEVICE_FEATURES
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | Integer | Primary key |
-| `tenant_id` | String(50) | Foreign key |
-| `device_id` | Integer | Device identifier |
-| `feature_values_json` | Text/JSON | Computed features |
-| `metadata_json` | Text/JSON | Device metadata |
-| `computed_at` | DateTime | Computation timestamp |
-| `created_at` | DateTime | Creation time |
-
-### 33. SHIFT_PERFORMANCE
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | Integer | Primary key |
-| `tenant_id` | String(50) | Foreign key |
-| `device_id` | Integer | Device identifier |
-| `location_id` | String(100) | Location identifier |
-| `shift_date` | DateTime | Shift date |
-| `shift_name` | String(50) | Shift name (Morning, Afternoon, Night) |
-| `shift_start` | DateTime | Shift start time |
-| `shift_end` | DateTime | Shift end time |
-| `shift_duration_hours` | Float | Duration in hours |
-| `battery_start` | Float | Starting battery percentage |
-| `battery_end` | Float | Ending battery percentage |
-| `battery_drain_total` | Float | Total drain |
-| `battery_drain_rate_per_hour` | Float | Drain rate |
-| `will_complete_shift` | Boolean | Predicted completion flag |
-| `estimated_dead_time` | DateTime | Predicted failure time |
-| `actual_completed_shift` | Boolean | Actual completion |
-| `was_fully_charged_at_start` | Boolean | Charging status |
-| `charge_events_count` | Integer | Number of charge events |
-| `total_charge_time_minutes` | Float | Charging duration |
-| `charge_received_during_shift` | Float | Battery % gained |
-| `screen_on_time_minutes` | Float | Screen active time |
-| `app_foreground_time_minutes` | Float | App foreground time |
-| `total_drops` | Integer | Call drops |
-| `total_disconnects` | Integer | Connection disconnects |
-| `drain_vs_location_baseline` | Float | Comparison to location baseline |
-| `drain_vs_device_baseline` | Float | Comparison to device baseline |
-| `created_at` | DateTime | Creation time |
+**Timestamp Column:** `CollectedDate` | **Device Column:** `DeviceId` | **Row Count:** ~8.5M (Large Table)
 
 ---
 
-## Device Assignment Tables
+### 9. cs_PresetApps (Preset App Usage)
 
-### 34. DEVICE_ASSIGNMENTS
+| Column | Type | Description |
+|--------|------|-------------|
+| `CollectedDate` | date | Collection date |
+| `Hour` | int | Hour of day (0-23) (dimension) |
+| `PresetAppId` | int | Preset app identifier (dimension) |
+| `DeviceId` | int | Device identifier |
+| `ConnectionTime` | int | Connection time in seconds |
+| `Download` | bigint | Downloaded bytes |
+| `Upload` | bigint | Uploaded bytes |
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | BigInteger | Primary key |
-| `tenant_id` | String(100) | Foreign key |
-| `device_id` | String(100) | Device identifier |
-| `user_id` | String(100) | User identifier |
-| `user_name` | String(200) | User display name |
-| `user_email` | String(200) | User email |
-| `team_id` | String(100) | Team identifier |
-| `team_name` | String(200) | Team display name |
-| `assignment_type` | String(50) | Type (owner, user, operator, manager) |
-| `valid_from` | DateTime | Assignment start date |
-| `valid_to` | DateTime | Assignment end date (NULL = current) |
-| `source` | String(50) | Source (mc_label, mc_attribute, manual, ad_sync) |
-| `source_label_type` | String(100) | Source label type (Owner, AssignedUser) |
-| `created_at` | DateTime | Creation time |
-| `updated_at` | DateTime | Update time |
+**Timestamp Column:** `CollectedDate` | **Device Column:** `DeviceId` | **Row Count:** ~19M (Large Table)
 
 ---
 
-## Cost Intelligence Tables
+### 10. cs_WifiHour (WiFi Connectivity)
 
-### 35. DEVICE_TYPE_COSTS
+| Column | Type | Description |
+|--------|------|-------------|
+| `CollectedDate` | date | Collection date |
+| `Hour` | int | Hour of day (0-23) (dimension) |
+| `Deviceid` | int | Device identifier (lowercase variant) |
+| `AccessPointId` | int | WiFi access point identifier (dimension) |
+| `WiFiSignalStrength` | int | WiFi signal strength (dBm) |
+| `ConnectionTime` | int | WiFi connection duration in seconds |
+| `DisconnectCount` | int | Number of WiFi disconnections |
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | BigInteger | Primary key |
-| `tenant_id` | String(50) | Foreign key |
-| `device_model` | String(255) | Device model string |
-| `currency_code` | String(3) | Currency (default USD) |
-| `purchase_cost` | BigInteger | Purchase cost in cents |
-| `replacement_cost` | BigInteger | Replacement cost in cents |
-| `repair_cost_avg` | BigInteger | Average repair cost in cents |
-| `depreciation_months` | Integer | Depreciation period (default 36) |
-| `residual_value_percent` | Integer | End-of-life value % |
-| `warranty_months` | Integer | Warranty period |
-| `valid_from` | DateTime | Effective start date |
-| `valid_to` | DateTime | Effective end date (NULL = active) |
-| `notes` | Text | Additional notes |
-| `created_by` | String(100) | Creator |
-| `created_at` | DateTime | Creation time |
-| `updated_at` | DateTime | Update time |
-
-### 36. OPERATIONAL_COSTS
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | BigInteger | Primary key |
-| `tenant_id` | String(50) | Foreign key |
-| `name` | String(255) | Cost name |
-| `description` | Text | Description |
-| `category` | String(50) | Category (labor, downtime, support, infrastructure, maintenance, other) |
-| `currency_code` | String(3) | Currency (default USD) |
-| `amount` | BigInteger | Cost amount in cents |
-| `cost_type` | String(50) | Type (hourly, daily, per_incident, fixed_monthly, per_device) |
-| `unit` | String(50) | Unit (hour, day, incident, month, device) |
-| `scope_type` | String(50) | Scope (tenant, location, device_group, device_model) |
-| `scope_id` | String(100) | Scope entity ID |
-| `is_active` | Boolean | Active flag |
-| `valid_from` | DateTime | Effective start date |
-| `valid_to` | DateTime | Effective end date |
-| `notes` | Text | Notes |
-| `created_by` | String(100) | Creator |
-| `created_at` | DateTime | Creation time |
-| `updated_at` | DateTime | Update time |
-
-### 37. COST_CALCULATION_CACHE
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | BigInteger | Primary key |
-| `tenant_id` | String(50) | Foreign key |
-| `entity_type` | String(50) | Entity type (anomaly, anomaly_event, insight, device) |
-| `entity_id` | String(100) | Entity identifier |
-| `device_id` | String(50) | Device identifier |
-| `device_model` | String(255) | Device model |
-| `currency_code` | String(3) | Currency (default USD) |
-| `hardware_cost` | BigInteger | Hardware cost in cents |
-| `downtime_cost` | BigInteger | Downtime cost in cents |
-| `labor_cost` | BigInteger | Labor cost in cents |
-| `other_cost` | BigInteger | Other costs in cents |
-| `total_cost` | BigInteger | Total cost in cents |
-| `potential_savings` | BigInteger | Potential savings in cents |
-| `investment_required` | BigInteger | Investment needed in cents |
-| `payback_months` | Float | Payback period in months |
-| `breakdown_json` | Text/JSON | Detailed cost breakdown |
-| `impact_level` | String(20) | Impact level (high, medium, low) |
-| `confidence_score` | Float | Confidence score (0-1) |
-| `confidence_explanation` | Text | Confidence reasoning |
-| `calculation_version` | String(20) | Formula version |
-| `cost_config_snapshot_json` | Text/JSON | Cost configuration snapshot |
-| `calculated_at` | DateTime | Calculation time |
-| `expires_at` | DateTime | Expiration time |
-
-### 38. COST_AUDIT_LOGS
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | BigInteger | Primary key |
-| `tenant_id` | String(50) | Foreign key |
-| `entity_type` | String(50) | Entity type (device_type_cost, operational_cost) |
-| `entity_id` | BigInteger | Entity identifier |
-| `action` | String(20) | Action (create, update, delete) |
-| `old_values_json` | Text/JSON | Previous values |
-| `new_values_json` | Text/JSON | New values |
-| `changed_fields_json` | Text/JSON | Changed field list |
-| `user_id` | String(100) | User who made change |
-| `user_email` | String(255) | User email |
-| `change_reason` | Text | Reason for change |
-| `source` | String(50) | Source (manual, api, import, system) |
-| `ip_address` | String(45) | Request IP |
-| `user_agent` | String(500) | Browser info |
-| `request_id` | String(100) | Request tracking ID |
-| `timestamp` | DateTime | Timestamp |
+**Timestamp Column:** `CollectedDate` | **Device Column:** `Deviceid` | **Row Count:** ~755K
 
 ---
 
-## External Data Discovery Tables
+### 11. cs_WiFiLocation (WiFi + GPS Location Data)
 
-The system also supports dynamic schema discovery from external data sources (XSight DW and MobiControl databases):
+| Column | Type | Description |
+|--------|------|-------------|
+| `CollectedDate` | date | Collection date |
+| `Hour` | int | Hour of day (0-23) (dimension) |
+| `Deviceid` | int | Device identifier |
+| `AccessPointId` | int | WiFi access point identifier (dimension) |
+| `ReadingTime` | datetime | Exact reading timestamp |
+| `WiFiSignalStrength` | int | WiFi signal strength (dBm) |
+| `Latitude` | float | GPS latitude coordinate |
+| `Longitude` | float | GPS longitude coordinate |
 
-### XSight Tables (cs_* prefix)
+**Timestamp Column:** `CollectedDate` | **Device Column:** `Deviceid` | **Row Count:** ~790K
 
-| Table Name | Description |
-|------------|-------------|
-| `cs_BatteryStat` | Battery statistics |
-| `cs_AppUsage` | Application usage metrics |
-| `cs_DataUsage` | Data consumption metrics |
-| `cs_BatteryAppDrain` | Battery drain by application |
-| `cs_Heatmap` | Device activity heatmaps |
-| `cs_DataUsageByHour` | Hourly data consumption |
-| `cs_BatteryLevelDrop` | Battery level drop events |
-| `cs_AppUsageListed` | Listed application usage |
-| `cs_WifiHour` | Hourly WiFi statistics |
-| `cs_WiFiLocation` | WiFi location data |
-| `cs_LastKnown` | Last known device state |
-| `cs_DeviceInstalledApp` | Installed applications |
-| `cs_PresetApps` | Preset application list |
+---
 
-*Plus additional cs_* tables dynamically discovered*
+### 12. cs_LastKnown (Last Known Location)
 
-### MobiControl Tables
+| Column | Type | Description |
+|--------|------|-------------|
+| `CollectedDate` | date | Collection date |
+| `DeviceId` | int | Device identifier |
+| `CollectedTime` | time | Time of collection |
+| `Latitude` | float | Last known latitude |
+| `Longitude` | float | Last known longitude |
+| `NetworkTypeId` | int | Network type when location was captured (dimension) |
+| `SignalStrengthBucketId` | int | Signal strength category (dimension) |
 
-| Table Name | Description |
-|------------|-------------|
-| `DeviceStatInt` | Time-series numeric stats |
-| `DeviceStatString` | Time-series string stats |
-| `DeviceStatLocation` | Location data |
-| `DeviceStatNetTraffic` | Network metrics |
-| `DeviceInstalledApp` | Installed applications |
-| `MainLog` | Main system log |
-| `Alert` | Alert records |
-| `Events` | Event records |
-| `DevInfo` | Device information |
-| `DeviceLastKnownLocation` | Last known location |
-| `AndroidDevice` | Android device specifics |
-| `iOSDevice` | iOS device specifics |
-| `WindowsDevice` | Windows device specifics |
-| `MacDevice` | Mac device specifics |
-| `LinuxDevice` | Linux device specifics |
-| `ZebraAndroidDevice` | Zebra Android device specifics |
+**Timestamp Column:** `CollectedDate` | **Device Column:** `DeviceId` | **Row Count:** ~674K
 
-*Plus additional tables dynamically discovered*
+---
+
+### 13. cs_DeviceInstalledApp (App Inventory Events)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `DeviceId` | int | Device identifier |
+| `AppId` | int | Application identifier (dimension) |
+| `AppVersionId` | int | Specific app version |
+| `EventTime` | datetime | Installation/removal event timestamp |
+| `EventType` | varchar | Type of event (Install/Update/Remove) |
+
+**Timestamp Column:** `EventTime` | **Device Column:** `DeviceId` | **Row Count:** ~372K
+
+---
+
+### 14. cs_CrashLogs (App Crash Analytics)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `CollectedDate` | date | Collection date |
+| `DeviceId` | int | Device identifier |
+| `AppId` | int | Application identifier (dimension) |
+| `CrashCount` | int | Number of crashes for the app |
+| `AppNotResponding` | int | App Not Responding (ANR) count |
+| `ExceptionType` | varchar | Type of exception thrown |
+| `ProcessName` | varchar | Process name that crashed |
+
+**Timestamp Column:** `CollectedDate` | **Device Column:** `DeviceId` | **Row Count:** Variable
+
+---
+
+## MobiControl Database
+
+Database: `MobiControlDB`
+
+### A. DevInfo (Core Device Inventory)
+
+This is the primary device table containing comprehensive device information.
+
+**Timestamp Column:** `LastCheckInTime` | **Row Count:** Millions
+
+#### Device Identity Fields
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `DeviceId` | int | Primary device identifier |
+| `DevId` | varchar | Device unique string ID |
+| `DevName` | varchar | Device name/hostname |
+| `TypeId` | int | Device type code |
+| `DeviceKindId` | int | Device category identifier |
+| `SerialNumber` | varchar | Hardware serial number |
+| `IMEI` | varchar | International Mobile Equipment Identity |
+| `MEID` | varchar | Mobile Equipment Identifier |
+| `UDID` | varchar | Unique Device Identifier (iOS) |
+
+#### Device Status & Connectivity
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `Online` | bit | Current online status (0/1) |
+| `Mode` | varchar | Device mode status |
+| `Flags` | int | Status flags bitmask |
+| `StatusMessage` | varchar | Current status message |
+| `ComplianceState` | varchar | Compliance status |
+| `ComplianceStateDetails` | varchar | Detailed compliance info |
+
+#### Critical Timestamps
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `EnrollmentTime` | datetime2 | Device enrollment timestamp |
+| `LastConnTime` | datetime2 | Last successful connection |
+| `LastDisconnTime` | datetime2 | Last disconnection timestamp |
+| `LastCheckInTime` | datetime2 | Last check-in timestamp |
+| `LastUpdateStatus` | datetime2 | Last update time |
+| `LastPolicyUpdateTime` | datetime2 | Last policy sync |
+| `LastLocationTime` | datetime2 | Last location update |
+| `LastInventoryTime` | datetime2 | Last inventory refresh |
+| `CreatedTime` | datetime2 | Record creation time |
+| `ModifiedTime` | datetime2 | Record modification time |
+
+#### MDM Agent Information
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `AgentVersion` | varchar | Agent version string |
+| `AgentVersionInt` | int | Agent version as integer |
+| `AgentVersionFourPart` | varchar | Full 4-part version |
+| `AgentBuildNumber` | varchar | Build number |
+| `AgentMode` | varchar | Agent operational mode |
+| `AgentStatus` | varchar | Agent health status |
+
+#### Hardware & Platform
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `Manufacturer` | varchar | Device manufacturer (Samsung, Apple, etc.) |
+| `Model` | varchar | Device model name |
+| `ModelNumber` | varchar | Model number |
+| `ProductName` | varchar | Product name |
+| `HardwareId` | varchar | Hardware identifier |
+
+#### OS & Firmware Information
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `OSVersion` | varchar | Operating system version |
+| `OSVersionInt` | int | OS version as integer |
+| `OSEditionId` | int | OS edition identifier |
+| `OSBuildNumber` | varchar | Build number |
+| `AndroidApiLevel` | int | Android API level (Android devices) |
+| `OEMVersion` | varchar | OEM-specific version |
+| `FirmwareVersion` | varchar | Firmware version |
+| `KernelVersion` | varchar | Kernel version |
+| `BasebandVersion` | varchar | Baseband version |
+| `BootloaderVersion` | varchar | Bootloader version |
+
+#### Memory & Storage
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `TotalRAM` | int | Total RAM in MB |
+| `AvailableRAM` | int | Available RAM in MB |
+| `TotalStorage` | int | Total storage in MB |
+| `AvailableStorage` | int | Available storage in MB |
+| `TotalExternalStorage` | int | External SD card total storage |
+| `AvailableExternalStorage` | int | External SD card available |
+| `TotalSDCardStorage` | int | SD card total storage |
+| `AvailableSDCardStorage` | int | SD card available |
+| `TotalInternalStorage` | int | Internal storage total |
+| `AvailableInternalStorage` | int | Internal storage available |
+
+#### Battery Status
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `BatteryStatus` | varchar | Battery health status (Good/Fair/Poor) |
+| `BatteryLevel` | int | Battery percentage (0-100) |
+| `BatteryHealth` | int | Battery health code |
+| `BackupBatteryStatus` | varchar | Backup battery status |
+| `IsCharging` | bit | Currently charging flag |
+| `BatteryTemperature` | int | Battery temperature in Celsius |
+
+#### Security & Compliance
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `HasPasscode` | bit | Passcode configured |
+| `PasscodeCompliant` | bit | Passcode meets policy |
+| `IsEncrypted` | bit | Device encryption enabled |
+| `EncryptionStatus` | varchar | Encryption status detail |
+| `SecurityStatus` | varchar | Overall security status |
+| `SecurityPatchLevel` | varchar | Security patch version |
+| `IsRooted` | bit | Device is rooted (Android) |
+| `IsJailbroken` | bit | Device is jailbroken (iOS) |
+| `IsDeveloperModeEnabled` | bit | Developer mode active |
+| `IsUSBDebuggingEnabled` | bit | USB debugging active |
+| `IsAndroidSafetynetAttestationPassed` | bit | SafetyNet passing |
+| `SafetynetAttestationTime` | datetime2 | SafetyNet check timestamp |
+| `KnoxCapability` | varchar | Samsung Knox capability |
+| `KnoxAttestationStatus` | varchar | Knox attestation status |
+| `KnoxVersion` | varchar | Knox version |
+| `TrustStatus` | varchar | Device trust status |
+| `CompromisedStatus` | varchar | Compromise detection status |
+
+#### Network & Connectivity
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `HostName` | varchar | Device hostname |
+| `IPAddress` | varchar | Current IP address |
+| `IPV6` | varchar | IPv6 address |
+| `MAC` | varchar | MAC address |
+| `WifiMAC` | varchar | WiFi MAC address |
+| `BluetoothMAC` | varchar | Bluetooth MAC address |
+| `WifiSSID` | varchar | Connected WiFi network name |
+| `WifiSignalStrength` | int | WiFi signal strength (dBm) |
+| `Carrier` | varchar | Mobile carrier name |
+| `SIMCarrierNetwork` | varchar | SIM card carrier |
+| `PhoneNumber` | varchar | Device phone number |
+| `CellularTechnology` | varchar | Cellular standard (LTE/5G/etc.) |
+| `NetworkType` | varchar | Current network type |
+| `InRoaming` | bit | Device in roaming |
+| `InRoamingSIM2` | bit | Roaming on secondary SIM |
+| `DataRoamingEnabled` | bit | Data roaming enabled |
+| `VoiceRoamingEnabled` | bit | Voice roaming enabled |
+| `IsHotspotEnabled` | bit | Hotspot/tethering enabled |
+| `VPNConnected` | bit | VPN connection active |
+
+#### Location Information
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `Latitude` | float | GPS latitude |
+| `Longitude` | float | GPS longitude |
+| `LocationAccuracy` | int | GPS accuracy in meters |
+| `Altitude` | int | GPS altitude in meters |
+| `LocationSource` | varchar | Location source (GPS/WiFi/Cell/etc.) |
+
+#### User & Ownership
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `CurrentPersonId` | int | Current user person ID |
+| `OwnershipType` | varchar | Ownership classification (Corporate/BYOD/etc.) |
+| `AssignedUserId` | int | Assigned user ID |
+| `UserName` | varchar | Assigned user name |
+| `UserEmail` | varchar | Assigned user email |
+
+#### Device Groups & Policies
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `DeviceGroupId` | int | Device group identifier |
+| `PolicyId` | int | Applied policy ID |
+| `ProfileId` | int | Configuration profile ID |
+| `ConfigurationProfileCount` | int | Number of config profiles |
+
+#### App Management
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `InstalledAppCount` | int | Total installed apps |
+| `ManagedAppCount` | int | Managed apps count |
+| `PendingAppCount` | int | Apps pending installation |
+| `BlockedAppCount` | int | Blocked apps count |
+
+---
+
+### B. iOSDevice (iOS-Specific Features)
+
+**Join Key:** `DevId` (from DevInfo) | **Row Count:** Millions (iOS devices only)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `DevId` | varchar | Device identifier |
+| `IsSupervised` | bit | Device supervised enrollment |
+| `IsLostModeEnabled` | bit | Find My Device enabled |
+| `IsActivationLockEnabled` | bit | Activation Lock active |
+| `ActivationLockBypassCode` | varchar | Bypass code if available |
+| `IsDdmEnabled` | bit | Device Deployment Management |
+| `IsDeviceLocatorEnabled` | bit | Device locator feature |
+| `IsDoNotDisturbEnabled` | bit | Do Not Disturb mode |
+| `IsCloudBackupEnabled` | bit | iCloud backup enabled |
+| `LastCloudBackupTime` | datetime2 | Last backup timestamp |
+| `IsiTunesStoreAccountActive` | bit | iTunes Store account active |
+| `IsPersonalHotspotEnabled` | bit | Personal hotspot enabled |
+| `CellularDataUsed` | bigint | Cellular data usage bytes |
+| `CellularDataLimit` | bigint | Cellular data limit bytes |
+| `VoicemailCount` | int | Voicemail messages count |
+| `ManagementProfileUpdateTime` | datetime2 | MDM profile update time |
+| `ManagementProfileSigningCertificateExpiry` | datetime2 | Cert expiration |
+| `DEPProfileAssigned` | bit | Device Enrollment Program assigned |
+| `DEPProfilePushed` | bit | DEP profile pushed |
+| `IsMDMRemovable` | bit | MDM removable flag |
+| `AvailableSoftwareUpdateVersion` | varchar | Available iOS version |
+| `IsPasswordAutofillEnabled` | bit | Password autofill |
+| `IsVpnConfigurationInstalled` | bit | VPN config installed |
+
+---
+
+### C. WindowsDevice (Windows-Specific Features)
+
+**Join Key:** `DeviceId` | **Row Count:** Millions (Windows devices only)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `DeviceId` | int | Device identifier |
+| `IsLocked` | bit | Device currently locked |
+| `LockStatus` | varchar | Lock status detail |
+| `WifiSubnet` | varchar | WiFi subnet info |
+| `DomainJoined` | bit | Domain-joined flag |
+| `AzureADJoined` | bit | Azure AD joined |
+| `HybridAzureADJoined` | bit | Hybrid Azure AD joined |
+| `AntivirusStatus` | varchar | Antivirus status (On/Off/Disabled) |
+| `AntivirusSignatureVersion` | varchar | Signature version |
+| `AntivirusLastQuickScanTime` | datetime2 | Last quick scan |
+| `AntivirusLastFullScanTime` | datetime2 | Last full scan |
+| `LastAntivirusSyncTime` | datetime2 | Last signature update |
+| `FirewallStatus` | varchar | Windows Firewall status |
+| `AutoUpdateStatus` | varchar | Windows Update status |
+| `LastWindowsUpdateTime` | datetime2 | Last update install time |
+| `PendingRebootRequired` | bit | Reboot pending flag |
+| `TPMPresent` | bit | TPM chip present |
+| `TPMEnabled` | bit | TPM enabled |
+| `TPMVersion` | varchar | TPM version |
+| `SecureBootEnabled` | bit | Secure Boot enabled |
+| `BitLockerStatus` | varchar | BitLocker encryption status |
+| `OsImageDeployedTime` | datetime2 | OS deployment time |
+| `LastBootTime` | datetime2 | Last system boot time |
+| `UptimeMinutes` | int | System uptime in minutes |
+| `DefenderStatus` | varchar | Windows Defender status |
+| `DefenderRealTimeProtection` | bit | Real-time protection enabled |
+| `WindowsUpdatePendingCount` | int | Pending updates count |
+
+---
+
+### D. MacDevice (Mac-Specific Features)
+
+**Join Key:** `DeviceId` | **Row Count:** Thousands (Mac devices)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `DeviceId` | int | Device identifier |
+| `IsAppleSilicon` | bit | M1/M2 Apple Silicon chip |
+| `IsActivationLockSupported` | bit | Activation Lock support |
+| `IsActivationLockEnabled` | bit | Activation Lock enabled |
+| `IsContentCachingEnabled` | bit | Content caching feature |
+| `ContentCachingSize` | bigint | Cached content size |
+| `IsRemoteDesktopEnabled` | bit | Remote desktop enabled |
+| `IsScreenSharingEnabled` | bit | Screen sharing enabled |
+| `IsFileVaultEnabled` | bit | FileVault encryption enabled |
+| `BootstrapTokenEscrowed` | bit | Bootstrap token escrowed |
+| `IsRemoteLoginEnabled` | bit | SSH remote login enabled |
+| `AutoLoginEnabled` | bit | Auto-login feature enabled |
+| `GuestAccountEnabled` | bit | Guest account enabled |
+
+---
+
+### E. MacDeviceSecurity (Mac Security Features)
+
+**Join Key:** `DeviceId` | **Row Count:** Thousands (Mac devices)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `DeviceId` | int | Device identifier |
+| `IsEnabled` | bit | FileVault encryption enabled |
+| `FileVaultStatus` | varchar | FileVault status detail |
+| `IsSystemIntegrityProtectionEnabled` | bit | SIP protection active |
+| `IsRecoveryLockEnabled` | bit | Recovery Mode locked |
+| `RecoveryLockPasswordSet` | bit | Recovery password set |
+| `FirewallEnabled` | bit | Mac Firewall enabled |
+| `FirewallBlockAllIncoming` | bit | Block all incoming connections |
+| `FirewallStealthMode` | bit | Stealth mode enabled |
+| `GatekeeperStatus` | varchar | Gatekeeper security status |
+| `XProtectVersion` | varchar | XProtect definitions version |
+| `MRTVersion` | varchar | Malware Removal Tool version |
+
+---
+
+### F. LinuxDevice (Linux-Specific Features)
+
+**Join Key:** `DeviceId` | **Row Count:** Hundreds (Linux devices)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `DeviceId` | int | Device identifier |
+| `DistributionName` | varchar | Linux distribution (Ubuntu/CentOS/etc.) |
+| `DistributionVersion` | varchar | Distribution version |
+| `KernelVersion` | varchar | Linux kernel version |
+| `LastOSUpdateScanTime` | datetime2 | Last update scan |
+| `PendingOSUpdates` | int | Number of pending updates |
+| `SELinuxStatus` | varchar | SELinux status (Enforcing/Permissive) |
+| `AppArmorStatus` | varchar | AppArmor security status |
+| `FirewallStatus` | varchar | Firewall status |
+| `SSHEnabled` | bit | SSH service running |
+| `RootLoginEnabled` | bit | Root SSH login enabled |
+| `PasswordAuthEnabled` | bit | Password authentication enabled |
+
+---
+
+### G. ZebraAndroidDevice (Zebra Android-Specific Features)
+
+**Join Key:** `DeviceId` | **Row Count:** Thousands (Zebra devices)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `DeviceId` | int | Device identifier |
+| `MXVersion` | varchar | MobileX Management System version |
+| `MXVersionInt` | int | MX version as integer |
+| `UserAccountsCount` | int | Number of user accounts |
+| `OSXVersion` | varchar | OSX version (Zebra OS) |
+| `DeviceTrackerEnabled` | bit | Device tracker feature |
+| `LicenseStatus` | varchar | License status |
+| `LifeguardUpdateVersion` | varchar | Lifeguard update version |
+| `BatteryPartNumber` | varchar | Battery part number |
+| `BatteryManufactureDate` | datetime2 | Battery manufacture date |
+| `BatteryCycleCount` | int | Battery cycle count |
+| `BatteryDecommissionStatus` | varchar | Battery status (Active/Retired) |
+| `ScannerFirmwareVersion` | varchar | Scanner firmware version |
+| `PrinterStatus` | varchar | Printer status |
+| `WLANSignalStrength` | int | WiFi signal strength |
+| `EthernetMACAddress` | varchar | Ethernet MAC address |
+
+---
+
+### H. MainLog (Activity/Event Log)
+
+**Timestamp Column:** `DateTime` | **Device Column:** `DeviceId` | **Row Count:** ~1M
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `ILogId` | bigint | Log entry unique ID |
+| `DateTime` | datetime2 | Event timestamp |
+| `EventId` | int | Event type identifier |
+| `Severity` | int | Event severity level |
+| `EventClass` | varchar | Event classification/category |
+| `ResTxt` | varchar | Event result/description |
+| `DeviceId` | int | Associated device ID |
+| `LoginId` | int | Associated login/user ID |
+
+---
+
+### I. Alert (System Alerts)
+
+**Timestamp Column:** `SetDateTime` | **Row Count:** ~1.3K
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `AlertId` | int | Alert unique identifier |
+| `AlertKey` | varchar | Alert unique key |
+| `AlertName` | varchar | Alert name/title |
+| `AlertSeverity` | int | Severity level |
+| `DevId` | varchar | Device identifier (string) |
+| `Status` | varchar | Alert status (Open/Closed/etc.) |
+| `SetDateTime` | datetime2 | When alert was triggered |
+| `AckDateTime` | datetime2 | When alert was acknowledged |
+
+---
+
+### J. DeviceStatInt (Time-Series Integer Metrics)
+
+**Timestamp Column:** `ServerDateTime` | **Device Column:** `DeviceId` | **Row Count:** ~764K
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `DeviceId` | int | Device identifier |
+| `TimeStamp` | datetime2 | Client-side timestamp |
+| `StatType` | int | Metric type code (see mapping below) |
+| `IntValue` | int | Numeric metric value |
+| `ServerDateTime` | datetime2 | Server-side timestamp |
+
+**StatType Mappings:**
+
+| StatType | Metric Name |
+|----------|-------------|
+| 1 | battery_level |
+| 2 | total_storage |
+| 3 | available_storage |
+| 4 | total_ram |
+| 5 | available_ram |
+| 6 | cpu_usage |
+| 7 | memory_usage |
+| 8 | wifi_signal_strength |
+| 9 | cellular_signal_strength |
+| 10 | device_temperature |
+| 11 | battery_temperature |
+| 12 | uptime_seconds |
+| 13 | screen_on_time |
+| 14 | network_rx_bytes |
+| 15 | network_tx_bytes |
+
+---
+
+### K. DeviceStatString (Time-Series String Metrics)
+
+**Timestamp Column:** `ServerDateTime` | **Device Column:** `DeviceId` | **Row Count:** ~349K
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `DeviceId` | int | Device identifier |
+| `TimeStamp` | datetime2 | Client timestamp |
+| `StatType` | int | String metric type code |
+| `StrValue` | varchar | String metric value |
+| `ServerDateTime` | datetime2 | Server timestamp |
+
+---
+
+### L. DeviceStatLocation (Time-Series GPS Data)
+
+**Timestamp Column:** `ServerDateTime` | **Device Column:** `DeviceId` | **Row Count:** ~619K
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `DeviceId` | int | Device identifier |
+| `TimeStamp` | datetime2 | Location timestamp |
+| `Latitude` | float | GPS latitude |
+| `Longitude` | float | GPS longitude |
+| `Altitude` | int | Altitude in meters |
+| `Heading` | int | Direction heading (degrees) |
+| `Speed` | int | Speed in km/h |
+| `ServerDateTime` | datetime2 | Server timestamp |
+
+---
+
+### M. DeviceStatNetTraffic (Time-Series Network Data)
+
+**Timestamp Column:** `ServerDateTime` | **Device Column:** `DeviceId` | **Row Count:** ~244K
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `DeviceId` | int | Device identifier |
+| `TimeStamp` | datetime2 | Traffic timestamp |
+| `StatType` | int | Network metric type |
+| `Upload` | bigint | Upload bytes |
+| `Download` | bigint | Download bytes |
+| `InterfaceType` | varchar | Network interface (WiFi/Cellular/etc.) |
+| `InterfaceID` | varchar | Specific interface identifier |
+| `Application` | varchar | Application name (if available) |
+| `ServerDateTime` | datetime2 | Server timestamp |
+
+---
+
+### N. DeviceInstalledApp (App Inventory)
+
+**Timestamp Column:** `LastChangedDate` | **Device Column:** `DeviceId` | **Row Count:** Variable
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `DeviceId` | int | Device identifier |
+| `InstalledAppId` | int | Installed app unique ID |
+| `StatusId` | int | App status code |
+| `Version` | varchar | App version string |
+| `Size` | int | App size in bytes |
+| `DataSize` | int | App data size in bytes |
+| `IsRunning` | bit | App currently running |
+| `LastChangedDate` | datetime2 | Last change timestamp |
+
+---
+
+### O. LabelDevice + LabelType (Custom Labels/Tags)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `DeviceId` | int | Device identifier |
+| `LabelTypeId` | int | Label type reference |
+| `Value` | nvarchar | Label value (can be location, assignment, custom data) |
+| `Name` | varchar | Label type name (from LabelType table) |
+
+**Common Label Types:**
+- Owner/User - Device owner/assigned user
+- Location - Physical location/store/warehouse
+- AssetTag - Asset tracking tag
+- CostCenter - Cost center assignment
+- Department - Department assignment
+- Custom attributes per deployment
+
+---
+
+### P. CustomAttribute (Custom Device Attributes)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `DeviceId` | int | Device identifier |
+| `Name` | varchar | Attribute name |
+| `Value` | varchar | Attribute value |
+
+Used for location mapping and custom properties per deployment.
 
 ---
 
 ## Summary Statistics
 
-| Category | Tables | Approximate Fields |
-|----------|--------|-------------------|
-| Core Infrastructure | 4 | 40+ |
-| Metrics & Telemetry | 3 | 45+ |
-| Baselines & Anomalies | 4 | 65+ |
-| ML & Training | 6 | 85+ |
-| Explanations & Investigation | 7 | 80+ |
-| Alerting | 3 | 30+ |
-| Audit & Compliance | 2 | 20+ |
-| Locations & Insights | 4 | 75+ |
-| Assignments | 1 | 15+ |
-| Cost Intelligence | 4 | 55+ |
-| **Total** | **38+** | **400+** |
+### XSight Tables
+
+| Table | Timestamp Column | Device Column | Row Count | Primary Use |
+|-------|------------------|---------------|-----------|-------------|
+| cs_BatteryStat | CollectedDate | DeviceId | ~700K | Battery health analysis |
+| cs_AppUsage | CollectedDate | DeviceId | ~500K | App usage patterns |
+| cs_DataUsage | CollectedDate | DeviceId | ~300K | Network usage metrics |
+| cs_BatteryAppDrain | CollectedDate | DeviceId | ~200K | Per-app battery drain |
+| cs_Heatmap | CollectedDate | DeviceId | ~150K | RF/Signal quality |
+| cs_DataUsageByHour | CollectedDate | DeviceId | ~104M | Hourly network details |
+| cs_BatteryLevelDrop | CollectedDate | DeviceId | ~14.8M | Hourly battery tracking |
+| cs_AppUsageListed | CollectedDate | DeviceId | ~8.5M | Hourly app details |
+| cs_PresetApps | CollectedDate | DeviceId | ~19M | Preset app usage |
+| cs_WifiHour | CollectedDate | Deviceid | ~755K | WiFi connectivity |
+| cs_WiFiLocation | CollectedDate | Deviceid | ~790K | WiFi + GPS location |
+| cs_LastKnown | CollectedDate | DeviceId | ~674K | Last location snapshot |
+| cs_DeviceInstalledApp | EventTime | DeviceId | ~372K | App inventory events |
+| cs_CrashLogs | CollectedDate | DeviceId | Variable | App crashes |
+
+### MobiControl Tables
+
+| Table | Timestamp Column | Device Column | Row Count | Primary Use |
+|-------|------------------|---------------|-----------|-------------|
+| DevInfo | LastCheckInTime | DeviceId | Millions | Device inventory |
+| iOSDevice | N/A | DevId | Millions | iOS-specific features |
+| WindowsDevice | N/A | DeviceId | Millions | Windows-specific features |
+| MacDevice | N/A | DeviceId | Thousands | Mac-specific features |
+| MacDeviceSecurity | N/A | DeviceId | Thousands | Mac security details |
+| LinuxDevice | N/A | DeviceId | Hundreds | Linux-specific features |
+| ZebraAndroidDevice | N/A | DeviceId | Thousands | Zebra Android features |
+| DeviceStatInt | ServerDateTime | DeviceId | ~764K | Integer metrics time-series |
+| DeviceStatString | ServerDateTime | DeviceId | ~349K | String metrics time-series |
+| DeviceStatLocation | ServerDateTime | DeviceId | ~619K | GPS coordinates time-series |
+| DeviceStatNetTraffic | ServerDateTime | DeviceId | ~244K | Network traffic time-series |
+| DeviceInstalledApp | LastChangedDate | DeviceId | Variable | App status tracking |
+| MainLog | DateTime | DeviceId | ~1M | Activity/event log |
+| Alert | SetDateTime | DevId | ~1.3K | System alerts |
+| LabelDevice | N/A | DeviceId | Variable | Device labels/tags |
+| CustomAttribute | N/A | DeviceId | Variable | Custom attributes |
+
+### Totals
+
+| Metric | Count |
+|--------|-------|
+| **XSight Tables** | 14 |
+| **MobiControl Tables** | 16 |
+| **Total Tables** | 30 |
+| **Total Fields/Columns** | 300+ |
 
 ---
 
-## Source Files
+## Schema Discovery
 
-The database structure is defined in the following source files:
+The system supports dynamic schema discovery that can detect additional tables at runtime:
 
-| File | Description |
-|------|-------------|
-| `scripts/init_backend_schema.sql` | SQL schema definition |
-| `src/device_anomaly/database/schema.py` | Python SQLAlchemy schema |
-| `src/device_anomaly/db/models.py` | Core ORM models |
-| `src/device_anomaly/db/models_cost.py` | Cost module models |
-| `src/device_anomaly/api/models.py` | API response models |
-| `src/device_anomaly/api/models_cost.py` | Cost API models |
-| `src/device_anomaly/data_access/schema_discovery.py` | External data discovery |
+### XSight High-Value Patterns
+- `cs_*` - All telemetry tables
+- `sb_*` - Smart battery tables
+- `vw_mc*` - MobiControl views
+- `vw_Device*` - Device views
+
+### MobiControl High-Value Patterns
+- `DeviceStat*` - Time-series stat tables
+- `Device*` - Device-related tables
+- `Alert*` - Alert tables
+- `Event*` - Event tables
