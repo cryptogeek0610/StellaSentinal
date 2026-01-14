@@ -19,6 +19,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
   ZAxis,
+  Cell,
 } from 'recharts';
 import clsx from 'clsx';
 import type {
@@ -80,10 +81,10 @@ export function CorrelationsTab() {
     queryFn: () => api.getCorrelationMatrix({ domain: selectedDomain }),
   });
 
-  // Fetch scatter data when metrics selected
+  // Fetch scatter data when metrics selected (increased limit from 500 to 2000 for fuller visualization)
   const { data: scatterData, isLoading: scatterLoading } = useQuery({
     queryKey: ['correlations', 'scatter', selectedMetricX, selectedMetricY],
-    queryFn: () => api.getScatterData(selectedMetricX, selectedMetricY),
+    queryFn: () => api.getScatterData(selectedMetricX, selectedMetricY, 'anomaly', 2000),
     enabled: selectedView === 'scatter' && !!selectedMetricX && !!selectedMetricY,
   });
 
@@ -451,6 +452,95 @@ function CorrelationMatrixView({ data, isLoading, onCellClick }: CorrelationMatr
 // Scatter Explorer View
 // =============================================================================
 
+// Anomaly detail panel for clicked points
+interface AnomalyDetailPanelProps {
+  point: {
+    deviceId: number;
+    x: number;
+    y: number;
+    cohort: string | null;
+  } | null;
+  metricX: string;
+  metricY: string;
+  onClose: () => void;
+}
+
+function AnomalyDetailPanel({ point, metricX, metricY, onClose }: AnomalyDetailPanelProps) {
+  if (!point) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 bg-red-500/10 border-b border-red-500/20">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
+            <span className="font-medium text-red-400">Anomaly Detected</span>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1 rounded-lg hover:bg-slate-700 transition-colors"
+          >
+            <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-4 space-y-4">
+          {/* Device ID */}
+          <div className="flex items-center justify-between p-3 rounded-lg bg-slate-800/50 border border-slate-700/30">
+            <span className="text-sm text-slate-400">Device ID</span>
+            <span className="font-mono font-medium text-white">{point.deviceId}</span>
+          </div>
+
+          {/* Metric Values */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="p-3 rounded-lg bg-slate-800/50 border border-slate-700/30">
+              <div className="text-xs text-slate-500 mb-1 truncate" title={metricX}>{metricX}</div>
+              <div className="text-lg font-mono font-bold text-blue-400">{point.x.toFixed(2)}</div>
+            </div>
+            <div className="p-3 rounded-lg bg-slate-800/50 border border-slate-700/30">
+              <div className="text-xs text-slate-500 mb-1 truncate" title={metricY}>{metricY}</div>
+              <div className="text-lg font-mono font-bold text-blue-400">{point.y.toFixed(2)}</div>
+            </div>
+          </div>
+
+          {/* Cohort */}
+          {point.cohort && (
+            <div className="flex items-center justify-between p-3 rounded-lg bg-slate-800/50 border border-slate-700/30">
+              <span className="text-sm text-slate-400">Cohort</span>
+              <span className="px-2 py-1 text-xs font-medium rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                {point.cohort}
+              </span>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex gap-2 pt-2">
+            <a
+              href={`/devices/${point.deviceId}`}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              View Device Profile
+            </a>
+            <button
+              onClick={onClose}
+              className="px-4 py-2 rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface ScatterExplorerViewProps {
   data?: ScatterPlotResponse;
   isLoading: boolean;
@@ -470,6 +560,13 @@ function ScatterExplorerView({
   onMetricXChange,
   onMetricYChange,
 }: ScatterExplorerViewProps) {
+  const [selectedAnomaly, setSelectedAnomaly] = useState<{
+    deviceId: number;
+    x: number;
+    y: number;
+    cohort: string | null;
+  } | null>(null);
+
   // Prepare scatter data for Recharts
   const chartData = useMemo(() => {
     if (!data?.points) return [];
@@ -581,10 +678,33 @@ function ScatterExplorerView({
                 )}
                 {/* Normal points */}
                 <Scatter name="Normal" data={normalData} fill="#3b82f6" fillOpacity={0.6} />
-                {/* Anomaly points */}
-                <Scatter name="Anomaly" data={anomalyData} fill="#ef4444" fillOpacity={0.8} />
+                {/* Anomaly points - clickable with Cell components */}
+                <Scatter name="Anomaly" data={anomalyData} fill="#ef4444" fillOpacity={0.8}>
+                  {anomalyData.map((entry, index) => (
+                    <Cell
+                      key={`anomaly-${index}`}
+                      cursor="pointer"
+                      onClick={() => {
+                        setSelectedAnomaly({
+                          deviceId: entry.deviceId,
+                          x: entry.x,
+                          y: entry.y,
+                          cohort: entry.cohort,
+                        });
+                      }}
+                    />
+                  ))}
+                </Scatter>
               </ScatterChart>
             </ResponsiveContainer>
+
+            {/* Anomaly Detail Panel */}
+            <AnomalyDetailPanel
+              point={selectedAnomaly}
+              metricX={selectedMetricX}
+              metricY={selectedMetricY}
+              onClose={() => setSelectedAnomaly(null)}
+            />
 
             {/* Stats Summary */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -612,9 +732,10 @@ function ScatterExplorerView({
                 <div className="w-3 h-3 rounded-full bg-blue-500" />
                 Normal ({normalData.length})
               </span>
-              <span className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-red-500" />
-                Anomaly ({anomalyData.length})
+              <span className="flex items-center gap-2 cursor-pointer group" title="Click any red point for details">
+                <div className="w-3 h-3 rounded-full bg-red-500 group-hover:ring-2 group-hover:ring-red-400/50" />
+                <span className="group-hover:text-red-400 transition-colors">Anomaly ({anomalyData.length})</span>
+                <span className="text-slate-600 group-hover:text-slate-400">- click for details</span>
               </span>
               <span className="flex items-center gap-2">
                 <div className="w-6 h-0.5 bg-amber-500" style={{ borderStyle: 'dashed' }} />

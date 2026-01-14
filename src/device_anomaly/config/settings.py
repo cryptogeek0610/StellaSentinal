@@ -10,9 +10,20 @@ from pydantic import BaseModel, Field, model_validator
 try:
     from dotenv import load_dotenv
 
-    env_path = Path(__file__).resolve().parents[2] / ".env"
-    if env_path.exists():
-        load_dotenv(env_path)
+    # Try multiple possible locations for .env file
+    # settings.py is at src/device_anomaly/config/settings.py
+    # .env is at project root (3 levels up from config/)
+    config_dir = Path(__file__).resolve().parent
+    possible_env_paths = [
+        config_dir.parents[2] / ".env",  # src/device_anomaly/config -> project root
+        config_dir.parents[3] / ".env",  # One more level up if needed
+        Path.cwd() / ".env",  # Current working directory
+    ]
+
+    for env_path in possible_env_paths:
+        if env_path.exists():
+            load_dotenv(env_path)
+            break
 except ImportError:
     pass  # python-dotenv not installed, skip
 

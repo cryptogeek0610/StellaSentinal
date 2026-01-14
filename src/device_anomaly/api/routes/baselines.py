@@ -1,15 +1,22 @@
-"""API routes for baseline management and LLM-driven adjustments."""
+"""API routes for baseline management and LLM-driven adjustments.
+
+This module provides:
+1. Standard baseline management (suggestions, adjustments, history)
+2. ML-enhanced baselines with ensemble detection and Bayesian adaptation
+3. Causal correlation discovery
+4. Real-time drift detection
+"""
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from pathlib import Path
 import json
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from device_anomaly.api.dependencies import get_db, get_tenant_id, require_role
 from device_anomaly.models.baseline import (
@@ -31,6 +38,10 @@ from device_anomaly.llm.prompt_utils import translate_metric, NO_THINKING_INSTRU
 from device_anomaly.database.schema import AnomalyResult
 
 router = APIRouter(prefix="/baselines", tags=["baselines"])
+logger = logging.getLogger(__name__)
+
+# Global ML service instance (lazy loaded)
+_ml_service = None
 
 _ALLOWED_BASELINE_SOURCES = {"dw", "synthetic"}
 
@@ -603,3 +614,394 @@ def get_baseline_history(
         return entries
     except (json.JSONDecodeError, TypeError):
         return []
+
+
+# =============================================================================
+# ML-ENHANCED BASELINE ROUTES (Ultra Mode)
+# =============================================================================
+
+
+async def _get_ml_service():
+    """Lazy-load the ML baseline service."""
+    global _ml_service
+    if _ml_service is None:
+        try:
+            from device_anomaly.services.ml_baseline_service import MLBaselineService
+            _ml_service = MLBaselineService()
+            # Try to load checkpoint
+            await _ml_service.load_checkpoint()
+        except ImportError as e:
+            logger.warning(f"ML baseline service not available: {e}")
+            raise HTTPException(
+                status_code=503,
+                detail="ML baseline service not available. Install required dependencies."
+            )
+    return _ml_service
+
+
+class MLBaselineStatusResponse(BaseModel):
+    """Status of the ML baseline engine."""
+    initialized: bool
+    last_train_time: Optional[str] = None
+    last_drift_check: Optional[str] = None
+    feature_count: int = 0
+    metric_count: int = 0
+    training_history_count: int = 0
+    drift_history_count: int = 0
+
+
+class MLTrainRequest(BaseModel):
+    """Request to train the ML baseline engine."""
+    lookback_days: int = Field(default=90, ge=7, le=365)
+    sources: Optional[List[str]] = None
+    feature_cols: Optional[List[str]] = None
+    metric_cols: Optional[List[str]] = None
+
+
+class MLTrainResponse(BaseModel):
+    """Response from ML training."""
+    success: bool
+    samples_trained: int = 0
+    feature_count: int = 0
+    metric_count: int = 0
+    duration_seconds: float = 0.0
+    error: Optional[str] = None
+
+
+class MLScoreRequest(BaseModel):
+    """Request to score device telemetry."""
+    device_data: Dict[str, Any]
+
+
+class MLScoreResponse(BaseModel):
+    """Response from ML scoring."""
+    device_id: Optional[str] = None
+    overall_anomaly_score: float
+    is_anomaly: bool
+    anomaly_type: str
+    metrics: Dict[str, Any]
+
+
+class CausalInsightResponse(BaseModel):
+    """Causal relationship insight."""
+    cause: str
+    effect: str
+    lag_days: int
+    correlation: float
+    direction: str
+    confidence: float
+    insight: str
+
+
+class DriftReportResponse(BaseModel):
+    """Drift detection report."""
+    timestamp: str
+    metrics_checked: int
+    metrics_drifted: int
+    drift_rate: float
+    auto_retrained: bool = False
+    details: Dict[str, Any] = {}
+
+
+class MLSuggestionResponse(BaseModel):
+    """ML-enhanced baseline suggestion."""
+    metric: str
+    current_baseline_mean: float
+    current_baseline_std: float
+    observed_median: float
+    z_score: float
+    proposed_adjustment: float
+    confidence: float
+    rationale: str
+    bayesian_uncertainty: Optional[float] = None
+    credible_interval: Optional[List[float]] = None
+
+
+@router.get("/ml/status", response_model=MLBaselineStatusResponse, tags=["ml-baselines"])
+async def get_ml_baseline_status():
+    """Get the current status of the ML baseline engine.
+
+    Returns information about:
+    - Whether the engine is initialized
+    - When it was last trained
+    - Number of features/metrics being tracked
+    - Training and drift detection history
+    """
+    try:
+        service = await _get_ml_service()
+        status = service.get_status()
+        return MLBaselineStatusResponse(**status)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to get ML baseline status")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/ml/train", response_model=MLTrainResponse, tags=["ml-baselines"])
+async def train_ml_baselines(
+    request: MLTrainRequest,
+    background_tasks: BackgroundTasks,
+    _: None = Depends(require_role(["admin"])),
+):
+    """Train the ML baseline engine from all data sources.
+
+    This is the 'Ultra' training mode that:
+    - Fuses data from XSight, MobiControl, and custom sources
+    - Trains an ensemble anomaly detector (IsolationForest + LOF + AutoEncoder + DBSCAN)
+    - Initializes Bayesian baselines with uncertainty quantification
+    - Discovers causal relationships between metrics
+    - Sets up drift detection references
+
+    Training runs synchronously but saves checkpoints for persistence.
+    """
+    try:
+        service = await _get_ml_service()
+
+        result = await service.train(
+            lookback_days=request.lookback_days,
+            feature_cols=request.feature_cols,
+            metric_cols=request.metric_cols,
+        )
+
+        return MLTrainResponse(
+            success=result.get("success", False),
+            samples_trained=result.get("samples_trained", 0),
+            feature_count=result.get("feature_count", 0),
+            metric_count=result.get("metric_count", 0),
+            duration_seconds=result.get("duration_seconds", 0.0),
+            error=result.get("error"),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("ML training failed")
+        return MLTrainResponse(success=False, error=str(e))
+
+
+@router.post("/ml/score", response_model=MLScoreResponse, tags=["ml-baselines"])
+async def score_device_with_ml(request: MLScoreRequest):
+    """Score a single device's telemetry using the ML engine.
+
+    Returns:
+    - Overall anomaly score (0-1)
+    - Anomaly classification
+    - Per-metric anomaly probabilities from Bayesian analysis
+    - Severity levels for each metric
+    """
+    try:
+        service = await _get_ml_service()
+        result = service.score_single_device(request.device_data)
+
+        return MLScoreResponse(
+            device_id=result.get("device_id"),
+            overall_anomaly_score=result.get("overall_anomaly_score", 0.0),
+            is_anomaly=result.get("is_anomaly", False),
+            anomaly_type=result.get("anomaly_type", "normal"),
+            metrics=result.get("metrics", {}),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("ML scoring failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/ml/causal-insights", response_model=List[CausalInsightResponse], tags=["ml-baselines"])
+async def get_causal_insights():
+    """Get discovered causal relationships between metrics.
+
+    Returns insights from causal discovery including:
+    - Cause and effect metrics
+    - Time lag between cause and effect
+    - Correlation strength
+    - Direction (causal, reverse_causal, bidirectional, spurious)
+    - Confidence score
+    - Human-readable insight
+
+    These relationships help understand how metrics influence each other,
+    enabling proactive anomaly prediction.
+    """
+    try:
+        service = await _get_ml_service()
+        insights = service.get_correlation_insights()
+
+        return [CausalInsightResponse(**i) for i in insights]
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to get causal insights")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/ml/check-drift", response_model=DriftReportResponse, tags=["ml-baselines"])
+async def check_baseline_drift(
+    lookback_days: int = Query(default=7, ge=1, le=90),
+):
+    """Check for distribution drift in recent data.
+
+    Uses multiple drift detection algorithms:
+    - PSI (Population Stability Index)
+    - KS Test (Kolmogorov-Smirnov)
+    - Jensen-Shannon Divergence
+    - Mean and variance shift detection
+
+    If significant drift is detected and auto-retraining is enabled,
+    the engine will automatically retrain.
+    """
+    try:
+        service = await _get_ml_service()
+
+        # Load recent data for drift check
+        import pandas as pd
+        df = await service.load_training_data(lookback_days=lookback_days)
+
+        if df.empty:
+            raise HTTPException(status_code=404, detail="No data available for drift check")
+
+        report = await service.check_drift(df)
+
+        return DriftReportResponse(
+            timestamp=report.get("timestamp", datetime.now(timezone.utc).isoformat()),
+            metrics_checked=report.get("metrics_checked", 0),
+            metrics_drifted=report.get("metrics_drifted", 0),
+            drift_rate=report.get("drift_rate", 0.0),
+            auto_retrained=report.get("auto_retrained", False),
+            details=report.get("details", {}),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Drift check failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/ml/suggestions", response_model=List[MLSuggestionResponse], tags=["ml-baselines"])
+async def get_ml_baseline_suggestions(
+    days: int = Query(default=30, ge=1, le=365),
+    z_threshold: float = Query(default=3.0, ge=1.0, le=10.0),
+):
+    """Get ML-enhanced baseline adjustment suggestions.
+
+    Combines:
+    - Statistical drift detection (z-scores from median/MAD)
+    - Bayesian uncertainty quantification
+    - Credible intervals for each metric
+
+    Suggestions are prioritized by:
+    1. Statistical significance (z-score)
+    2. Bayesian uncertainty (high uncertainty = more urgent)
+    3. Impact on anomaly detection
+    """
+    try:
+        service = await _get_ml_service()
+
+        # Load recent data
+        import pandas as pd
+        df = await service.load_training_data(lookback_days=days)
+
+        if df.empty:
+            return []
+
+        suggestions = service.get_baseline_suggestions(df, z_threshold=z_threshold)
+
+        return [
+            MLSuggestionResponse(
+                metric=s["metric"],
+                current_baseline_mean=s["current_baseline_mean"],
+                current_baseline_std=s["current_baseline_std"],
+                observed_median=s["observed_median"],
+                z_score=s["z_score"],
+                proposed_adjustment=s["proposed_adjustment"],
+                confidence=s["confidence"],
+                rationale=s["rationale"],
+                bayesian_uncertainty=s.get("bayesian_uncertainty"),
+                credible_interval=s.get("credible_interval"),
+            )
+            for s in suggestions
+        ]
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to get ML suggestions")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/ml/update-online", tags=["ml-baselines"])
+async def update_baselines_online(
+    device_data: Dict[str, Any],
+):
+    """Update baselines with new streaming data (online learning).
+
+    Uses Bayesian updating for real-time baseline adaptation:
+    - Incremental mean/variance updates (Welford's algorithm)
+    - Exponentially weighted moving statistics
+    - Change point detection
+
+    Call this endpoint as new telemetry arrives to keep baselines current.
+    """
+    try:
+        service = await _get_ml_service()
+
+        import pandas as pd
+        df = pd.DataFrame([device_data])
+
+        result = await service.update_baselines(df)
+
+        return {
+            "success": True,
+            "updated_metrics": result.get("updated_metrics", []),
+            "needs_retraining": result.get("needs_retraining", []),
+            "timestamp": result.get("timestamp"),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Online update failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/ml/training-history", tags=["ml-baselines"])
+async def get_ml_training_history():
+    """Get the training history of the ML baseline engine.
+
+    Returns list of past training runs with:
+    - Timestamp
+    - Number of samples trained
+    - Features and metrics used
+    - Duration
+    - Success/failure status
+    """
+    try:
+        service = await _get_ml_service()
+        return service.get_training_history()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to get training history")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/ml/drift-history", tags=["ml-baselines"])
+async def get_ml_drift_history():
+    """Get the drift detection history.
+
+    Returns list of past drift checks with:
+    - Timestamp
+    - Drift rate (fraction of metrics that drifted)
+    - Number of metrics that drifted
+    """
+    try:
+        service = await _get_ml_service()
+        return service.get_drift_history()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to get drift history")
+        raise HTTPException(status_code=500, detail=str(e))

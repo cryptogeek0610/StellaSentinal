@@ -98,9 +98,9 @@ function IssueItem({ issue }: { issue: SystemicIssue }) {
           </div>
           <p className="text-sm text-white font-medium mb-1">{issue.cohort_description}</p>
           <p className="text-xs text-slate-400">
-            {issue.deviation_multiplier.toFixed(1)}x {issue.metric} vs fleet avg
+            {(issue.deviation_multiplier ?? 0).toFixed(1)}x {issue.metric} vs fleet avg
             <span className="mx-1">·</span>
-            {issue.affected_device_count} devices
+            {issue.affected_device_count ?? 0} devices
           </p>
         </div>
       </div>

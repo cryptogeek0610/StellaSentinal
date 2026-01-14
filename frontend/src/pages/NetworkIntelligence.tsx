@@ -11,6 +11,7 @@
  */
 
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Card } from '../components/Card';
@@ -318,7 +319,7 @@ export default function NetworkIntelligence() {
 
   const tabs = [
     { id: 'overview' as const, label: 'Overview', icon: <ChartBarIcon /> },
-    { id: 'aps' as const, label: 'WiFi APs', icon: <WifiIcon /> },
+    { id: 'aps' as const, label: 'WiFi Networks', icon: <WifiIcon /> },
     { id: 'apps' as const, label: 'App Usage', icon: <DevicePhoneMobileIcon /> },
     { id: 'carriers' as const, label: 'Carriers', icon: <SignalIcon /> },
   ];
@@ -405,7 +406,7 @@ export default function NetworkIntelligence() {
                 color="stellar"
               />
               <KpiCard
-                label="WiFi Access Points"
+                label="WiFi Networks (SSIDs)"
                 value={summary?.total_aps ?? 0}
                 subValue={`${summary?.good_aps ?? 0} healthy`}
                 icon={<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -459,9 +460,9 @@ export default function NetworkIntelligence() {
                 </div>
               </Card>
 
-              {/* AP Signal Quality Distribution */}
+              {/* WiFi Network Signal Quality Distribution */}
               <Card className="p-6">
-                <h3 className="text-lg font-semibold text-white mb-4">AP Signal Quality</h3>
+                <h3 className="text-lg font-semibold text-white mb-4">WiFi Signal Quality by Network</h3>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={apQualityDistribution}>
@@ -501,24 +502,26 @@ export default function NetworkIntelligence() {
           </motion.div>
         )}
 
-        {/* WiFi APs Tab */}
+        {/* WiFi Networks Tab */}
         {selectedTab === 'aps' && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
           >
             <Card className="p-6">
-              <h3 className="text-lg font-semibold text-white mb-4">WiFi Access Points</h3>
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold text-white">WiFi Networks</h3>
+                <p className="text-sm text-slate-400 mt-1">Network performance aggregated by SSID across all connected devices</p>
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="text-left text-xs text-slate-500 uppercase tracking-wide border-b border-slate-700">
-                      <th className="pb-3 pr-4">SSID</th>
-                      <th className="pb-3 pr-4">Location</th>
-                      <th className="pb-3 pr-4">Signal</th>
+                      <th className="pb-3 pr-4">Network Name (SSID)</th>
+                      <th className="pb-3 pr-4">Avg Signal</th>
                       <th className="pb-3 pr-4">Drop Rate</th>
-                      <th className="pb-3 pr-4">Devices</th>
-                      <th className="pb-3">Quality</th>
+                      <th className="pb-3 pr-4">Connected Devices</th>
+                      <th className="pb-3">Quality Score</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -526,9 +529,7 @@ export default function NetworkIntelligence() {
                       <tr key={i} className="border-b border-slate-800 hover:bg-slate-800/50">
                         <td className="py-3 pr-4">
                           <div className="font-medium text-white">{ap.ssid}</div>
-                          <div className="text-xs text-slate-500">{ap.bssid}</div>
                         </td>
-                        <td className="py-3 pr-4 text-slate-400">{ap.location}</td>
                         <td className="py-3 pr-4">
                           <SignalBadge dbm={Math.round(ap.avg_signal_dbm)} />
                         </td>
@@ -598,9 +599,12 @@ export default function NetworkIntelligence() {
                     <p className="text-sm text-slate-400 mt-1">
                       Unknown application with high upload activity detected on 8 devices. This may indicate data exfiltration.
                     </p>
-                    <button className="mt-2 text-sm text-red-400 hover:text-red-300">
+                    <Link
+                      to="/investigations"
+                      className="mt-2 inline-block text-sm text-red-400 hover:text-red-300"
+                    >
                       Investigate &rarr;
-                    </button>
+                    </Link>
                   </div>
                 </div>
               </Card>
