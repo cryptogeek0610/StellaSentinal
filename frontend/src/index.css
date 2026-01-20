@@ -13,37 +13,69 @@
 @tailwind utilities;
 
 :root {
-  /* Core Space Palette */
+  /* Core Space Palette - Dark Mode (Default) */
   --color-void: 8 9 13;
   --color-space: 14 17 23;
   --color-nebula: 22 26 35;
   --color-cosmic: 32 38 50;
-  
+
   /* Stellar Accents */
   --color-stellar: 245 166 35;
   --color-nova: 255 199 95;
   --color-aurora: 0 217 192;
   --color-plasma: 99 102 241;
-  
+
   /* Status Colors */
   --color-success: 16 185 129;
   --color-warning: 255 107 53;
   --color-danger: 255 71 87;
   --color-info: 56 189 248;
-  
-  /* Text Hierarchy */
+
+  /* Text Hierarchy - WCAG AA Compliant (4.5:1+ contrast) */
   --color-text-primary: 240 242 245;
-  --color-text-secondary: 136 146 160;
-  --color-text-tertiary: 88 96 112;
-  
+  --color-text-secondary: 156 163 175; /* Improved from 136 146 160 for better contrast */
+  --color-text-tertiary: 107 114 128; /* Improved from 88 96 112 for better contrast */
+
   /* Borders & Lines */
   --color-border: 37 42 53;
   --color-border-subtle: 28 32 42;
-  
+
   /* Chart colors (using CSS variables for consistency) */
   --color-chart-primary: 245 166 35;
   --color-chart-secondary: 0 217 192;
   --color-chart-tertiary: 99 102 241;
+
+  /* Base font size for better readability */
+  font-size: 17px;
+}
+
+/* Light Mode Theme */
+:root.light, [data-theme="light"] {
+  --color-void: 250 250 250;
+  --color-space: 255 255 255;
+  --color-nebula: 245 245 245;
+  --color-cosmic: 238 238 238;
+
+  /* Stellar Accents - Adjusted for light mode */
+  --color-stellar: 217 119 6;
+  --color-nova: 180 83 9;
+  --color-aurora: 13 148 136;
+  --color-plasma: 79 70 229;
+
+  /* Status Colors - Darker for light backgrounds */
+  --color-success: 5 150 105;
+  --color-warning: 217 119 6;
+  --color-danger: 220 38 38;
+  --color-info: 2 132 199;
+
+  /* Text Hierarchy - Dark text for light mode */
+  --color-text-primary: 17 24 39;
+  --color-text-secondary: 55 65 81;
+  --color-text-tertiary: 107 114 128;
+
+  /* Borders & Lines */
+  --color-border: 229 231 235;
+  --color-border-subtle: 243 244 246;
 }
 
 @layer base {
@@ -807,4 +839,180 @@
   );
   background-size: 400px 100%;
   animation: shimmer 1.5s infinite linear;
+}
+
+/* ==========================================
+   Reduced Motion Support
+   Respects user preferences for reduced motion
+   ========================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .animate-fade-in,
+  .animate-slide-up,
+  .animate-slide-in-right,
+  .animate-scale-in,
+  .animate-float,
+  .animate-shimmer {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .status-dot-online,
+  .status-dot-warning,
+  .status-dot-critical,
+  .status-online,
+  .status-warning,
+  .status-critical {
+    animation: none !important;
+  }
+
+  .pulse-beacon::before {
+    animation: none !important;
+  }
+
+  .scan-line::after {
+    animation: none !important;
+  }
+}
+
+/* ==========================================
+   Button Micro-interactions
+   Subtle feedback on press states
+   ========================================== */
+
+.btn-stellar:active,
+.btn-primary:active,
+.btn-secondary:active,
+.btn-danger:active,
+.btn-success:active,
+.btn-ghost:active {
+  transform: scale(0.97);
+}
+
+/* Improve focus visibility for keyboard navigation */
+.btn-stellar:focus-visible,
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible,
+.btn-danger:focus-visible,
+.btn-success:focus-visible,
+.btn-ghost:focus-visible {
+  outline: 2px solid rgb(var(--color-stellar));
+  outline-offset: 2px;
+}
+
+/* ==========================================
+   Screen Reader Only (sr-only) Utility
+   ========================================== */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.sr-only:focus,
+.focus\:not-sr-only:focus {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: inherit;
+  margin: inherit;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+/* ==========================================
+   Responsive Typography Scale
+   ========================================== */
+
+@media (max-width: 640px) {
+  :root {
+    font-size: 16px;
+  }
+}
+
+@media (min-width: 1280px) {
+  :root {
+    font-size: 18px;
+  }
+}
+
+/* ==========================================
+   Improved Chart Tooltip Styling
+   ========================================== */
+
+.recharts-tooltip-wrapper {
+  z-index: 50 !important;
+}
+
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: linear-gradient(135deg, rgba(22, 26, 35, 0.95), rgba(14, 17, 23, 0.98)) !important;
+  backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(37, 42, 53, 0.8) !important;
+  border-radius: 0.75rem !important;
+  padding: 0.75rem 1rem !important;
+  box-shadow:
+    0 4px 24px -4px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(245, 166, 35, 0.1) !important;
+}
+
+.recharts-tooltip-wrapper .recharts-default-tooltip .recharts-tooltip-label {
+  color: rgb(var(--color-text-primary)) !important;
+  font-weight: 600 !important;
+  margin-bottom: 0.5rem !important;
+  font-family: 'Outfit', system-ui, sans-serif !important;
+}
+
+.recharts-tooltip-wrapper .recharts-default-tooltip .recharts-tooltip-item {
+  color: rgb(var(--color-text-secondary)) !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 0.75rem !important;
+}
+
+.recharts-tooltip-wrapper .recharts-default-tooltip .recharts-tooltip-item-name {
+  color: rgb(var(--color-text-tertiary)) !important;
+}
+
+.recharts-tooltip-wrapper .recharts-default-tooltip .recharts-tooltip-item-value {
+  color: rgb(var(--color-text-primary)) !important;
+  font-weight: 500 !important;
+}
+
+/* Light mode chart adjustments */
+:root.light .recharts-tooltip-wrapper .recharts-default-tooltip,
+[data-theme="light"] .recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(250, 250, 250, 0.98)) !important;
+  border: 1px solid rgba(229, 231, 235, 0.8) !important;
+  box-shadow:
+    0 4px 24px -4px rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(217, 119, 6, 0.1) !important;
+}
+
+/* ==========================================
+   Focus Ring Utilities
+   ========================================== */
+
+.focus-ring {
+  @apply focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:ring-offset-2 focus:ring-offset-slate-900;
+}
+
+.focus-ring-within {
+  @apply focus-within:outline-none focus-within:ring-2 focus-within:ring-amber-500/50 focus-within:ring-offset-2 focus-within:ring-offset-slate-900;
 }

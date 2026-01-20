@@ -8,6 +8,17 @@
 // Correlation Matrix Types
 // =============================================================================
 
+/**
+ * Statistics about metrics filtered during correlation computation.
+ */
+export interface FilterStats {
+  total_input: number;      // Total metrics before filtering
+  low_variance: number;     // Metrics removed due to low variance
+  low_cardinality: number;  // Metrics removed due to low cardinality
+  high_null: number;        // Metrics removed due to high null ratio
+  passed: number;           // Metrics that passed quality filters
+}
+
 export interface CorrelationCell {
   metric_x: string;
   metric_y: string;
@@ -15,16 +26,20 @@ export interface CorrelationCell {
   p_value: number | null;
   sample_count: number;
   method: string;
+  is_significant: boolean;  // Whether correlation is statistically significant (p < 0.05)
 }
 
 export interface CorrelationMatrixResponse {
   metrics: string[];
   matrix: number[][];  // N x N correlation values
+  p_values: number[][] | null;  // N x N p-values matrix
   strong_correlations: CorrelationCell[];  // |r| > threshold
   method: 'pearson' | 'spearman';
   computed_at: string;
   total_samples: number;
   domain_filter: string | null;
+  date_range: { start: string; end: string } | null;  // Date range used for computation
+  filter_stats: FilterStats | null;  // Statistics about filtered metrics
 }
 
 // =============================================================================
@@ -111,7 +126,7 @@ export interface CorrelationInsightsResponse {
 export interface CohortCorrelationPattern {
   cohort_id: string;
   cohort_name: string;
-  metric_pair: [string, string];
+  metric_pair: string[];  // Array of two metric names (backend returns List[str])
   cohort_correlation: number;
   fleet_correlation: number;
   deviation: number;  // How different from fleet average
@@ -162,4 +177,24 @@ export interface ScatterDataParams {
   metric_y: string;
   color_by?: 'anomaly' | 'cohort';
   limit?: number;
+}
+
+// =============================================================================
+// Scatter Anomaly Explanation Types
+// =============================================================================
+
+export interface ScatterAnomalyExplainRequest {
+  device_id: number;
+  metric_x: string;
+  metric_y: string;
+  x_value: number;
+  y_value: number;
+}
+
+export interface ScatterAnomalyExplanation {
+  explanation: string;
+  what_happened: string;
+  key_concerns: string[];
+  likely_explanation: string;
+  suggested_action: string;
 }

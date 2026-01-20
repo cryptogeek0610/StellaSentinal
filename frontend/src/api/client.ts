@@ -151,7 +151,7 @@ import {
   getMockTemporalComparison,
   getMockDayOverDay,
   getMockWeekOverWeek,
-  // Correlation Intelligence mock data
+  // Correlation Intelligence mock data - restored for fallback when backend unavailable
   getMockCorrelationMatrix,
   getMockScatterData,
   getMockCausalGraph,
@@ -168,6 +168,7 @@ import type {
   CohortCorrelationPatternsResponse,
   TimeLagCorrelationsResponse,
   CorrelationMatrixParams,
+  ScatterAnomalyExplanation,
 } from '../types/correlations';
 import {
   parseAnomalyList,
@@ -2725,6 +2726,7 @@ export const api = {
   /**
    * Get correlation matrix for numeric metrics.
    * Returns N x N correlation matrix and list of strong correlations.
+   * Uses mock data when mock mode is enabled, otherwise fetches from backend.
    */
   getCorrelationMatrix: (
     params?: CorrelationMatrixParams
@@ -2746,6 +2748,7 @@ export const api = {
   /**
    * Get scatter plot data for two metrics.
    * Returns data points, correlation coefficient, and regression line parameters.
+   * Uses mock data when mock mode is enabled, otherwise fetches from backend.
    */
   getScatterData: (
     metricX: string,
@@ -2768,8 +2771,35 @@ export const api = {
   },
 
   /**
+   * Get LLM explanation for a scatter plot anomaly.
+   * Provides contextual analysis of why a device appears as an anomaly.
+   */
+  explainScatterAnomaly: (params: {
+    deviceId: number;
+    metricX: string;
+    metricY: string;
+    xValue: number;
+    yValue: number;
+  }): Promise<ScatterAnomalyExplanation> => {
+    return fetchAPI<ScatterAnomalyExplanation>(
+      '/correlations/scatter/explain',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          device_id: params.deviceId,
+          metric_x: params.metricX,
+          metric_y: params.metricY,
+          x_value: params.xValue,
+          y_value: params.yValue,
+        }),
+      }
+    );
+  },
+
+  /**
    * Get causal relationship network from domain knowledge.
    * Returns nodes and edges representing known causal relationships.
+   * Uses mock data when mock mode is enabled, otherwise fetches from backend.
    */
   getCausalGraph: (includeInferred: boolean = true): Promise<CausalGraphResponse> => {
     if (getMockModeFromStorage()) {
@@ -2783,6 +2813,7 @@ export const api = {
   /**
    * Get auto-discovered correlation insights.
    * Returns ranked list of insights about metric relationships.
+   * Uses mock data when mock mode is enabled, otherwise fetches from backend.
    */
   getCorrelationInsights: (
     topK: number = 10,
@@ -2799,6 +2830,7 @@ export const api = {
   /**
    * Get cohort-specific correlation patterns.
    * Identifies cohorts with unusual correlation patterns compared to fleet average.
+   * Uses mock data when mock mode is enabled, otherwise fetches from backend.
    */
   getCohortCorrelationPatterns: (): Promise<CohortCorrelationPatternsResponse> => {
     if (getMockModeFromStorage()) {
@@ -2812,6 +2844,7 @@ export const api = {
   /**
    * Get time-lagged correlations for predictive insights.
    * Analyzes how metrics at time T correlate with other metrics at time T+lag.
+   * Uses mock data when mock mode is enabled, otherwise fetches from backend.
    */
   getTimeLaggedCorrelations: (
     maxLag: number = 7,

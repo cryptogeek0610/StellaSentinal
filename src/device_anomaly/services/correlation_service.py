@@ -91,36 +91,73 @@ KNOWN_CORRELATIONS: Dict[Tuple[str, str], float] = {
     ("StorageUtilization", "CrashCount"): 0.45,
 }
 
-# Metric domains for filtering
+# Metric domains for filtering - expanded for comprehensive correlation analysis
 METRIC_DOMAINS: Dict[str, List[str]] = {
     "battery": [
         "TotalBatteryLevelDrop",
-        "TotalDischargeTime_Sec",
-        "ScreenOnTime_Sec",
         "BatteryDrainPerHour",
         "BatteryHealth",
+        "BatteryTemperature",
+        "CycleCount",
+        "FullChargeCapacity",
+        "ChargePatternGoodCount",
+        "ChargePatternBadCount",
+        "AcChargeCount",
+        "WirelessChargeCount",
+    ],
+    "power": [
+        "ScreenOnTime_Sec",
+        "ScreenOffTime_Sec",
+        "DozeTime_Sec",
+        "WakeLockTime_Sec",
+        "CpuActiveTime_Sec",
+        "PowerSaveModeTime_Sec",
     ],
     "rf": [
         "AvgSignalStrength",
-        "TotalDropCnt",
-        "WifiDisconnectCount",
+        "WifiSignalStrength",
         "CellSignalStrength",
+        "SignalStrengthStd",
+        "WifiDropCount",
+        "CellTowerChanges",
+        "HandoffCount",
+        "UniqueAPsConnected",
+        "TotalDropCnt",
+        "DisconnectCount",
+    ],
+    "network_type": [
+        "TimeOnWifi",
+        "TimeOn5G",
+        "TimeOn4G",
+        "TimeOn3G",
+        "TimeOn2G",
+        "TimeOnNoNetwork",
     ],
     "throughput": [
         "Download",
         "Upload",
-        "TotalDataUsage",
+        "WifiDownload",
+        "WifiUpload",
+        "MobileDownload",
+        "MobileUpload",
+        "BackgroundDataUsage",
+        "RoamingDataUsage",
     ],
     "usage": [
         "AppForegroundTime",
+        "UniqueAppsUsed",
         "CrashCount",
-        "AppVisitCount",
         "ANRCount",
+        "ForceStopCount",
+        "BackgroundBatteryDrain",
+        "NotificationCount",
+        "BackgroundTime",
     ],
     "storage": [
         "StorageUtilization",
-        "RAMPressure",
         "FreeStorageKb",
+        "AvailableInternalStorage",
+        "RAMPressure",
     ],
     "system": [
         "CPUUsage",
@@ -190,6 +227,9 @@ class CorrelationService:
         metrics: Optional[List[str]] = None,
         method: str = "pearson",
         domain_filter: Optional[str] = None,
+        min_variance: float = 0.001,
+        min_unique_values: int = 3,
+        min_non_null_ratio: float = 0.1,
     ) -> Dict[str, Any]:
         """
         Compute correlation matrix from telemetry data.
@@ -199,6 +239,9 @@ class CorrelationService:
             metrics: List of metrics to analyze (auto-detected if None)
             method: Correlation method ("pearson" or "spearman")
             domain_filter: Filter to specific domain
+            min_variance: Minimum variance threshold to include a metric (filters constant columns)
+            min_unique_values: Minimum unique values required (filters low-cardinality columns)
+            min_non_null_ratio: Minimum ratio of non-null values required
 
         Returns:
             Dictionary with correlation matrix and strong correlations
@@ -234,11 +277,40 @@ class CorrelationService:
                 "strong_correlations": [],
             }
 
-        # Limit to reasonable number
-        available_metrics = available_metrics[:50]
-
-        # Compute correlation matrix
+        # Convert to numeric and apply quality filters
         numeric_df = df[available_metrics].apply(pd.to_numeric, errors="coerce")
+
+        # Filter metrics based on data quality criteria
+        filtered_metrics, filter_stats = self._filter_metrics_for_correlation(
+            numeric_df,
+            min_variance=min_variance,
+            min_unique_values=min_unique_values,
+            min_non_null_ratio=min_non_null_ratio,
+        )
+
+        if len(filtered_metrics) < 2:
+            logger.warning(
+                f"After filtering, only {len(filtered_metrics)} metrics remain. "
+                f"Filter stats: {filter_stats}"
+            )
+            return {
+                "error": "Insufficient metrics after quality filtering",
+                "metrics": filtered_metrics,
+                "matrix": [],
+                "strong_correlations": [],
+                "filter_stats": filter_stats,
+            }
+
+        # Limit to reasonable number (after filtering for better quality)
+        filtered_metrics = filtered_metrics[:50]
+        numeric_df = numeric_df[filtered_metrics]
+
+        logger.info(
+            f"Correlation matrix: {len(filtered_metrics)} metrics after filtering "
+            f"(removed {filter_stats['low_variance']} low-variance, "
+            f"{filter_stats['low_cardinality']} low-cardinality, "
+            f"{filter_stats['high_null']} high-null columns)"
+        )
 
         if method == "spearman":
             corr_matrix = numeric_df.corr(method="spearman")
@@ -254,7 +326,7 @@ class CorrelationService:
         )
 
         return {
-            "metrics": available_metrics,
+            "metrics": filtered_metrics,
             "matrix": corr_matrix.fillna(0).values.tolist(),
             "p_values": p_value_matrix.fillna(1).values.tolist(),
             "strong_correlations": strong_correlations,
@@ -262,7 +334,88 @@ class CorrelationService:
             "sample_count": len(df),
             "computed_at": datetime.now(timezone.utc).isoformat(),
             "domain_filter": domain_filter,
+            "filter_stats": filter_stats,
         }
+
+    def _filter_metrics_for_correlation(
+        self,
+        df: pd.DataFrame,
+        min_variance: float = 0.0001,  # Lowered from 0.001 for more inclusive filtering
+        min_unique_values: int = 2,  # Lowered from 3 to allow binary metrics
+        min_non_null_ratio: float = 0.05,  # Lowered from 0.1 to allow sparser data
+    ) -> Tuple[List[str], Dict[str, int]]:
+        """
+        Filter metrics to those suitable for meaningful correlation analysis.
+
+        Removes:
+        - Constant or near-constant columns (low variance)
+        - Single-value columns (need at least 2 unique values for correlation)
+        - Columns with too many missing values (>95% null)
+
+        Args:
+            df: DataFrame with numeric columns
+            min_variance: Minimum variance threshold (default: 0.0001)
+            min_unique_values: Minimum number of unique non-null values (default: 2)
+            min_non_null_ratio: Minimum ratio of non-null values (default: 0.05)
+
+        Returns:
+            Tuple of (filtered metric names, filter statistics dict)
+        """
+        filtered_metrics = []
+        stats = {
+            "total_input": len(df.columns),
+            "low_variance": 0,
+            "low_cardinality": 0,
+            "high_null": 0,
+            "passed": 0,
+            "filtered_columns": {
+                "high_null": [],
+                "low_cardinality": [],
+                "low_variance": [],
+            },
+        }
+
+        for col in df.columns:
+            series = df[col]
+
+            # Check non-null ratio
+            non_null_ratio = series.notna().sum() / len(series) if len(series) > 0 else 0
+            if non_null_ratio < min_non_null_ratio:
+                stats["high_null"] += 1
+                stats["filtered_columns"]["high_null"].append(col)
+                logger.debug(f"Filtered {col}: high null ratio ({non_null_ratio:.2%})")
+                continue
+
+            # Check unique values (cardinality)
+            n_unique = series.nunique()
+            if n_unique < min_unique_values:
+                stats["low_cardinality"] += 1
+                stats["filtered_columns"]["low_cardinality"].append(col)
+                logger.debug(f"Filtered {col}: low cardinality ({n_unique} unique values)")
+                continue
+
+            # Check variance (handles constant columns)
+            variance = series.var()
+            if pd.isna(variance) or variance < min_variance:
+                stats["low_variance"] += 1
+                stats["filtered_columns"]["low_variance"].append(col)
+                logger.debug(f"Filtered {col}: low variance ({variance})")
+                continue
+
+            # Passed all filters
+            filtered_metrics.append(col)
+            stats["passed"] += 1
+
+        # Log summary at info level when many metrics are filtered
+        total_filtered = stats["high_null"] + stats["low_cardinality"] + stats["low_variance"]
+        if total_filtered > 5:
+            logger.info(
+                f"Metric filtering summary: {stats['passed']} passed, "
+                f"{stats['high_null']} high null, {stats['low_cardinality']} low cardinality, "
+                f"{stats['low_variance']} low variance"
+            )
+
+        return filtered_metrics, stats
 
     def _compute_p_values(
         self,
@@ -511,10 +664,18 @@ class CorrelationService:
         if len(common_fleet) < self.min_samples:
             return []
 
-        fleet_corr, _ = stats.pearsonr(
-            x_fleet.loc[common_fleet],
-            y_fleet.loc[common_fleet],
-        )
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            try:
+                fleet_corr, _ = stats.pearsonr(
+                    x_fleet.loc[common_fleet],
+                    y_fleet.loc[common_fleet],
+                )
+                if np.isnan(fleet_corr):
+                    fleet_corr = 0.0
+            except Exception:
+                fleet_corr = 0.0
 
         # Per-cohort correlations
         patterns: List[CohortCorrelationPattern] = []
@@ -531,10 +692,14 @@ class CorrelationService:
                 continue
 
             try:
-                cohort_corr, p_value = stats.pearsonr(
-                    x.loc[common_idx],
-                    y.loc[common_idx],
-                )
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    cohort_corr, p_value = stats.pearsonr(
+                        x.loc[common_idx],
+                        y.loc[common_idx],
+                    )
+                    if np.isnan(cohort_corr):
+                        continue
             except Exception:
                 continue
 

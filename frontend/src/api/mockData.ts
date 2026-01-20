@@ -3720,13 +3720,15 @@ export function getMockCorrelationMatrix(domain?: string): CorrelationMatrixResp
     for (let i = 0; i < n; i++) {
         for (let j = i + 1; j < n; j++) {
             if (Math.abs(matrix[i][j]) >= 0.6) {
+                const pValue = Math.abs(matrix[i][j]) > 0.7 ? 0.001 : 0.01;
                 strong.push({
                     metric_x: metrics[i],
                     metric_y: metrics[j],
                     correlation: matrix[i][j],
-                    p_value: Math.abs(matrix[i][j]) > 0.7 ? 0.001 : 0.01,
+                    p_value: pValue,
                     sample_count: 3000 + Math.floor(Math.random() * 2000),
                     method: "pearson",
+                    is_significant: pValue < 0.05,
                 });
             }
         }
@@ -3738,11 +3740,14 @@ export function getMockCorrelationMatrix(domain?: string): CorrelationMatrixResp
     return {
         metrics,
         matrix,
+        p_values: matrix.map(row => row.map(() => 0.01)), // Mock p-values
         strong_correlations: strong,
         method: "pearson",
         computed_at: new Date().toISOString(),
         total_samples: 4532,
         domain_filter: domain || null,
+        date_range: { start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], end: new Date().toISOString().split('T')[0] },
+        filter_stats: { total_input: metrics.length + 5, low_variance: 2, low_cardinality: 2, high_null: 1, passed: metrics.length },
     };
 }
 

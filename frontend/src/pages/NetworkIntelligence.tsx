@@ -25,6 +25,7 @@ import type {
   DeviceGroupHierarchyResponse,
 } from '../api/client';
 import { DeviceGroupTreeNav } from '../components/network/DeviceGroupTreeNav';
+import { QualityScoreCell } from '../components/network/QualityScoreCell';
 import {
   BarChart,
   Bar,
@@ -536,18 +537,11 @@ export default function NetworkIntelligence() {
                         <td className="py-3 pr-4 text-slate-400">{(ap.drop_rate * 100).toFixed(1)}%</td>
                         <td className="py-3 pr-4 text-slate-400">{ap.device_count}</td>
                         <td className="py-3">
-                          <div className="flex items-center gap-2">
-                            <div className="w-24 h-2 bg-slate-700 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full rounded-full ${
-                                  ap.quality_score >= 80 ? 'bg-emerald-500' :
-                                  ap.quality_score >= 60 ? 'bg-yellow-500' : 'bg-red-500'
-                                }`}
-                                style={{ width: `${ap.quality_score}%` }}
-                              />
-                            </div>
-                            <span className="text-xs text-slate-500">{ap.quality_score.toFixed(0)}%</span>
-                          </div>
+                          <QualityScoreCell
+                            qualityScore={ap.quality_score}
+                            avgSignalDbm={ap.avg_signal_dbm}
+                            dropRate={ap.drop_rate}
+                          />
                         </td>
                       </tr>
                     ))}

@@ -9,7 +9,6 @@ from device_anomaly.api.main import app
 from device_anomaly.data_access.anomaly_persistence import persist_anomaly_results
 from device_anomaly.features.device_features import DeviceFeatureBuilder
 from device_anomaly.models.anomaly_detector import AnomalyDetectorIsolationForest, AnomalyDetectorConfig
-image.png
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "tiny_telemetry.csv"
 
 

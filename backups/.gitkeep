@@ -1,2 +1,0 @@
-# Place your SQL Server BAK files here
-# They will be mounted to /var/opt/mssql/backup in the container

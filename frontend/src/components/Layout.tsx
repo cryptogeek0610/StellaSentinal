@@ -5,9 +5,14 @@
  * - Clean header: title, search, system health only
  * - Mock mode banner remains (important user feedback)
  * - Removed: duplicate critical badges, mock toggle, notifications bell
+ *
+ * Accessibility Features:
+ * - Skip to main content link
+ * - ARIA live region for announcements
+ * - Focus management for mobile menu
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Sidebar } from './Sidebar';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
@@ -15,10 +20,23 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useMockMode } from '../hooks/useMockMode';
 import { usePageTitle } from '../hooks/usePageTitle';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface LayoutProps {
   children: React.ReactNode;
 }
+
+// ARIA Live Region Announcer for screen readers
+const Announcer: React.FC<{ message: string }> = ({ message }) => (
+  <div
+    role="status"
+    aria-live="polite"
+    aria-atomic="true"
+    className="sr-only"
+  >
+    {message}
+  </div>
+);
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
@@ -28,6 +46,17 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [showSearch, setShowSearch] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
+  const [announcement, setAnnouncement] = useState('');
+
+  // Focus trap for mobile menu
+  const mobileMenuRef = useFocusTrap<HTMLDivElement>({ isActive: isMobileMenuOpen });
+
+  // Announce page changes to screen readers
+  const announce = useCallback((message: string) => {
+    setAnnouncement('');
+    // Small delay to ensure the announcement is picked up
+    setTimeout(() => setAnnouncement(message), 100);
+  }, []);
 
   const { data: connectionStatus } = useQuery({
     queryKey: ['dashboard', 'connections'],
@@ -115,8 +144,24 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     }
   };
 
+  // Announce page navigation
+  useEffect(() => {
+    announce(`Navigated to ${pageTitle}`);
+  }, [pageTitle, announce]);
+
   return (
     <div className="flex h-screen overflow-hidden flex-col">
+      {/* Skip to Main Content Link - Accessibility */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-amber-500 focus:text-slate-900 focus:font-semibold focus:rounded-lg focus:shadow-lg focus:outline-none"
+      >
+        Skip to main content
+      </a>
+
+      {/* ARIA Live Region for Announcements */}
+      <Announcer message={announcement} />
+
       {/* Mock Mode Banner - Keep this, it's important user feedback */}
       <AnimatePresence>
         {mockMode && (
@@ -162,6 +207,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 aria-hidden="true"
               />
               <motion.div
+                ref={mobileMenuRef}
                 initial={{ x: '-100%' }}
                 animate={{ x: 0 }}
                 exit={{ x: '-100%' }}
@@ -265,7 +311,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           </header>
 
           {/* Main Content */}
-          <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+          <main
+            id="main-content"
+            className="flex-1 overflow-y-auto p-4 lg:p-6"
+            tabIndex={-1}
+          >
             <motion.div
               key={location.pathname}
               initial={{ opacity: 0, y: 10 }}

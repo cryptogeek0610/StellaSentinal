@@ -10,14 +10,19 @@ import logging
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from device_anomaly.api.dependencies import require_role
 from device_anomaly.config.settings import reload_settings
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/setup", tags=["setup"])
+router = APIRouter(
+    prefix="/setup",
+    tags=["setup"],
+    dependencies=[Depends(require_role(["admin"]))],
+)
 
 
 class TestConnectionRequest(BaseModel):

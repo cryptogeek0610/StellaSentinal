@@ -5,14 +5,19 @@
  * - Clean navigation only
  * - Removed: alert banner (redundant with nav badge), AI status card, Today's stats
  * - Kept: system health mini bar (single source of truth)
+ *
+ * UX Improvements:
+ * - Collapsible section groups with localStorage persistence
+ * - Keyboard navigation support
  */
 
 import { Link, useLocation } from 'react-router-dom';
 import { clsx } from 'clsx';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { useMockMode } from '../hooks/useMockMode';
+import { useState, useEffect, useCallback } from 'react';
 
 /**
  * Apple-like Navigation Philosophy:
@@ -259,9 +264,57 @@ interface SidebarProps {
   onClose?: () => void;
 }
 
+const COLLAPSED_SECTIONS_KEY = 'stella-collapsed-sections';
+
+// Helper to load collapsed sections from localStorage
+const loadCollapsedSections = (): Set<string> => {
+  try {
+    const stored = localStorage.getItem(COLLAPSED_SECTIONS_KEY);
+    return stored ? new Set(JSON.parse(stored)) : new Set();
+  } catch {
+    return new Set();
+  }
+};
+
+// Helper to save collapsed sections to localStorage
+const saveCollapsedSections = (sections: Set<string>) => {
+  try {
+    localStorage.setItem(COLLAPSED_SECTIONS_KEY, JSON.stringify([...sections]));
+  } catch {
+    // Ignore localStorage errors
+  }
+};
+
 export const Sidebar = ({ onClose }: SidebarProps) => {
   const location = useLocation();
   const { mockMode, toggleMockMode } = useMockMode();
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(() => loadCollapsedSections());
+
+  // Save collapsed sections when they change
+  useEffect(() => {
+    saveCollapsedSections(collapsedSections);
+  }, [collapsedSections]);
+
+  // Toggle section collapse state
+  const toggleSection = useCallback((sectionTitle: string) => {
+    setCollapsedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(sectionTitle)) {
+        next.delete(sectionTitle);
+      } else {
+        next.add(sectionTitle);
+      }
+      return next;
+    });
+  }, []);
+
+  // Handle keyboard navigation for section headers
+  const handleSectionKeyDown = useCallback((e: React.KeyboardEvent, sectionTitle: string) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      toggleSection(sectionTitle);
+    }
+  }, [toggleSection]);
 
   const { data: stats } = useQuery({
     queryKey: ['dashboard', 'stats'],
@@ -344,94 +397,142 @@ export const Sidebar = ({ onClose }: SidebarProps) => {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-4 py-6 space-y-6 overflow-y-auto">
-        {navSections.map((section, sectionIndex) => (
-          <div key={section.title}>
-            <p className="px-4 mb-3 text-[10px] font-bold text-slate-600 uppercase tracking-[0.2em]">
-              {section.title}
-            </p>
-            <div className="space-y-1">
-              {section.items.map((item, index) => {
-                const isActive =
-                  location.pathname.startsWith(item.path) ||
-                  (item.path === '/dashboard' && location.pathname === '/');
-                const badge = getBadgeContent(item.badge);
+      <nav className="flex-1 px-4 py-6 space-y-4 overflow-y-auto" role="navigation" aria-label="Main navigation">
+        {navSections.map((section) => {
+          const isCollapsed = collapsedSections.has(section.title);
+          const sectionId = `nav-section-${section.title.toLowerCase().replace(/\s+/g, '-')}`;
 
-                return (
+          return (
+            <div key={section.title} role="group" aria-labelledby={`${sectionId}-header`}>
+              {/* Collapsible Section Header */}
+              <button
+                id={`${sectionId}-header`}
+                onClick={() => toggleSection(section.title)}
+                onKeyDown={(e) => handleSectionKeyDown(e, section.title)}
+                className="w-full flex items-center justify-between px-4 mb-2 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded"
+                aria-expanded={!isCollapsed}
+                aria-controls={sectionId}
+              >
+                <span className="text-[10px] font-bold text-slate-600 uppercase tracking-[0.2em] group-hover:text-slate-400 transition-colors">
+                  {section.title}
+                </span>
+                <motion.svg
+                  animate={{ rotate: isCollapsed ? -90 : 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="w-3 h-3 text-slate-600 group-hover:text-slate-400 transition-colors"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  aria-hidden="true"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </motion.svg>
+              </button>
+
+              {/* Collapsible Section Content */}
+              <AnimatePresence initial={false}>
+                {!isCollapsed && (
                   <motion.div
-                    key={item.name}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: (sectionIndex * 3 + index) * 0.05 }}
+                    id={sectionId}
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                    className="overflow-hidden"
+                    role="list"
                   >
-                    <Link
-                      to={item.path}
-                      onClick={onClose}
-                      className={clsx(
-                        'nav-item group relative flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200',
-                        isActive
-                          ? 'bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-transparent text-white'
-                          : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-                      )}
-                    >
-                      {isActive && (
-                        <motion.div
-                          layoutId="activeNavIndicator"
-                          className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-gradient-to-b from-amber-400 to-amber-500 rounded-r-full shadow-stellar"
-                          transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                        />
-                      )}
+                    <div className="space-y-1">
+                      {section.items.map((item, index) => {
+                        const isActive =
+                          location.pathname.startsWith(item.path) ||
+                          (item.path === '/dashboard' && location.pathname === '/');
+                        const badge = getBadgeContent(item.badge);
 
-                      <span className={clsx(
-                        'transition-colors duration-200',
-                        isActive ? 'text-amber-400' : 'text-slate-500 group-hover:text-slate-300'
-                      )}>
-                        {item.icon}
-                      </span>
+                        return (
+                          <motion.div
+                            key={item.name}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: index * 0.03 }}
+                            role="listitem"
+                          >
+                            <Link
+                              to={item.path}
+                              onClick={onClose}
+                              className={clsx(
+                                'nav-item group relative flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900',
+                                isActive
+                                  ? 'bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-transparent text-white'
+                                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                              )}
+                              aria-current={isActive ? 'page' : undefined}
+                            >
+                              {isActive && (
+                                <motion.div
+                                  layoutId="activeNavIndicator"
+                                  className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-gradient-to-b from-amber-400 to-amber-500 rounded-r-full shadow-stellar"
+                                  transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                                />
+                              )}
 
-                      <div className="flex-1 min-w-0">
-                        <span className={clsx('block text-sm font-medium', isActive ? 'text-white' : '')}>
-                          {item.name}
-                        </span>
-                        <span className="block text-[10px] text-slate-600 truncate">
-                          {item.description}
-                        </span>
-                      </div>
+                              <span className={clsx(
+                                'transition-colors duration-200',
+                                isActive ? 'text-amber-400' : 'text-slate-500 group-hover:text-slate-300'
+                              )}>
+                                {item.icon}
+                              </span>
 
-                      {/* Badge */}
-                      {badge && 'count' in badge && (badge.count ?? 0) > 0 && (
-                        <motion.span
-                          initial={{ scale: 0 }}
-                          animate={(badge as { isAction?: boolean }).isAction ? { scale: [1, 1.05, 1] } : { scale: 1 }}
-                          transition={(badge as { isAction?: boolean }).isAction ? { duration: 2, repeat: Infinity } : undefined}
-                          className={clsx(
-                            'min-w-[24px] h-6 flex items-center justify-center px-2 rounded-full text-xs font-bold',
-                            (badge as { isAction?: boolean }).isAction
-                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.3)]'
-                              : (badge as { count: number; critical?: boolean }).critical
-                                ? 'bg-red-500/20 text-red-400 border border-red-500/30'
-                                : 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
-                          )}
-                        >
-                          {(badge as { count: number }).count}
-                        </motion.span>
-                      )}
+                              <div className="flex-1 min-w-0">
+                                <span className={clsx('block text-sm font-medium', isActive ? 'text-white' : '')}>
+                                  {item.name}
+                                </span>
+                                <span className="block text-[10px] text-slate-600 truncate">
+                                  {item.description}
+                                </span>
+                              </div>
 
-                      {badge && 'status' in badge && (
-                        <div className={clsx(
-                          'w-2.5 h-2.5 rounded-full',
-                          badge.status === 'healthy' && 'bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.6)]',
-                          badge.status === 'degraded' && 'bg-orange-400 shadow-[0_0_8px_rgba(251,146,60,0.6)]',
-                          badge.status === 'critical' && 'bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.6)] animate-pulse'
-                        )} />
-                      )}
-                    </Link>
+                              {/* Badge */}
+                              {badge && 'count' in badge && (badge.count ?? 0) > 0 && (
+                                <motion.span
+                                  initial={{ scale: 0 }}
+                                  animate={(badge as { isAction?: boolean }).isAction ? { scale: [1, 1.05, 1] } : { scale: 1 }}
+                                  transition={(badge as { isAction?: boolean }).isAction ? { duration: 2, repeat: Infinity } : undefined}
+                                  className={clsx(
+                                    'min-w-[24px] h-6 flex items-center justify-center px-2 rounded-full text-xs font-bold',
+                                    (badge as { isAction?: boolean }).isAction
+                                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.3)]'
+                                      : (badge as { count: number; critical?: boolean }).critical
+                                        ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                                        : 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+                                  )}
+                                  aria-label={`${(badge as { count: number }).count} items`}
+                                >
+                                  {(badge as { count: number }).count}
+                                </motion.span>
+                              )}
+
+                              {badge && 'status' in badge && (
+                                <div
+                                  className={clsx(
+                                    'w-2.5 h-2.5 rounded-full',
+                                    badge.status === 'healthy' && 'bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.6)]',
+                                    badge.status === 'degraded' && 'bg-orange-400 shadow-[0_0_8px_rgba(251,146,60,0.6)]',
+                                    badge.status === 'critical' && 'bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.6)] animate-pulse'
+                                  )}
+                                  aria-label={`System status: ${badge.status}`}
+                                />
+                              )}
+                            </Link>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
                   </motion.div>
-                );
-              })}
+                )}
+              </AnimatePresence>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </nav>
 
       {/* Footer - System Health & Mock Mode Toggle */}

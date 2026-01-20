@@ -15,3 +15,10 @@ export {
 
 export { ToggleSwitch } from './ToggleSwitch';
 export { QueryState } from './QueryState';
+
+// New UI components
+export { EmptyState } from './EmptyState';
+export { ErrorBoundary, withErrorBoundary } from './ErrorBoundary';
+export { ToastProvider, useToast } from './Toast';
+export { Modal, ConfirmDialog } from './Modal';
+export { AnimatedList, AnimatedListItem } from './AnimatedList';
