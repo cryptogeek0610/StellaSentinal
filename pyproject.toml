@@ -46,6 +46,8 @@ dependencies = [
     "scipy>=1.11.0",            # Statistical functions for feature engineering
     # Deep Learning (PyTorch) - CPU version by default
     "torch>=2.1.0",             # PyTorch for VAE/Autoencoder anomaly detection
+    # Streamlit for legacy Python dashboard UI
+    "streamlit>=1.30.0",        # Streamlit dashboard framework
 ]
 
 [project.optional-dependencies]

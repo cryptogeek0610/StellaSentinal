@@ -52,7 +52,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             variant="error"
             title="Something went wrong"
             description={
-              process.env.NODE_ENV === 'development'
+              import.meta.env.DEV
                 ? this.state.error?.message
                 : 'An unexpected error occurred. Please try again.'
             }
