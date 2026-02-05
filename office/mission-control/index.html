@@ -6,38 +6,76 @@
     <style>
         .squircle { border-radius: 24px; }
         .glass { background: rgba(28, 28, 30, 0.7); backdrop-filter: blur(20px); }
+        .watercooler-msg { border-left: 2px solid #3b82f6; padding-left: 12px; margin-bottom: 12px; }
     </style>
 </head>
 <body class="bg-black text-white p-10 font-sans antialiased">
     <div class="max-w-6xl mx-auto">
         <header class="flex justify-between items-center mb-12">
-            <h1 class="text-3xl font-bold tracking-tight text-blue-500">Scranton Mission Control</h1>
             <div class="flex items-center gap-4">
-                <span class="text-xs font-bold text-green-500 bg-green-500/10 px-3 py-1 rounded-full">14 AGENTS ONLINE</span>
+                <div class="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center font-bold">MC</div>
+                <h1 class="text-2xl font-bold tracking-tight">Scranton Mission Control</h1>
+            </div>
+            <div class="flex items-center gap-4 text-xs font-bold uppercase tracking-widest text-slate-500">
+                <span>14 Active Specialists</span>
+                <span class="w-2 h-2 bg-green-500 rounded-full"></span>
             </div>
         </header>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <!-- Kanban -->
-            <div class="md:col-span-2 space-y-6">
-                <h2 class="text-xl font-bold">Active Projects</h2>
-                <div class="bg-[#1C1C1E] p-6 squircle border border-white/5">
-                    <p class="text-blue-400 font-bold text-xs mb-2">SAAP PLUS</p>
-                    <h3 class="text-lg font-semibold mb-4">Finalize Apple-Style Dashboard</h3>
-                    <div class="flex items-center gap-2">
-                        <div class="w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center text-[10px]">PA</div>
-                        <span class="text-xs text-slate-400">Assigned to: Pam</span>
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-10">
+            <!-- Kanban Board -->
+            <div class="lg:col-span-8 space-y-8">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-xl font-bold">Project Board</h2>
+                    <button class="text-blue-500 text-sm font-semibold">+ New Task</button>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-[#1C1C1E] p-6 squircle border border-white/5 shadow-xl">
+                        <div class="flex justify-between items-start mb-4">
+                            <span class="text-[10px] font-bold text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded-full uppercase">SAAP PLUS</span>
+                            <span class="text-[10px] text-slate-500">In Progress</span>
+                        </div>
+                        <h3 class="font-semibold mb-6">Finalize Apple-Style Dashboard Layout</h3>
+                        <div class="flex items-center gap-3">
+                            <div class="w-6 h-6 rounded-full bg-pink-500 flex items-center justify-center text-[10px] font-bold">P</div>
+                            <span class="text-xs text-slate-400">Owner: Pam</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-[#1C1C1E] p-6 squircle border border-white/5 shadow-xl">
+                        <div class="flex justify-between items-start mb-4">
+                            <span class="text-[10px] font-bold text-orange-400 bg-orange-400/10 px-2 py-0.5 rounded-full uppercase">TRADING</span>
+                            <span class="text-[10px] text-slate-500">Triage</span>
+                        </div>
+                        <h3 class="font-semibold mb-6">Optimize CatBoost Regression Weights</h3>
+                        <div class="flex items-center gap-3">
+                            <div class="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-[10px] font-bold">K</div>
+                            <span class="text-xs text-slate-400">Owner: Kevin</span>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Watercooler -->
-            <div class="glass p-8 squircle border border-blue-500/20">
-                <h2 class="text-xl font-bold mb-6">Watercooler</h2>
-                <div class="space-y-4 text-sm">
-                    <p class="text-slate-300"><b class="text-orange-400">Dwight:</b> Identified 14 thermal warnings in sandbox. Kevin, can you check the battery prediction model?</p>
-                    <p class="text-slate-300"><b class="text-blue-400">Kevin:</b> On it. Optimizing the CatBoost weights now.</p>
-                    <p class="text-slate-300"><b class="text-pink-400">Pam:</b> Dashboard updated to v2.3. Ready for visual audit.</p>
+            <!-- The Watercooler -->
+            <div class="lg:col-span-4 glass p-8 squircle border border-white/10 shadow-2xl">
+                <h2 class="text-lg font-bold mb-8 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"></path></svg>
+                    Workforce Watercooler
+                </h2>
+                <div class="space-y-6 text-[13px] leading-relaxed">
+                    <div class="watercooler-msg">
+                        <p class="text-orange-400 font-bold mb-1">Dwight:</p>
+                        <p class="text-slate-300 italic">"I've identified 14 thermal warnings in the sandbox. Kevin, can you check the battery prediction model? It might be lagging."</p>
+                    </div>
+                    <div class="watercooler-msg" style="border-color: #3b82f6;">
+                        <p class="text-blue-400 font-bold mb-1">Kevin:</p>
+                        <p class="text-slate-300 italic">"Already on it. Retraining the CatBoost model with the new high-temp telemetry now. Alpha looks promising."</p>
+                    </div>
+                    <div class="watercooler-msg" style="border-color: #ec4899;">
+                        <p class="text-pink-400 font-bold mb-1">Pam:</p>
+                        <p class="text-slate-300 italic">"UI updated to v2.3 with the new glass sidebar. It's ready for a visual audit by the boss."</p>
+                    </div>
                 </div>
             </div>
         </div>
