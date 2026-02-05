@@ -13,10 +13,10 @@ Usage:
 
 import argparse
 import sys
+import tempfile
 import time
 from pathlib import Path
-from typing import List, Dict, Any
-import tempfile
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -25,11 +25,13 @@ from tabulate import tabulate
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from device_anomaly.models.anomaly_detector import AnomalyDetectorIsolationForest, AnomalyDetectorConfig
+from device_anomaly.models.anomaly_detector import (
+    AnomalyDetectorConfig,
+    AnomalyDetectorIsolationForest,
+)
 from device_anomaly.models.inference_engine import (
-    create_inference_engine,
-    EngineType,
     EngineConfig,
+    EngineType,
     ExecutionProvider,
 )
 from device_anomaly.models.onnx_exporter import ONNXModelExporter, ONNXQuantizer
@@ -48,8 +50,8 @@ class ONNXBenchmark:
         self.n_estimators = n_estimators
         self.contamination = contamination
 
-        self.model_paths: Dict[str, Path] = {}
-        self.results: List[Dict[str, Any]] = []
+        self.model_paths: dict[str, Path] = {}
+        self.results: list[dict[str, Any]] = []
 
     def generate_data(self, n_samples: int) -> np.ndarray:
         """Generate synthetic test data"""
@@ -58,13 +60,15 @@ class ONNXBenchmark:
 
     def train_and_export_models(self, training_samples: int = 1000) -> None:
         """Train IsolationForest and export to all formats"""
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"Training IsolationForest ({self.n_estimators} trees, {self.n_features} features)")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
         # Generate training data
         train_data = self.generate_data(training_samples)
-        df_train = pd.DataFrame(train_data, columns=[f"feature_{i}" for i in range(self.n_features)])
+        df_train = pd.DataFrame(
+            train_data, columns=[f"feature_{i}" for i in range(self.n_features)]
+        )
 
         # Train model
         print(f"Training on {training_samples:,} samples...")
@@ -115,7 +119,9 @@ class ONNXBenchmark:
         ONNXQuantizer.quantize_dynamic(onnx_fp32_path, onnx_int8_path)
         onnx_int8_size = onnx_int8_path.stat().st_size / 1e6
         self.model_paths["onnx_int8"] = onnx_int8_path
-        print(f"  ✓ ONNX INT8:        {onnx_int8_size:.2f} MB ({(1-onnx_int8_size/onnx_fp32_size)*100:.1f}% reduction)")
+        print(
+            f"  ✓ ONNX INT8:        {onnx_int8_size:.2f} MB ({(1 - onnx_int8_size / onnx_fp32_size) * 100:.1f}% reduction)"
+        )
 
         print()
 
@@ -128,7 +134,7 @@ class ONNXBenchmark:
         warmup_runs: int = 3,
         benchmark_runs: int = 10,
         provider: ExecutionProvider = ExecutionProvider.CPU,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Benchmark a single inference engine"""
 
         # Create engine
@@ -155,7 +161,7 @@ class ONNXBenchmark:
         times = []
         for _ in range(benchmark_runs):
             start = time.perf_counter()
-            predictions = engine.predict(test_data)
+            engine.predict(test_data)
             elapsed = (time.perf_counter() - start) * 1000  # ms
             times.append(elapsed)
 
@@ -176,20 +182,30 @@ class ONNXBenchmark:
 
     def run_benchmarks(
         self,
-        batch_sizes: List[int],
+        batch_sizes: list[int],
         use_gpu: bool = False,
     ) -> pd.DataFrame:
         """Run benchmarks across different batch sizes"""
 
-        print(f"\n{'='*60}")
-        print(f"Running Benchmarks")
-        print(f"{'='*60}\n")
+        print(f"\n{'=' * 60}")
+        print("Running Benchmarks")
+        print(f"{'=' * 60}\n")
 
         # Determine which engines to test
         engines_to_test = [
             ("sklearn", EngineType.SKLEARN, self.model_paths["sklearn"], ExecutionProvider.CPU),
-            ("onnx_fp32_cpu", EngineType.ONNX, self.model_paths["onnx_fp32"], ExecutionProvider.CPU),
-            ("onnx_int8_cpu", EngineType.ONNX, self.model_paths["onnx_int8"], ExecutionProvider.CPU),
+            (
+                "onnx_fp32_cpu",
+                EngineType.ONNX,
+                self.model_paths["onnx_fp32"],
+                ExecutionProvider.CPU,
+            ),
+            (
+                "onnx_int8_cpu",
+                EngineType.ONNX,
+                self.model_paths["onnx_int8"],
+                ExecutionProvider.CPU,
+            ),
         ]
 
         if use_gpu:
@@ -199,8 +215,18 @@ class ONNXBenchmark:
             if "CUDAExecutionProvider" in ort.get_available_providers():
                 engines_to_test.extend(
                     [
-                        ("onnx_fp32_gpu", EngineType.ONNX, self.model_paths["onnx_fp32"], ExecutionProvider.CUDA),
-                        ("onnx_int8_gpu", EngineType.ONNX, self.model_paths["onnx_int8"], ExecutionProvider.CUDA),
+                        (
+                            "onnx_fp32_gpu",
+                            EngineType.ONNX,
+                            self.model_paths["onnx_fp32"],
+                            ExecutionProvider.CUDA,
+                        ),
+                        (
+                            "onnx_int8_gpu",
+                            EngineType.ONNX,
+                            self.model_paths["onnx_int8"],
+                            ExecutionProvider.CUDA,
+                        ),
                     ]
                 )
                 print("GPU (CUDA) available - including GPU benchmarks\n")
@@ -241,9 +267,9 @@ class ONNXBenchmark:
 
     def print_summary(self, results_df: pd.DataFrame) -> None:
         """Print summary comparison"""
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("Performance Summary")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
         # Group by batch size
         for batch_size in results_df["samples"].unique():
@@ -270,7 +296,9 @@ class ONNXBenchmark:
 
             print(tabulate(summary_data, headers="keys", tablefmt="grid"))
 
-    def save_results(self, results_df: pd.DataFrame, output_path: str = "benchmark_results.csv") -> None:
+    def save_results(
+        self, results_df: pd.DataFrame, output_path: str = "benchmark_results.csv"
+    ) -> None:
         """Save results to CSV"""
         results_df.to_csv(output_path, index=False)
         print(f"\n✓ Results saved to {output_path}")
@@ -322,7 +350,7 @@ def main():
     print("\n" + "=" * 60)
     print("ONNX Runtime Performance Benchmark")
     print("=" * 60)
-    print(f"\nConfiguration:")
+    print("\nConfiguration:")
     print(f"  Features: {args.n_features}")
     print(f"  Trees: {args.n_estimators}")
     print(f"  Batch sizes: {batch_sizes}")
@@ -330,7 +358,7 @@ def main():
 
     # Install tabulate if needed
     try:
-        import tabulate
+        import tabulate  # noqa: F401
     except ImportError:
         print("\nInstalling tabulate for pretty tables...")
         import subprocess
