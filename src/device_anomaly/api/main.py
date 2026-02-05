@@ -8,10 +8,11 @@ import os
 import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from device_anomaly.api.errors import http_exception_handler, unhandled_exception_handler
 from device_anomaly.api.rate_limit import RateLimitMiddleware
 from device_anomaly.api.request_context import clear_request_context, set_request_context
 from device_anomaly.api.routes import (
@@ -107,6 +108,10 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# Register structured error handlers
+app.add_exception_handler(HTTPException, http_exception_handler)  # type: ignore[arg-type]
+app.add_exception_handler(Exception, unhandled_exception_handler)  # type: ignore[arg-type]
 
 # Environment-based CORS configuration
 # In production, set CORS_ORIGINS environment variable (comma-separated)
