@@ -34,6 +34,7 @@ from device_anomaly.api.models import (
     ScoreDistributionResponse,
     TroubleshootingAdviceResponse,
 )
+from device_anomaly.api.routes.devices import validate_attribute_name
 from device_anomaly.config.settings import get_settings
 from device_anomaly.database.schema import (
     AnomalyResult,
@@ -1607,6 +1608,9 @@ def get_location_heatmap(
     synced from MobiControl into the device metadata (extra_data JSON field),
     this endpoint should be updated to query actual data.
     """
+    if attribute_name:
+        validate_attribute_name(attribute_name, param="attribute_name")
+
     # Return mock data if Mock Mode is enabled
     if mock_mode:
         mock_data = get_mock_location_heatmap(attribute_name)

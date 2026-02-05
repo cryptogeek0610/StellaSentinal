@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -13,6 +14,22 @@ from device_anomaly.api.mock_mode import get_mock_devices
 from device_anomaly.api.models import AnomalyResponse, DeviceDetailResponse, DeviceResponse
 from device_anomaly.config.settings import get_settings
 from device_anomaly.database.schema import AnomalyResult, DeviceMetadata
+
+# Regex for safe custom attribute names: alphanumeric, underscores, hyphens, dots, spaces
+_SAFE_ATTR_NAME_RE = re.compile(r"^[\w\s.\-]{1,128}$")
+
+
+def validate_attribute_name(name: str, param: str = "attribute name") -> str:
+    """Validate a custom attribute name against an allowlist pattern.
+
+    Raises HTTPException 400 if the name contains unsafe characters or is too long.
+    """
+    if not _SAFE_ATTR_NAME_RE.match(name):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid {param}: must be 1-128 characters, alphanumeric/underscore/hyphen/dot/space only",
+        )
+    return name
 
 
 def escape_like_pattern(value: str) -> str:
@@ -35,6 +52,9 @@ def list_devices(
     db: Session = Depends(get_db),
 ):
     """List devices with filtering, pagination, and grouping."""
+    if group_by:
+        validate_attribute_name(group_by, param="group_by")
+
     # Return mock data if Mock Mode is enabled
     if mock_mode:
         mock_devices = get_mock_devices()
