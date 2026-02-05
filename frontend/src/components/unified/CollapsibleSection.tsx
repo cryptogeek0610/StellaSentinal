@@ -119,6 +119,8 @@ export function CollapsibleSection({
       {/* Header - Always visible */}
       <button
         onClick={handleToggle}
+        aria-expanded={isExpanded}
+        aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${title}`}
         className="w-full flex items-center justify-between p-4 text-left group"
       >
         <div className="flex items-center gap-3">

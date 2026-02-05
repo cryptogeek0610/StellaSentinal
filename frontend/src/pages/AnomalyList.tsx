@@ -117,10 +117,11 @@ function AnomalyList() {
         <div className="p-4 border-b border-slate-700/50">
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex-1 min-w-[200px]">
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+              <label htmlFor="device-id-filter" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
                 Device ID
               </label>
               <input
+                id="device-id-filter"
                 type="text"
                 value={deviceIdFilter}
                 onChange={(e) => {
@@ -132,10 +133,11 @@ function AnomalyList() {
               />
             </div>
             <div className="w-48">
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+              <label htmlFor="status-filter" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
                 Status
               </label>
               <select
+                id="status-filter"
                 value={statusFilter}
                 onChange={(e) => {
                   setStatusFilter(e.target.value);
@@ -155,12 +157,13 @@ function AnomalyList() {
 
         {/* Table */}
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full" aria-label="Anomaly results">
             <thead>
               <tr className="border-b border-slate-700/50">
                 <th className="table-header w-12">
                   <input
                     type="checkbox"
+                    aria-label="Select all anomalies"
                     className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-cyber-blue focus:ring-cyber-blue/50"
                   />
                 </th>
@@ -186,6 +189,7 @@ function AnomalyList() {
                     <td className="table-cell">
                       <input
                         type="checkbox"
+                        aria-label={`Select device ${anomaly.device_id}`}
                         className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-cyber-blue focus:ring-cyber-blue/50"
                       />
                     </td>
