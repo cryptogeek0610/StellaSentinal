@@ -8,7 +8,7 @@
  * - AI pattern analysis display
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, memo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
@@ -70,7 +70,7 @@ const STATUS_COLORS: Record<string, string> = {
   unknown: 'bg-amber-500',
 };
 
-function DeviceCard({
+const DeviceCard = memo(function DeviceCard({
   device,
   onViewDevice,
 }: {
@@ -132,9 +132,9 @@ function DeviceCard({
       </div>
     </div>
   );
-}
+});
 
-function DeviceGroupSection({
+const DeviceGroupSection = memo(function DeviceGroupSection({
   grouping,
   onViewDevice,
   defaultExpanded = true,
@@ -180,7 +180,7 @@ function DeviceGroupSection({
       )}
     </div>
   );
-}
+});
 
 function AIAnalysisBanner({ analysis }: { analysis: string }) {
   return (

@@ -6,6 +6,7 @@
  * Links to the detailed dashboard for full history.
  */
 
+import { memo } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import { formatDistanceToNow, parseISO } from 'date-fns';
@@ -78,7 +79,7 @@ const SEVERITY_DOTS: Record<string, string> = {
   info: 'bg-blue-500',
 };
 
-function ActivityItem({ item, index }: { item: CompactActivityItem; index: number }) {
+const ActivityItem = memo(function ActivityItem({ item, index }: { item: CompactActivityItem; index: number }) {
   const navigate = useNavigate();
   const config = EVENT_CONFIG[item.type];
   const isClickable = !!item.linkTo;
@@ -140,7 +141,7 @@ function ActivityItem({ item, index }: { item: CompactActivityItem; index: numbe
       )}
     </motion.div>
   );
-}
+});
 
 function LoadingSkeleton() {
   return (

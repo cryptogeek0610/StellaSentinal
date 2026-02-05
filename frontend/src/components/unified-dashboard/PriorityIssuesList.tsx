@@ -6,7 +6,7 @@
  * with the specific insight highlighted.
  */
 
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
@@ -73,7 +73,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   device_hidden_pattern: 'Device',
 };
 
-function PriorityIssueCard({
+const PriorityIssueCard = memo(function PriorityIssueCard({
   issue,
   rank,
   onDevicesClick,
@@ -195,7 +195,7 @@ function PriorityIssueCard({
       </div>
     </motion.button>
   );
-}
+});
 
 function LoadingSkeleton() {
   return (

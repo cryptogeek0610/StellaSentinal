@@ -5,6 +5,7 @@
  * Shows issues like "Samsung S21 has 2.3x higher crash rate than fleet average"
  */
 
+import { memo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api } from '../../api/client';
@@ -76,7 +77,7 @@ const issueTypeIcons: Record<string, React.ReactNode> = {
   ),
 };
 
-function IssueItem({ issue }: { issue: SystemicIssue }) {
+const IssueItem = memo(function IssueItem({ issue }: { issue: SystemicIssue }) {
   const config = severityConfig[issue.severity] || severityConfig.low;
 
   return (
@@ -106,7 +107,7 @@ function IssueItem({ issue }: { issue: SystemicIssue }) {
       </div>
     </div>
   );
-}
+});
 
 interface SystemicIssuesCardProps {
   maxIssues?: number;

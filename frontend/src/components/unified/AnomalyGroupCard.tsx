@@ -8,7 +8,7 @@
  * - Location chips in collapsed view
  */
 
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
@@ -114,7 +114,7 @@ function groupAnomaliesByDevice(anomalies: AnomalyGroupMember[]): DeviceGroup[] 
 }
 
 // Compact anomaly row for nested display within device cards
-function CompactAnomalyRow({
+const CompactAnomalyRow = memo(function CompactAnomalyRow({
   anomaly,
   onClick,
 }: {
@@ -148,10 +148,10 @@ function CompactAnomalyRow({
       </span>
     </button>
   );
-}
+});
 
 // Device card that groups multiple anomalies from the same device
-function DeviceCard({
+const DeviceCard = memo(function DeviceCard({
   device,
   selectedAnomalyIds,
   onToggleDevice,
@@ -224,7 +224,7 @@ function DeviceCard({
       </div>
     </div>
   );
-}
+});
 
 export function AnomalyGroupCard({
   group,
