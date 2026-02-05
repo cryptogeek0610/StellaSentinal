@@ -11,7 +11,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from device_anomaly.api.routes import anomalies, dashboard, devices, baselines, llm_settings, data_discovery, training, automation, streaming, setup, investigation, device_actions, insights, costs, system_health, location_intelligence, events_alerts, temporal, correlations, cross_device, data_quality, network, security, action_center
+from device_anomaly.api.routes import anomalies, dashboard, devices, baselines, llm_settings, data_discovery, training, automation, streaming, setup, investigation, device_actions, insights, costs, system_health, location_intelligence, events_alerts, temporal, correlations, cross_device, data_quality, network, security, action_center, scranton_bridge
 from device_anomaly.api.request_context import clear_request_context, set_request_context
 from device_anomaly.config.logging_config import setup_logging
 from device_anomaly.observability.otel import setup_tracing
@@ -248,6 +248,7 @@ app.include_router(data_quality.router, prefix="/api")
 app.include_router(network.router, prefix="/api")
 app.include_router(security.router, prefix="/api")
 app.include_router(action_center.router, prefix="/api")
+app.include_router(scranton_bridge.router, prefix="/api")
 
 
 @app.get("/")
