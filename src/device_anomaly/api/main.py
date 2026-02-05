@@ -12,6 +12,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from device_anomaly.api.rate_limit import RateLimitMiddleware
 from device_anomaly.api.request_context import clear_request_context, set_request_context
 from device_anomaly.api.routes import (
     action_center,
@@ -163,6 +164,9 @@ app.add_middleware(
     allow_methods=CORS_METHODS,
     allow_headers=CORS_HEADERS,
 )
+
+# Rate limiting middleware — applied after CORS so preflight requests pass through
+app.add_middleware(RateLimitMiddleware)
 
 if setup_tracing("stella-sentinel-api"):
     try:
