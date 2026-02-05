@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Scranton Mission Control</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .squircle { border-radius: 24px; }
+        .glass { background: rgba(28, 28, 30, 0.7); backdrop-filter: blur(20px); }
+    </style>
+</head>
+<body class="bg-black text-white p-10 font-sans antialiased">
+    <div class="max-w-6xl mx-auto">
+        <header class="flex justify-between items-center mb-12">
+            <h1 class="text-3xl font-bold tracking-tight text-blue-500">Scranton Mission Control</h1>
+            <div class="flex items-center gap-4">
+                <span class="text-xs font-bold text-green-500 bg-green-500/10 px-3 py-1 rounded-full">14 AGENTS ONLINE</span>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <!-- Kanban -->
+            <div class="md:col-span-2 space-y-6">
+                <h2 class="text-xl font-bold">Active Projects</h2>
+                <div class="bg-[#1C1C1E] p-6 squircle border border-white/5">
+                    <p class="text-blue-400 font-bold text-xs mb-2">SAAP PLUS</p>
+                    <h3 class="text-lg font-semibold mb-4">Finalize Apple-Style Dashboard</h3>
+                    <div class="flex items-center gap-2">
+                        <div class="w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center text-[10px]">PA</div>
+                        <span class="text-xs text-slate-400">Assigned to: Pam</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Watercooler -->
+            <div class="glass p-8 squircle border border-blue-500/20">
+                <h2 class="text-xl font-bold mb-6">Watercooler</h2>
+                <div class="space-y-4 text-sm">
+                    <p class="text-slate-300"><b class="text-orange-400">Dwight:</b> Identified 14 thermal warnings in sandbox. Kevin, can you check the battery prediction model?</p>
+                    <p class="text-slate-300"><b class="text-blue-400">Kevin:</b> On it. Optimizing the CatBoost weights now.</p>
+                    <p class="text-slate-300"><b class="text-pink-400">Pam:</b> Dashboard updated to v2.3. Ready for visual audit.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

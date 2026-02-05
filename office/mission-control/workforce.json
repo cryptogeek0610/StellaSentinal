@@ -1,0 +1,15 @@
+{
+  "squad_name": "Scranton Digital",
+  "lead_agent": "Michael",
+  "agents": [
+    {"id": "jim", "name": "Jim", "role": "Sales Engineer & Customer Success", "specialty": "SOTI Demos, Relationship Building, Lead Gen"},
+    {"id": "dwight", "name": "Dwight", "role": "Infrastructure & Security", "specialty": "MobiControl Backend, Server Hardening, Security Audits"},
+    {"id": "pam", "name": "Pam", "role": "UI/UX Designer", "specialty": "Apple-style Design, Glassmorphism, Component Library"},
+    {"id": "kevin", "name": "Kevin", "role": "Backend & ML Engineer", "specialty": "FastAPI, Python, CatBoost, ONNX Inference"},
+    {"id": "angela", "name": "Angela", "role": "Finance & Analytics", "specialty": "P&L, Trading Bot Performance, Audit Logs"},
+    {"id": "ryan", "name": "Ryan", "role": "Product & Innovation", "specialty": "MCP Protocol, Strategy, Market Trends"},
+    {"id": "kelly", "name": "Kelly", "role": "Marketing & Social", "specialty": "Instagram Automation, Promo Content, Cinematic Scripts"}
+  ],
+  "kanban": [],
+  "watercooler": []
+}
