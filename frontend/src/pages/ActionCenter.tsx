@@ -32,11 +32,11 @@ interface FleetPulseMetrics {
   total_devices: number;
   healthy_devices: number;
   devices_with_issues: number;
-  security_score: number;
-  network_score: number;
+  security_score: number | null;
+  network_score: number | null;
   open_investigations: number;
   anomalies_today: number;
-  avg_battery_health: number;
+  avg_battery_health: number | null;
 }
 
 
@@ -135,17 +135,17 @@ function FleetPulse({ metrics }: { metrics: FleetPulseMetrics }) {
     },
     {
       label: 'Security Score',
-      value: `${metrics.security_score}`,
-      subtext: 'out of 100',
-      color: metrics.security_score >= 80 ? 'text-emerald-400' : metrics.security_score >= 60 ? 'text-amber-400' : 'text-red-400',
+      value: metrics.security_score != null ? `${metrics.security_score}` : '--',
+      subtext: metrics.security_score != null ? 'out of 100' : 'Not yet available',
+      color: metrics.security_score == null ? 'text-slate-500' : metrics.security_score >= 80 ? 'text-emerald-400' : metrics.security_score >= 60 ? 'text-amber-400' : 'text-red-400',
       link: '/security',
       linkLabel: 'Security Details',
     },
     {
       label: 'Network Score',
-      value: `${metrics.network_score}`,
-      subtext: 'out of 100',
-      color: metrics.network_score >= 80 ? 'text-emerald-400' : metrics.network_score >= 60 ? 'text-amber-400' : 'text-red-400',
+      value: metrics.network_score != null ? `${metrics.network_score}` : '--',
+      subtext: metrics.network_score != null ? 'out of 100' : 'Not yet available',
+      color: metrics.network_score == null ? 'text-slate-500' : metrics.network_score >= 80 ? 'text-emerald-400' : metrics.network_score >= 60 ? 'text-amber-400' : 'text-red-400',
       link: '/network',
       linkLabel: 'Network Details',
     },
@@ -540,11 +540,11 @@ export default function ActionCenter() {
         total_devices: dashboardStats.devices_monitored,
         healthy_devices: dashboardStats.devices_monitored - (dashboardStats.open_cases || 0),
         devices_with_issues: dashboardStats.open_cases || 0,
-        security_score: 72.5, // TODO: Add security score to dashboard stats API
-        network_score: 78.5, // TODO: Add network score to dashboard stats API
+        security_score: null, // Not yet available from API
+        network_score: null, // Not yet available from API
         open_investigations: dashboardStats.open_cases || 0,
         anomalies_today: dashboardStats.anomalies_today,
-        avg_battery_health: 81, // TODO: Add battery health to dashboard stats API
+        avg_battery_health: null, // Not yet available from API
       }
     : undefined;
 
