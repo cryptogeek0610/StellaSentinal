@@ -77,6 +77,10 @@ class AnomalyResult(Base):
             "timestamp",
             unique=True,
         ),
+        # Composite indexes for common query patterns (dashboard, filtering, history)
+        Index("idx_anomaly_tenant_label_ts", "tenant_id", "anomaly_label", "timestamp"),
+        Index("idx_anomaly_tenant_label_status", "tenant_id", "anomaly_label", "status"),
+        Index("idx_anomaly_tenant_device_label", "tenant_id", "device_id", "anomaly_label"),
     )
 
     def __repr__(self) -> str:
@@ -104,6 +108,11 @@ class DeviceMetadata(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
+    __table_args__ = (
+        Index("idx_device_tenant_model", "tenant_id", "device_model"),
+        Index("idx_device_tenant_last_seen", "tenant_id", "last_seen"),
+    )
+
     def __repr__(self) -> str:
         return f"<DeviceMetadata(device_id={self.device_id}, model={self.device_model})>"
 
@@ -121,6 +130,8 @@ class InvestigationNote(Base):
     action_type = Column(String(50), nullable=True)  # e.g., "status_change", "assignment", "note"
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (Index("idx_note_tenant_anomaly", "tenant_id", "anomaly_id"),)
 
     def __repr__(self) -> str:
         return f"<InvestigationNote(id={self.id}, anomaly_id={self.anomaly_id}, user={self.user})>"
@@ -172,6 +183,8 @@ class TrainingRun(Base):
     dataset_version_id = Column(
         Integer, nullable=True, index=True
     )  # FK to training_dataset_versions
+
+    __table_args__ = (Index("idx_training_tenant_status", "tenant_id", "status"),)
 
     def __repr__(self) -> str:
         return f"<TrainingRun(run_id={self.run_id}, status={self.status})>"
