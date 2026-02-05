@@ -366,6 +366,7 @@ class AIAnalysisResponse(BaseModel):
     analysis_id: str
     generated_at: datetime
     model_used: str
+    analysis_source: str = "llm"  # llm, rule_based, unavailable
     primary_hypothesis: RootCauseHypothesis
     alternative_hypotheses: list[RootCauseHypothesis]
     confidence_score: float  # 0-1

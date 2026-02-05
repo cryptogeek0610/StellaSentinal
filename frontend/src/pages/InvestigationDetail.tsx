@@ -376,6 +376,7 @@ function InvestigationDetail() {
               <Card title={<span className="flex items-center gap-2"><BrainIcon /> Root Cause Analysis</span>}>
                 <AIAnalysisPanel
                   hypothesis={aiAnalysis?.primary_hypothesis}
+                  analysisSource={aiAnalysis?.analysis_source}
                   isLoading={aiLoading}
                   onRegenerate={() => refetchAI()}
                 />

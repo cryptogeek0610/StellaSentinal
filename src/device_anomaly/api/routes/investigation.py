@@ -1128,10 +1128,16 @@ Top Contributing Factors (metrics most different from normal):
         # Filter out benign-high evidence (e.g., high free storage is good, not a problem)
         llm_response = _filter_benign_evidence(llm_response)
         model_used = llm_client.model_name or "unknown"
+        # Detect if the LLM client fell back to rule-based analysis
+        if llm_response and "_(rule-based analysis)_" in llm_response:
+            analysis_source = "rule_based"
+        else:
+            analysis_source = "llm"
     except Exception as e:
         logger.warning(f"LLM generation failed: {e}")
         llm_response = None
         model_used = "fallback"
+        analysis_source = "rule_based"
 
     # Build response (with fallback if LLM fails)
     analysis_id = str(uuid.uuid4())
@@ -1193,6 +1199,7 @@ Top Contributing Factors (metrics most different from normal):
         analysis_id=analysis_id,
         generated_at=datetime.now(UTC),
         model_used=model_used,
+        analysis_source=analysis_source,
         primary_hypothesis=primary_hypothesis,
         alternative_hypotheses=[
             RootCauseHypothesis(

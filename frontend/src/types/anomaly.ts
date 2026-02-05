@@ -577,6 +577,7 @@ export interface AIAnalysis {
   analysis_id: string;
   generated_at: string;
   model_used: string;
+  analysis_source: 'llm' | 'rule_based' | 'unavailable';
   primary_hypothesis: RootCauseHypothesis;
   alternative_hypotheses: RootCauseHypothesis[];
   confidence_score: number;
