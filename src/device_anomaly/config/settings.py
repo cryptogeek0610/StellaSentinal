@@ -490,6 +490,46 @@ class AppSettings(BaseModel):
 _settings: AppSettings | None = None
 
 
+def validate_config_at_startup(settings: AppSettings) -> list[str]:
+    """Validate configuration at startup and return a list of warnings.
+
+    This does not raise — it logs warnings for issues that may cause
+    problems but allows the app to start (useful for dev/local mode).
+    """
+    warnings: list[str] = []
+    env = settings.env
+
+    # PostgreSQL — warn if using default/empty password in non-local envs
+    if env not in ("local", "development") and settings.backend_db.password in (
+        "",
+        "postgres",
+        "changeme",
+    ):
+        warnings.append(
+            "BACKEND_DB_PASS is set to a default value. "
+            "Set a strong password for production deployments."
+        )
+
+    # API key — required in production
+    api_key = os.getenv("API_KEY", "")
+    require_api_key = os.getenv("REQUIRE_API_KEY", "false").lower() == "true" or env == "production"
+    if require_api_key and not api_key:
+        warnings.append(
+            "REQUIRE_API_KEY is enabled but API_KEY is not set. "
+            "API authentication will reject all requests."
+        )
+
+    # CORS — warn if wide-open in non-local envs
+    cors_origins = os.getenv("CORS_ORIGINS", "")
+    if env not in ("local", "development") and not cors_origins:
+        warnings.append(
+            "CORS_ORIGINS is not set. In production, set this to your "
+            "allowed frontend origins (comma-separated)."
+        )
+
+    return warnings
+
+
 def get_settings(validate_dw: bool = False) -> AppSettings:
     """Get application settings.
 

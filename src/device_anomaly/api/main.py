@@ -53,6 +53,14 @@ async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown events."""
     # Startup
 
+    # Validate configuration and log warnings
+    from device_anomaly.config.settings import get_settings, validate_config_at_startup
+
+    settings = get_settings()
+    config_warnings = validate_config_at_startup(settings)
+    for warning in config_warnings:
+        logger.warning("CONFIG: %s", warning)
+
     # Initialize MobiControl device metadata cache for streaming enrichment
     try:
         from device_anomaly.services.device_metadata_sync import (
