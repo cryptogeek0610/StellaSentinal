@@ -1,13 +1,13 @@
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { Card } from '../components/Card';
+import { Breadcrumb } from '../components/Breadcrumb';
 import { format } from 'date-fns';
 import { motion } from 'framer-motion';
 
 const KpiDetail = () => {
   const { type } = useParams<{ type: string }>();
-  const navigate = useNavigate();
 
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['dashboard', 'stats'],
@@ -91,22 +91,18 @@ const KpiDetail = () => {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
     >
+      {/* Breadcrumb */}
+      <Breadcrumb
+        items={[
+          { label: 'Dashboard', to: '/' },
+          { label: getTitle() },
+        ]}
+      />
+
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => navigate(-1)}
-            className="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors"
-          >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <div>
-            <h1 className="text-2xl font-bold text-white">{getTitle()}</h1>
-            <p className="text-sm text-slate-500 mt-1">Detailed view of selected metric</p>
-          </div>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold text-white">{getTitle()}</h1>
+        <p className="text-sm text-slate-500 mt-1">Detailed view of selected metric</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

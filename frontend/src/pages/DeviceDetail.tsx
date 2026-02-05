@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { format } from 'date-fns';
 import { Card } from '../components/Card';
+import { Breadcrumb } from '../components/Breadcrumb';
 import { motion } from 'framer-motion';
 
 function DeviceDetail() {
@@ -85,18 +86,18 @@ function DeviceDetail() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
     >
+      {/* Breadcrumb */}
+      <Breadcrumb
+        items={[
+          { label: 'Fleet', to: '/fleet' },
+          { label: device.device_name || `Device ${device.device_id}` },
+        ]}
+      />
+
       {/* Device Header */}
       <div className="glass-panel p-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <Link
-              to="/investigations"
-              className="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </Link>
             <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-emerald-500/20 to-cyan-400/20 flex items-center justify-center">
               <svg
                 className="h-8 w-8 text-emerald-500"

@@ -11,12 +11,13 @@
  */
 
 import { useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { format, formatDistanceToNowStrict } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../components/Card';
+import { Breadcrumb } from '../components/Breadcrumb';
 import { useMockMode } from '../hooks/useMockMode';
 import { showSuccess, showError } from '../utils/toast';
 import type {
@@ -48,7 +49,7 @@ import {
 
 function InvestigationDetail() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+
   const queryClient = useQueryClient();
   useMockMode(); // Used for conditional mock data in API client
   const anomalyId = parseInt(id || '0');
@@ -258,28 +259,26 @@ function InvestigationDetail() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
     >
+      {/* Breadcrumb */}
+      <Breadcrumb
+        items={[
+          { label: 'Investigations', to: '/investigations' },
+          { label: `Investigation #${anomaly.id}` },
+        ]}
+      />
+
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => navigate('/investigations')}
-            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-white">Investigation #{anomaly.id}</h1>
-              <span className={`px-2 py-1 text-xs font-bold rounded ${severity.bg} ${severity.color} border ${severity.border}`}>
-                {severity.label}
-              </span>
-            </div>
-            <p className="text-slate-500 text-sm mt-1">
-              {anomaly.device_name || `Device #${anomaly.device_id}`} • Detected {formatDistanceToNowStrict(new Date(anomaly.timestamp))} ago
-            </p>
+        <div>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-white">Investigation #{anomaly.id}</h1>
+            <span className={`px-2 py-1 text-xs font-bold rounded ${severity.bg} ${severity.color} border ${severity.border}`}>
+              {severity.label}
+            </span>
           </div>
+          <p className="text-slate-500 text-sm mt-1">
+            {anomaly.device_name || `Device #${anomaly.device_id}`} • Detected {formatDistanceToNowStrict(new Date(anomaly.timestamp))} ago
+          </p>
         </div>
 
         {/* Status Update Dropdown */}
