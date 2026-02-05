@@ -8,7 +8,7 @@
 import React, { useState } from 'react';
 import { EmptyState } from './EmptyState';
 import { Modal, ConfirmDialog } from './Modal';
-import { useToast } from './Toast';
+import { useToast } from './useToast';
 import { AnimatedList, AnimatedListItem } from './AnimatedList';
 import { ErrorBoundary } from './ErrorBoundary';
 

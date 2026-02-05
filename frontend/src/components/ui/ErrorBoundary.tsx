@@ -5,7 +5,7 @@
  * logs those errors, and displays a fallback UI.
  */
 
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { Component, ErrorInfo, ReactNode } from 'react';
 import { EmptyState } from './EmptyState';
 
 interface ErrorBoundaryProps {
@@ -67,28 +67,6 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
     return this.props.children;
   }
-}
-
-/**
- * withErrorBoundary HOC
- *
- * Wraps a component with an ErrorBoundary.
- */
-export function withErrorBoundary<P extends object>(
-  WrappedComponent: React.ComponentType<P>,
-  errorBoundaryProps?: Omit<ErrorBoundaryProps, 'children'>
-) {
-  const displayName = WrappedComponent.displayName || WrappedComponent.name || 'Component';
-
-  const ComponentWithErrorBoundary = (props: P) => (
-    <ErrorBoundary {...errorBoundaryProps}>
-      <WrappedComponent {...props} />
-    </ErrorBoundary>
-  );
-
-  ComponentWithErrorBoundary.displayName = `withErrorBoundary(${displayName})`;
-
-  return ComponentWithErrorBoundary;
 }
 
 export default ErrorBoundary;

@@ -10,7 +10,7 @@
  * - The page tells you what to do, not asks you to choose
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
@@ -84,7 +84,7 @@ function Investigations() {
     }
   }, [groupedData?.groups, hasAutoExpanded]);
 
-  const groups = groupedData?.groups || [];
+  const groups = useMemo(() => groupedData?.groups || [], [groupedData?.groups]);
   const totalAnomalies = groupedData?.total_anomalies ?? 0;
 
   // Handlers

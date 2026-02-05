@@ -18,7 +18,9 @@ export { QueryState } from './QueryState';
 
 // New UI components
 export { EmptyState } from './EmptyState';
-export { ErrorBoundary, withErrorBoundary } from './ErrorBoundary';
-export { ToastProvider, useToast } from './Toast';
+export { ErrorBoundary } from './ErrorBoundary';
+export { withErrorBoundary } from './withErrorBoundary';
+export { ToastProvider } from './Toast';
+export { useToast } from './useToast';
 export { Modal, ConfirmDialog } from './Modal';
 export { AnimatedList, AnimatedListItem } from './AnimatedList';
