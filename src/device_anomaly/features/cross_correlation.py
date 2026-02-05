@@ -394,15 +394,13 @@ class CrossCorrelationFeatureBuilder:
                 firmware_total_drop_mean / (global_total_drop_mean * 2 + 1e-6), 0, 1
             )
 
-        if "AvgSignalStrength" in df.columns:
-            # Signal-to-drop ratio by firmware
-            if "TotalDropCnt" in df.columns:
-                signal_quality = df["AvgSignalStrength"] + 100  # Convert dBm to positive
-                df["Firmware_SignalDropRatio"] = df["TotalDropCnt"] / (signal_quality + 1)
+        if "AvgSignalStrength" in df.columns and "TotalDropCnt" in df.columns:
+            signal_quality = df["AvgSignalStrength"] + 100  # Convert dBm to positive
+            df["Firmware_SignalDropRatio"] = df["TotalDropCnt"] / (signal_quality + 1)
 
-                # Compare to firmware average
-                fw_avg_ratio = df.groupby(firmware_id)["Firmware_SignalDropRatio"].transform("mean")
-                df["SignalDropRatio_vs_Firmware"] = df["Firmware_SignalDropRatio"] - fw_avg_ratio
+            # Compare to firmware average
+            fw_avg_ratio = df.groupby(firmware_id)["Firmware_SignalDropRatio"].transform("mean")
+            df["SignalDropRatio_vs_Firmware"] = df["Firmware_SignalDropRatio"] - fw_avg_ratio
 
         return df
 

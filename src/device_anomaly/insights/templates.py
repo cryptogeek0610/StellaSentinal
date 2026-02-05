@@ -15,6 +15,7 @@ Design principles:
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -783,17 +784,13 @@ def render_financial_impact(
 
     # Optional breakdown
     if include_breakdown and template.financial_breakdown_template:
-        try:
+        with contextlib.suppress(KeyError):
             parts.append(template.financial_breakdown_template.format(**data))
-        except KeyError:
-            pass  # Skip breakdown if data missing
 
     # Optional ROI
     if include_roi and template.roi_template:
-        try:
+        with contextlib.suppress(KeyError):
             parts.append(template.roi_template.format(**data))
-        except KeyError:
-            pass  # Skip ROI if data missing
 
     return " ".join(parts) if parts else None
 

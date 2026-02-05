@@ -277,12 +277,12 @@ class HourlyFeatureBuilder:
 
                 # Rolling mean within device
                 df[f"{col}_roll_{window}h_mean"] = df.groupby("DeviceId")[col].transform(
-                    lambda x: x.rolling(window=window, min_periods=1).mean()
+                    lambda x, w=window: x.rolling(window=w, min_periods=1).mean()
                 )
 
                 # Rolling std
                 df[f"{col}_roll_{window}h_std"] = df.groupby("DeviceId")[col].transform(
-                    lambda x: x.rolling(window=window, min_periods=2).std()
+                    lambda x, w=window: x.rolling(window=w, min_periods=2).std()
                 )
 
         return df

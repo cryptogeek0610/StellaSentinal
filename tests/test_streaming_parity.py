@@ -252,7 +252,7 @@ def test_parity_single_event_missing_rollups():
     buffer.add_event(event)
 
     features = computer._compute_features(event, buffer)
-    has_rollup = any(name.endswith("_roll_mean") for name in features.keys())
+    has_rollup = any(name.endswith("_roll_mean") for name in features)
     assert not has_rollup, "Expected no rolling features with a single event"
 
 
@@ -291,7 +291,7 @@ def test_parity_below_window_missing_rollups():
 
     event = build_event(df_raw.iloc[-1], metric_cols)
     features = computer._compute_features(event, buffer)
-    has_rollup = any(name.endswith("_roll_mean") for name in features.keys())
+    has_rollup = any(name.endswith("_roll_mean") for name in features)
     assert not has_rollup, "Expected no rolling features when history < window size"
 
 

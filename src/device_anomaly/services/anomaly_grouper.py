@@ -344,7 +344,7 @@ class AnomalyGrouper:
         # Common location
         locations = [c.location for c in classified_anomalies if c.location]
         common_location = (
-            locations[0] if locations and all(l == locations[0] for l in locations) else None
+            locations[0] if locations and all(loc == locations[0] for loc in locations) else None
         )
 
         # Common device model
@@ -438,7 +438,7 @@ class AnomalyGrouper:
 
             # Check for common location
             locations = [c.location for c in anomalies if c.location]
-            if locations and all(l == locations[0] for l in locations):
+            if locations and all(loc == locations[0] for loc in locations):
                 group_name = f"{category_name} at {locations[0]} ({device_count} devices)"
                 grouping_factors = [
                     f"Same category: {category_name}",

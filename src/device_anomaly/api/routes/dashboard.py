@@ -1295,7 +1295,7 @@ def get_isolation_forest_stats(
     # Calculate statistics
     scores_array = np.array(scores)
     total_predictions = len(scores)
-    total_anomalies = sum(1 for l in labels if l == -1)
+    total_anomalies = sum(1 for label in labels if label == -1)
     total_normal = total_predictions - total_anomalies
 
     # NOTE: Only anomalies (label == -1) are persisted to the database by default,

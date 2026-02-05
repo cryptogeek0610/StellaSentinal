@@ -7,6 +7,7 @@ flagged as anomalies using SHAP (SHapley Additive exPlanations) values.
 
 from __future__ import annotations
 
+import importlib.util
 import logging
 from dataclasses import dataclass
 from typing import Any
@@ -148,9 +149,7 @@ class AnomalyExplainer:
             logger.warning("Explainer not fitted, returning empty explanations")
             return self._fallback_explanations(X, scores, labels, device_ids)
 
-        try:
-            import shap
-        except ImportError:
+        if importlib.util.find_spec("shap") is None:
             return self._fallback_explanations(X, scores, labels, device_ids)
 
         logger.info(f"Computing SHAP explanations for {len(X)} samples")

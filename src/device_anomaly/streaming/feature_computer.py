@@ -458,10 +458,9 @@ class StreamingFeatureComputer:
             }
             # Sanitize metrics: skip non-finite values
             for metric, value in evt.metrics.items():
-                if value is not None:
-                    if isinstance(value, (int, float)) and np.isfinite(value):
-                        row[metric] = value
-                    # Skip NaN/inf to avoid contaminating rolling stats
+                if value is not None and isinstance(value, (int, float)) and np.isfinite(value):
+                    row[metric] = value
+                # Skip NaN/inf to avoid contaminating rolling stats
             rows.append(row)
 
         if not rows:

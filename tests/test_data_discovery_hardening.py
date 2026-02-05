@@ -399,7 +399,7 @@ class TestWeightBasedThrottling:
             assert sem.current_weight == 0
             assert sem.available_weight == 5
 
-            ctx = await sem.acquire(weight=2)
+            await sem.acquire(weight=2)
             assert sem.current_weight == 2
             assert sem.available_weight == 3
 
@@ -417,7 +417,7 @@ class TestWeightBasedThrottling:
             sem = WeightedSemaphore(max_weight=5)
 
             # Acquire weight 4
-            ctx1 = await sem.acquire(weight=4)
+            await sem.acquire(weight=4)
             assert sem.current_weight == 4
 
             # Trying to acquire weight 3 should not complete immediately
@@ -426,7 +426,7 @@ class TestWeightBasedThrottling:
 
             async def try_acquire():
                 nonlocal acquired
-                ctx2 = await sem.acquire(weight=3)
+                await sem.acquire(weight=3)
                 acquired = True
                 await sem.release(3)
 
@@ -457,7 +457,7 @@ class TestWeightBasedThrottling:
             sem = WeightedSemaphore(max_weight=5)
 
             # Request weight > max should be clamped
-            ctx = await sem.acquire(weight=10)  # Will be clamped to 5
+            await sem.acquire(weight=10)  # Will be clamped to 5
             assert sem.current_weight == 5
 
             await sem.release(5)

@@ -519,10 +519,8 @@ def _is_high_value_table(table_name: str, source_db: SourceDatabase, row_count: 
 
     # Check patterns
     for pattern in config.get("patterns", []):
-        if re.match(pattern, table_name, re.IGNORECASE):
-            # Also require minimum row count for pattern matches
-            if row_count >= 1000:
-                return True
+        if re.match(pattern, table_name, re.IGNORECASE) and row_count >= 1000:
+            return True
 
     return False
 

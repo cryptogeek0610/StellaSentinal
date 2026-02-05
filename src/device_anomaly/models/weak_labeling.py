@@ -237,8 +237,9 @@ class WeakLabelGenerator:
 
             # Track matched rules
             matched = df.loc[mask, "heuristic_rules_matched"]
+            rule_name = rule["name"]
             df.loc[mask, "heuristic_rules_matched"] = matched.apply(
-                lambda x: f"{x},{rule['name']}" if x else rule["name"]
+                lambda x, rn=rule_name: f"{x},{rn}" if x else rn
             )
 
         return df

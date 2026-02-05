@@ -12,12 +12,6 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-
-def _utc_now() -> datetime:
-    """Return current UTC time. Used as default for DateTime columns."""
-    return datetime.now(UTC)
-
-
 from sqlalchemy import (
     BigInteger,
     Boolean,
@@ -34,6 +28,11 @@ from sqlalchemy import (
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
+
+
+def _utc_now() -> datetime:
+    """Return current UTC time. Used as default for DateTime columns."""
+    return datetime.now(UTC)
 
 
 class Tenant(Base):

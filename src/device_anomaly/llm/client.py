@@ -833,20 +833,24 @@ def get_default_llm_client() -> BaseLLMClient:
         )
 
     # Check for Azure OpenAI configuration first
-    if llm_api_key and llm_model and llm_base_url:
-        if "openai.azure.com" in llm_base_url or "azure.com" in llm_base_url:
-            api_version = llm_api_version or "2024-12-01-preview"
-            logger.info(
-                "Using AzureOpenAILLMClient (deployment=%s, api_version=%s).",
-                llm_model,
-                api_version,
-            )
-            return AzureOpenAILLMClient(
-                api_key=llm_api_key,
-                azure_endpoint=llm_base_url,
-                deployment_name=llm_model,
-                api_version=api_version,
-            )
+    if (
+        llm_api_key
+        and llm_model
+        and llm_base_url
+        and ("openai.azure.com" in llm_base_url or "azure.com" in llm_base_url)
+    ):
+        api_version = llm_api_version or "2024-12-01-preview"
+        logger.info(
+            "Using AzureOpenAILLMClient (deployment=%s, api_version=%s).",
+            llm_model,
+            api_version,
+        )
+        return AzureOpenAILLMClient(
+            api_key=llm_api_key,
+            azure_endpoint=llm_base_url,
+            deployment_name=llm_model,
+            api_version=api_version,
+        )
 
     base_url_api = _normalize_openai_base_url(llm_base_url)
     if base_url_api != llm_base_url:

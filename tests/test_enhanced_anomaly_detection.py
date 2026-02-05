@@ -336,7 +336,7 @@ class TestPredictiveDetector:
         )
 
         assert result.prediction_type == "battery_failure"
-        assert result.will_occur == True  # Will drain ~80% in 8 hours
+        assert result.will_occur is True  # Will drain ~80% in 8 hours
 
     def test_storage_exhaustion_prediction(self):
         from device_anomaly.models.predictive_detector import PredictiveAnomalyDetector
@@ -378,7 +378,7 @@ class TestAutoRetraining:
             drift_metrics={"psi": {"f1": 0.1}},
             current_anomaly_rate=0.05,
         )
-        assert result.should_retrain == True  # No previous training
+        assert result.should_retrain is True  # No previous training
 
     def test_time_triggers(self):
         from datetime import datetime
@@ -392,7 +392,7 @@ class TestAutoRetraining:
             drift_metrics={},
             current_anomaly_rate=0.05,
         )
-        assert result.should_retrain == True
+        assert result.should_retrain is True
         assert "Max interval" in result.reason
 
 

@@ -395,21 +395,25 @@ class RootCauseAnalyzer:
             cause_val = features.get(cause_feat, 0)
 
             # Check if both are elevated/problematic
-            if isinstance(effect_val, (int, float)) and isinstance(cause_val, (int, float)):
-                if effect_val > 0 and cause_val > 0:
-                    causes.append(
-                        RootCause(
-                            cause_type="correlation",
-                            feature=cause_feat,
-                            evidence=explanation,
-                            confidence=0.6,
-                            details={
-                                "effect_feature": effect,
-                                "effect_value": effect_val,
-                                "cause_value": cause_val,
-                            },
-                        )
+            if (
+                isinstance(effect_val, (int, float))
+                and isinstance(cause_val, (int, float))
+                and effect_val > 0
+                and cause_val > 0
+            ):
+                causes.append(
+                    RootCause(
+                        cause_type="correlation",
+                        feature=cause_feat,
+                        evidence=explanation,
+                        confidence=0.6,
+                        details={
+                            "effect_feature": effect,
+                            "effect_value": effect_val,
+                            "cause_value": cause_val,
+                        },
                     )
+                )
 
         return causes
 

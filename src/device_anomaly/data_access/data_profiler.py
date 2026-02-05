@@ -773,18 +773,20 @@ def get_available_metrics(profiles: dict[str, TableProfile]) -> list[dict[str, A
 
     for table_name, profile in profiles.items():
         for col_name, col_stats in profile.column_stats.items():
-            if any(t in col_stats.dtype.lower() for t in numeric_types):
-                if col_stats.mean is not None:  # Has computed stats
-                    metrics.append(
-                        {
-                            "table": table_name,
-                            "column": col_name,
-                            "dtype": col_stats.dtype,
-                            "mean": col_stats.mean,
-                            "std": col_stats.std,
-                            "min": col_stats.min_val,
-                            "max": col_stats.max_val,
-                        }
-                    )
+            if (
+                any(t in col_stats.dtype.lower() for t in numeric_types)
+                and col_stats.mean is not None
+            ):
+                metrics.append(
+                    {
+                        "table": table_name,
+                        "column": col_name,
+                        "dtype": col_stats.dtype,
+                        "mean": col_stats.mean,
+                        "std": col_stats.std,
+                        "min": col_stats.min_val,
+                        "max": col_stats.max_val,
+                    }
+                )
 
     return metrics

@@ -495,7 +495,7 @@ class TestDLConfig:
         """Test preset configurations."""
         from device_anomaly.config.dl_config import DL_PRESETS, get_preset
 
-        for preset_name in DL_PRESETS.keys():
+        for preset_name in DL_PRESETS:
             config = get_preset(preset_name)
             assert config is not None
             assert config.model.model_type in ["vae", "autoencoder"]

@@ -171,10 +171,7 @@ class PyTorchInferenceEngine:
         with torch.no_grad():
             # Handle VAE (returns tuple) vs Autoencoder (returns tensor)
             output = self.model(x_tensor)
-            if isinstance(output, tuple):
-                recon = output[0]  # reconstruction
-            else:
-                recon = output
+            recon = output[0] if isinstance(output, tuple) else output
 
             # Compute reconstruction error
             error = torch.mean((x_tensor - recon) ** 2, dim=1)

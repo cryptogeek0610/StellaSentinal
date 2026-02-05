@@ -113,11 +113,7 @@ def _temporal_aware_mc_join(
             # Find closest MC snapshot before this timestamp
             mc_before = device_mc[device_mc[mc_time_col] <= dw_time]
 
-            if mc_before.empty:
-                # No MC data before - use earliest available
-                closest_mc = device_mc.iloc[0]
-            else:
-                closest_mc = mc_before.iloc[-1]  # Latest before
+            closest_mc = device_mc.iloc[0] if mc_before.empty else mc_before.iloc[-1]
 
             # Compute staleness
             mc_time = closest_mc[mc_time_col]

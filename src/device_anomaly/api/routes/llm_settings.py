@@ -103,12 +103,13 @@ def _validate_llm_base_url(base_url: str) -> None:
     if not base_url:
         return
 
-    if _llm_base_url_allowlist:
-        if not any(base_url.startswith(entry) for entry in _llm_base_url_allowlist):
-            raise HTTPException(
-                status_code=400,
-                detail="LLM base URL is not in the allowlist",
-            )
+    if _llm_base_url_allowlist and not any(
+        base_url.startswith(entry) for entry in _llm_base_url_allowlist
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="LLM base URL is not in the allowlist",
+        )
 
     parsed = urlparse(base_url)
     if parsed.scheme not in ("http", "https") or not parsed.hostname:

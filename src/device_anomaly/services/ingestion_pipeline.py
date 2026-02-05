@@ -50,9 +50,6 @@ from device_anomaly.data_access.xsight_loader_extended import (
 from device_anomaly.data_access.xsight_loader_extended import (
     _validate_columns as _xsight_validate_columns,
 )
-
-# Import table_exists alias for xsight - uses same db_utils helper
-_xsight_table_exists = _mc_table_exists
 from device_anomaly.db.session import DatabaseSession
 from device_anomaly.services.ingestion_metrics import record_ingestion_metric
 from device_anomaly.services.ingestion_orchestrator import (
@@ -61,6 +58,9 @@ from device_anomaly.services.ingestion_orchestrator import (
     get_table_weight,
     run_batch_sync,
 )
+
+# Import table_exists alias for xsight - uses same db_utils helper
+_xsight_table_exists = _mc_table_exists
 
 logger = logging.getLogger(__name__)
 

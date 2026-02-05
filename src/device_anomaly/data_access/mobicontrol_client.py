@@ -11,12 +11,12 @@ from datetime import datetime
 from typing import Any
 
 import requests
-
-logger = logging.getLogger(__name__)
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from device_anomaly.config.settings import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 class MobiControlAPIError(Exception):

@@ -246,7 +246,7 @@ class TemporalFeatureBuilder:
         for col in target_columns:
             if col in df.columns:
                 df = df.groupby("DeviceId", group_keys=False).apply(
-                    lambda grp: detect_change_points(grp, col)
+                    lambda grp, c=col: detect_change_points(grp, c)
                 )
 
         # Aggregate change point scores

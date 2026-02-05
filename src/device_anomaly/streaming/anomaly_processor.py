@@ -164,19 +164,17 @@ class AnomalyStreamProcessor:
 
             self._score_count += 1
 
-            if result.is_anomaly:
-                # Check cooldown
-                if self._should_alert(device_id):
-                    await self._publish_alert(result)
-                    self._last_alert_time[device_id] = datetime.utcnow()
-                    self._alert_count += 1
+            if result.is_anomaly and self._should_alert(device_id):
+                await self._publish_alert(result)
+                self._last_alert_time[device_id] = datetime.utcnow()
+                self._alert_count += 1
 
-                    logger.info(
-                        "ANOMALY DETECTED: device=%d score=%.3f severity=%s",
-                        device_id,
-                        result.anomaly_score,
-                        result.severity,
-                    )
+                logger.info(
+                    "ANOMALY DETECTED: device=%d score=%.3f severity=%s",
+                    device_id,
+                    result.anomaly_score,
+                    result.severity,
+                )
 
         except Exception as e:
             logger.error(
