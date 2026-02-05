@@ -206,68 +206,69 @@ async def add_request_context(request: Request, call_next):
         or str(uuid.uuid4())
     )
 
-    tenant_id = request.headers.get("X-Tenant-Id") or request.headers.get("X-Tenant-ID")
-    if _require_tenant and not tenant_id and not bypass_auth:
+    # Set minimal context immediately so logging and error responses always
+    # have the request_id, even on early auth/tenant validation failures.
+    set_request_context(request_id=request_id, tenant_id="", user_id=None, user_role="viewer")
+
+    def _error_response(status_code: int, message: str) -> JSONResponse:
+        from device_anomaly.api.errors import _build_error_response
+
         return JSONResponse(
-            status_code=400,
-            content={"detail": "X-Tenant-Id header is required"},
+            status_code=status_code,
+            content=_build_error_response(status_code, message),
+            headers={"X-Request-Id": request_id},
         )
-    tenant_id = tenant_id or _default_tenant
-    if _tenant_allowlist and tenant_id not in _tenant_allowlist:
-        return JSONResponse(
-            status_code=403,
-            content={"detail": "Tenant is not allowed"},
-        )
-
-    provided_key = None
-    auth_header = request.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        provided_key = auth_header.split(" ", 1)[1].strip()
-    if not provided_key:
-        provided_key = request.headers.get("X-Api-Key") or request.headers.get("X-API-Key")
-
-    if _require_api_key and not bypass_auth:
-        if not _api_key:
-            logger.error("REQUIRE_API_KEY is enabled but API_KEY is not configured.")
-            return JSONResponse(
-                status_code=500,
-                content={"detail": "Authentication not configured"},
-            )
-        # Use constant-time comparison to prevent timing attacks
-        if not hmac.compare_digest(provided_key or "", _api_key):
-            return JSONResponse(
-                status_code=401,
-                content={"detail": "Invalid API key"},
-            )
-
-    user_id = None
-    user_role = _default_user_role
-    if _trust_client_headers:
-        user_id = request.headers.get("X-User-Id") or request.headers.get("X-User-ID")
-        user_role = (
-            request.headers.get("X-User-Role")
-            or request.headers.get("X-User-ROLE")
-            or _default_user_role
-        )
-    if provided_key and not user_id:
-        user_id = "api_key"
-    if provided_key and not _trust_client_headers:
-        user_role = _api_key_role
-
-    set_request_context(
-        request_id=request_id,
-        tenant_id=tenant_id,
-        user_id=user_id,
-        user_role=user_role,
-    )
 
     try:
+        tenant_id = request.headers.get("X-Tenant-Id") or request.headers.get("X-Tenant-ID")
+        if _require_tenant and not tenant_id and not bypass_auth:
+            return _error_response(400, "X-Tenant-Id header is required")
+        tenant_id = tenant_id or _default_tenant
+        if _tenant_allowlist and tenant_id not in _tenant_allowlist:
+            return _error_response(403, "Tenant is not allowed")
+
+        provided_key = None
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            provided_key = auth_header.split(" ", 1)[1].strip()
+        if not provided_key:
+            provided_key = request.headers.get("X-Api-Key") or request.headers.get("X-API-Key")
+
+        if _require_api_key and not bypass_auth:
+            if not _api_key:
+                logger.error("REQUIRE_API_KEY is enabled but API_KEY is not configured.")
+                return _error_response(500, "Authentication not configured")
+            # Use constant-time comparison to prevent timing attacks
+            if not hmac.compare_digest(provided_key or "", _api_key):
+                return _error_response(401, "Invalid API key")
+
+        user_id = None
+        user_role = _default_user_role
+        if _trust_client_headers:
+            user_id = request.headers.get("X-User-Id") or request.headers.get("X-User-ID")
+            user_role = (
+                request.headers.get("X-User-Role")
+                or request.headers.get("X-User-ROLE")
+                or _default_user_role
+            )
+        if provided_key and not user_id:
+            user_id = "api_key"
+        if provided_key and not _trust_client_headers:
+            user_role = _api_key_role
+
+        # Upgrade context with fully resolved identity
+        set_request_context(
+            request_id=request_id,
+            tenant_id=tenant_id,
+            user_id=user_id,
+            user_role=user_role,
+        )
+
         response = await call_next(request)
+        response.headers["X-Request-Id"] = request_id
+        return response
     finally:
         clear_request_context()
-
-    response.headers["X-Request-Id"] = request_id
-    return response
 
 
 # Include routers with /api prefix
