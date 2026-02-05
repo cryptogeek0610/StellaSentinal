@@ -7,7 +7,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_DIR = ROOT / "frontend"
 
@@ -166,10 +165,14 @@ def verify_frontend(check_only: bool) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Verify backend + frontend checks.")
-    parser.add_argument("--check", action="store_true", help="Only check prerequisites; do not run tests/builds")
+    parser.add_argument(
+        "--check", action="store_true", help="Only check prerequisites; do not run tests/builds"
+    )
     parser.add_argument("--skip-backend", action="store_true", help="Skip backend verification")
     parser.add_argument("--skip-frontend", action="store_true", help="Skip frontend verification")
-    parser.add_argument("--db-only", action="store_true", help="Only run database connectivity tests")
+    parser.add_argument(
+        "--db-only", action="store_true", help="Only run database connectivity tests"
+    )
     args = parser.parse_args()
 
     # If db-only, just test database connections
