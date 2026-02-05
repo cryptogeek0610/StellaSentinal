@@ -11,8 +11,7 @@ Design principles:
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from sqlalchemy import (
     BigInteger,
@@ -26,14 +25,13 @@ from sqlalchemy import (
     String,
     Text,
 )
-from sqlalchemy.orm import relationship
 
 from device_anomaly.db.models import Base
 
 
 def _utc_now() -> datetime:
     """Return current UTC time. Used as default for DateTime columns."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class DeviceTypeCost(Base):

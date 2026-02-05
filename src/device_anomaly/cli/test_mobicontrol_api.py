@@ -11,7 +11,6 @@ __test__ = False
 import json
 import os
 import sys
-from pprint import pprint
 
 # Load test credentials from .env.test if it exists
 try:
@@ -93,7 +92,7 @@ def test_get_devices():
         print("\nFetching first page of devices (page_size=5)...")
         result = client.get_devices(page=1, page_size=5)
 
-        print(f"\n✅ Successfully retrieved devices")
+        print("\n✅ Successfully retrieved devices")
         print(f"Response type: {type(result).__name__}")
 
         # Handle both list and dict responses
@@ -102,11 +101,11 @@ def test_get_devices():
             print(f"\n  Number of devices: {len(devices)}")
 
             if devices:
-                print(f"\n  First device sample:")
+                print("\n  First device sample:")
                 first_device = devices[0]
                 if isinstance(first_device, dict):
                     print(f"    Keys: {list(first_device.keys())}")
-                    print(f"    Sample data:")
+                    print("    Sample data:")
                     for key in list(first_device.keys())[:15]:  # Show first 15 keys
                         value = first_device[key]
                         if isinstance(value, (dict, list)):
@@ -117,7 +116,7 @@ def test_get_devices():
                     print(f"    Device data: {first_device}")
 
         elif isinstance(result, dict):
-            print(f"Response structure:")
+            print("Response structure:")
             print(f"  Keys: {list(result.keys())}")
 
             if "data" in result:
@@ -125,10 +124,10 @@ def test_get_devices():
                 print(f"\n  Number of devices: {len(devices)}")
 
                 if devices:
-                    print(f"\n  First device sample:")
+                    print("\n  First device sample:")
                     first_device = devices[0]
                     print(f"    Keys: {list(first_device.keys())}")
-                    print(f"    Sample data:")
+                    print("    Sample data:")
                     for key in list(first_device.keys())[:15]:  # Show first 15 keys
                         value = first_device[key]
                         if isinstance(value, (dict, list)):
@@ -138,7 +137,7 @@ def test_get_devices():
 
             if "pagination" in result:
                 pagination = result["pagination"]
-                print(f"\n  Pagination info:")
+                print("\n  Pagination info:")
                 for key, value in pagination.items():
                     print(f"    {key}: {value}")
         else:
@@ -190,7 +189,7 @@ def test_get_single_device():
         device_id = first_device.get("deviceId") or first_device.get("id") or first_device.get("DeviceId")
         if not device_id:
             # Try to find any ID-like field
-            for key in first_device.keys():
+            for key in first_device:
                 if "id" in key.lower() and key.lower() != "guid":
                     device_id = first_device[key]
                     break
@@ -203,9 +202,9 @@ def test_get_single_device():
         print(f"\nFetching details for device: {device_id}")
         device = client.get_device(str(device_id))
 
-        print(f"\n✅ Successfully retrieved device details")
+        print("\n✅ Successfully retrieved device details")
         print(f"  Device keys: {list(device.keys())}")
-        print(f"\n  Sample device data:")
+        print("\n  Sample device data:")
         for key in list(device.keys())[:15]:  # Show first 15 keys
             value = device[key]
             if isinstance(value, (dict, list)):

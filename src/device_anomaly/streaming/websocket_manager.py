@@ -8,18 +8,19 @@ dashboard updates and notifications.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Optional, Set
+from typing import Any
 
 from fastapi import WebSocket, WebSocketDisconnect
 
 from device_anomaly.streaming.engine import (
+    MessageType,
     StreamingEngine,
     StreamMessage,
-    MessageType,
 )
 
 logger = logging.getLogger(__name__)
@@ -31,9 +32,9 @@ class ClientConnection:
 
     websocket: WebSocket
     client_id: str
-    tenant_id: Optional[str] = None
-    subscribed_devices: Set[int] = field(default_factory=set)
-    subscribed_severity: Set[str] = field(default_factory=lambda: {"low", "medium", "high", "critical"})
+    tenant_id: str | None = None
+    subscribed_devices: set[int] = field(default_factory=set)
+    subscribed_severity: set[str] = field(default_factory=lambda: {"low", "medium", "high", "critical"})
     connected_at: datetime = field(default_factory=datetime.utcnow)
     messages_sent: int = 0
 
@@ -86,10 +87,8 @@ class WebSocketManager:
         # Close all connections
         async with self._lock:
             for client in list(self._connections.values()):
-                try:
+                with contextlib.suppress(Exception):
                     await client.websocket.close()
-                except Exception:
-                    pass
             self._connections.clear()
 
         logger.info("WebSocketManager stopped")
@@ -97,8 +96,8 @@ class WebSocketManager:
     async def connect(
         self,
         websocket: WebSocket,
-        client_id: Optional[str] = None,
-        tenant_id: Optional[str] = None,
+        client_id: str | None = None,
+        tenant_id: str | None = None,
     ) -> str:
         """
         Accept a new WebSocket connection.
@@ -246,7 +245,7 @@ class WebSocketManager:
         connection: ClientConnection,
         device_id: int,
         severity: str,
-        tenant_id: Optional[str],
+        tenant_id: str | None,
     ) -> bool:
         """Check if an anomaly should be sent to a client."""
         # Tenant filter
@@ -258,10 +257,7 @@ class WebSocketManager:
             return False
 
         # Device filter (empty = all devices)
-        if connection.subscribed_devices and device_id not in connection.subscribed_devices:
-            return False
-
-        return True
+        return not (connection.subscribed_devices and device_id not in connection.subscribed_devices)
 
     async def _send_to_client(
         self,
@@ -284,7 +280,7 @@ class WebSocketManager:
     async def broadcast(
         self,
         data: dict,
-        tenant_id: Optional[str] = None,
+        tenant_id: str | None = None,
     ) -> int:
         """
         Broadcast a message to all connected clients.

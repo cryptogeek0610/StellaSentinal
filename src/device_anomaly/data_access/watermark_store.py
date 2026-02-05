@@ -18,13 +18,14 @@ Features:
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Lock
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 from sqlalchemy import Column, DateTime, Integer, String, Text, create_engine, text
 from sqlalchemy.orm import declarative_base, sessionmaker
@@ -43,7 +44,7 @@ class WatermarkRecord(Base):
     table_name = Column(String(255), nullable=False)
     watermark_column = Column(String(100), nullable=False)
     watermark_value = Column(DateTime(timezone=True), nullable=False)
-    last_updated = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    last_updated = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     rows_extracted = Column(Integer, default=0)
     metadata_json = Column(Text, nullable=True)
 
@@ -69,11 +70,11 @@ class WatermarkStore:
 
     def __init__(
         self,
-        postgres_url: Optional[str] = None,
-        redis_url: Optional[str] = None,
-        file_path: Optional[Path] = None,
+        postgres_url: str | None = None,
+        redis_url: str | None = None,
+        file_path: Path | None = None,
         lookback_hours: int = 24,
-        enable_file_fallback: Optional[bool] = None,
+        enable_file_fallback: bool | None = None,
     ):
         """
         Initialize watermark store.
@@ -111,7 +112,7 @@ class WatermarkStore:
         self._pg_session = None
         self._pg_engine = None
         self._redis_client = None
-        self._file_cache: Dict[str, Dict[str, Any]] = {}
+        self._file_cache: dict[str, dict[str, Any]] = {}
 
         # Initialize backends in priority order
         self._init_postgres()
@@ -209,7 +210,7 @@ class WatermarkStore:
         self,
         source_db: str,
         table_name: str,
-        default_lookback_hours: Optional[int] = None,
+        default_lookback_hours: int | None = None,
     ) -> datetime:
         """
         Get last watermark for a table.
@@ -223,7 +224,7 @@ class WatermarkStore:
             Last watermark timestamp (or default based on lookback)
         """
         lookback = default_lookback_hours or self._lookback_hours
-        default_watermark = datetime.now(timezone.utc) - timedelta(hours=lookback)
+        default_watermark = datetime.now(UTC) - timedelta(hours=lookback)
 
         key = self._make_key(source_db, table_name)
 
@@ -244,7 +245,7 @@ class WatermarkStore:
                 if result and result[0]:
                     watermark = result[0]
                     if watermark.tzinfo is None:
-                        watermark = watermark.replace(tzinfo=timezone.utc)
+                        watermark = watermark.replace(tzinfo=UTC)
                     return watermark
             except Exception as e:
                 logger.warning(f"PostgreSQL watermark read failed: {e}")
@@ -272,7 +273,7 @@ class WatermarkStore:
         self,
         source_db: str,
         table_name: str,
-    ) -> Optional[datetime]:
+    ) -> datetime | None:
         """Return persisted watermark if it exists, otherwise None."""
         key = self._make_key(source_db, table_name)
 
@@ -292,7 +293,7 @@ class WatermarkStore:
                 if result and result[0]:
                     watermark = result[0]
                     if watermark.tzinfo is None:
-                        watermark = watermark.replace(tzinfo=timezone.utc)
+                        watermark = watermark.replace(tzinfo=UTC)
                     return watermark
             except Exception as e:
                 logger.debug(f"PostgreSQL stored watermark read failed: {e}")
@@ -318,7 +319,7 @@ class WatermarkStore:
         self,
         source_db: str,
         table_name: str,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Get stored metadata JSON for a watermark record."""
         # Try PostgreSQL first
         if self._pg_session:
@@ -358,9 +359,9 @@ class WatermarkStore:
         watermark_value: datetime,
         watermark_column: str = "ServerDateTime",
         rows_extracted: int = 0,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
         force: bool = False,
-    ) -> Tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """
         Set watermark for a table (MONOTONIC - only moves forward).
 
@@ -379,7 +380,7 @@ class WatermarkStore:
             - (False, "reason") on failure
         """
         if watermark_value.tzinfo is None:
-            watermark_value = watermark_value.replace(tzinfo=timezone.utc)
+            watermark_value = watermark_value.replace(tzinfo=UTC)
 
         key = self._make_key(source_db, table_name)
 
@@ -464,7 +465,7 @@ class WatermarkStore:
                     "table_name": table_name,
                     "watermark_column": watermark_column,
                     "watermark_value": watermark_value.isoformat(),
-                    "last_updated": datetime.now(timezone.utc).isoformat(),
+                    "last_updated": datetime.now(UTC).isoformat(),
                     "rows_extracted": rows_extracted,
                     "metadata_json": json.dumps(metadata) if metadata else None,
                 }
@@ -473,14 +474,14 @@ class WatermarkStore:
 
         return (pg_success, None)
 
-    def get_all_watermarks(self, source_db: Optional[str] = None) -> Dict[str, datetime]:
+    def get_all_watermarks(self, source_db: str | None = None) -> dict[str, datetime]:
         """
         Get all watermarks, optionally filtered by source database.
 
         Returns:
             Dictionary mapping "source_db.table_name" to watermark datetime
         """
-        watermarks: Dict[str, datetime] = {}
+        watermarks: dict[str, datetime] = {}
 
         # Try PostgreSQL
         if self._pg_session:
@@ -499,7 +500,7 @@ class WatermarkStore:
                     key = f"{row[0]}.{row[1]}"
                     wm = row[2]
                     if wm.tzinfo is None:
-                        wm = wm.replace(tzinfo=timezone.utc)
+                        wm = wm.replace(tzinfo=UTC)
                     watermarks[key] = wm
 
                 return watermarks
@@ -526,9 +527,9 @@ class WatermarkStore:
         self,
         source_db: str,
         table_name: str,
-        lookback_hours: Optional[int] = None,
-        to_datetime: Optional[datetime] = None,
-    ) -> Tuple[datetime, bool]:
+        lookback_hours: int | None = None,
+        to_datetime: datetime | None = None,
+    ) -> tuple[datetime, bool]:
         """
         Reset watermark to trigger backfill (EXPLICIT backward move).
 
@@ -549,10 +550,10 @@ class WatermarkStore:
         if to_datetime:
             new_watermark = to_datetime
             if new_watermark.tzinfo is None:
-                new_watermark = new_watermark.replace(tzinfo=timezone.utc)
+                new_watermark = new_watermark.replace(tzinfo=UTC)
         else:
             lookback = lookback_hours or self._lookback_hours
-            new_watermark = datetime.now(timezone.utc) - timedelta(hours=lookback)
+            new_watermark = datetime.now(UTC) - timedelta(hours=lookback)
 
         key = self._make_key(source_db, table_name)
 
@@ -581,7 +582,7 @@ class WatermarkStore:
                         "watermark_value": new_watermark,
                         "metadata_json": json.dumps({
                             "reset": True,
-                            "reset_at": datetime.now(timezone.utc).isoformat(),
+                            "reset_at": datetime.now(UTC).isoformat(),
                             "lookback_hours": lookback_hours,
                         }),
                     }
@@ -594,10 +595,8 @@ class WatermarkStore:
 
         # Clear Redis cache
         if self._redis_client:
-            try:
+            with contextlib.suppress(Exception):
                 self._redis_client.delete(key)
-            except Exception:
-                pass
 
         # Update file cache if enabled
         if self._enable_file_fallback:
@@ -607,11 +606,11 @@ class WatermarkStore:
                     "table_name": table_name,
                     "watermark_column": "reset",
                     "watermark_value": new_watermark.isoformat(),
-                    "last_updated": datetime.now(timezone.utc).isoformat(),
+                    "last_updated": datetime.now(UTC).isoformat(),
                     "rows_extracted": 0,
                     "metadata_json": json.dumps({
                         "reset": True,
-                        "reset_at": datetime.now(timezone.utc).isoformat(),
+                        "reset_at": datetime.now(UTC).isoformat(),
                         "lookback_hours": lookback_hours,
                     }),
                 }
@@ -626,7 +625,7 @@ class WatermarkStore:
         return (new_watermark, success)
 
 
-    def get_last_scoring_watermark(self) -> Optional[datetime]:
+    def get_last_scoring_watermark(self) -> datetime | None:
         """
         Get the watermark for the last scoring run.
 
@@ -635,7 +634,7 @@ class WatermarkStore:
         """
         return self._get_stored_watermark("scoring", "last_run")
 
-    def set_last_scoring_watermark(self, timestamp: datetime) -> Tuple[bool, Optional[str]]:
+    def set_last_scoring_watermark(self, timestamp: datetime) -> tuple[bool, str | None]:
         """
         Record the timestamp of a scoring run.
 
@@ -654,8 +653,8 @@ class WatermarkStore:
 
     def check_source_data_freshness(
         self,
-        source_tables: Optional[list] = None,
-    ) -> Tuple[bool, Optional[datetime], str]:
+        source_tables: list | None = None,
+    ) -> tuple[bool, datetime | None, str]:
         """
         Check if source data has new records since the last scoring run.
 
@@ -683,7 +682,7 @@ class WatermarkStore:
         last_scoring = self.get_last_scoring_watermark()
 
         # Find the most recent watermark across source tables
-        max_source_timestamp: Optional[datetime] = None
+        max_source_timestamp: datetime | None = None
         checked_tables = []
 
         for source_db, table_name in source_tables:
@@ -729,7 +728,7 @@ class WatermarkStore:
 
 
 # Global singleton
-_watermark_store: Optional[WatermarkStore] = None
+_watermark_store: WatermarkStore | None = None
 _store_lock = Lock()
 
 

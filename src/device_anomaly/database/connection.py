@@ -5,7 +5,7 @@ import os
 from threading import Lock
 
 from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from device_anomaly.database.schema import Base
 
@@ -257,8 +257,12 @@ def get_results_db_engine():
                     Base.metadata.create_all(_ENGINE)
                     _migrate_results_schema(_ENGINE)
                 try:
-                    from device_anomaly.observability.db_metrics import instrument_engine as instrument_db_metrics
-                    from device_anomaly.observability.sqlalchemy import instrument_engine as instrument_otel
+                    from device_anomaly.observability.db_metrics import (
+                        instrument_engine as instrument_db_metrics,
+                    )
+                    from device_anomaly.observability.sqlalchemy import (
+                        instrument_engine as instrument_otel,
+                    )
 
                     instrument_db_metrics(_ENGINE, "results")
                     instrument_otel(_ENGINE)

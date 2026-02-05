@@ -13,14 +13,13 @@ Data Sources:
 import logging
 import time
 from datetime import datetime, timedelta
-from typing import Dict, Optional
 
 import pandas as pd
 from sqlalchemy import text
 
 from device_anomaly.config.settings import get_settings
-from device_anomaly.data_access.db_connection import create_dw_engine, create_mc_engine
 from device_anomaly.data_access.anomaly_persistence import upsert_device_metadata
+from device_anomaly.data_access.db_connection import create_dw_engine, create_mc_engine
 from device_anomaly.database.connection import get_results_db_session
 
 logger = logging.getLogger(__name__)
@@ -275,8 +274,8 @@ def get_sync_stats() -> dict:
 # =============================================================================
 
 # In-memory cache for device metadata used by streaming enrichment
-_MC_DEVICE_CACHE: Dict[int, Dict] = {}
-_MC_CACHE_LOADED_AT: Optional[datetime] = None
+_MC_DEVICE_CACHE: dict[int, dict] = {}
+_MC_CACHE_LOADED_AT: datetime | None = None
 
 
 def load_mc_device_metadata_cache(since_days: int = 30, limit: int = 200_000) -> int:
@@ -378,7 +377,7 @@ def load_mc_device_metadata_cache(since_days: int = 30, limit: int = 200_000) ->
         return 0
 
 
-def get_mc_device_metadata(device_id: int) -> Optional[Dict]:
+def get_mc_device_metadata(device_id: int) -> dict | None:
     """
     Get cached device metadata for streaming enrichment.
 
@@ -391,7 +390,7 @@ def get_mc_device_metadata(device_id: int) -> Optional[Dict]:
     return _MC_DEVICE_CACHE.get(device_id)
 
 
-def get_mc_cache_stats() -> Dict:
+def get_mc_cache_stats() -> dict:
     """
     Get statistics about the MC device metadata cache.
 

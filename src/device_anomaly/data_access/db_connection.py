@@ -3,8 +3,8 @@ from __future__ import annotations
 import logging
 import time
 import urllib.parse
+from collections.abc import Callable
 from threading import Lock
-from typing import Callable
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
@@ -115,8 +115,12 @@ def create_dw_engine() -> Engine:
                 def on_dw_connect(dbapi_conn, connection_record):
                     logger.debug("DW database connection established")
                 try:
-                    from device_anomaly.observability.db_metrics import instrument_engine as instrument_db_metrics
-                    from device_anomaly.observability.sqlalchemy import instrument_engine as instrument_otel
+                    from device_anomaly.observability.db_metrics import (
+                        instrument_engine as instrument_db_metrics,
+                    )
+                    from device_anomaly.observability.sqlalchemy import (
+                        instrument_engine as instrument_otel,
+                    )
 
                     instrument_db_metrics(_DW_ENGINE, "dw")
                     instrument_otel(_DW_ENGINE)
@@ -178,8 +182,12 @@ def create_mc_engine() -> Engine:
                 def on_mc_connect(dbapi_conn, connection_record):
                     logger.debug("MC database connection established")
                 try:
-                    from device_anomaly.observability.db_metrics import instrument_engine as instrument_db_metrics
-                    from device_anomaly.observability.sqlalchemy import instrument_engine as instrument_otel
+                    from device_anomaly.observability.db_metrics import (
+                        instrument_engine as instrument_db_metrics,
+                    )
+                    from device_anomaly.observability.sqlalchemy import (
+                        instrument_engine as instrument_otel,
+                    )
 
                     instrument_db_metrics(_MC_ENGINE, "mc")
                     instrument_otel(_MC_ENGINE)

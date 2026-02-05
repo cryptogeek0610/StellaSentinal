@@ -8,8 +8,6 @@ on device telemetry data. The architecture uses:
 """
 from __future__ import annotations
 
-from typing import List, Tuple
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -38,7 +36,7 @@ class VAE(nn.Module):
     def __init__(
         self,
         input_dim: int,
-        hidden_dims: List[int] = None,
+        hidden_dims: list[int] = None,
         latent_dim: int = 32,
         dropout: float = 0.2,
         use_batch_norm: bool = True,
@@ -129,7 +127,7 @@ class VAE(nn.Module):
                 nn.init.ones_(module.weight)
                 nn.init.zeros_(module.bias)
 
-    def encode(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def encode(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Encode input to latent space parameters.
 
         Args:
@@ -180,7 +178,7 @@ class VAE(nn.Module):
     def forward(
         self,
         x: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Forward pass through the VAE.
 
         Args:
@@ -202,7 +200,7 @@ class VAE(nn.Module):
         log_var: torch.Tensor,
         kl_weight: float = 1e-3,
         reduction: str = "mean",
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Compute VAE loss (ELBO).
 
         Loss = Reconstruction Loss + KL Weight * KL Divergence
@@ -228,10 +226,7 @@ class VAE(nn.Module):
         # Formula: -0.5 * sum(1 + log_var - mu^2 - exp(log_var))
         kl_loss = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp(), dim=1)
 
-        if reduction == "mean":
-            kl_loss = kl_loss.mean()
-        else:
-            kl_loss = kl_loss.sum()
+        kl_loss = kl_loss.mean() if reduction == "mean" else kl_loss.sum()
 
         total_loss = recon_loss + kl_weight * kl_loss
 
@@ -297,7 +292,7 @@ class VAE(nn.Module):
         }
 
     @classmethod
-    def from_config(cls, config: dict) -> "VAE":
+    def from_config(cls, config: dict) -> VAE:
         """Create model from configuration dict."""
         return cls(
             input_dim=config["input_dim"],
@@ -318,7 +313,7 @@ class Autoencoder(nn.Module):
     def __init__(
         self,
         input_dim: int,
-        hidden_dims: List[int] = None,
+        hidden_dims: list[int] = None,
         latent_dim: int = 32,
         dropout: float = 0.2,
         use_batch_norm: bool = True,

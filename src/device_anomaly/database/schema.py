@@ -2,15 +2,15 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
     Float,
-    Integer,
     Index,
+    Integer,
     String,
     Text,
     create_engine,
@@ -22,7 +22,7 @@ class Base(DeclarativeBase):
     pass
 
 
-class AnomalyStatus(str, Enum):
+class AnomalyStatus(StrEnum):
     """Status of an anomaly investigation."""
 
     OPEN = "open"
@@ -432,7 +432,7 @@ class RemediationOutcome(Base):
 # ============================================================================
 
 
-class LocationMappingType(str, Enum):
+class LocationMappingType(StrEnum):
     """How devices are mapped to locations."""
 
     CUSTOM_ATTRIBUTE = "custom_attribute"  # Match device CustomAttributes[attribute_name] == value
@@ -441,7 +441,7 @@ class LocationMappingType(str, Enum):
     GEO_FENCE = "geo_fence"  # Match lat/lon within radius
 
 
-class InsightSeverity(str, Enum):
+class InsightSeverity(StrEnum):
     """Severity level for customer-facing insights."""
 
     CRITICAL = "critical"  # Immediate action required
@@ -449,7 +449,7 @@ class InsightSeverity(str, Enum):
     INFO = "info"  # FYI / monitoring
 
 
-class TrendDirection(str, Enum):
+class TrendDirection(StrEnum):
     """Trend direction for metrics."""
 
     IMPROVING = "improving"

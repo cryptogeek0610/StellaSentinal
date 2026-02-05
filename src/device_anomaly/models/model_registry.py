@@ -4,8 +4,7 @@ import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
-
+from typing import Any
 
 DEFAULT_MODELS_SUBDIR = Path("models") / "production"
 ENV_MODELS_DIR = "MODEL_ARTIFACTS_DIR"
@@ -14,11 +13,11 @@ ENV_MODELS_DIR = "MODEL_ARTIFACTS_DIR"
 @dataclass
 class ModelArtifactLocation:
     model_dir: Path
-    metadata_path: Optional[Path]
-    metadata: Optional[dict[str, Any]]
+    metadata_path: Path | None
+    metadata: dict[str, Any] | None
 
 
-def get_models_dir(models_dir: Optional[Path] = None) -> Path:
+def get_models_dir(models_dir: Path | None = None) -> Path:
     if models_dir is not None:
         return Path(models_dir)
     env_dir = os.getenv(ENV_MODELS_DIR)
@@ -43,7 +42,7 @@ def _candidate_model_dirs(base_dir: Path) -> list[Path]:
     return list({c.resolve() for c in candidates})
 
 
-def find_latest_model_dir(models_dir: Optional[Path] = None) -> Optional[Path]:
+def find_latest_model_dir(models_dir: Path | None = None) -> Path | None:
     base_dir = get_models_dir(models_dir)
     candidates = _candidate_model_dirs(base_dir)
     if not candidates:
@@ -62,7 +61,7 @@ def find_latest_model_dir(models_dir: Optional[Path] = None) -> Optional[Path]:
     return candidates[0]
 
 
-def load_latest_training_metadata(models_dir: Optional[Path] = None) -> Optional[dict[str, Any]]:
+def load_latest_training_metadata(models_dir: Path | None = None) -> dict[str, Any] | None:
     model_dir = find_latest_model_dir(models_dir)
     if model_dir is None:
         return None
@@ -75,7 +74,7 @@ def load_latest_training_metadata(models_dir: Optional[Path] = None) -> Optional
         return None
 
 
-def resolve_model_artifacts(models_dir: Optional[Path] = None) -> ModelArtifactLocation:
+def resolve_model_artifacts(models_dir: Path | None = None) -> ModelArtifactLocation:
     model_dir = find_latest_model_dir(models_dir)
     if model_dir is None:
         return ModelArtifactLocation(model_dir=Path("."), metadata_path=None, metadata=None)
@@ -91,7 +90,7 @@ def resolve_model_artifacts(models_dir: Optional[Path] = None) -> ModelArtifactL
     return ModelArtifactLocation(model_dir=model_dir, metadata_path=metadata_path if metadata_path.exists() else None, metadata=metadata)
 
 
-def resolve_artifact_path(model_dir: Path, artifact_path: Optional[str]) -> Optional[Path]:
+def resolve_artifact_path(model_dir: Path, artifact_path: str | None) -> Path | None:
     if not artifact_path:
         return None
     path = Path(artifact_path)

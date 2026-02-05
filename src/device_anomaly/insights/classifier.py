@@ -14,14 +14,12 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from device_anomaly.insights.categories import (
-    CATEGORY_METADATA,
     EntityType,
     InsightCategory,
     InsightSeverity,
-    get_category_severity,
 )
 
 logger = logging.getLogger(__name__)
@@ -33,10 +31,10 @@ class ClassificationEvidence:
 
     feature_name: str
     feature_value: float
-    threshold: Optional[float] = None
-    comparison: Optional[str] = None  # "above", "below", "equals"
-    baseline_value: Optional[float] = None
-    z_score: Optional[float] = None
+    threshold: float | None = None
+    comparison: str | None = None  # "above", "below", "equals"
+    baseline_value: float | None = None
+    z_score: float | None = None
     contribution_weight: float = 0.0
 
 
@@ -47,12 +45,12 @@ class ClassifiedInsight:
     category: InsightCategory
     severity: InsightSeverity
     confidence: float  # 0.0 to 1.0
-    evidence: List[ClassificationEvidence] = field(default_factory=list)
-    primary_metric: Optional[str] = None
-    primary_value: Optional[float] = None
+    evidence: list[ClassificationEvidence] = field(default_factory=list)
+    primary_metric: str | None = None
+    primary_value: float | None = None
     affected_entity_type: EntityType = EntityType.DEVICE
-    affected_entity_id: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    affected_entity_id: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -97,7 +95,7 @@ class InsightClassifier:
         )
     """
 
-    def __init__(self, config: Optional[ClassifierConfig] = None):
+    def __init__(self, config: ClassifierConfig | None = None):
         """Initialize the classifier.
 
         Args:
@@ -107,11 +105,11 @@ class InsightClassifier:
 
     def classify(
         self,
-        features: Dict[str, Any],
-        device_context: Optional[Dict[str, Any]] = None,
-        anomaly_score: Optional[float] = None,
-        feature_contributions: Optional[Dict[str, float]] = None,
-    ) -> List[ClassifiedInsight]:
+        features: dict[str, Any],
+        device_context: dict[str, Any] | None = None,
+        anomaly_score: float | None = None,
+        feature_contributions: dict[str, float] | None = None,
+    ) -> list[ClassifiedInsight]:
         """Analyze features and return all applicable insight categories.
 
         Args:
@@ -125,7 +123,7 @@ class InsightClassifier:
         """
         device_context = device_context or {}
         feature_contributions = feature_contributions or {}
-        insights: List[ClassifiedInsight] = []
+        insights: list[ClassifiedInsight] = []
 
         # Battery classifications
         battery_insights = self._classify_battery(features, device_context)
@@ -156,16 +154,16 @@ class InsightClassifier:
 
     def _classify_battery(
         self,
-        features: Dict[str, Any],
-        context: Dict[str, Any],
-    ) -> List[ClassifiedInsight]:
+        features: dict[str, Any],
+        context: dict[str, Any],
+    ) -> list[ClassifiedInsight]:
         """Classify battery-related insights."""
         insights = []
 
         # Get battery features
         drain_rate = features.get("BatteryDrainPerHour", 0)
         battery_level = features.get("BatteryLevel", features.get("battery_start", 100))
-        total_drain = features.get("TotalBatteryLevelDrop", 0)
+        features.get("TotalBatteryLevelDrop", 0)
         charge_good = features.get("ChargePatternGoodCount", 0)
         charge_bad = features.get("ChargePatternBadCount", 0)
         battery_health = features.get("BatteryHealth", 100)
@@ -310,9 +308,9 @@ class InsightClassifier:
 
     def _classify_device(
         self,
-        features: Dict[str, Any],
-        context: Dict[str, Any],
-    ) -> List[ClassifiedInsight]:
+        features: dict[str, Any],
+        context: dict[str, Any],
+    ) -> list[ClassifiedInsight]:
         """Classify device-related insights (drops, reboots)."""
         insights = []
 
@@ -389,14 +387,14 @@ class InsightClassifier:
 
     def _classify_network(
         self,
-        features: Dict[str, Any],
-        context: Dict[str, Any],
-    ) -> List[ClassifiedInsight]:
+        features: dict[str, Any],
+        context: dict[str, Any],
+    ) -> list[ClassifiedInsight]:
         """Classify network-related insights."""
         insights = []
 
         unique_aps = features.get("UniqueAPsConnected", 0)
-        wifi_disconnects = features.get("WifiDisconnectCount", 0)
+        features.get("WifiDisconnectCount", 0)
         cell_towers = features.get("CellTowerChanges", features.get("UniqueCellIds", 0))
         total_disconnects = features.get("DisconnectCount", features.get("TotalDropCnt", 0))
         time_no_network = features.get("TimeOnNoNetwork", 0)
@@ -536,9 +534,9 @@ class InsightClassifier:
 
     def _classify_apps(
         self,
-        features: Dict[str, Any],
-        context: Dict[str, Any],
-    ) -> List[ClassifiedInsight]:
+        features: dict[str, Any],
+        context: dict[str, Any],
+    ) -> list[ClassifiedInsight]:
         """Classify app-related insights."""
         insights = []
 
@@ -546,7 +544,7 @@ class InsightClassifier:
         anr_count = features.get("ANRCount", 0)
         app_battery_drain = features.get("TotalBatteryAppDrain", 0)
         app_foreground_time = features.get("AppForegroundTime", 0)
-        max_app_drain = features.get("MaxSingleAppDrain", 0)
+        features.get("MaxSingleAppDrain", 0)
 
         # 1. App Crash Pattern
         if crash_count >= self.config.app_crash_threshold:
@@ -631,9 +629,9 @@ class InsightClassifier:
     def classify_for_location(
         self,
         location_id: str,
-        device_insights: List[List[ClassifiedInsight]],
-        location_context: Optional[Dict[str, Any]] = None,
-    ) -> List[ClassifiedInsight]:
+        device_insights: list[list[ClassifiedInsight]],
+        location_context: dict[str, Any] | None = None,
+    ) -> list[ClassifiedInsight]:
         """Aggregate device insights into location-level insights.
 
         Args:
@@ -648,7 +646,7 @@ class InsightClassifier:
         location_insights = []
 
         # Count devices with each insight category
-        category_counts: Dict[InsightCategory, int] = {}
+        category_counts: dict[InsightCategory, int] = {}
         for device_insight_list in device_insights:
             seen_categories = set()
             for insight in device_insight_list:

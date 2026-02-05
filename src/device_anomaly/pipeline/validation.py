@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime, timezone
 import json
 import logging
+from collections.abc import Iterable
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterable
 
 import pandas as pd
-
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +76,6 @@ def drop_all_nan_columns(df: pd.DataFrame, name: str) -> pd.DataFrame:
 
 def save_model_metadata(path: Path, payload: dict) -> None:
     payload = dict(payload)
-    payload.setdefault("generated_at", datetime.now(timezone.utc).isoformat())
+    payload.setdefault("generated_at", datetime.now(UTC).isoformat())
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, default=float))

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -56,7 +56,7 @@ class AnomalyExplainer:
         self,
         model: Any,
         feature_names: list[str],
-        config: Optional[ExplanationConfig] = None,
+        config: ExplanationConfig | None = None,
     ):
         """
         Initialize the explainer.
@@ -131,9 +131,9 @@ class AnomalyExplainer:
     def explain(
         self,
         X: np.ndarray,
-        scores: Optional[np.ndarray] = None,
-        labels: Optional[np.ndarray] = None,
-        device_ids: Optional[list] = None,
+        scores: np.ndarray | None = None,
+        labels: np.ndarray | None = None,
+        device_ids: list | None = None,
     ) -> list[AnomalyExplanation]:
         """
         Generate explanations for samples.
@@ -197,7 +197,7 @@ class AnomalyExplainer:
     ) -> AnomalyExplanation:
         """Build explanation object from SHAP values."""
         # Get feature contributions
-        contributions = list(zip(self.feature_names, shap_values))
+        contributions = list(zip(self.feature_names, shap_values, strict=False))
 
         # Sort by absolute contribution
         contributions.sort(key=lambda x: abs(x[1]), reverse=True)
@@ -229,9 +229,9 @@ class AnomalyExplainer:
     def _fallback_explanations(
         self,
         X: np.ndarray,
-        scores: Optional[np.ndarray],
-        labels: Optional[np.ndarray],
-        device_ids: Optional[list],
+        scores: np.ndarray | None,
+        labels: np.ndarray | None,
+        device_ids: list | None,
     ) -> list[AnomalyExplanation]:
         """Generate fallback explanations without SHAP."""
         if scores is None:
@@ -248,7 +248,7 @@ class AnomalyExplainer:
         for i in range(len(X)):
             # Use feature values as proxy for contribution
             feature_values = X[i]
-            contributions = list(zip(self.feature_names, feature_values))
+            contributions = list(zip(self.feature_names, feature_values, strict=False))
 
             # Sort by absolute value (extreme values more likely contributors)
             contributions.sort(key=lambda x: abs(x[1]), reverse=True)
@@ -343,7 +343,7 @@ def explain_anomalies(
     model: Any,
     df: pd.DataFrame,
     feature_cols: list[str],
-    X_background: Optional[np.ndarray] = None,
+    X_background: np.ndarray | None = None,
     top_k: int = 5,
 ) -> pd.DataFrame:
     """

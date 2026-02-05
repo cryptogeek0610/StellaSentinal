@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import logging
 import random
-from datetime import datetime, timezone
-from typing import Any, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
@@ -29,19 +29,19 @@ class APQualityResponse(BaseModel):
     """WiFi access point quality metrics."""
 
     ssid: str
-    bssid: Optional[str] = None
+    bssid: str | None = None
     avg_signal_dbm: float = Field(description="Average signal strength in dBm")
     drop_rate: float = Field(description="Connection drop rate (0-1)")
     device_count: int = Field(description="Number of devices using this AP")
     quality_score: float = Field(description="Quality score 0-100")
-    location: Optional[str] = None
+    location: str | None = None
 
 
 class PerAppUsageResponse(BaseModel):
     """Per-application network usage."""
 
     app_name: str
-    app_id: Optional[int] = None
+    app_id: int | None = None
     data_download_mb: float
     data_upload_mb: float
     device_count: int
@@ -54,7 +54,7 @@ class CarrierStatsResponse(BaseModel):
     carrier_name: str
     device_count: int
     avg_signal: float
-    avg_latency_ms: Optional[float] = None
+    avg_latency_ms: float | None = None
     reliability_score: float
 
 
@@ -62,9 +62,9 @@ class NetworkSummaryResponse(BaseModel):
     """Network intelligence summary."""
 
     tenant_id: str
-    device_group_id: Optional[int] = None
-    device_group_name: Optional[str] = None
-    device_group_path: Optional[str] = None
+    device_group_id: int | None = None
+    device_group_name: str | None = None
+    device_group_path: str | None = None
     total_devices: int = 0
     total_aps: int
     good_aps: int
@@ -74,21 +74,21 @@ class NetworkSummaryResponse(BaseModel):
     fleet_network_score: float
     wifi_vs_cellular_ratio: float
     devices_in_dead_zones: int
-    recommendations: List[str] = []
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    recommendations: list[str] = []
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class APListResponse(BaseModel):
     """List of access points with quality metrics."""
 
-    aps: List[APQualityResponse]
+    aps: list[APQualityResponse]
     total_count: int
 
 
 class AppUsageListResponse(BaseModel):
     """List of per-app network usage."""
 
-    apps: List[PerAppUsageResponse]
+    apps: list[PerAppUsageResponse]
     total_download_mb: float
     total_upload_mb: float
 
@@ -96,7 +96,7 @@ class AppUsageListResponse(BaseModel):
 class CarrierListResponse(BaseModel):
     """List of carrier statistics."""
 
-    carriers: List[CarrierStatsResponse]
+    carriers: list[CarrierStatsResponse]
 
 
 class DeviceGroupNode(BaseModel):
@@ -104,16 +104,16 @@ class DeviceGroupNode(BaseModel):
 
     device_group_id: int
     group_name: str
-    parent_device_group_id: Optional[int] = None
+    parent_device_group_id: int | None = None
     device_count: int
     full_path: str
-    children: List["DeviceGroupNode"] = []
+    children: list[DeviceGroupNode] = []
 
 
 class DeviceGroupHierarchyResponse(BaseModel):
     """Device group hierarchy response."""
 
-    groups: List[DeviceGroupNode]
+    groups: list[DeviceGroupNode]
     total_groups: int
 
 
@@ -231,7 +231,7 @@ def _generate_mock_hierarchy() -> DeviceGroupHierarchyResponse:
     return DeviceGroupHierarchyResponse(groups=groups, total_groups=12)
 
 
-def _get_mock_group_info(device_group_id: Optional[int]) -> dict[str, Any]:
+def _get_mock_group_info(device_group_id: int | None) -> dict[str, Any]:
     """Get mock group info for a specific group ID."""
     mock_groups = {
         1: {"name": "All Devices", "path": "All Devices", "device_count": 1250},
@@ -293,8 +293,8 @@ def _get_mock_group_info(device_group_id: Optional[int]) -> dict[str, Any]:
 
 
 def _generate_mock_aps(
-    count: int = 20, device_group_id: Optional[int] = None
-) -> List[APQualityResponse]:
+    count: int = 20, device_group_id: int | None = None
+) -> list[APQualityResponse]:
     """Generate mock AP quality data."""
     random.seed(42 if device_group_id is None else device_group_id)
 
@@ -344,8 +344,8 @@ def _generate_mock_aps(
 
 
 def _generate_mock_apps(
-    device_group_id: Optional[int] = None,
-) -> List[PerAppUsageResponse]:
+    device_group_id: int | None = None,
+) -> list[PerAppUsageResponse]:
     """Generate mock per-app usage data."""
     # Base data
     apps = [
@@ -420,8 +420,8 @@ def _generate_mock_apps(
 
 
 def _generate_mock_carriers(
-    device_group_id: Optional[int] = None,
-) -> List[CarrierStatsResponse]:
+    device_group_id: int | None = None,
+) -> list[CarrierStatsResponse]:
     """Generate mock carrier statistics."""
     carriers = [
         CarrierStatsResponse(
@@ -465,7 +465,7 @@ def _generate_mock_carriers(
 
 
 def _generate_mock_summary(
-    tenant_id: str, device_group_id: Optional[int] = None
+    tenant_id: str, device_group_id: int | None = None
 ) -> NetworkSummaryResponse:
     """Generate mock network summary."""
     group_info = _get_mock_group_info(device_group_id)
@@ -556,7 +556,7 @@ async def get_device_group_hierarchy(
 
         # Fallback to network_data module (uses conf_DeviceGroup from XSight DW)
         logger.info("device_group_service returned empty, trying network_data fallback")
-        from device_anomaly.data_access.network_data import get_device_groups, build_group_hierarchy
+        from device_anomaly.data_access.network_data import build_group_hierarchy, get_device_groups
 
         groups = get_device_groups()
         if not groups:
@@ -590,7 +590,7 @@ async def get_device_group_hierarchy(
 async def get_network_summary(
     tenant_id: str = Depends(get_tenant_id),
     mock_mode: bool = Depends(get_mock_mode),
-    device_group_id: Optional[int] = Query(
+    device_group_id: int | None = Query(
         default=None, description="Filter by DeviceGroup ID"
     ),
 ):
@@ -653,7 +653,7 @@ async def get_network_summary(
             wifi_vs_cellular_ratio=0.8,  # Would need additional data source
             devices_in_dead_zones=devices_in_dead_zones,
             recommendations=recommendations,
-            generated_at=datetime.now(timezone.utc),
+            generated_at=datetime.now(UTC),
         )
 
     except Exception as e:
@@ -671,7 +671,7 @@ async def get_network_summary(
             wifi_vs_cellular_ratio=0.0,
             devices_in_dead_zones=0,
             recommendations=[f"Error loading network data: {str(e)[:100]}"],
-            generated_at=datetime.now(timezone.utc),
+            generated_at=datetime.now(UTC),
         )
 
 
@@ -681,7 +681,7 @@ async def get_ap_quality(
     mock_mode: bool = Depends(get_mock_mode),
     limit: int = Query(default=50, le=500),
     min_device_count: int = Query(default=1, ge=0),
-    device_group_id: Optional[int] = Query(
+    device_group_id: int | None = Query(
         default=None, description="Filter by DeviceGroup ID"
     ),
 ):
@@ -727,7 +727,7 @@ async def get_per_app_usage(
     tenant_id: str = Depends(get_tenant_id),
     mock_mode: bool = Depends(get_mock_mode),
     period_days: int = Query(default=7, ge=1, le=90),
-    device_group_id: Optional[int] = Query(
+    device_group_id: int | None = Query(
         default=None, description="Filter by DeviceGroup ID"
     ),
 ):
@@ -785,7 +785,7 @@ async def get_per_app_usage(
 async def get_carrier_stats(
     tenant_id: str = Depends(get_tenant_id),
     mock_mode: bool = Depends(get_mock_mode),
-    device_group_id: Optional[int] = Query(
+    device_group_id: int | None = Query(
         default=None, description="Filter by DeviceGroup ID"
     ),
 ):
@@ -825,7 +825,7 @@ async def get_dead_zones(
     signal_threshold_dbm: int = Query(
         default=-85, description="Signal below this is considered dead zone"
     ),
-    device_group_id: Optional[int] = Query(
+    device_group_id: int | None = Query(
         default=None, description="Filter by DeviceGroup ID"
     ),
 ):

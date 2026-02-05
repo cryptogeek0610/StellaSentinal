@@ -9,9 +9,9 @@ from __future__ import annotations
 import json
 import logging
 import time
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import Callable, Dict, Iterable, List, Optional, Tuple
+from datetime import UTC, datetime, timedelta
 
 import pandas as pd
 from sqlalchemy import BigInteger, Column, DateTime, MetaData, String, Table, Text, inspect, text
@@ -19,28 +19,37 @@ from sqlalchemy import BigInteger, Column, DateTime, MetaData, String, Table, Te
 from device_anomaly.config.settings import get_settings
 from device_anomaly.data_access.canonical_events import (
     CanonicalEvent,
-    SourceDatabase as CanonicalSourceDatabase,
     dataframe_to_canonical_events,
     dedupe_events,
 )
+from device_anomaly.data_access.canonical_events import (
+    SourceDatabase as CanonicalSourceDatabase,
+)
 from device_anomaly.data_access.data_profiler import DW_TELEMETRY_TABLES_LEGACY
 from device_anomaly.data_access.db_connection import create_dw_engine, create_mc_engine
+from device_anomaly.data_access.db_utils import table_exists as _mc_table_exists
 from device_anomaly.data_access.mc_timeseries_loader import (
     MC_TIMESERIES_TABLES,
     load_mc_timeseries_incremental,
+)
+from device_anomaly.data_access.mc_timeseries_loader import (
     _validate_columns as _mc_validate_columns,
 )
-from device_anomaly.data_access.db_utils import table_exists as _mc_table_exists
 from device_anomaly.data_access.schema_discovery import (
     SourceDatabase as SchemaSourceDatabase,
+)
+from device_anomaly.data_access.schema_discovery import (
     get_curated_table_list,
 )
 from device_anomaly.data_access.watermark_store import get_watermark_store
 from device_anomaly.data_access.xsight_loader_extended import (
     XSIGHT_EXTENDED_TABLES,
     load_xsight_table_incremental,
+)
+from device_anomaly.data_access.xsight_loader_extended import (
     _validate_columns as _xsight_validate_columns,
 )
+
 # Import table_exists alias for xsight - uses same db_utils helper
 _xsight_table_exists = _mc_table_exists
 from device_anomaly.db.session import DatabaseSession
@@ -68,7 +77,7 @@ def _is_hourly_table(table_name: str) -> bool:
     return "Hour" in columns or config.get("large_table", False)
 
 
-def _xsight_table_enabled(table_name: str, settings) -> Tuple[bool, Optional[str]]:
+def _xsight_table_enabled(table_name: str, settings) -> tuple[bool, str | None]:
     base_tables = set(DW_TELEMETRY_TABLES_LEGACY)
     if table_name in base_tables:
         return True, None
@@ -81,7 +90,7 @@ def _select_candidate_tables(
     source_db: SchemaSourceDatabase,
     include_discovered: bool,
     fallback: Iterable[str],
-) -> List[str]:
+) -> list[str]:
     try:
         candidates = get_curated_table_list(
             source_db=source_db,
@@ -98,9 +107,9 @@ def _select_candidate_tables(
 
 
 def _build_ingestion_plan(
-    xsight_tables: Optional[List[str]] = None,
-    mc_tables: Optional[List[str]] = None,
-) -> Tuple[List[Dict[str, str]], List[SkippedTable]]:
+    xsight_tables: list[str] | None = None,
+    mc_tables: list[str] | None = None,
+) -> tuple[list[dict[str, str]], list[SkippedTable]]:
     settings = get_settings()
     include_discovered = settings.enable_schema_discovery
 
@@ -115,8 +124,8 @@ def _build_ingestion_plan(
         fallback=MC_TIMESERIES_TABLES.keys(),
     )
 
-    tasks: List[Dict[str, str]] = []
-    skipped: List[SkippedTable] = []
+    tasks: list[dict[str, str]] = []
+    skipped: list[SkippedTable] = []
 
     for table_name in xsight_candidates:
         if table_name not in XSIGHT_EXTENDED_TABLES:
@@ -141,7 +150,7 @@ def _build_ingestion_plan(
 
 
 def _mock_dataframe(table_name: str, source_db: str, rows: int = 3) -> pd.DataFrame:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if source_db == "xsight":
         config = XSIGHT_EXTENDED_TABLES.get(table_name, {})
     else:
@@ -158,9 +167,7 @@ def _mock_dataframe(table_name: str, source_db: str, rows: int = 3) -> pd.DataFr
                 row[col] = now - timedelta(minutes=rows - i)
             elif col == "Hour":
                 row[col] = (i + 8) % 24
-            elif col in {"DeviceId", "Deviceid"}:
-                row[col] = 100 + i
-            elif col == device_col:
+            elif col in {"DeviceId", "Deviceid"} or col == device_col:
                 row[col] = 100 + i
             elif col == "StatType":
                 row[col] = 1
@@ -201,7 +208,7 @@ def _ensure_canonical_events_table(engine, auto_create: bool) -> bool:
     return True
 
 
-def _insert_canonical_events(engine, events: List[CanonicalEvent]) -> int:
+def _insert_canonical_events(engine, events: list[CanonicalEvent]) -> int:
     if not events:
         return 0
 
@@ -259,8 +266,8 @@ def _record_skip(
     record_metric(
         source_db=skip.source_db,
         table_name=skip.table_name,
-        started_at=datetime.now(timezone.utc),
-        completed_at=datetime.now(timezone.utc),
+        started_at=datetime.now(UTC),
+        completed_at=datetime.now(UTC),
         rows_skipped=1,
         success=True,
         warning=skip.reason,
@@ -281,9 +288,9 @@ def _ingest_table(
     dry_run: bool,
     record_metric: Callable[..., None],
     watermark_store,
-) -> Dict[str, int]:
+) -> dict[str, int]:
     settings = get_settings()
-    started_at = datetime.now(timezone.utc)
+    started_at = datetime.now(UTC)
     rows_fetched = 0
     rows_inserted = 0
     rows_deduped = 0
@@ -330,13 +337,13 @@ def _ingest_table(
             query_start = time.perf_counter()
             if dry_run:
                 df = _mock_dataframe(table_name, source_db)
-                new_watermark = datetime.now(timezone.utc)
+                new_watermark = datetime.now(UTC)
                 new_hour = None
             else:
                 df, new_watermark, new_hour = load_xsight_table_incremental(
                     table_name=table_name,
                     start_date=watermark_start,
-                    end_date=datetime.now(timezone.utc),
+                    end_date=datetime.now(UTC),
                     batch_size=settings.ingest_batch_size,
                     use_watermark=False,
                     engine=engine,
@@ -406,12 +413,12 @@ def _ingest_table(
             query_start = time.perf_counter()
             if dry_run:
                 df = _mock_dataframe(table_name, source_db)
-                new_watermark = datetime.now(timezone.utc)
+                new_watermark = datetime.now(UTC)
             else:
                 df, new_watermark = load_mc_timeseries_incremental(
                     table_name=table_name,
                     start_time=watermark_start,
-                    end_time=datetime.now(timezone.utc),
+                    end_time=datetime.now(UTC),
                     batch_size=settings.ingest_batch_size,
                     use_watermark=False,
                     engine=engine,
@@ -466,7 +473,7 @@ def _ingest_table(
             source_db=source_db,
             table_name=table_name,
             started_at=started_at,
-            completed_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(UTC),
             rows_fetched=rows_fetched,
             rows_inserted=rows_inserted,
             rows_deduped=rows_deduped,
@@ -491,10 +498,10 @@ def _ingest_table(
 
 
 def run_ingestion_batch(
-    xsight_tables: Optional[List[str]] = None,
-    mc_tables: Optional[List[str]] = None,
+    xsight_tables: list[str] | None = None,
+    mc_tables: list[str] | None = None,
     dry_run: bool = False,
-    max_weight: Optional[int] = None,
+    max_weight: int | None = None,
     record_metric: Callable[..., None] = record_ingestion_metric,
     watermark_store=None,
 ) -> IngestionBatchResult:
@@ -504,7 +511,7 @@ def run_ingestion_batch(
     Returns an IngestionBatchResult for reporting.
     """
     settings = get_settings()
-    batch_id = datetime.now(timezone.utc).strftime("ingest_%Y%m%d_%H%M%S")
+    batch_id = datetime.now(UTC).strftime("ingest_%Y%m%d_%H%M%S")
     watermark_store = watermark_store or get_watermark_store()
 
     tasks, skipped = _build_ingestion_plan(xsight_tables=xsight_tables, mc_tables=mc_tables)
@@ -513,11 +520,11 @@ def run_ingestion_batch(
         _record_skip(skip, batch_id=batch_id, record_metric=record_metric)
 
     if not tasks:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         logger.warning("No ingestion tasks scheduled (dry_run=%s).", dry_run)
         return IngestionBatchResult(started_at=now, completed_at=now, tasks=[])
 
-    def loader(table_name: str, source_db: str) -> Dict[str, int]:
+    def loader(table_name: str, source_db: str) -> dict[str, int]:
         return _ingest_table(
             table_name,
             source_db,

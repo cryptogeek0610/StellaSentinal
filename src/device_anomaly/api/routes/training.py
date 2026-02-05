@@ -5,8 +5,8 @@ import json
 import logging
 import os
 import threading
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -54,19 +54,19 @@ class TrainingMetricsResponse(BaseModel):
     feature_count: int
     anomaly_rate_train: float
     anomaly_rate_validation: float
-    validation_auc: Optional[float] = None
-    precision_at_recall_80: Optional[float] = None
-    feature_importance: Dict[str, float] = Field(default_factory=dict)
+    validation_auc: float | None = None
+    precision_at_recall_80: float | None = None
+    feature_importance: dict[str, float] = Field(default_factory=dict)
 
 
 class TrainingArtifactsResponse(BaseModel):
     """Paths to training artifacts."""
 
-    model_path: Optional[str] = None
-    onnx_path: Optional[str] = None
-    baselines_path: Optional[str] = None
-    cohort_stats_path: Optional[str] = None
-    metadata_path: Optional[str] = None
+    model_path: str | None = None
+    onnx_path: str | None = None
+    baselines_path: str | None = None
+    cohort_stats_path: str | None = None
+    metadata_path: str | None = None
 
 
 class TrainingStageInfo(BaseModel):
@@ -74,9 +74,9 @@ class TrainingStageInfo(BaseModel):
 
     name: str
     status: str  # 'pending', 'running', 'completed', 'failed'
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
-    message: Optional[str] = None
+    started_at: str | None = None
+    completed_at: str | None = None
+    message: str | None = None
 
 
 class TrainingRunResponse(BaseModel):
@@ -85,23 +85,23 @@ class TrainingRunResponse(BaseModel):
     run_id: str
     status: str  # 'idle', 'pending', 'running', 'completed', 'failed'
     progress: float = 0.0
-    message: Optional[str] = None
-    stage: Optional[str] = None
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
-    estimated_completion: Optional[str] = None
-    config: Optional[Dict[str, Any]] = None
-    metrics: Optional[TrainingMetricsResponse] = None
-    artifacts: Optional[TrainingArtifactsResponse] = None
-    model_version: Optional[str] = None
-    error: Optional[str] = None
-    stages: Optional[List[TrainingStageInfo]] = None
+    message: str | None = None
+    stage: str | None = None
+    started_at: str | None = None
+    completed_at: str | None = None
+    estimated_completion: str | None = None
+    config: dict[str, Any] | None = None
+    metrics: TrainingMetricsResponse | None = None
+    artifacts: TrainingArtifactsResponse | None = None
+    model_version: str | None = None
+    error: str | None = None
+    stages: list[TrainingStageInfo] | None = None
 
 
 class TrainingHistoryResponse(BaseModel):
     """List of past training runs."""
 
-    runs: List[TrainingRunResponse]
+    runs: list[TrainingRunResponse]
     total: int
 
 
@@ -110,8 +110,8 @@ class TrainingQueueStatus(BaseModel):
 
     queue_length: int
     worker_available: bool
-    last_job_completed_at: Optional[str] = None
-    next_scheduled: Optional[str] = None
+    last_job_completed_at: str | None = None
+    next_scheduled: str | None = None
 
 
 # ============================================================================
@@ -142,7 +142,7 @@ def get_redis():
 # ============================================================================
 
 _training_state_lock = threading.Lock()
-_training_state: Dict[str, Any] = {
+_training_state: dict[str, Any] = {
     "status": "idle",
     "progress": 0.0,
     "message": None,
@@ -154,13 +154,13 @@ _training_state: Dict[str, Any] = {
 }
 
 
-def _update_training_state(updates: Dict[str, Any]) -> None:
+def _update_training_state(updates: dict[str, Any]) -> None:
     """Thread-safe update of training state."""
     with _training_state_lock:
         _training_state.update(updates)
 
 
-def _get_training_state_copy() -> Dict[str, Any]:
+def _get_training_state_copy() -> dict[str, Any]:
     """Thread-safe copy of training state."""
     with _training_state_lock:
         return dict(_training_state)
@@ -190,7 +190,7 @@ STAGE_NAME_MAP = {
 }
 
 
-def _build_stages_from_status(status: Dict[str, Any]) -> Optional[List[TrainingStageInfo]]:
+def _build_stages_from_status(status: dict[str, Any]) -> list[TrainingStageInfo] | None:
     """Build stages list from current training status.
 
     Creates a stages representation based on current progress and stage information.
@@ -201,9 +201,9 @@ def _build_stages_from_status(status: Dict[str, Any]) -> Optional[List[TrainingS
         return None
 
     current_stage = status.get("stage", "")
-    progress = status.get("progress", 0.0)
+    status.get("progress", 0.0)
     started_at = status.get("started_at")
-    completed_at = status.get("completed_at")
+    status.get("completed_at")
 
     # Map current stage to display name
     current_stage_name = STAGE_NAME_MAP.get(current_stage, current_stage.replace("_", " ").title() if current_stage else "")
@@ -265,9 +265,9 @@ def _build_stages_from_status(status: Dict[str, Any]) -> Optional[List[TrainingS
 # ============================================================================
 
 
-def get_mock_training_stages() -> List[TrainingStageInfo]:
+def get_mock_training_stages() -> list[TrainingStageInfo]:
     """Generate mock training stages."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return [
         TrainingStageInfo(
             name="Initialize",
@@ -319,8 +319,8 @@ def get_mock_training_run() -> TrainingRunResponse:
         progress=100.0,
         message="Training completed successfully",
         stage="complete",
-        started_at=(datetime.now(timezone.utc) - timedelta(hours=2)).isoformat(),
-        completed_at=(datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(),
+        started_at=(datetime.now(UTC) - timedelta(hours=2)).isoformat(),
+        completed_at=(datetime.now(UTC) - timedelta(hours=1)).isoformat(),
         config={
             "start_date": "2024-01-01",
             "end_date": "2024-12-01",
@@ -362,7 +362,7 @@ def get_mock_training_run() -> TrainingRunResponse:
 
 def get_mock_running_training() -> TrainingRunResponse:
     """Generate mock running training for demonstration."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     stages = [
         TrainingStageInfo(
             name="Initialize",
@@ -413,9 +413,9 @@ def get_mock_running_training() -> TrainingRunResponse:
     )
 
 
-def get_mock_training_history() -> List[TrainingRunResponse]:
+def get_mock_training_history() -> list[TrainingRunResponse]:
     """Generate mock training history."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return [
         get_mock_training_run(),
         TrainingRunResponse(
@@ -486,7 +486,7 @@ def _run_training_job_background(config: TrainingConfigRequest, tenant_id: str):
             "message": "Initializing training pipeline...",
         })
 
-        from device_anomaly.pipeline.training import TrainingConfig, RealDataTrainingPipeline
+        from device_anomaly.pipeline.training import RealDataTrainingPipeline, TrainingConfig
 
         training_config = TrainingConfig(
             start_date=config.start_date,
@@ -527,7 +527,7 @@ def _run_training_job_background(config: TrainingConfigRequest, tenant_id: str):
             "status": "failed",
             "stage": "error",
             "message": "Training failed. Check server logs for details.",
-            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "completed_at": datetime.now(UTC).isoformat(),
         })
     finally:
         set_tenant_id(None)
@@ -538,7 +538,7 @@ def _run_training_job_background(config: TrainingConfigRequest, tenant_id: str):
 # ============================================================================
 
 
-def _get_status_from_redis() -> Optional[Dict[str, Any]]:
+def _get_status_from_redis() -> dict[str, Any] | None:
     """Get training status from Redis."""
     redis_client = get_redis()
     if redis_client:
@@ -551,7 +551,7 @@ def _get_status_from_redis() -> Optional[Dict[str, Any]]:
     return None
 
 
-def _get_history_from_redis(limit: int = 10) -> List[Dict[str, Any]]:
+def _get_history_from_redis(limit: int = 10) -> list[dict[str, Any]]:
     """Get training history from Redis."""
     redis_client = get_redis()
     if redis_client:
@@ -569,12 +569,12 @@ def _submit_job_to_redis(config: TrainingConfigRequest, tenant_id: str) -> str:
     if not redis_client:
         raise HTTPException(status_code=503, detail="Redis not available")
 
-    job_id = f"job_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+    job_id = f"job_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
     job = {
         "job_id": job_id,
         "config": config.model_dump(),
         "tenant_id": tenant_id,
-        "submitted_at": datetime.now(timezone.utc).isoformat(),
+        "submitted_at": datetime.now(UTC).isoformat(),
         "status": "pending",
     }
 
@@ -642,7 +642,7 @@ def start_training(
                 status="pending",
                 progress=0.0,
                 message="Training job queued, waiting for ML worker...",
-                started_at=datetime.now(timezone.utc).isoformat(),
+                started_at=datetime.now(UTC).isoformat(),
                 config=config.model_dump(),
             )
         except Exception as e:
@@ -656,7 +656,7 @@ def start_training(
             detail="A training job is already running. Wait for it to complete."
         )
 
-    started_at = datetime.now(timezone.utc).isoformat()
+    started_at = datetime.now(UTC).isoformat()
     with _training_state_lock:
         _training_state.update({
             "status": "running",
@@ -828,8 +828,8 @@ def get_queue_status(
         return TrainingQueueStatus(
             queue_length=0,
             worker_available=True,
-            last_job_completed_at=(datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(),
-            next_scheduled=(datetime.now(timezone.utc) + timedelta(hours=6)).isoformat(),
+            last_job_completed_at=(datetime.now(UTC) - timedelta(hours=1)).isoformat(),
+            next_scheduled=(datetime.now(UTC) + timedelta(hours=6)).isoformat(),
         )
 
     redis_client = get_redis()

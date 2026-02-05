@@ -4,8 +4,8 @@ from device_anomaly.pipeline.validation import (
     PipelineStage,
     PipelineTracker,
     drop_all_nan_columns,
-    ensure_required_columns,
     ensure_min_rows,
+    ensure_required_columns,
     save_model_metadata,
 )
 

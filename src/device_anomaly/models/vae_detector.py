@@ -7,7 +7,7 @@ integration with the existing training and inference pipelines.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -17,7 +17,6 @@ import torch.nn as nn
 from device_anomaly.models.dl_base import (
     BaseDLDetector,
     DLDetectorConfig,
-    DLTrainingMetrics,
 )
 from device_anomaly.models.vae_architecture import VAE, Autoencoder
 
@@ -72,7 +71,7 @@ class VAEDetector(BaseDLDetector):
         anomalies = df_scored[df_scored['anomaly_label'] == -1]
     """
 
-    def __init__(self, config: Optional[VAEDetectorConfig] = None):
+    def __init__(self, config: VAEDetectorConfig | None = None):
         """Initialize the VAE detector.
 
         Args:
@@ -262,7 +261,7 @@ class VAEDetector(BaseDLDetector):
         self,
         df: pd.DataFrame,
         top_k: int = 5
-    ) -> Dict[int, Dict[str, float]]:
+    ) -> dict[int, dict[str, float]]:
         """Explain which features contribute most to each anomaly.
 
         Args:
@@ -288,7 +287,7 @@ class VAEDetector(BaseDLDetector):
         self,
         output_path: str | Path,
         export_onnx: bool = False
-    ) -> Dict[str, Path]:
+    ) -> dict[str, Path]:
         """Save trained model to disk.
 
         Extends parent method to save VAE-specific state.
@@ -349,7 +348,7 @@ class VAEDetector(BaseDLDetector):
         return saved_paths
 
     @classmethod
-    def load_model(cls, model_path: str | Path) -> "VAEDetector":
+    def load_model(cls, model_path: str | Path) -> VAEDetector:
         """Load a trained VAE detector from disk.
 
         Args:
@@ -423,7 +422,7 @@ class VAEDetector(BaseDLDetector):
 
         return instance
 
-    def get_metadata(self) -> Dict[str, Any]:
+    def get_metadata(self) -> dict[str, Any]:
         """Get detector metadata for observability."""
         metadata = super().get_metadata()
         metadata["model_type"] = self.config.model_type

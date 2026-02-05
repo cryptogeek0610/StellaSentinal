@@ -17,14 +17,20 @@ import logging
 import os
 import uuid
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Iterable
+from typing import Any
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import roc_auc_score, precision_recall_curve
+from sklearn.metrics import precision_recall_curve, roc_auc_score
 
+from device_anomaly.features.cohort_stats import (
+    CohortStatsStore,
+    apply_cohort_stats,
+    compute_cohort_stats,
+    save_cohort_stats,
+)
 from device_anomaly.models.anomaly_detector import (
     AnomalyDetectorConfig,
     AnomalyDetectorIsolationForest,
@@ -33,17 +39,11 @@ from device_anomaly.models.baseline import (
     compute_data_driven_baselines,
     save_data_driven_baselines,
 )
-from device_anomaly.features.cohort_stats import (
-    CohortStatsStore,
-    apply_cohort_stats,
-    compute_cohort_stats,
-    save_cohort_stats,
-)
 from device_anomaly.pipeline.validation import (
     PipelineStage,
     PipelineTracker,
-    ensure_min_rows,
     drop_all_nan_columns,
+    ensure_min_rows,
     save_model_metadata,
 )
 
@@ -73,7 +73,7 @@ class TrainingConfig:
     export_onnx: bool = True
     min_train_rows: int = field(default_factory=_get_min_train_rows)
     min_validation_rows: int = field(default_factory=_get_min_validation_rows)
-    device_type_col: Optional[str] = "ModelId"
+    device_type_col: str | None = "ModelId"
     timestamp_col: str = "Timestamp"
     row_limit: int = 1_000_000
     # Multi-source training: if True, loads from all configured training sources
@@ -82,7 +82,7 @@ class TrainingConfig:
     # Ensemble detector configuration
     use_ensemble: bool = False
     ensemble_contamination: float = 0.05
-    ensemble_weights: Optional[Dict[str, float]] = None  # IF, LOF, OCSVM weights
+    ensemble_weights: dict[str, float] | None = None  # IF, LOF, OCSVM weights
     # SHAP explanations
     enable_shap: bool = False
     shap_background_samples: int = 100
@@ -94,11 +94,11 @@ class TrainingConfig:
     include_wifi_features: bool = True
     # Hourly granularity
     include_hourly_data: bool = False
-    hourly_tables: List[str] = field(default_factory=lambda: [
+    hourly_tables: list[str] = field(default_factory=lambda: [
         "cs_DataUsageByHour", "cs_BatteryLevelDrop", "cs_WifiHour"
     ])
     hourly_aggregation: str = "device_day"  # "hourly", "device_day", "device_hour"
-    hourly_windows: List[int] = field(default_factory=lambda: [6, 12, 24, 48])
+    hourly_windows: list[int] = field(default_factory=lambda: [6, 12, 24, 48])
     hourly_max_days: int = 7  # Limit hourly data to recent N days
     # Auto-discovery
     use_auto_discovery: bool = False
@@ -124,17 +124,17 @@ class TrainingMetrics:
     feature_count: int
     anomaly_rate_train: float
     anomaly_rate_validation: float
-    validation_auc: Optional[float] = None
-    precision_at_recall_80: Optional[float] = None
-    feature_importance: Dict[str, float] = field(default_factory=dict)
+    validation_auc: float | None = None
+    precision_at_recall_80: float | None = None
+    feature_importance: dict[str, float] = field(default_factory=dict)
     # Ensemble-specific metrics
-    ensemble_algorithm_scores: Optional[Dict[str, float]] = None
+    ensemble_algorithm_scores: dict[str, float] | None = None
     # Enhanced evaluation metrics
-    score_stability: Optional[Dict[str, float]] = None
-    cohort_fairness: Optional[Dict[str, Any]] = None
-    temporal_stability: Optional[Dict[str, float]] = None
+    score_stability: dict[str, float] | None = None
+    cohort_fairness: dict[str, Any] | None = None
+    temporal_stability: dict[str, float] | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -143,14 +143,14 @@ class TrainingArtifacts:
     """Paths to training artifacts."""
 
     model_path: Path
-    onnx_path: Optional[Path] = None
-    baselines_path: Optional[Path] = None
-    cohort_stats_path: Optional[Path] = None
-    cohort_detector_path: Optional[Path] = None
-    metadata_path: Optional[Path] = None
-    feature_importance_path: Optional[Path] = None
+    onnx_path: Path | None = None
+    baselines_path: Path | None = None
+    cohort_stats_path: Path | None = None
+    cohort_detector_path: Path | None = None
+    metadata_path: Path | None = None
+    feature_importance_path: Path | None = None
 
-    def to_dict(self) -> Dict[str, str]:
+    def to_dict(self) -> dict[str, str]:
         return {
             k: str(v) if v else None
             for k, v in {
@@ -177,9 +177,9 @@ class TrainingResult:
     started_at: str
     completed_at: str
     status: str = "completed"
-    error: Optional[str] = None
+    error: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "run_id": self.run_id,
             "model_version": self.model_version,
@@ -211,13 +211,13 @@ class RealDataTrainingPipeline:
         self.config = config
         self.tracker = PipelineTracker()
         self.run_id = str(uuid.uuid4())[:8]
-        self.model_version: Optional[str] = None
-        self._df_train: Optional[pd.DataFrame] = None
-        self._df_val: Optional[pd.DataFrame] = None
-        self._baselines: Optional[Dict] = None
-        self._cohort_stats_payload: Optional[dict[str, Any]] = None
-        self._feature_norms: Optional[dict[str, float]] = None
-        self._feature_spec: Optional[dict[str, Any]] = None
+        self.model_version: str | None = None
+        self._df_train: pd.DataFrame | None = None
+        self._df_val: pd.DataFrame | None = None
+        self._baselines: dict | None = None
+        self._cohort_stats_payload: dict[str, Any] | None = None
+        self._feature_norms: dict[str, float] | None = None
+        self._feature_spec: dict[str, Any] | None = None
 
     def load_training_data(self) -> pd.DataFrame:
         """
@@ -242,8 +242,8 @@ class RealDataTrainingPipeline:
         if self.config.use_multi_source:
             logger.info("Multi-source training enabled - loading from all configured sources")
             from device_anomaly.data_access.unified_loader import (
-                load_multi_source_training_data,
                 get_multi_source_summary,
+                load_multi_source_training_data,
             )
 
             df = load_multi_source_training_data(
@@ -303,9 +303,7 @@ class RealDataTrainingPipeline:
         """Load training data using auto-discovered high-value tables."""
         from device_anomaly.data_access.schema_discovery import (
             discover_training_tables,
-            SourceDatabase,
         )
-        from device_anomaly.data_access.unified_loader import load_unified_device_dataset
 
         # Discover tables suitable for ML training
         discovered = discover_training_tables(
@@ -404,8 +402,8 @@ class RealDataTrainingPipeline:
 
         from device_anomaly.features.device_features import (
             DeviceFeatureBuilder,
-            compute_feature_norms,
             build_extended_features,
+            compute_feature_norms,
         )
 
         if self.config.use_extended_features:
@@ -448,7 +446,7 @@ class RealDataTrainingPipeline:
         self.tracker.advance(PipelineStage.FEATURES)
         return df_features
 
-    def apply_feature_selection(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, List[str]]:
+    def apply_feature_selection(self, df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
         """
         Apply feature selection to reduce dimensionality for expanded features.
 
@@ -485,7 +483,7 @@ class RealDataTrainingPipeline:
         logger.info(f"Feature selection: {len(df.columns)} -> {len(df_selected.columns)} columns")
         return df_selected, selected_features
 
-    def compute_cohort_stats(self, df: pd.DataFrame) -> Optional[CohortStatsStore]:
+    def compute_cohort_stats(self, df: pd.DataFrame) -> CohortStatsStore | None:
         """Compute and store cohort statistics from training-only data."""
         payload = compute_cohort_stats(df=df)
         if not payload.get("stats") and not payload.get("global"):
@@ -494,7 +492,7 @@ class RealDataTrainingPipeline:
         self._cohort_stats_payload = payload
         return CohortStatsStore(payload)
 
-    def compute_baselines(self, df: pd.DataFrame) -> Dict[str, Any]:
+    def compute_baselines(self, df: pd.DataFrame) -> dict[str, Any]:
         """
         Compute data-driven baselines from training data.
 
@@ -534,7 +532,7 @@ class RealDataTrainingPipeline:
 
     def train_validation_split(
         self, df: pd.DataFrame
-    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """
         Perform time-based train/validation split.
 
@@ -580,7 +578,7 @@ class RealDataTrainingPipeline:
         self._df_val = df_val
         return df_train, df_val
 
-    def _resolve_timestamp_column(self, df: pd.DataFrame) -> Optional[str]:
+    def _resolve_timestamp_column(self, df: pd.DataFrame) -> str | None:
         candidates = [
             self.config.timestamp_col,
             "Timestamp",
@@ -596,7 +594,7 @@ class RealDataTrainingPipeline:
 
     def get_model_version(self) -> str:
         if not self.model_version:
-            self.model_version = datetime.now(timezone.utc).strftime("v%Y%m%d_%H%M%S")
+            self.model_version = datetime.now(UTC).strftime("v%Y%m%d_%H%M%S")
         return self.model_version
 
     def train_model(self, train_df: pd.DataFrame) -> Any:
@@ -761,7 +759,7 @@ class RealDataTrainingPipeline:
         self,
         detector: Any,
         scored_df: pd.DataFrame,
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """Get per-algorithm anomaly rates from ensemble."""
         algorithm_scores = {}
 
@@ -780,7 +778,7 @@ class RealDataTrainingPipeline:
         val_df: pd.DataFrame,
         val_scored: pd.DataFrame,
         score_col: str,
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         Compute score stability using bootstrap variance.
 
@@ -790,7 +788,7 @@ class RealDataTrainingPipeline:
             n_bootstrap = 10
             bootstrap_rates = []
 
-            for i in range(n_bootstrap):
+            for _i in range(n_bootstrap):
                 sample_idx = np.random.choice(len(val_df), size=len(val_df), replace=True)
                 sample_df = val_df.iloc[sample_idx]
                 sample_scored = detector.score_dataframe(sample_df)
@@ -812,7 +810,7 @@ class RealDataTrainingPipeline:
         self,
         scored_df: pd.DataFrame,
         label_col: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Compute cohort fairness metrics.
 
@@ -830,7 +828,7 @@ class RealDataTrainingPipeline:
         scored_df: pd.DataFrame,
         ts_col: str,
         label_col: str,
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         Compute temporal stability of anomaly detection.
 
@@ -864,7 +862,7 @@ class RealDataTrainingPipeline:
         self,
         detector: AnomalyDetectorIsolationForest,
         df: pd.DataFrame,
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         Estimate feature importance by measuring score variance contribution.
 
@@ -904,7 +902,7 @@ class RealDataTrainingPipeline:
         detector: AnomalyDetectorIsolationForest,
         metrics: TrainingMetrics,
         output_dir: str | Path,
-        model_version: Optional[str] = None,
+        model_version: str | None = None,
     ) -> TrainingArtifacts:
         """
         Save all training artifacts to disk.
@@ -1005,7 +1003,7 @@ class RealDataTrainingPipeline:
         from device_anomaly.database.connection import get_results_db_session
         from device_anomaly.database.schema import TrainingRun
 
-        def _parse_dt(value: Optional[str]) -> Optional[datetime]:
+        def _parse_dt(value: str | None) -> datetime | None:
             if not value:
                 return None
             try:
@@ -1053,7 +1051,7 @@ class RealDataTrainingPipeline:
         Returns:
             TrainingResult with complete run information
         """
-        started_at = datetime.now(timezone.utc).isoformat()
+        started_at = datetime.now(UTC).isoformat()
         logger.info(f"=== Starting Training Pipeline (run_id: {self.run_id}) ===")
         logger.info(f"Config: extended={self.config.use_extended_features}, "
                    f"hourly={self.config.include_hourly_data}, "
@@ -1069,7 +1067,7 @@ class RealDataTrainingPipeline:
             df_features = self.prepare_features(df)
 
             # 2.5 Feature selection (for expanded feature sets)
-            selected_features: List[str] = []
+            selected_features: list[str] = []
             if self.config.enable_feature_selection and len(df_features.columns) > self.config.max_features:
                 logger.info(f"Applying feature selection: {len(df_features.columns)} cols -> max {self.config.max_features}")
                 df_features, selected_features = self.apply_feature_selection(df_features)
@@ -1107,7 +1105,7 @@ class RealDataTrainingPipeline:
             # 8. Export artifacts
             artifacts = self.export_artifacts(detector, metrics, output_dir, model_version=model_version)
 
-            completed_at = datetime.now(timezone.utc).isoformat()
+            completed_at = datetime.now(UTC).isoformat()
             result = TrainingResult(
                 run_id=self.run_id,
                 model_version=model_version,
@@ -1129,7 +1127,7 @@ class RealDataTrainingPipeline:
 
         except Exception as e:
             logger.error(f"Training pipeline failed: {e}", exc_info=True)
-            completed_at = datetime.now(timezone.utc).isoformat()
+            completed_at = datetime.now(UTC).isoformat()
 
             result = TrainingResult(
                 run_id=self.run_id,

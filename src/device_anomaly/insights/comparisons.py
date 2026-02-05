@@ -14,25 +14,21 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from enum import StrEnum
+from typing import Any
 
 import numpy as np
-import pandas as pd
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from device_anomaly.database.schema import (
-    AnomalyResult,
     DeviceFeature,
     LocationMetadata,
-    ShiftPerformance,
 )
 
 logger = logging.getLogger(__name__)
 
 
-class ComparisonType(str, Enum):
+class ComparisonType(StrEnum):
     """Types of comparisons available."""
 
     FLEET = "fleet"
@@ -163,11 +159,11 @@ class LocationComparison:
     device_count_b: int
 
     # Metric comparisons
-    metric_comparisons: Dict[str, Tuple[float, float, float]]  # metric -> (a_val, b_val, diff_pct)
+    metric_comparisons: dict[str, tuple[float, float, float]]  # metric -> (a_val, b_val, diff_pct)
 
     # Overall assessment
-    overall_winner: Optional[str]  # location_id of better performer, or None if similar
-    key_differences: List[str]  # List of notable differences
+    overall_winner: str | None  # location_id of better performer, or None if similar
+    key_differences: list[str]  # List of notable differences
 
     def to_text(self) -> str:
         """Generate human-readable comparison summary."""
@@ -217,8 +213,8 @@ class ComparisonEngine:
         self.comparison_days = comparison_days
 
         # Cache for fleet statistics (refreshed periodically)
-        self._fleet_stats_cache: Dict[str, Dict[str, float]] = {}
-        self._fleet_stats_timestamp: Optional[datetime] = None
+        self._fleet_stats_cache: dict[str, dict[str, float]] = {}
+        self._fleet_stats_timestamp: datetime | None = None
         self._cache_ttl_minutes = 60
 
     def compare_to_fleet(
@@ -226,7 +222,7 @@ class ComparisonEngine:
         device_id: int,
         metric: str,
         value: float,
-        period_days: Optional[int] = None,
+        period_days: int | None = None,
     ) -> FleetComparison:
         """Compare a device's metric value to the entire fleet.
 
@@ -293,9 +289,9 @@ class ComparisonEngine:
         device_id: int,
         metric: str,
         value: float,
-        device_metadata: Optional[Dict[str, Any]] = None,
-        period_days: Optional[int] = None,
-    ) -> Optional[CohortComparison]:
+        device_metadata: dict[str, Any] | None = None,
+        period_days: int | None = None,
+    ) -> CohortComparison | None:
         """Compare a device's metric to its cohort (same manufacturer/model/OS).
 
         Args:
@@ -361,7 +357,7 @@ class ComparisonEngine:
         metric: str,
         current_value: float,
         baseline_days: int = 30,
-    ) -> Optional[HistoricalComparison]:
+    ) -> HistoricalComparison | None:
         """Compare device's current metric to its historical baseline.
 
         Args:
@@ -451,9 +447,9 @@ class ComparisonEngine:
         self,
         location_a_id: str,
         location_b_id: str,
-        metrics: Optional[List[str]] = None,
-        period_days: Optional[int] = None,
-    ) -> Optional[LocationComparison]:
+        metrics: list[str] | None = None,
+        period_days: int | None = None,
+    ) -> LocationComparison | None:
         """Compare two locations across multiple metrics.
 
         Args:
@@ -496,8 +492,8 @@ class ComparisonEngine:
             return None
 
         # Compare each metric
-        metric_comparisons: Dict[str, Tuple[float, float, float]] = {}
-        key_differences: List[str] = []
+        metric_comparisons: dict[str, tuple[float, float, float]] = {}
+        key_differences: list[str] = []
 
         wins_a = 0
         wins_b = 0
@@ -554,7 +550,7 @@ class ComparisonEngine:
         self,
         metric: str,
         value: float,
-        period_days: Optional[int] = None,
+        period_days: int | None = None,
     ) -> int:
         """Get the fleet percentile for a metric value.
 
@@ -574,8 +570,8 @@ class ComparisonEngine:
         device_id: int,
         metric: str,
         value: float,
-        device_metadata: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        device_metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Get full comparison context for a metric.
 
         Returns fleet, cohort, and historical comparisons in a single call.
@@ -604,7 +600,7 @@ class ComparisonEngine:
         self,
         metric: str,
         period_days: int,
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """Get fleet-wide statistics for a metric (with caching).
 
         Args:
@@ -685,7 +681,7 @@ class ComparisonEngine:
         os_version: str,
         metric: str,
         period_days: int,
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """Get statistics for a device cohort.
 
         Args:
@@ -755,9 +751,9 @@ class ComparisonEngine:
     def _get_location_statistics(
         self,
         location_id: str,
-        metrics: List[str],
+        metrics: list[str],
         period_days: int,
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """Get statistics for a location.
 
         Args:
@@ -785,7 +781,7 @@ class ComparisonEngine:
         import json
 
         device_ids = set()
-        metric_values: Dict[str, List[float]] = {m: [] for m in metrics}
+        metric_values: dict[str, list[float]] = {m: [] for m in metrics}
 
         for features_json, metadata_json in query:
             try:
@@ -804,14 +800,14 @@ class ComparisonEngine:
             except (json.JSONDecodeError, KeyError, TypeError, ValueError):
                 continue
 
-        result: Dict[str, float] = {"device_count": len(device_ids)}
+        result: dict[str, float] = {"device_count": len(device_ids)}
 
         for metric, values in metric_values.items():
             result[metric] = float(np.mean(values)) if values else 0
 
         return result
 
-    def _get_device_metadata(self, device_id: int) -> Optional[Dict[str, Any]]:
+    def _get_device_metadata(self, device_id: int) -> dict[str, Any] | None:
         """Get device metadata from the most recent feature record.
 
         Args:
@@ -843,8 +839,8 @@ class ComparisonEngine:
     def _generate_comparison_summary(
         self,
         fleet: FleetComparison,
-        cohort: Optional[CohortComparison],
-        historical: Optional[HistoricalComparison],
+        cohort: CohortComparison | None,
+        historical: HistoricalComparison | None,
     ) -> str:
         """Generate a single-sentence summary of all comparisons.
 

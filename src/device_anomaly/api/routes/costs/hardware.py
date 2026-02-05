@@ -4,9 +4,8 @@ Hardware costs endpoints.
 from __future__ import annotations
 
 import math
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
@@ -39,7 +38,7 @@ router = APIRouter()
 def list_hardware_costs(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
-    search: Optional[str] = Query(None, max_length=255),
+    search: str | None = Query(None, max_length=255),
     db: Session = Depends(get_backend_db),
 ):
     """
@@ -202,7 +201,7 @@ def create_hardware_cost(
 
     if existing:
         # Expire the existing entry
-        existing.valid_to = datetime.now(timezone.utc)
+        existing.valid_to = datetime.now(UTC)
 
     # Create new entry
     new_cost = DeviceTypeCost(
@@ -395,7 +394,7 @@ def delete_hardware_cost(
         "device_model": cost.device_model,
         "purchase_cost": float(cents_to_dollars(cost.purchase_cost)),
     }
-    cost.valid_to = datetime.now(timezone.utc)
+    cost.valid_to = datetime.now(UTC)
 
     # Create audit log
     create_audit_log(

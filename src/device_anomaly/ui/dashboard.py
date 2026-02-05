@@ -6,13 +6,13 @@ Connects to the FastAPI backend API for data.
 
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 
-import requests
-import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import requests
+import streamlit as st
 
 # Configuration
 API_BASE_URL = os.getenv("API_BASE_URL", "http://api:8000")
@@ -148,8 +148,8 @@ def render_trend_chart(trends: list):
         paper_bgcolor="rgba(0,0,0,0)",
         font_color="#94a3b8",
         title_font_color="#f8fafc",
-        xaxis=dict(gridcolor="rgba(148, 163, 184, 0.1)"),
-        yaxis=dict(gridcolor="rgba(148, 163, 184, 0.1)"),
+        xaxis={"gridcolor": "rgba(148, 163, 184, 0.1)"},
+        yaxis={"gridcolor": "rgba(148, 163, 184, 0.1)"},
     )
 
     fig.update_traces(
@@ -245,7 +245,7 @@ def render_score_distribution(if_stats: dict):
         paper_bgcolor="rgba(0,0,0,0)",
         font_color="#94a3b8",
         title_font_color="#f8fafc",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        legend={"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "right", "x": 1},
     )
 
     st.plotly_chart(fig, use_container_width=True)
@@ -352,11 +352,6 @@ def render_dashboard_page():
         ai_summary = api_get("/dashboard/ai-summary")
         if ai_summary:
             health_status = ai_summary.get("health_status", "unknown")
-            status_colors = {
-                "healthy": "success",
-                "degraded": "warning",
-                "critical": "error",
-            }
 
             if health_status == "healthy":
                 st.success(f"Fleet Status: {health_status.upper()}")
@@ -386,7 +381,7 @@ def render_anomalies_page():
             ["All", "open", "investigating", "resolved", "false_positive"],
         )
     with col2:
-        days = st.slider("Days", 1, 30, 7)
+        st.slider("Days", 1, 30, 7)
     with col3:
         limit = st.number_input("Limit", 10, 100, 50)
 

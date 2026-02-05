@@ -9,14 +9,14 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 import onnx
 import onnxruntime as ort
-from sklearn.base import BaseEstimator
 from skl2onnx import convert_sklearn
 from skl2onnx.common.data_types import FloatTensorType
+from sklearn.base import BaseEstimator
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ class ONNXModelExporter:
         )
     """
 
-    def __init__(self, config: Optional[ONNXExportConfig] = None):
+    def __init__(self, config: ONNXExportConfig | None = None):
         self.config = config or ONNXExportConfig()
 
     def export_model(
@@ -313,7 +313,7 @@ class ONNXQuantizer:
             Path to quantized model
         """
         try:
-            from onnxruntime.quantization import quantize_dynamic, QuantType
+            from onnxruntime.quantization import QuantType, quantize_dynamic
 
             input_path = Path(input_path)
             output_path = Path(output_path)

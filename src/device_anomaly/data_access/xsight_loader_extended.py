@@ -24,8 +24,9 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Generator, List, Optional, Tuple
+from collections.abc import Generator
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pandas as pd
 from sqlalchemy import bindparam, text
@@ -203,7 +204,7 @@ XSIGHT_EXTENDED_TABLES = {
 }
 
 
-def _validate_columns(engine: Engine, table_name: str, columns: List[str]) -> List[str]:
+def _validate_columns(engine: Engine, table_name: str, columns: list[str]) -> list[str]:
     """Validate which columns exist in the table."""
     query = text("""
         SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
@@ -225,14 +226,14 @@ def _validate_columns(engine: Engine, table_name: str, columns: List[str]) -> Li
 
 def load_xsight_table_incremental(
     table_name: str,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
-    device_ids: Optional[List[int]] = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    device_ids: list[int] | None = None,
     batch_size: int = DEFAULT_BATCH_SIZE,
     use_watermark: bool = True,
-    engine: Optional[Engine] = None,
-    start_hour: Optional[int] = None,
-) -> Tuple[pd.DataFrame, Optional[datetime], Optional[int]]:
+    engine: Engine | None = None,
+    start_hour: int | None = None,
+) -> tuple[pd.DataFrame, datetime | None, int | None]:
     """
     Load data incrementally from an XSight table using KEYSET PAGINATION.
 
@@ -295,7 +296,7 @@ def load_xsight_table_incremental(
                     start_hour = None
 
     if end_date is None:
-        end_date = datetime.now(timezone.utc)
+        end_date = datetime.now(UTC)
 
     # For date-only columns (CollectedDate), convert to date
     start_val = start_date.date() if hasattr(start_date, 'date') else start_date
@@ -307,7 +308,7 @@ def load_xsight_table_incremental(
     # Build WHERE clause using keyset pagination
     # For hourly tables: WHERE (CollectedDate > :start_date) OR (CollectedDate = :start_date AND Hour > :start_hour)
     # For regular tables: WHERE CollectedDate > :start_date
-    params: Dict[str, Any] = {
+    params: dict[str, Any] = {
         "end_date": end_val,
     }
 
@@ -366,7 +367,7 @@ def load_xsight_table_incremental(
                     new_watermark = datetime.combine(max_ts, datetime.min.time())
 
                 if new_watermark.tzinfo is None:
-                    new_watermark = new_watermark.replace(tzinfo=timezone.utc)
+                    new_watermark = new_watermark.replace(tzinfo=UTC)
 
         # For hourly tables, get the max hour for the max date
         if is_hourly and "Hour" in df.columns and new_watermark:
@@ -389,7 +390,7 @@ def load_xsight_table_incremental(
 def load_and_update_watermark(
     table_name: str,
     batch_size: int = DEFAULT_BATCH_SIZE,
-    engine: Optional[Engine] = None,
+    engine: Engine | None = None,
 ) -> pd.DataFrame:
     """
     Load incremental data and update watermark atomically.
@@ -428,10 +429,10 @@ def load_and_update_watermark(
 
 def load_all_xsight_tables(
     batch_size: int = DEFAULT_BATCH_SIZE,
-    tables: Optional[List[str]] = None,
-    priority_filter: Optional[int] = None,
-    engine: Optional[Engine] = None,
-) -> Dict[str, pd.DataFrame]:
+    tables: list[str] | None = None,
+    priority_filter: int | None = None,
+    engine: Engine | None = None,
+) -> dict[str, pd.DataFrame]:
     """
     Load incremental data from multiple XSight tables.
 
@@ -478,8 +479,8 @@ def load_xsight_as_events(
     table_name: str,
     tenant_id: str = "default",
     batch_size: int = DEFAULT_BATCH_SIZE,
-    engine: Optional[Engine] = None,
-) -> List[CanonicalEvent]:
+    engine: Engine | None = None,
+) -> list[CanonicalEvent]:
     """
     Load XSight data and normalize to canonical events.
     """
@@ -506,10 +507,10 @@ def load_xsight_as_events(
 
 def stream_xsight_table(
     table_name: str,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
     batch_size: int = DEFAULT_BATCH_SIZE,
-    engine: Optional[Engine] = None,
+    engine: Engine | None = None,
 ) -> Generator[pd.DataFrame, None, None]:
     """
     Stream data from an XSight table in batches using keyset pagination.
@@ -521,9 +522,9 @@ def stream_xsight_table(
 
     current_watermark = start_date
     if current_watermark is None:
-        current_watermark = datetime.now(timezone.utc) - timedelta(days=30)
+        current_watermark = datetime.now(UTC) - timedelta(days=30)
 
-    current_hour: Optional[int] = None  # For hourly tables
+    current_hour: int | None = None  # For hourly tables
 
     while True:
         df, new_watermark, new_hour = load_xsight_table_incremental(
@@ -552,8 +553,8 @@ def stream_xsight_table(
 
 
 def get_xsight_table_stats(
-    engine: Optional[Engine] = None,
-) -> Dict[str, Dict[str, Any]]:
+    engine: Engine | None = None,
+) -> dict[str, dict[str, Any]]:
     """
     Get statistics for all configured XSight tables.
     """
@@ -620,9 +621,9 @@ def get_xsight_table_stats(
 def backfill_xsight_table(
     table_name: str,
     start_date: datetime,
-    end_date: Optional[datetime] = None,
+    end_date: datetime | None = None,
     batch_size: int = DEFAULT_BATCH_SIZE,
-    engine: Optional[Engine] = None,
+    engine: Engine | None = None,
 ) -> int:
     """
     Backfill historical data for an XSight table.
@@ -662,7 +663,7 @@ def backfill_xsight_table(
 def aggregate_hourly_data(
     df: pd.DataFrame,
     table_name: str,
-    agg_funcs: Optional[Dict[str, str]] = None,
+    agg_funcs: dict[str, str] | None = None,
 ) -> pd.DataFrame:
     """
     Aggregate hourly data (cs_*ByHour tables) to daily level.

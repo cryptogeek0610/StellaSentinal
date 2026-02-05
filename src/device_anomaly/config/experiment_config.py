@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional
 
 
 @dataclass
@@ -9,7 +8,7 @@ class DetectionConfig:
     """Config for the anomaly detector itself."""
     window: int = 12
     contamination: float = 0.03
-    feature_overrides: Optional[List[str]] = None
+    feature_overrides: list[str] | None = None
 
 
 @dataclass
@@ -55,5 +54,5 @@ class DWExperimentConfig:
     detection: DetectionConfig = field(default_factory=DetectionConfig)
     events: EventConfig = field(default_factory=EventConfig)
 
-    row_limit: Optional[int] = 1_000_000
-    device_ids: Optional[List[int]] = None
+    row_limit: int | None = 1_000_000
+    device_ids: list[int] | None = None

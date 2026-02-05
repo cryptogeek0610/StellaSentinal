@@ -15,7 +15,6 @@ Data Sources:
 from __future__ import annotations
 
 import logging
-from typing import List, Optional
 
 import numpy as np
 import pandas as pd
@@ -329,7 +328,7 @@ def build_network_traffic_features(
     return builder.transform(df)
 
 
-def get_network_traffic_feature_names() -> List[str]:
+def get_network_traffic_feature_names() -> list[str]:
     """Get list of network traffic feature names that this module generates."""
     return [
         # Basic traffic

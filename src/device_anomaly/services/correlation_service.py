@@ -15,8 +15,8 @@ from __future__ import annotations
 import hashlib
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -40,7 +40,7 @@ class CorrelationResult:
     p_value: float
     sample_count: int
     method: str  # "pearson" or "spearman"
-    confidence_interval: Tuple[float, float] = field(default_factory=lambda: (0.0, 0.0))
+    confidence_interval: tuple[float, float] = field(default_factory=lambda: (0.0, 0.0))
     is_significant: bool = False
 
 
@@ -64,13 +64,13 @@ class CohortCorrelationPattern:
 
     cohort_id: str
     cohort_name: str
-    metric_pair: List[str]
+    metric_pair: list[str]
     cohort_correlation: float
     fleet_correlation: float
     deviation: float
     device_count: int
     is_anomalous: bool
-    insight: Optional[str] = None
+    insight: str | None = None
 
 
 # =============================================================================
@@ -78,7 +78,7 @@ class CohortCorrelationPattern:
 # =============================================================================
 
 # Known strong correlations from domain knowledge (used as reference)
-KNOWN_CORRELATIONS: Dict[Tuple[str, str], float] = {
+KNOWN_CORRELATIONS: dict[tuple[str, str], float] = {
     ("TotalBatteryLevelDrop", "ScreenOnTime_Sec"): 0.78,
     ("TotalBatteryLevelDrop", "AvgSignalStrength"): -0.72,
     ("AvgSignalStrength", "TotalDropCnt"): -0.81,
@@ -92,7 +92,7 @@ KNOWN_CORRELATIONS: Dict[Tuple[str, str], float] = {
 }
 
 # Metric domains for filtering - expanded for comprehensive correlation analysis
-METRIC_DOMAINS: Dict[str, List[str]] = {
+METRIC_DOMAINS: dict[str, list[str]] = {
     "battery": [
         "TotalBatteryLevelDrop",
         "BatteryDrainPerHour",
@@ -201,36 +201,36 @@ class CorrelationService:
         self.cache_ttl = timedelta(minutes=cache_ttl_minutes)
         self.min_samples = min_samples
         self.significance_level = significance_level
-        self._cache: Dict[str, Tuple[Any, datetime]] = {}
+        self._cache: dict[str, tuple[Any, datetime]] = {}
 
     def _get_cache_key(self, *args: Any) -> str:
         """Generate cache key from arguments."""
         key_str = str(args)
         return hashlib.md5(key_str.encode()).hexdigest()
 
-    def _get_from_cache(self, key: str) -> Optional[Any]:
+    def _get_from_cache(self, key: str) -> Any | None:
         """Get value from cache if not expired."""
         if key in self._cache:
             value, timestamp = self._cache[key]
-            if datetime.now(timezone.utc) - timestamp < self.cache_ttl:
+            if datetime.now(UTC) - timestamp < self.cache_ttl:
                 return value
             del self._cache[key]
         return None
 
     def _set_cache(self, key: str, value: Any) -> None:
         """Set value in cache."""
-        self._cache[key] = (value, datetime.now(timezone.utc))
+        self._cache[key] = (value, datetime.now(UTC))
 
     def compute_correlation_matrix(
         self,
         df: pd.DataFrame,
-        metrics: Optional[List[str]] = None,
+        metrics: list[str] | None = None,
         method: str = "pearson",
-        domain_filter: Optional[str] = None,
+        domain_filter: str | None = None,
         min_variance: float = 0.001,
         min_unique_values: int = 3,
         min_non_null_ratio: float = 0.1,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Compute correlation matrix from telemetry data.
 
@@ -332,7 +332,7 @@ class CorrelationService:
             "strong_correlations": strong_correlations,
             "method": method,
             "sample_count": len(df),
-            "computed_at": datetime.now(timezone.utc).isoformat(),
+            "computed_at": datetime.now(UTC).isoformat(),
             "domain_filter": domain_filter,
             "filter_stats": filter_stats,
         }
@@ -343,7 +343,7 @@ class CorrelationService:
         min_variance: float = 0.0001,  # Lowered from 0.001 for more inclusive filtering
         min_unique_values: int = 2,  # Lowered from 3 to allow binary metrics
         min_non_null_ratio: float = 0.05,  # Lowered from 0.1 to allow sparser data
-    ) -> Tuple[List[str], Dict[str, int]]:
+    ) -> tuple[list[str], dict[str, int]]:
         """
         Filter metrics to those suitable for meaningful correlation analysis.
 
@@ -459,7 +459,7 @@ class CorrelationService:
         p_value_matrix: pd.DataFrame,
         df: pd.DataFrame,
         threshold: float = 0.5,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Extract strong correlations from matrix."""
         strong = []
         metrics = corr_matrix.columns.tolist()
@@ -491,9 +491,9 @@ class CorrelationService:
     def compute_time_lagged_correlations(
         self,
         df: pd.DataFrame,
-        metric_pairs: Optional[List[Tuple[str, str]]] = None,
+        metric_pairs: list[tuple[str, str]] | None = None,
         max_lag_days: int = 7,
-    ) -> List[TimeLaggedCorrelation]:
+    ) -> list[TimeLaggedCorrelation]:
         """
         Compute time-lagged correlations for predictive insights.
 
@@ -521,7 +521,7 @@ class CorrelationService:
                 ("CPUUsage", "CrashCount"),
             ]
 
-        results: List[TimeLaggedCorrelation] = []
+        results: list[TimeLaggedCorrelation] = []
 
         for metric_a, metric_b in metric_pairs:
             if metric_a not in df.columns or metric_b not in df.columns:
@@ -541,7 +541,7 @@ class CorrelationService:
         metric_a: str,
         metric_b: str,
         max_lag_days: int,
-    ) -> Optional[TimeLaggedCorrelation]:
+    ) -> TimeLaggedCorrelation | None:
         """Find the best lag for correlation between two metrics."""
         # Need time-ordered data
         if "Timestamp" not in df.columns and "CollectedDate" not in df.columns:
@@ -605,7 +605,6 @@ class CorrelationService:
         correlation: float,
     ) -> str:
         """Generate human-readable insight for lagged correlation."""
-        direction = "higher" if correlation > 0 else "lower"
         metric_a_readable = metric_a.replace("_", " ").lower()
         metric_b_readable = metric_b.replace("_", " ").lower()
 
@@ -625,9 +624,9 @@ class CorrelationService:
     def compute_cohort_correlations(
         self,
         df: pd.DataFrame,
-        metric_pair: Tuple[str, str],
+        metric_pair: tuple[str, str],
         cohort_column: str = "cohort_id",
-    ) -> List[CohortCorrelationPattern]:
+    ) -> list[CohortCorrelationPattern]:
         """
         Compute correlations per cohort and compare to fleet.
 
@@ -678,7 +677,7 @@ class CorrelationService:
                 fleet_corr = 0.0
 
         # Per-cohort correlations
-        patterns: List[CohortCorrelationPattern] = []
+        patterns: list[CohortCorrelationPattern] = []
 
         for cohort_id, grp in df.groupby(cohort_column):
             if len(grp) < self.min_samples:
@@ -736,7 +735,7 @@ class CorrelationService:
         df: pd.DataFrame,
         top_k: int = 10,
         min_strength: float = 0.5,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Generate auto-discovered correlation insights.
 
@@ -753,7 +752,7 @@ class CorrelationService:
         strong_correlations = result.get("strong_correlations", [])
 
         insights = []
-        for i, corr in enumerate(strong_correlations[:top_k]):
+        for _i, corr in enumerate(strong_correlations[:top_k]):
             if abs(corr["correlation"]) < min_strength:
                 continue
 
@@ -762,7 +761,7 @@ class CorrelationService:
 
         return insights
 
-    def _generate_insight(self, corr: Dict[str, Any]) -> Dict[str, Any]:
+    def _generate_insight(self, corr: dict[str, Any]) -> dict[str, Any]:
         """Generate insight from correlation result."""
         metric_x = corr["metric_x"]
         metric_y = corr["metric_y"]
@@ -855,7 +854,7 @@ class CorrelationService:
         metric_x: str,
         metric_y: str,
         correlation: float,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Generate recommendation for correlation insight."""
         recommendations = {
             ("TotalBatteryLevelDrop", "ScreenOnTime_Sec"): (
@@ -893,9 +892,9 @@ class CorrelationService:
 
 def compute_correlations_from_dataframe(
     df: pd.DataFrame,
-    domain: Optional[str] = None,
+    domain: str | None = None,
     method: str = "pearson",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Convenience function to compute correlations from a DataFrame.
 
@@ -914,7 +913,7 @@ def compute_correlations_from_dataframe(
 def get_time_lagged_insights(
     df: pd.DataFrame,
     max_lag_days: int = 7,
-) -> List[TimeLaggedCorrelation]:
+) -> list[TimeLaggedCorrelation]:
     """
     Get time-lagged correlation insights.
 

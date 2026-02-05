@@ -11,7 +11,6 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
 
 from device_anomaly.api.models import (
     DeviceGroupingResponse,
@@ -27,15 +26,15 @@ class DeviceInfo:
     """Internal representation of device data for grouping."""
 
     device_id: int
-    device_name: Optional[str]
-    device_model: Optional[str]
-    location: Optional[str]
+    device_name: str | None
+    device_model: str | None
+    location: str | None
     status: str
-    last_seen: Optional[str]
-    os_version: Optional[str]
+    last_seen: str | None
+    os_version: str | None
     anomaly_count: int = 0
-    severity: Optional[str] = None
-    primary_metric: Optional[str] = None
+    severity: str | None = None
+    primary_metric: str | None = None
 
 
 class DeviceGrouper:
@@ -43,7 +42,7 @@ class DeviceGrouper:
 
     def __init__(
         self,
-        llm_client: Optional[BaseLLMClient] = None,
+        llm_client: BaseLLMClient | None = None,
         enable_ai_grouping: bool = True,
     ):
         """
@@ -57,8 +56,8 @@ class DeviceGrouper:
         self._enable_ai_grouping = enable_ai_grouping
 
     def group_by_location(
-        self, devices: List[ImpactedDeviceResponse]
-    ) -> List[DeviceGroupingResponse]:
+        self, devices: list[ImpactedDeviceResponse]
+    ) -> list[DeviceGroupingResponse]:
         """
         Group devices by their location.
 
@@ -68,7 +67,7 @@ class DeviceGrouper:
         Returns:
             List of device groupings by location
         """
-        groups: Dict[str, List[ImpactedDeviceResponse]] = {}
+        groups: dict[str, list[ImpactedDeviceResponse]] = {}
 
         for device in devices:
             key = device.location or "Unknown Location"
@@ -85,8 +84,8 @@ class DeviceGrouper:
         ]
 
     def group_by_model(
-        self, devices: List[ImpactedDeviceResponse]
-    ) -> List[DeviceGroupingResponse]:
+        self, devices: list[ImpactedDeviceResponse]
+    ) -> list[DeviceGroupingResponse]:
         """
         Group devices by their device model.
 
@@ -96,7 +95,7 @@ class DeviceGrouper:
         Returns:
             List of device groupings by model
         """
-        groups: Dict[str, List[ImpactedDeviceResponse]] = {}
+        groups: dict[str, list[ImpactedDeviceResponse]] = {}
 
         for device in devices:
             key = device.device_model or "Unknown Model"
@@ -114,10 +113,10 @@ class DeviceGrouper:
 
     def group_by_pattern_similarity(
         self,
-        devices: List[ImpactedDeviceResponse],
-        insight_category: Optional[str] = None,
-        insight_headline: Optional[str] = None,
-    ) -> Tuple[List[DeviceGroupingResponse], Optional[str]]:
+        devices: list[ImpactedDeviceResponse],
+        insight_category: str | None = None,
+        insight_headline: str | None = None,
+    ) -> tuple[list[DeviceGroupingResponse], str | None]:
         """
         AI-powered grouping based on pattern similarity.
 
@@ -209,8 +208,8 @@ Focus on actionable groupings based on:
     def _parse_pattern_response(
         self,
         response: str,
-        devices: List[ImpactedDeviceResponse],
-    ) -> List[DeviceGroupingResponse]:
+        devices: list[ImpactedDeviceResponse],
+    ) -> list[DeviceGroupingResponse]:
         """
         Parse LLM response into device groupings.
 
@@ -221,10 +220,10 @@ Focus on actionable groupings based on:
         Returns:
             List of device groupings
         """
-        groupings: List[DeviceGroupingResponse] = []
+        groupings: list[DeviceGroupingResponse] = []
 
         # Build device name lookup (case-insensitive)
-        device_by_name: Dict[str, ImpactedDeviceResponse] = {}
+        device_by_name: dict[str, ImpactedDeviceResponse] = {}
         for d in devices:
             name = (d.device_name or f"Device-{d.device_id}").lower().strip()
             device_by_name[name] = d
@@ -256,7 +255,7 @@ Focus on actionable groupings based on:
             device_names = [n.strip() for n in re.split(r',\s*|\n', device_names_str) if n.strip()]
 
             # Map names to actual devices
-            matched_devices: List[ImpactedDeviceResponse] = []
+            matched_devices: list[ImpactedDeviceResponse] = []
             for name in device_names:
                 name_lower = name.lower().strip()
                 # Try exact match first
@@ -299,8 +298,8 @@ Focus on actionable groupings based on:
         return "Pattern analysis completed."
 
     def _fallback_grouping(
-        self, devices: List[ImpactedDeviceResponse]
-    ) -> List[DeviceGroupingResponse]:
+        self, devices: list[ImpactedDeviceResponse]
+    ) -> list[DeviceGroupingResponse]:
         """
         Combined location + model grouping as fallback when AI is unavailable.
 
@@ -310,7 +309,7 @@ Focus on actionable groupings based on:
         Returns:
             List of device groupings
         """
-        groups: Dict[str, List[ImpactedDeviceResponse]] = {}
+        groups: dict[str, list[ImpactedDeviceResponse]] = {}
 
         for device in devices:
             location = device.location or "Unknown Location"

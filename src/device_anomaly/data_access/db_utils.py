@@ -9,10 +9,9 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, TypeVar, Generic
 from dataclasses import dataclass
+from typing import Generic, TypeVar
 
-import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
@@ -52,7 +51,7 @@ def table_exists(engine: Engine, table_name: str, base_table_only: bool = False)
         return False
 
 
-def get_valid_columns(engine: Engine, table_name: str, requested_columns: List[str]) -> List[str]:
+def get_valid_columns(engine: Engine, table_name: str, requested_columns: list[str]) -> list[str]:
     """Validate which columns exist in the table.
 
     Args:
@@ -86,8 +85,8 @@ class LoaderConfig:
     """Configuration for a data loader."""
     table_name: str
     timestamp_col: str
-    device_col: Optional[str] = None
-    columns: Optional[List[str]] = None
+    device_col: str | None = None
+    columns: list[str] | None = None
     base_table_only: bool = False
 
 
@@ -107,7 +106,7 @@ class BaseLoader(ABC, Generic[T]):
 
     def __init__(self, config: LoaderConfig):
         self.config = config
-        self._engine: Optional[Engine] = None
+        self._engine: Engine | None = None
 
     @property
     def engine(self) -> Engine:
@@ -134,7 +133,7 @@ class BaseLoader(ABC, Generic[T]):
             base_table_only=self.config.base_table_only
         )
 
-    def get_valid_columns(self) -> List[str]:
+    def get_valid_columns(self) -> list[str]:
         """Get the list of valid columns for the configured table."""
         if not self.config.columns:
             return []
@@ -144,7 +143,7 @@ class BaseLoader(ABC, Generic[T]):
             self.config.columns
         )
 
-    def load(self, **kwargs) -> Optional[T]:
+    def load(self, **kwargs) -> T | None:
         """Load data with standard error handling.
 
         Returns None if the table doesn't exist or an error occurs.

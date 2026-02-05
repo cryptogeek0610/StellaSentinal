@@ -10,23 +10,21 @@ This analyzer identifies problematic apps and their impact on battery and stabil
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
-from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from enum import StrEnum
+from typing import Any
 
-import numpy as np
 import pandas as pd
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from device_anomaly.database.schema import DeviceFeature
-from device_anomaly.insights.categories import InsightCategory, InsightSeverity
+from device_anomaly.insights.categories import InsightSeverity
 
 logger = logging.getLogger(__name__)
 
 
-class AppIssueType(str, Enum):
+class AppIssueType(StrEnum):
     """Types of app issues."""
 
     EXCESSIVE_POWER = "excessive_power"
@@ -41,7 +39,7 @@ class AppPowerProfile:
     """Power profile for a single app."""
 
     package_name: str
-    app_name: Optional[str]
+    app_name: str | None
 
     # Usage metrics
     foreground_time_hours: float
@@ -67,7 +65,7 @@ class AppCrashProfile:
     """Crash profile for a single app."""
 
     package_name: str
-    app_name: Optional[str]
+    app_name: str | None
 
     # Crash metrics
     crash_count: int
@@ -100,18 +98,18 @@ class AppPowerReport:
     total_battery_drain_from_apps: float
 
     # Top power consumers
-    top_power_consumers: List[AppPowerProfile]
+    top_power_consumers: list[AppPowerProfile]
 
     # Most inefficient (high drain per usage)
-    most_inefficient: List[AppPowerProfile]
+    most_inefficient: list[AppPowerProfile]
 
     # Background drain offenders
-    background_drain_offenders: List[AppPowerProfile]
+    background_drain_offenders: list[AppPowerProfile]
 
     # App category breakdown
-    drain_by_category: Dict[str, float]  # category -> total drain %
+    drain_by_category: dict[str, float]  # category -> total drain %
 
-    recommendations: List[str]
+    recommendations: list[str]
 
 
 @dataclass
@@ -129,19 +127,19 @@ class AppCrashReport:
     avg_crashes_per_device: float
 
     # Crash ranking
-    top_crashers: List[AppCrashProfile]
+    top_crashers: list[AppCrashProfile]
 
     # Most impactful (affects most devices)
-    most_impactful: List[AppCrashProfile]
+    most_impactful: list[AppCrashProfile]
 
     # ANR offenders
-    anr_offenders: List[AppCrashProfile]
+    anr_offenders: list[AppCrashProfile]
 
     # Trend
     overall_trend: str
     trend_change_percent: float
 
-    recommendations: List[str]
+    recommendations: list[str]
 
 
 @dataclass
@@ -152,7 +150,7 @@ class AppBatteryCorrelation:
     analysis_period_days: int
 
     # Top apps by drain contribution
-    top_drain_apps: List[Tuple[str, float]]  # (app_name, drain %)
+    top_drain_apps: list[tuple[str, float]]  # (app_name, drain %)
 
     # Correlation strength
     app_vs_battery_correlation: float  # 0-1, how much apps explain drain
@@ -162,7 +160,7 @@ class AppBatteryCorrelation:
     has_rogue_app: bool
 
     # Recommendations
-    recommendations: List[str]
+    recommendations: list[str]
 
 
 class AppPowerAnalyzer:
@@ -317,7 +315,7 @@ class AppPowerAnalyzer:
         self,
         device_id: int,
         period_days: int = 7,
-    ) -> Optional[AppBatteryCorrelation]:
+    ) -> AppBatteryCorrelation | None:
         """Correlate app usage with battery drain for a specific device.
 
         Args:
@@ -339,7 +337,7 @@ class AppPowerAnalyzer:
             return None
 
         # Total battery drain
-        total_drain = device_data["total_battery_drain"].sum() if "total_battery_drain" in device_data.columns else 100
+        device_data["total_battery_drain"].sum() if "total_battery_drain" in device_data.columns else 100
 
         # Top apps by drain
         top_apps = sorted(app_drains.items(), key=lambda x: x[1], reverse=True)[:5]
@@ -373,7 +371,7 @@ class AppPowerAnalyzer:
         self,
         package_name: str,
         period_days: int = 7,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get overall impact score for an app.
 
         Args:
@@ -543,7 +541,7 @@ class AppPowerAnalyzer:
 
         return pd.DataFrame(records)
 
-    def _build_app_power_profiles(self, app_data: pd.DataFrame) -> List[AppPowerProfile]:
+    def _build_app_power_profiles(self, app_data: pd.DataFrame) -> list[AppPowerProfile]:
         """Build power profiles from app data."""
         if app_data.empty:
             return []
@@ -593,7 +591,7 @@ class AppPowerAnalyzer:
         self,
         crash_data: pd.DataFrame,
         period_days: int,
-    ) -> List[AppCrashProfile]:
+    ) -> list[AppCrashProfile]:
         """Build crash profiles from crash data."""
         if crash_data.empty:
             return []
@@ -647,8 +645,8 @@ class AppPowerAnalyzer:
 
     def _calculate_drain_by_category(
         self,
-        profiles: List[AppPowerProfile],
-    ) -> Dict[str, float]:
+        profiles: list[AppPowerProfile],
+    ) -> dict[str, float]:
         """Calculate drain by app category."""
         # Simplified categorization
         categories = {
@@ -677,7 +675,7 @@ class AppPowerAnalyzer:
     def _calculate_device_app_drains(
         self,
         device_data: pd.DataFrame,
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """Calculate app drain contributions for a device."""
         if device_data.empty:
             return {}
@@ -698,11 +696,11 @@ class AppPowerAnalyzer:
 
     def _generate_power_recommendations(
         self,
-        top_consumers: List[AppPowerProfile],
-        inefficient: List[AppPowerProfile],
-        background: List[AppPowerProfile],
+        top_consumers: list[AppPowerProfile],
+        inefficient: list[AppPowerProfile],
+        background: list[AppPowerProfile],
         apps_with_issues: int,
-    ) -> List[str]:
+    ) -> list[str]:
         """Generate power consumption recommendations."""
         recommendations = []
 
@@ -733,10 +731,10 @@ class AppPowerAnalyzer:
 
     def _generate_crash_recommendations(
         self,
-        top_crashers: List[AppCrashProfile],
-        impactful: List[AppCrashProfile],
-        anr_offenders: List[AppCrashProfile],
-    ) -> List[str]:
+        top_crashers: list[AppCrashProfile],
+        impactful: list[AppCrashProfile],
+        anr_offenders: list[AppCrashProfile],
+    ) -> list[str]:
         """Generate crash recommendations."""
         recommendations = []
 

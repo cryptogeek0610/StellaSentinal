@@ -6,12 +6,12 @@ context managers and dependency injection patterns for FastAPI.
 """
 from __future__ import annotations
 
-from contextlib import contextmanager
 import os
+from collections.abc import Generator
+from contextlib import contextmanager
 from threading import Lock
-from typing import Generator, Optional
 
-from sqlalchemy import create_engine, event, text
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -41,12 +41,12 @@ class DatabaseSession:
             session.close()
     """
 
-    _instance: Optional["DatabaseSession"] = None
-    _engine: Optional[Engine] = None
-    _session_factory: Optional[sessionmaker] = None
+    _instance: DatabaseSession | None = None
+    _engine: Engine | None = None
+    _session_factory: sessionmaker | None = None
     _lock: Lock = Lock()  # Thread-safe singleton lock
 
-    def __new__(cls) -> "DatabaseSession":
+    def __new__(cls) -> DatabaseSession:
         """Thread-safe singleton pattern for database session."""
         if cls._instance is None:
             with cls._lock:
@@ -88,7 +88,9 @@ class DatabaseSession:
             connect_args=connect_args,
         )
         try:
-            from device_anomaly.observability.db_metrics import instrument_engine as instrument_db_metrics
+            from device_anomaly.observability.db_metrics import (
+                instrument_engine as instrument_db_metrics,
+            )
             from device_anomaly.observability.sqlalchemy import instrument_engine as instrument_otel
 
             instrument_db_metrics(self._engine, "backend")

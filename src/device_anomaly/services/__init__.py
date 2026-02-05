@@ -1,23 +1,23 @@
 """Services module for device anomaly detection."""
 
 from device_anomaly.services.anomaly_grouper import AnomalyGrouper
-from device_anomaly.services.ingestion_orchestrator import (
-    IngestionOrchestrator,
-    IngestionTask,
-    IngestionBatchResult,
-    WeightedSemaphore,
-    get_table_weight,
-    get_table_category,
-    create_table_list_for_ingestion,
-    run_batch_sync,
-)
 from device_anomaly.services.ingestion_metrics import (
-    TableIngestionMetric,
     DailyCoverageReport,
     IngestionMetricsStore,
+    TableIngestionMetric,
+    generate_daily_coverage_report,
     get_metrics_store,
     record_ingestion_metric,
-    generate_daily_coverage_report,
+)
+from device_anomaly.services.ingestion_orchestrator import (
+    IngestionBatchResult,
+    IngestionOrchestrator,
+    IngestionTask,
+    WeightedSemaphore,
+    create_table_list_for_ingestion,
+    get_table_category,
+    get_table_weight,
+    run_batch_sync,
 )
 from device_anomaly.services.ingestion_pipeline import run_ingestion_batch
 

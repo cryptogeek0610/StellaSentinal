@@ -18,12 +18,12 @@ data from multiple customer databases while keeping runtime isolated.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Iterable, List, Optional
+from collections.abc import Iterable
+from datetime import UTC, datetime, timedelta
 
 import pandas as pd
 
-from device_anomaly.config.settings import get_settings, TrainingDataSource
+from device_anomaly.config.settings import TrainingDataSource, get_settings
 from device_anomaly.data_access.dw_loader import (
     load_device_daily_telemetry,
     load_device_telemetry_with_fallback,
@@ -198,7 +198,7 @@ def _latest_mc_snapshot(mc_df: pd.DataFrame) -> pd.DataFrame:
     return deduped
 
 
-def _add_disconnect_flags(mc_df: pd.DataFrame, end_dt: Optional[str]) -> pd.DataFrame:
+def _add_disconnect_flags(mc_df: pd.DataFrame, end_dt: str | None) -> pd.DataFrame:
     """Add disconnect recency indicators based on LastDisconnTime.
 
     IMPORTANT: Uses the row's LastCheckInTime as reference when available,
@@ -218,13 +218,13 @@ def _add_disconnect_flags(mc_df: pd.DataFrame, end_dt: Optional[str]) -> pd.Data
         try:
             fallback_ts = pd.to_datetime(end_dt)
         except Exception:
-            fallback_ts = datetime.now(timezone.utc)
+            fallback_ts = datetime.now(UTC)
         reference_ts = reference_ts.fillna(fallback_ts)
     else:
         try:
             reference_ts = pd.to_datetime(end_dt)
         except Exception:
-            reference_ts = datetime.now(timezone.utc)
+            reference_ts = datetime.now(UTC)
 
     mc_df["LastDisconnTime"] = pd.to_datetime(mc_df["LastDisconnTime"], errors="coerce")
     mc_df["DisconnectWithinWindow"] = (
@@ -344,14 +344,14 @@ def _add_temporal_features(df: pd.DataFrame, end_date: str) -> pd.DataFrame:
         try:
             fallback_ts = pd.to_datetime(end_date)
         except Exception:
-            fallback_ts = datetime.now(timezone.utc)
+            fallback_ts = datetime.now(UTC)
         reference_ts = reference_ts.fillna(fallback_ts)
     else:
         # No per-row timestamp - use end_date for all rows
         try:
             reference_ts = pd.to_datetime(end_date)
         except Exception:
-            reference_ts = datetime.now(timezone.utc)
+            reference_ts = datetime.now(UTC)
 
     # Device age (days since enrollment)
     if "EnrollmentTime" in df.columns:
@@ -676,7 +676,7 @@ def _load_from_source(
     source: TrainingDataSource,
     start_date: str,
     end_date: str,
-    row_limit: Optional[int] = None,
+    row_limit: int | None = None,
 ) -> pd.DataFrame:
     """
     Load unified dataset from a specific training data source.
@@ -694,6 +694,7 @@ def _load_from_source(
         DataFrame with unified device data from the source
     """
     import os
+
     from device_anomaly.config.settings import reset_settings
 
     # Save original environment
@@ -767,8 +768,8 @@ def _load_from_source(
 def load_multi_source_training_data(
     start_date: str,
     end_date: str,
-    sources: Optional[List[TrainingDataSource]] = None,
-    row_limit_per_source: Optional[int] = 500_000,
+    sources: list[TrainingDataSource] | None = None,
+    row_limit_per_source: int | None = 500_000,
 ) -> pd.DataFrame:
     """
     Load and combine training data from multiple customer databases.
@@ -822,7 +823,7 @@ def load_multi_source_training_data(
             enrich_features=True,
         )
 
-    LOGGER.info(f"=== Multi-Source Training Data Load ===")
+    LOGGER.info("=== Multi-Source Training Data Load ===")
     LOGGER.info(f"Date range: {start_date} to {end_date}")
     LOGGER.info(f"Sources: {[s.name for s in sources]}")
 
@@ -848,7 +849,7 @@ def load_multi_source_training_data(
     # Combine all sources
     combined = pd.concat(all_dfs, ignore_index=True)
 
-    LOGGER.info(f"=== Multi-Source Load Complete ===")
+    LOGGER.info("=== Multi-Source Load Complete ===")
     LOGGER.info(f"Total rows: {len(combined):,}")
     LOGGER.info(f"Unique devices: {combined['DeviceId'].nunique():,}")
     LOGGER.info(f"Sources represented: {combined['_source'].nunique()}")
@@ -906,7 +907,7 @@ def get_multi_source_summary(df: pd.DataFrame) -> dict:
 def _load_mc_location_data(
     start_date: str,
     end_date: str,
-    device_ids: Optional[Iterable[int]] = None,
+    device_ids: Iterable[int] | None = None,
 ) -> pd.DataFrame:
     """
     Load location data from MobiControl DeviceStatLocation.
@@ -914,14 +915,14 @@ def _load_mc_location_data(
     Returns GPS coordinates with timestamps for movement analysis.
     """
     try:
+        from device_anomaly.data_access.db_connection import create_mc_engine
         from device_anomaly.data_access.mc_timeseries_loader import (
             load_mc_timeseries_incremental,
         )
-        from device_anomaly.data_access.db_connection import create_mc_engine
 
         engine = create_mc_engine()
-        start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-        end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=timezone.utc) + timedelta(days=1)
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=UTC)
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=UTC) + timedelta(days=1)
 
         df, _ = load_mc_timeseries_incremental(
             table_name="DeviceStatLocation",
@@ -944,7 +945,7 @@ def _load_mc_location_data(
 def _load_mc_system_health_data(
     start_date: str,
     end_date: str,
-    device_ids: Optional[Iterable[int]] = None,
+    device_ids: Iterable[int] | None = None,
 ) -> pd.DataFrame:
     """
     Load system health metrics from MobiControl DeviceStatInt.
@@ -952,14 +953,14 @@ def _load_mc_system_health_data(
     Returns CPU, RAM, storage metrics from time-series data.
     """
     try:
+        from device_anomaly.data_access.db_connection import create_mc_engine
         from device_anomaly.data_access.mc_timeseries_loader import (
             load_mc_timeseries_incremental,
         )
-        from device_anomaly.data_access.db_connection import create_mc_engine
 
         engine = create_mc_engine()
-        start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-        end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=timezone.utc) + timedelta(days=1)
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=UTC)
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=UTC) + timedelta(days=1)
 
         df, _ = load_mc_timeseries_incremental(
             table_name="DeviceStatInt",
@@ -982,7 +983,7 @@ def _load_mc_system_health_data(
 def _load_mc_events_data(
     start_date: str,
     end_date: str,
-    device_ids: Optional[Iterable[int]] = None,
+    device_ids: Iterable[int] | None = None,
 ) -> pd.DataFrame:
     """
     Load event/log data from MobiControl MainLog.
@@ -990,14 +991,14 @@ def _load_mc_events_data(
     Returns device events for crash/error pattern analysis.
     """
     try:
+        from device_anomaly.data_access.db_connection import create_mc_engine
         from device_anomaly.data_access.mc_timeseries_loader import (
             load_mc_timeseries_incremental,
         )
-        from device_anomaly.data_access.db_connection import create_mc_engine
 
         engine = create_mc_engine()
-        start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-        end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=timezone.utc) + timedelta(days=1)
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=UTC)
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=UTC) + timedelta(days=1)
 
         df, _ = load_mc_timeseries_incremental(
             table_name="MainLog",
@@ -1020,7 +1021,7 @@ def _load_mc_events_data(
 def _load_xsight_location_data(
     start_date: str,
     end_date: str,
-    device_ids: Optional[Iterable[int]] = None,
+    device_ids: Iterable[int] | None = None,
 ) -> pd.DataFrame:
     """
     Load WiFi location data from XSight cs_WiFiLocation and cs_LastKnown.
@@ -1028,14 +1029,14 @@ def _load_xsight_location_data(
     Returns GPS + WiFi signal strength for location-based anomaly detection.
     """
     try:
+        from device_anomaly.data_access.db_connection import create_dw_engine
         from device_anomaly.data_access.xsight_loader_extended import (
             load_xsight_table_incremental,
         )
-        from device_anomaly.data_access.db_connection import create_dw_engine
 
         engine = create_dw_engine()
-        start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-        end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=timezone.utc) + timedelta(days=1)
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=UTC)
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=UTC) + timedelta(days=1)
 
         dfs = []
 
@@ -1080,7 +1081,7 @@ def _load_xsight_location_data(
 def _load_xsight_wifi_data(
     start_date: str,
     end_date: str,
-    device_ids: Optional[Iterable[int]] = None,
+    device_ids: Iterable[int] | None = None,
 ) -> pd.DataFrame:
     """
     Load WiFi connectivity patterns from XSight cs_WifiHour.
@@ -1088,14 +1089,14 @@ def _load_xsight_wifi_data(
     Returns WiFi signal strength, connection time, and disconnect counts.
     """
     try:
+        from device_anomaly.data_access.db_connection import create_dw_engine
         from device_anomaly.data_access.xsight_loader_extended import (
             load_xsight_table_incremental,
         )
-        from device_anomaly.data_access.db_connection import create_dw_engine
 
         engine = create_dw_engine()
-        start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-        end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=timezone.utc) + timedelta(days=1)
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=UTC)
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=UTC) + timedelta(days=1)
 
         df, _, _ = load_xsight_table_incremental(
             table_name="cs_WifiHour",
@@ -1385,8 +1386,8 @@ def get_extended_dataset_summary(df: pd.DataFrame) -> dict:
 def load_hourly_device_dataset(
     start_date: str,
     end_date: str,
-    device_ids: Optional[Iterable[int]] = None,
-    tables: Optional[List[str]] = None,
+    device_ids: Iterable[int] | None = None,
+    tables: list[str] | None = None,
     aggregation_level: str = "device_day",
     max_rows_per_table: int = 1_000_000,
     max_days: int = 7,
@@ -1429,14 +1430,14 @@ def load_hourly_device_dataset(
         LOGGER.info(f"Limiting hourly data to last {max_days} days: {start_date} to {end_date}")
 
     try:
+        from device_anomaly.data_access.db_connection import create_dw_engine
         from device_anomaly.data_access.xsight_loader_extended import (
             load_xsight_table_incremental,
         )
-        from device_anomaly.data_access.db_connection import create_dw_engine
 
         engine = create_dw_engine()
-        start_datetime = dt.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-        end_datetime = dt.strptime(end_date, "%Y-%m-%d").replace(tzinfo=timezone.utc) + timedelta(days=1)
+        start_datetime = dt.strptime(start_date, "%Y-%m-%d").replace(tzinfo=UTC)
+        end_datetime = dt.strptime(end_date, "%Y-%m-%d").replace(tzinfo=UTC) + timedelta(days=1)
 
         all_dfs = []
 
@@ -1548,7 +1549,7 @@ def _aggregate_hourly_data(df: pd.DataFrame, aggregation_level: str) -> pd.DataF
         # Aggregate by device and hour-of-day (temporal patterns)
         df["_hour"] = df[ts_col].dt.hour
 
-        agg_dict = {col: "mean" for col in numeric_cols[:20]}
+        agg_dict = dict.fromkeys(numeric_cols[:20], "mean")
         grouped = df.groupby(["DeviceId", "_hour"]).agg(agg_dict)
         grouped.columns = [f"{col}_hour_pattern" for col in grouped.columns]
         grouped = grouped.reset_index()

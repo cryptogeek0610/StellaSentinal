@@ -1,18 +1,15 @@
 """API routes for anomaly endpoints."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from device_anomaly.api.dependencies import get_current_user, get_db, get_tenant_id, require_role
 from device_anomaly.api.models import (
     AddNoteRequest,
     AnomalyDetailResponse,
-    AnomalyFilters,
     AnomalyListResponse,
     AnomalyResponse,
     BulkActionRequest,
@@ -20,7 +17,11 @@ from device_anomaly.api.models import (
     GroupedAnomaliesResponse,
     ResolveAnomalyRequest,
 )
-from device_anomaly.database.schema import AnomalyResult, AnomalyStatus, DeviceMetadata, InvestigationNote
+from device_anomaly.database.schema import (
+    AnomalyResult,
+    DeviceMetadata,
+    InvestigationNote,
+)
 from device_anomaly.services.anomaly_grouper import AnomalyGrouper
 
 router = APIRouter(prefix="/anomalies", tags=["anomalies"])
@@ -28,12 +29,12 @@ router = APIRouter(prefix="/anomalies", tags=["anomalies"])
 
 @router.get("", response_model=AnomalyListResponse)
 def list_anomalies(
-    device_id: Optional[int] = Query(None),
-    start_date: Optional[datetime] = Query(None),
-    end_date: Optional[datetime] = Query(None),
-    status: Optional[str] = Query(None),
-    min_score: Optional[float] = Query(None),
-    max_score: Optional[float] = Query(None),
+    device_id: int | None = Query(None),
+    start_date: datetime | None = Query(None),
+    end_date: datetime | None = Query(None),
+    status: str | None = Query(None),
+    min_score: float | None = Query(None),
+    max_score: float | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -91,8 +92,8 @@ def list_anomalies(
 
 @router.get("/grouped", response_model=GroupedAnomaliesResponse)
 def list_grouped_anomalies(
-    status: Optional[str] = Query(None, description="Filter by status: open, investigating, resolved"),
-    min_severity: Optional[str] = Query(None, description="Minimum severity: critical, high, medium, low"),
+    status: str | None = Query(None, description="Filter by status: open, investigating, resolved"),
+    min_severity: str | None = Query(None, description="Minimum severity: critical, high, medium, low"),
     min_group_size: int = Query(2, ge=1, description="Minimum anomalies to form a group"),
     temporal_window_hours: int = Query(24, ge=1, description="Time window for temporal grouping"),
     db: Session = Depends(get_db),
@@ -197,13 +198,13 @@ def bulk_action(
     # Track results
     updated_count = 0
     failed_ids = []
-    found_ids = set(a.id for a in anomalies_to_update)
+    found_ids = {a.id for a in anomalies_to_update}
 
     # Update each anomaly
     for anomaly in anomalies_to_update:
         try:
             anomaly.status = new_status
-            anomaly.updated_at = datetime.now(timezone.utc)
+            anomaly.updated_at = datetime.now(UTC)
 
             # Add investigation note
             note_text = request.notes or f"Bulk action: Status changed to {new_status}"
@@ -296,7 +297,7 @@ def resolve_anomaly(
             anomaly.notes += f"\n\n{request.notes}"
         else:
             anomaly.notes = request.notes
-    anomaly.updated_at = datetime.now(timezone.utc)
+    anomaly.updated_at = datetime.now(UTC)
 
     # Add investigation note
     note = InvestigationNote(

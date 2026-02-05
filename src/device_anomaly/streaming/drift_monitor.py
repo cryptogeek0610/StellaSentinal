@@ -4,14 +4,14 @@ import logging
 import os
 import time
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 
 logger = logging.getLogger(__name__)
 
 
-def _parse_int(value: Optional[str], default: int) -> int:
+def _parse_int(value: str | None, default: int) -> int:
     try:
         if value is None:
             return default
@@ -21,7 +21,7 @@ def _parse_int(value: Optional[str], default: int) -> int:
         return default
 
 
-def _parse_float(value: Optional[str], default: float) -> float:
+def _parse_float(value: str | None, default: float) -> float:
     try:
         if value is None:
             return default
@@ -40,7 +40,7 @@ class DriftMonitorConfig:
     min_samples: int
 
     @classmethod
-    def from_env(cls) -> "DriftMonitorConfig":
+    def from_env(cls) -> DriftMonitorConfig:
         window_size = _parse_int(os.getenv("STREAMING_DRIFT_WINDOW_SIZE"), 200)
         bins = _parse_int(os.getenv("STREAMING_DRIFT_BINS"), 10)
         warn_psi = _parse_float(os.getenv("STREAMING_DRIFT_WARN_PSI"), 0.2)
@@ -68,7 +68,7 @@ class StreamingDriftMonitor:
         self._current_events = 0
         self._short_history_events = 0
         self._missing_norms_events = 0
-        self._missing_feature_counts: dict[str, int] = {name: 0 for name in feature_names}
+        self._missing_feature_counts: dict[str, int] = dict.fromkeys(feature_names, 0)
         self._last_emit = 0.0
 
     def update(
@@ -76,7 +76,7 @@ class StreamingDriftMonitor:
         features: dict[str, float],
         short_history: bool = False,
         missing_norms: bool = False,
-    ) -> Optional[dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         if short_history:
             self._short_history_events += 1
         if missing_norms:
@@ -117,7 +117,7 @@ class StreamingDriftMonitor:
         self._last_emit = now
         return metrics
 
-    def _initialize_baseline(self) -> Optional[dict[str, Any]]:
+    def _initialize_baseline(self) -> dict[str, Any] | None:
         active_features = []
         for name, values in list(self._baseline_values.items()):
             series = np.array(values, dtype=float)
@@ -143,7 +143,7 @@ class StreamingDriftMonitor:
         self._current_events = 0
         self._short_history_events = 0
         self._missing_norms_events = 0
-        self._missing_feature_counts = {name: 0 for name in self._baseline_counts.keys()}
+        self._missing_feature_counts = dict.fromkeys(self._baseline_counts.keys(), 0)
         # Reset last_emit to current time so the first window starts fresh
         self._last_emit = time.time()
 
@@ -157,7 +157,7 @@ class StreamingDriftMonitor:
             "window_size": self.config.window_size,
         }
 
-    def _emit_metrics(self) -> Optional[dict[str, Any]]:
+    def _emit_metrics(self) -> dict[str, Any] | None:
         if not self._baseline_counts or self._current_events == 0:
             return None
 
@@ -198,12 +198,12 @@ class StreamingDriftMonitor:
         self._current_events = 0
         self._short_history_events = 0
         self._missing_norms_events = 0
-        self._missing_feature_counts = {name: 0 for name in self._baseline_counts.keys()}
+        self._missing_feature_counts = dict.fromkeys(self._baseline_counts.keys(), 0)
 
         return metrics
 
     @staticmethod
-    def _coerce_value(value: Optional[float]) -> Optional[float]:
+    def _coerce_value(value: float | None) -> float | None:
         if value is None:
             return None
         if isinstance(value, (np.integer, np.floating)):
@@ -214,7 +214,7 @@ class StreamingDriftMonitor:
             return None
         return float(value)
 
-    def _build_bins(self, values: np.ndarray) -> Optional[np.ndarray]:
+    def _build_bins(self, values: np.ndarray) -> np.ndarray | None:
         if values.size < self.config.min_samples:
             return None
         quantiles = np.linspace(0, 1, self.config.bins + 1)
@@ -231,7 +231,7 @@ class StreamingDriftMonitor:
         return edges
 
     @staticmethod
-    def _psi(expected: np.ndarray, actual: np.ndarray) -> Optional[float]:
+    def _psi(expected: np.ndarray, actual: np.ndarray) -> float | None:
         expected_total = float(np.sum(expected))
         actual_total = float(np.sum(actual))
         if expected_total <= 0 or actual_total <= 0:

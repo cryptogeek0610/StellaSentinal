@@ -14,16 +14,16 @@ import json
 import logging
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 
 from device_anomaly.streaming.engine import (
+    MessageType,
     StreamingEngine,
     StreamMessage,
-    MessageType,
 )
 
 logger = logging.getLogger(__name__)
@@ -38,11 +38,11 @@ class TelemetryEvent:
     metrics: dict[str, float]
 
     # Device context (enriched from MobiControl)
-    model_id: Optional[int] = None
-    manufacturer_id: Optional[int] = None
-    os_version_id: Optional[int] = None
-    firmware_version: Optional[str] = None
-    tenant_id: Optional[str] = None
+    model_id: int | None = None
+    manufacturer_id: int | None = None
+    os_version_id: int | None = None
+    firmware_version: str | None = None
+    tenant_id: str | None = None
 
     @property
     def cohort_id(self) -> str:
@@ -94,7 +94,7 @@ class DeviceBuffer:
     max_age_hours: int = 168  # 7 days
 
     events: list[TelemetryEvent] = field(default_factory=list)
-    last_update: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    last_update: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     # Running statistics for incremental computation
     _running_sums: dict[str, float] = field(default_factory=dict)
@@ -104,7 +104,7 @@ class DeviceBuffer:
     def add_event(self, event: TelemetryEvent) -> None:
         """Add a new telemetry event to the buffer."""
         self.events.append(event)
-        self.last_update = datetime.now(timezone.utc)
+        self.last_update = datetime.now(UTC)
 
         # Update running statistics
         for metric, value in event.metrics.items():
@@ -118,12 +118,12 @@ class DeviceBuffer:
 
     def _prune(self) -> None:
         """Remove old events from buffer."""
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=self.max_age_hours)
+        cutoff = datetime.now(UTC) - timedelta(hours=self.max_age_hours)
 
         # Remove by age (handle timezone-naive timestamps by treating them as UTC)
         def _ensure_aware(ts: datetime) -> datetime:
             if ts.tzinfo is None:
-                return ts.replace(tzinfo=timezone.utc)
+                return ts.replace(tzinfo=UTC)
             return ts
 
         while self.events and _ensure_aware(self.events[0].timestamp) < cutoff:
@@ -143,14 +143,14 @@ class DeviceBuffer:
                 self._running_sq_sums[metric] = self._running_sq_sums.get(metric, 0) - value ** 2
                 self._counts[metric] = max(0, self._counts.get(metric, 0) - 1)
 
-    def get_rolling_mean(self, metric: str) -> Optional[float]:
+    def get_rolling_mean(self, metric: str) -> float | None:
         """Get rolling mean for a metric."""
         count = self._counts.get(metric, 0)
         if count == 0:
             return None
         return self._running_sums.get(metric, 0) / count
 
-    def get_rolling_std(self, metric: str) -> Optional[float]:
+    def get_rolling_std(self, metric: str) -> float | None:
         """Get rolling standard deviation for a metric."""
         count = self._counts.get(metric, 0)
         if count < 2:
@@ -165,7 +165,7 @@ class DeviceBuffer:
             variance = 0  # Numerical stability
         return np.sqrt(variance)
 
-    def get_rolling_stats(self, metric: str) -> dict[str, Optional[float]]:
+    def get_rolling_stats(self, metric: str) -> dict[str, float | None]:
         """Get all rolling statistics for a metric."""
         values = [
             e.metrics.get(metric)
@@ -192,7 +192,7 @@ class DeviceBuffer:
             "count": len(values),
         }
 
-    def get_delta(self, metric: str) -> Optional[float]:
+    def get_delta(self, metric: str) -> float | None:
         """Get the change from previous event."""
         recent = [e for e in self.events if metric in e.metrics]
         if len(recent) < 2:
@@ -216,7 +216,7 @@ class DeviceBuffer:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "DeviceBuffer":
+    def from_dict(cls, data: dict[str, Any]) -> DeviceBuffer:
         """Rehydrate buffer from serialized state."""
         buffer = cls(
             device_id=int(data["device_id"]),
@@ -249,8 +249,8 @@ class TelemetryBuffer:
         self.max_age_hours = max_age_hours
         self._buffers: dict[int, DeviceBuffer] = {}
         self._lock = asyncio.Lock()
-        self.restored_at: Optional[datetime] = None
-        self.restore_source: Optional[str] = None
+        self.restored_at: datetime | None = None
+        self.restore_source: str | None = None
 
     async def add_event(self, event: TelemetryEvent) -> DeviceBuffer:
         """Add a telemetry event to the appropriate buffer."""
@@ -282,7 +282,7 @@ class TelemetryBuffer:
         del self._buffers[oldest_device]
         logger.debug("Evicted buffer for device %d", oldest_device)
 
-    def get_buffer(self, device_id: int) -> Optional[DeviceBuffer]:
+    def get_buffer(self, device_id: int) -> DeviceBuffer | None:
         """Get the buffer for a device."""
         return self._buffers.get(device_id)
 
@@ -304,7 +304,7 @@ class TelemetryBuffer:
         }
 
     @classmethod
-    def from_snapshot(cls, snapshot: dict[str, Any]) -> "TelemetryBuffer":
+    def from_snapshot(cls, snapshot: dict[str, Any]) -> TelemetryBuffer:
         """Restore TelemetryBuffer from a snapshot."""
         buffer = cls(
             max_devices=int(snapshot.get("max_devices", 10000)),
@@ -341,7 +341,7 @@ class TelemetryBuffer:
             return False
 
     @classmethod
-    def load_snapshot_path(cls, path: Path, max_bytes: int) -> Optional["TelemetryBuffer"]:
+    def load_snapshot_path(cls, path: Path, max_bytes: int) -> TelemetryBuffer | None:
         """Load buffer snapshot from disk with size/corruption guards."""
         if not path.exists():
             return None
@@ -357,7 +357,7 @@ class TelemetryBuffer:
                 return None
             payload = json.loads(path.read_text())
             buffer = cls.from_snapshot(payload)
-            buffer.restored_at = datetime.now(timezone.utc)
+            buffer.restored_at = datetime.now(UTC)
             buffer.restore_source = str(path)
             return buffer
         except Exception as exc:
@@ -383,7 +383,7 @@ class TelemetryStream:
     def __init__(
         self,
         engine: StreamingEngine,
-        buffer: Optional[TelemetryBuffer] = None,
+        buffer: TelemetryBuffer | None = None,
     ):
         self.engine = engine
         self.buffer = buffer or TelemetryBuffer()
@@ -410,8 +410,8 @@ class TelemetryStream:
         self,
         device_id: int,
         metrics: dict[str, float],
-        timestamp: Optional[datetime] = None,
-        tenant_id: Optional[str] = None,
+        timestamp: datetime | None = None,
+        tenant_id: str | None = None,
     ) -> None:
         """
         Ingest raw telemetry and publish to stream.
@@ -426,7 +426,7 @@ class TelemetryStream:
             message_type=MessageType.TELEMETRY_RAW,
             payload={
                 "metrics": metrics,
-                "timestamp": (timestamp or datetime.now(timezone.utc)).isoformat(),
+                "timestamp": (timestamp or datetime.now(UTC)).isoformat(),
             },
             device_id=device_id,
             tenant_id=tenant_id,
@@ -506,7 +506,7 @@ class TelemetryStream:
 
         return event
 
-    async def _fetch_device_metadata(self, device_id: int) -> Optional[dict]:
+    async def _fetch_device_metadata(self, device_id: int) -> dict | None:
         """
         Fetch device metadata from MobiControl cache for streaming enrichment.
 
@@ -541,7 +541,7 @@ class TelemetryStream:
             logger.debug("Error fetching metadata for device %d: %s", device_id, e)
             return None
 
-    def get_buffer_for_device(self, device_id: int) -> Optional[DeviceBuffer]:
+    def get_buffer_for_device(self, device_id: int) -> DeviceBuffer | None:
         """Get the telemetry buffer for a specific device."""
         return self.buffer.get_buffer(device_id)
 

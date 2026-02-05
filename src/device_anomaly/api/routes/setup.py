@@ -5,7 +5,6 @@ Endpoints for environment configuration and connection testing.
 This module provides a UI-driven way to configure the .env file.
 """
 
-import os
 import logging
 from pathlib import Path
 from typing import Any, Literal

@@ -14,23 +14,20 @@ This analyzer provides network-aware insights.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from datetime import datetime, time, timedelta
-from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from enum import StrEnum
 
-import numpy as np
 import pandas as pd
-from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
 from device_anomaly.database.schema import DeviceFeature, LocationMetadata
-from device_anomaly.insights.categories import InsightCategory, InsightSeverity
+from device_anomaly.insights.categories import InsightSeverity
 
 logger = logging.getLogger(__name__)
 
 
-class NetworkIssueType(str, Enum):
+class NetworkIssueType(StrEnum):
     """Types of network issues."""
 
     AP_HOPPING = "ap_hopping"
@@ -49,7 +46,7 @@ class WifiRoamingIssue:
     """A WiFi roaming issue for a device."""
 
     device_id: int
-    device_name: Optional[str]
+    device_name: str | None
     issue_type: NetworkIssueType  # AP_HOPPING or AP_STICKINESS
     unique_aps_connected: int
     ap_changes_per_hour: float
@@ -57,7 +54,7 @@ class WifiRoamingIssue:
     weak_signal_percentage: float  # % time on weak signal
     description: str
     severity: InsightSeverity
-    affected_location: Optional[str]
+    affected_location: str | None
     recommendation: str
 
 
@@ -81,15 +78,15 @@ class WifiRoamingReport:
     avg_signal_strength: float
 
     # Problematic APs (if available)
-    worst_aps: List[Tuple[str, float]]  # (BSSID/SSID, issue_rate)
+    worst_aps: list[tuple[str, float]]  # (BSSID/SSID, issue_rate)
 
     # Issues
-    issues: List[WifiRoamingIssue]
+    issues: list[WifiRoamingIssue]
 
     # Dead zones detected
-    potential_dead_zones: List[str]
+    potential_dead_zones: list[str]
 
-    recommendations: List[str]
+    recommendations: list[str]
 
 
 @dataclass
@@ -97,9 +94,9 @@ class CellularIssue:
     """A cellular connectivity issue."""
 
     device_id: int
-    device_name: Optional[str]
+    device_name: str | None
     issue_type: NetworkIssueType
-    carrier: Optional[str]
+    carrier: str | None
     primary_network_type: str  # "5G", "LTE", "3G"
     tower_changes_per_hour: float
     tech_fallback_rate: float  # % time on lower tech than expected
@@ -116,22 +113,22 @@ class CellularPatternReport:
     analysis_period_days: int
 
     # Summary by carrier
-    carrier_stats: Dict[str, Dict[str, float]]  # carrier -> {devices, avg_signal, fallback_rate}
+    carrier_stats: dict[str, dict[str, float]]  # carrier -> {devices, avg_signal, fallback_rate}
 
     # Summary by network type
-    network_type_distribution: Dict[str, float]  # "5G" -> % time
+    network_type_distribution: dict[str, float]  # "5G" -> % time
 
     # Issues
     total_devices: int
     devices_with_tower_hopping: int
     devices_with_tech_fallback: int
-    issues: List[CellularIssue]
+    issues: list[CellularIssue]
 
     # Carrier comparison
-    best_carrier: Optional[str]
-    worst_carrier: Optional[str]
+    best_carrier: str | None
+    worst_carrier: str | None
 
-    recommendations: List[str]
+    recommendations: list[str]
 
 
 @dataclass
@@ -143,7 +140,7 @@ class DisconnectEvent:
     duration_minutes: float
     network_type_before: str  # "wifi", "cellular", "none"
     network_type_after: str
-    location_id: Optional[str]
+    location_id: str | None
     is_predictable: bool  # Part of a pattern
 
 
@@ -164,18 +161,18 @@ class DisconnectPatternReport:
 
     # Pattern detection
     has_predictable_pattern: bool
-    pattern_description: Optional[str]  # e.g., "Daily at 14:00"
+    pattern_description: str | None  # e.g., "Daily at 14:00"
     pattern_confidence: float
 
     # Breakdown
-    disconnects_by_hour: Dict[int, int]  # hour -> count
-    disconnects_by_day: Dict[int, int]  # day_of_week -> count
-    disconnects_by_location: Dict[str, int]  # location -> count
+    disconnects_by_hour: dict[int, int]  # hour -> count
+    disconnects_by_day: dict[int, int]  # day_of_week -> count
+    disconnects_by_location: dict[str, int]  # location -> count
 
     # Top offenders
-    devices_with_most_disconnects: List[Tuple[int, int]]  # (device_id, count)
+    devices_with_most_disconnects: list[tuple[int, int]]  # (device_id, count)
 
-    recommendations: List[str]
+    recommendations: list[str]
 
 
 @dataclass
@@ -183,20 +180,20 @@ class HiddenDeviceIndicator:
     """Indicator that a device may be hidden or taken off-site."""
 
     device_id: int
-    device_name: Optional[str]
-    assigned_location: Optional[str]
+    device_name: str | None
+    assigned_location: str | None
 
     # Evidence
     offline_hours_last_week: float
     unusual_offline_periods: int  # Count of off-hours offline periods
-    last_seen_location: Optional[str]
+    last_seen_location: str | None
     never_seen_at_assigned: bool
 
     # Scoring
     hidden_score: float  # 0-1, higher = more likely hidden
     confidence: float
 
-    indicators: List[str]  # Human-readable evidence
+    indicators: list[str]  # Human-readable evidence
 
 
 @dataclass
@@ -212,12 +209,12 @@ class HiddenDeviceReport:
     devices_highly_suspicious: int  # score > 0.8
 
     # Flagged devices
-    flagged_devices: List[HiddenDeviceIndicator]
+    flagged_devices: list[HiddenDeviceIndicator]
 
     # By location
-    locations_missing_devices: Dict[str, int]  # location -> count of missing devices
+    locations_missing_devices: dict[str, int]  # location -> count of missing devices
 
-    recommendations: List[str]
+    recommendations: list[str]
 
 
 class NetworkPatternAnalyzer:
@@ -259,7 +256,7 @@ class NetworkPatternAnalyzer:
 
     def analyze_wifi_roaming(
         self,
-        location_id: Optional[str] = None,
+        location_id: str | None = None,
         period_days: int = 7,
     ) -> WifiRoamingReport:
         """Analyze WiFi roaming patterns.
@@ -306,7 +303,7 @@ class NetworkPatternAnalyzer:
             )
 
         # Analyze each device
-        issues: List[WifiRoamingIssue] = []
+        issues: list[WifiRoamingIssue] = []
         device_ids = network_data["device_id"].unique()
 
         hopping_count = 0
@@ -383,7 +380,7 @@ class NetworkPatternAnalyzer:
             )
 
         # Analyze each device
-        issues: List[CellularIssue] = []
+        issues: list[CellularIssue] = []
         device_ids = network_data["device_id"].unique()
 
         tower_hopping_count = 0
@@ -436,7 +433,7 @@ class NetworkPatternAnalyzer:
     def analyze_disconnect_patterns(
         self,
         group_by: str = "tenant",  # "device", "location", "tenant"
-        entity_id: Optional[str] = None,
+        entity_id: str | None = None,
         period_days: int = 7,
     ) -> DisconnectPatternReport:
         """Analyze network disconnection patterns.
@@ -449,10 +446,7 @@ class NetworkPatternAnalyzer:
         Returns:
             DisconnectPatternReport with disconnect analysis
         """
-        if group_by == "location":
-            location_id = entity_id
-        else:
-            location_id = None
+        location_id = entity_id if group_by == "location" else None
 
         network_data = self._get_network_features(location_id, period_days)
 
@@ -556,7 +550,7 @@ class NetworkPatternAnalyzer:
                 recommendations=[],
             )
 
-        flagged: List[HiddenDeviceIndicator] = []
+        flagged: list[HiddenDeviceIndicator] = []
         device_ids = network_data["device_id"].unique()
 
         for device_id in device_ids:
@@ -572,7 +566,7 @@ class NetworkPatternAnalyzer:
         highly_suspicious = sum(1 for d in flagged if d.hidden_score > 0.8)
 
         # Count missing devices by location
-        locations_missing: Dict[str, int] = {}
+        locations_missing: dict[str, int] = {}
         for device in flagged:
             if device.assigned_location:
                 locations_missing[device.assigned_location] = locations_missing.get(device.assigned_location, 0) + 1
@@ -594,7 +588,7 @@ class NetworkPatternAnalyzer:
 
     def _get_network_features(
         self,
-        location_id: Optional[str],
+        location_id: str | None,
         period_days: int,
     ) -> pd.DataFrame:
         """Get network features for analysis."""
@@ -658,9 +652,9 @@ class NetworkPatternAnalyzer:
         self,
         device_id: int,
         device_data: pd.DataFrame,
-    ) -> List[WifiRoamingIssue]:
+    ) -> list[WifiRoamingIssue]:
         """Analyze WiFi roaming for a single device."""
-        issues: List[WifiRoamingIssue] = []
+        issues: list[WifiRoamingIssue] = []
 
         if device_data.empty:
             return issues
@@ -707,15 +701,15 @@ class NetworkPatternAnalyzer:
         self,
         device_id: int,
         device_data: pd.DataFrame,
-    ) -> List[CellularIssue]:
+    ) -> list[CellularIssue]:
         """Analyze cellular connectivity for a single device."""
-        issues: List[CellularIssue] = []
+        issues: list[CellularIssue] = []
 
         if device_data.empty:
             return issues
 
         avg_cells = device_data["unique_cells"].mean() if "unique_cells" in device_data.columns else 0
-        avg_signal = device_data["cell_signal"].mean() if "cell_signal" in device_data.columns else 0
+        device_data["cell_signal"].mean() if "cell_signal" in device_data.columns else 0
 
         # Check for tower hopping
         if avg_cells > self.TOWER_HOPPING_THRESHOLD:
@@ -756,9 +750,9 @@ class NetworkPatternAnalyzer:
 
         return issues
 
-    def _detect_dead_zones(self, network_data: pd.DataFrame) -> List[str]:
+    def _detect_dead_zones(self, network_data: pd.DataFrame) -> list[str]:
         """Detect potential WiFi dead zones based on signal data."""
-        dead_zones: List[str] = []
+        dead_zones: list[str] = []
 
         if network_data.empty or "wifi_signal" not in network_data.columns:
             return dead_zones
@@ -775,12 +769,12 @@ class NetworkPatternAnalyzer:
     def _calculate_carrier_stats(
         self,
         network_data: pd.DataFrame,
-    ) -> Dict[str, Dict[str, float]]:
+    ) -> dict[str, dict[str, float]]:
         """Calculate statistics by carrier."""
         if network_data.empty or "carrier" not in network_data.columns:
             return {}
 
-        stats: Dict[str, Dict[str, float]] = {}
+        stats: dict[str, dict[str, float]] = {}
 
         for carrier in network_data["carrier"].dropna().unique():
             carrier_data = network_data[network_data["carrier"] == carrier]
@@ -795,7 +789,7 @@ class NetworkPatternAnalyzer:
     def _calculate_network_type_distribution(
         self,
         network_data: pd.DataFrame,
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """Calculate distribution of time by network type."""
         if network_data.empty:
             return {}
@@ -819,7 +813,7 @@ class NetworkPatternAnalyzer:
     def _detect_disconnect_pattern(
         self,
         network_data: pd.DataFrame,
-    ) -> Tuple[bool, Optional[str], float]:
+    ) -> tuple[bool, str | None, float]:
         """Detect if disconnects follow a predictable pattern."""
         # Simplified pattern detection
         # In production, would use time-series analysis
@@ -847,7 +841,7 @@ class NetworkPatternAnalyzer:
         device_id: int,
         device_data: pd.DataFrame,
         period_days: int,
-    ) -> Optional[HiddenDeviceIndicator]:
+    ) -> HiddenDeviceIndicator | None:
         """Analyze if a device shows hidden/off-site patterns."""
         if device_data.empty:
             return None
@@ -859,7 +853,7 @@ class NetworkPatternAnalyzer:
         # Expected hours (8 hrs/day work)
         expected_offline = period_days * 16  # 16 hrs offline per day is normal
 
-        indicators: List[str] = []
+        indicators: list[str] = []
         hidden_score = 0
 
         # Check if significantly more offline than expected
@@ -890,12 +884,12 @@ class NetworkPatternAnalyzer:
 
     def _generate_wifi_recommendations(
         self,
-        issues: List[WifiRoamingIssue],
-        dead_zones: List[str],
+        issues: list[WifiRoamingIssue],
+        dead_zones: list[str],
         hopping_count: int,
         stickiness_count: int,
         total_devices: int,
-    ) -> List[str]:
+    ) -> list[str]:
         """Generate WiFi recommendations."""
         recommendations = []
 
@@ -921,11 +915,11 @@ class NetworkPatternAnalyzer:
 
     def _generate_cellular_recommendations(
         self,
-        issues: List[CellularIssue],
-        carrier_stats: Dict[str, Dict[str, float]],
+        issues: list[CellularIssue],
+        carrier_stats: dict[str, dict[str, float]],
         tower_hopping_count: int,
         total_devices: int,
-    ) -> List[str]:
+    ) -> list[str]:
         """Generate cellular recommendations."""
         recommendations = []
 
@@ -953,7 +947,7 @@ class NetworkPatternAnalyzer:
         total_disconnects: int,
         has_pattern: bool,
         total_devices: int,
-    ) -> List[str]:
+    ) -> list[str]:
         """Generate disconnect recommendations."""
         recommendations = []
 
@@ -974,9 +968,9 @@ class NetworkPatternAnalyzer:
 
     def _generate_hidden_recommendations(
         self,
-        flagged: List[HiddenDeviceIndicator],
+        flagged: list[HiddenDeviceIndicator],
         highly_suspicious: int,
-    ) -> List[str]:
+    ) -> list[str]:
         """Generate hidden device recommendations."""
         recommendations = []
 

@@ -10,7 +10,6 @@ This module transforms CPU, RAM, storage, and temperature data into ML features:
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -120,7 +119,7 @@ class SystemHealthFeatureBuilder:
             "Temperature", "DeviceTemp", "BatteryTemp", "CPUTemp", "temperature"
         ])
 
-    def _find_column(self, df: pd.DataFrame, candidates: list[str]) -> Optional[str]:
+    def _find_column(self, df: pd.DataFrame, candidates: list[str]) -> str | None:
         """Find first matching column from candidates."""
         for col in candidates:
             if col in df.columns:
@@ -365,7 +364,7 @@ class SystemHealthFeatureBuilder:
             # Weighted average
             total_weight = sum(weights)
             df["system_health_score"] = sum(
-                c * w for c, w in zip(health_components, weights)
+                c * w for c, w in zip(health_components, weights, strict=False)
             ) / total_weight
 
             # Health risk score (inverse of health)

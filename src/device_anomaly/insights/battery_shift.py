@@ -12,13 +12,12 @@ This analyzer provides shift-aware battery insights.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, time, timedelta
-from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-from sqlalchemy import and_, func, Integer
+from sqlalchemy import Integer, func
 from sqlalchemy.orm import Session
 
 from device_anomaly.database.schema import (
@@ -26,7 +25,7 @@ from device_anomaly.database.schema import (
     LocationMetadata,
     ShiftPerformance,
 )
-from device_anomaly.insights.categories import InsightCategory, InsightSeverity
+from device_anomaly.insights.categories import InsightSeverity
 from device_anomaly.insights.location_mapper import LocationMapper, ShiftSchedule
 
 logger = logging.getLogger(__name__)
@@ -42,7 +41,7 @@ class BatteryProjection:
     projected_level: float
     target_time: datetime
     will_survive: bool
-    estimated_dead_time: Optional[datetime]
+    estimated_dead_time: datetime | None
     confidence: float  # 0-1
 
 
@@ -51,16 +50,16 @@ class DeviceShiftReadiness:
     """Shift readiness assessment for a single device."""
 
     device_id: int
-    device_name: Optional[str]
+    device_name: str | None
     current_battery: float
     drain_rate_per_hour: float
     shift_hours: float
     projected_end_battery: float
     will_complete_shift: bool
-    estimated_dead_time: Optional[str]  # Time format like "14:30"
+    estimated_dead_time: str | None  # Time format like "14:30"
     was_fully_charged: bool  # >= 90% at shift start
     readiness_score: float  # 0-100
-    recommendations: List[str]
+    recommendations: list[str]
 
 
 @dataclass
@@ -83,7 +82,7 @@ class ShiftReadinessReport:
     readiness_percentage: float
 
     # Device details
-    device_readiness: List[DeviceShiftReadiness]
+    device_readiness: list[DeviceShiftReadiness]
 
     # Aggregated insights
     avg_battery_at_start: float
@@ -92,7 +91,7 @@ class ShiftReadinessReport:
     devices_will_die_during_shift: int
 
     # Comparison
-    vs_last_week_readiness: Optional[float]  # % change
+    vs_last_week_readiness: float | None  # % change
 
 
 @dataclass
@@ -100,7 +99,7 @@ class ChargingPatternIssue:
     """A charging pattern issue for a device."""
 
     device_id: int
-    device_name: Optional[str]
+    device_name: str | None
     issue_type: str  # "incomplete_charge", "short_charges", "usb_instead_ac", "missed_overnight"
     description: str
     frequency: str  # "daily", "3x_per_week", etc.
@@ -128,17 +127,17 @@ class ChargingPatternReport:
     missed_overnight: int  # Devices not charged overnight
 
     # Issues
-    issues: List[ChargingPatternIssue]
+    issues: list[ChargingPatternIssue]
 
     # Top recommendations
-    recommendations: List[str]
+    recommendations: list[str]
 
 
 @dataclass
 class PeriodicDrainEvent:
     """A periodic drain event detected in a device."""
 
-    day_of_week: Optional[int]  # 0=Monday, None if daily
+    day_of_week: int | None  # 0=Monday, None if daily
     time_of_day: time
     duration_minutes: int
     avg_drain_rate: float
@@ -151,21 +150,21 @@ class PeriodicDrainReport:
     """Periodic drain analysis for a device."""
 
     device_id: int
-    device_name: Optional[str]
+    device_name: str | None
     analysis_period_days: int
 
     # Detected patterns
     has_periodic_pattern: bool
-    patterns: List[PeriodicDrainEvent]
+    patterns: list[PeriodicDrainEvent]
 
     # Overall drain profile
     avg_daily_drain: float
-    peak_drain_time: Optional[time]
-    lowest_drain_time: Optional[time]
+    peak_drain_time: time | None
+    lowest_drain_time: time | None
 
     # Correlation analysis
-    correlated_apps: List[Tuple[str, float]]  # (app_name, correlation)
-    correlated_locations: List[Tuple[str, float]]
+    correlated_apps: list[tuple[str, float]]  # (app_name, correlation)
+    correlated_locations: list[tuple[str, float]]
 
 
 class BatteryShiftAnalyzer:
@@ -192,7 +191,7 @@ class BatteryShiftAnalyzer:
         self,
         db_session: Session,
         tenant_id: str,
-        location_mapper: Optional[LocationMapper] = None,
+        location_mapper: LocationMapper | None = None,
     ):
         """Initialize the analyzer.
 
@@ -209,8 +208,8 @@ class BatteryShiftAnalyzer:
         self,
         location_id: str,
         shift_date: datetime,
-        shift_name: Optional[str] = None,
-    ) -> Optional[ShiftReadinessReport]:
+        shift_name: str | None = None,
+    ) -> ShiftReadinessReport | None:
         """Analyze battery readiness for an upcoming shift.
 
         Args:
@@ -245,7 +244,7 @@ class BatteryShiftAnalyzer:
         shift_duration = self._calculate_shift_duration(shift)
 
         # Analyze each device
-        device_readiness: List[DeviceShiftReadiness] = []
+        device_readiness: list[DeviceShiftReadiness] = []
 
         for _, row in devices_df.iterrows():
             readiness = self._analyze_device_shift_readiness(row, shift, shift_duration)
@@ -292,7 +291,7 @@ class BatteryShiftAnalyzer:
         self,
         location_id: str,
         period_days: int = 14,
-    ) -> Optional[ChargingPatternReport]:
+    ) -> ChargingPatternReport | None:
         """Analyze charging patterns at a location.
 
         Args:
@@ -318,7 +317,7 @@ class BatteryShiftAnalyzer:
         if charging_data.empty:
             return None
 
-        issues: List[ChargingPatternIssue] = []
+        issues: list[ChargingPatternIssue] = []
 
         # Analyze each device's charging patterns
         device_ids = charging_data["device_id"].unique()
@@ -345,7 +344,7 @@ class BatteryShiftAnalyzer:
                     missed_overnight += 1
 
         total_devices = len(device_ids)
-        devices_with_issues = len(set(i.device_id for i in issues))
+        devices_with_issues = len({i.device_id for i in issues})
 
         # Generate recommendations
         recommendations = self._generate_charging_recommendations(
@@ -371,7 +370,7 @@ class BatteryShiftAnalyzer:
         self,
         device_id: int,
         lookback_days: int = 14,
-    ) -> Optional[PeriodicDrainReport]:
+    ) -> PeriodicDrainReport | None:
         """Identify periodic/recurring drain patterns for a device.
 
         Args:
@@ -431,8 +430,8 @@ class BatteryShiftAnalyzer:
         self,
         device_id: int,
         target_time: datetime,
-        current_level: Optional[float] = None,
-        drain_rate: Optional[float] = None,
+        current_level: float | None = None,
+        drain_rate: float | None = None,
     ) -> BatteryProjection:
         """Project battery level at a future time.
 
@@ -549,8 +548,8 @@ class BatteryShiftAnalyzer:
         self,
         location: LocationMetadata,
         shift_date: datetime,
-        shift_name: Optional[str] = None,
-    ) -> Optional[ShiftSchedule]:
+        shift_name: str | None = None,
+    ) -> ShiftSchedule | None:
         """Get the relevant shift schedule for analysis."""
         shifts = self.location_mapper._load_shift_schedules(location)
         if not shifts:
@@ -695,7 +694,7 @@ class BatteryShiftAnalyzer:
         self,
         location_id: str,
         shift_date: datetime,
-    ) -> Optional[float]:
+    ) -> float | None:
         """Get historical shift readiness percentage."""
         # Query ShiftPerformance for the given date
         query = (
@@ -767,9 +766,9 @@ class BatteryShiftAnalyzer:
         self,
         device_id: int,
         device_data: pd.DataFrame,
-    ) -> List[ChargingPatternIssue]:
+    ) -> list[ChargingPatternIssue]:
         """Analyze charging patterns for a single device."""
-        issues: List[ChargingPatternIssue] = []
+        issues: list[ChargingPatternIssue] = []
 
         if device_data.empty:
             return issues
@@ -824,7 +823,7 @@ class BatteryShiftAnalyzer:
         usb_only: int,
         missed: int,
         total: int,
-    ) -> List[str]:
+    ) -> list[str]:
         """Generate location-wide charging recommendations."""
         recommendations = []
 
@@ -897,9 +896,9 @@ class BatteryShiftAnalyzer:
     def _detect_periodic_patterns(
         self,
         drain_data: pd.DataFrame,
-    ) -> List[PeriodicDrainEvent]:
+    ) -> list[PeriodicDrainEvent]:
         """Detect periodic drain patterns in the data."""
-        patterns: List[PeriodicDrainEvent] = []
+        patterns: list[PeriodicDrainEvent] = []
 
         if drain_data.empty or "hour" not in drain_data.columns:
             return patterns
@@ -928,7 +927,7 @@ class BatteryShiftAnalyzer:
         self,
         device_id: int,
         drain_data: pd.DataFrame,
-    ) -> List[Tuple[str, float]]:
+    ) -> list[tuple[str, float]]:
         """Find apps correlated with high battery drain.
 
         Note: Would require app usage data not currently available.
@@ -940,7 +939,7 @@ class BatteryShiftAnalyzer:
         self,
         device_id: int,
         drain_data: pd.DataFrame,
-    ) -> List[Tuple[str, float]]:
+    ) -> list[tuple[str, float]]:
         """Find locations correlated with high battery drain.
 
         Note: Would require location history not currently available.
@@ -951,7 +950,7 @@ class BatteryShiftAnalyzer:
     def _get_current_device_battery(
         self,
         device_id: int,
-    ) -> Optional[Dict[str, float]]:
+    ) -> dict[str, float] | None:
         """Get current battery level and drain rate for a device."""
         feature = (
             self.db.query(DeviceFeature)

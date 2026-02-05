@@ -9,8 +9,7 @@ Users don't browse data - they see problems ranked by $ impact and fix them.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import List, Optional
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
@@ -52,7 +51,7 @@ class Issue(BaseModel):
     one_liner: str = Field(description="Problem + cost + fix in one sentence")
     impact: IssueImpact
     remediation: Remediation
-    device_ids: List[int] = []
+    device_ids: list[int] = []
     detected_at: datetime
 
 
@@ -66,14 +65,14 @@ class ActionCenterSummary(BaseModel):
     automatable_count: int = Field(description="Issues we can fix automatically")
     automatable_savings: float = Field(description="$ saved if we auto-fix everything")
     by_category: dict
-    top_3_issues: List[str]
+    top_3_issues: list[str]
     recommended_action: str = Field(description="Single most impactful thing to do now")
     generated_at: datetime
 
 
 class IssueListResponse(BaseModel):
     """All issues, sorted by priority."""
-    issues: List[Issue]
+    issues: list[Issue]
     total_count: int
     can_auto_fix: int
 
@@ -91,9 +90,9 @@ class FixResult(BaseModel):
 # Mock Data for Demo
 # ============================================================================
 
-def _generate_mock_issues() -> List[Issue]:
+def _generate_mock_issues() -> list[Issue]:
     """Generate realistic demo issues."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     return [
         Issue(
@@ -227,7 +226,7 @@ def _generate_mock_issues() -> List[Issue]:
     ]
 
 
-def _generate_mock_summary(issues: List[Issue]) -> ActionCenterSummary:
+def _generate_mock_summary(issues: list[Issue]) -> ActionCenterSummary:
     """Generate summary from issues."""
     total_hourly = sum(i.impact.hourly_cost for i in issues)
     automatable = [i for i in issues if i.remediation.automated]
@@ -258,7 +257,7 @@ def _generate_mock_summary(issues: List[Issue]) -> ActionCenterSummary:
             f"Auto-fix {len(automatable)} issues to save ${sum(i.impact.hourly_cost for i in automatable):.0f}/hr"
             if automatable else "Review and approve manual fixes"
         ),
-        generated_at=datetime.now(timezone.utc),
+        generated_at=datetime.now(UTC),
     )
 
 
@@ -292,7 +291,7 @@ async def get_action_summary(
         # Add required fields that the resolver doesn't provide
         return ActionCenterSummary(
             tenant_id=tenant_id,
-            generated_at=datetime.now(timezone.utc),
+            generated_at=datetime.now(UTC),
             **summary_dict,
         )
     except Exception as e:
@@ -309,7 +308,7 @@ async def get_action_summary(
             by_category={},
             top_3_issues=[],
             recommended_action="No issues detected - fleet is healthy",
-            generated_at=datetime.now(timezone.utc),
+            generated_at=datetime.now(UTC),
         )
 
 
@@ -317,7 +316,7 @@ async def get_action_summary(
 async def get_issues(
     tenant_id: str = Depends(get_tenant_id),
     mock_mode: bool = Depends(get_mock_mode),
-    category: Optional[str] = Query(None, description="Filter by category"),
+    category: str | None = Query(None, description="Filter by category"),
     automatable_only: bool = Query(False, description="Only show auto-fixable issues"),
     limit: int = Query(50, le=200),
 ):
@@ -381,7 +380,7 @@ async def fix_issue(
     )
 
 
-@router.post("/fix-all-automated", response_model=List[FixResult])
+@router.post("/fix-all-automated", response_model=list[FixResult])
 async def fix_all_automated(
     tenant_id: str = Depends(get_tenant_id),
     mock_mode: bool = Depends(get_mock_mode),

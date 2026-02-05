@@ -5,9 +5,8 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -24,7 +23,7 @@ router = APIRouter()
 _COST_ALERTS_PATH = Path(os.getenv("COST_ALERTS_PATH", "data/cost_alerts.json"))
 
 
-def _parse_datetime(value: Optional[str]) -> Optional[datetime]:
+def _parse_datetime(value: str | None) -> datetime | None:
     if not value:
         return None
     try:
@@ -57,8 +56,8 @@ def _save_cost_alert_store(alerts: list[dict]) -> None:
 def _serialize_cost_alert(alert: dict) -> CostAlert:
     data = dict(alert)
     data.pop("tenant_id", None)
-    data["created_at"] = _parse_datetime(data.get("created_at")) or datetime.now(timezone.utc)
-    data["updated_at"] = _parse_datetime(data.get("updated_at")) or datetime.now(timezone.utc)
+    data["created_at"] = _parse_datetime(data.get("created_at")) or datetime.now(UTC)
+    data["updated_at"] = _parse_datetime(data.get("updated_at")) or datetime.now(UTC)
     data["last_triggered"] = _parse_datetime(data.get("last_triggered"))
     return CostAlert(**data)
 
@@ -82,7 +81,7 @@ def create_cost_alert(
     alerts = _load_cost_alert_store()
     tenant_alerts = [a for a in alerts if a.get("tenant_id") == tenant_id]
     next_id = max((a.get("id", 0) for a in tenant_alerts), default=0) + 1
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     new_alert = {
         "id": next_id,
@@ -132,7 +131,7 @@ def update_cost_alert(
             alert["notify_email"] = update_data["notify_email"]
         if "notify_webhook" in update_data:
             alert["notify_webhook"] = update_data["notify_webhook"]
-        alert["updated_at"] = datetime.now(timezone.utc).isoformat()
+        alert["updated_at"] = datetime.now(UTC).isoformat()
         updated = alert
         break
 

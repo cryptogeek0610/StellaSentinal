@@ -1,42 +1,45 @@
 """API routes for dashboard endpoints."""
 from __future__ import annotations
 
+import logging
 import os
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
+import numpy as np
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
-import numpy as np
 
 from device_anomaly.api.dependencies import get_db, get_mock_mode, get_tenant_id
 from device_anomaly.api.mock_mode import (
+    get_mock_connection_status,
+    get_mock_custom_attributes,
     get_mock_dashboard_stats,
     get_mock_dashboard_trends,
-    get_mock_connection_status,
     get_mock_isolation_forest_stats,
     get_mock_location_heatmap,
-    get_mock_custom_attributes,
 )
-from device_anomaly.database.schema import TroubleshootingCache
 from device_anomaly.api.models import (
     AllConnectionsStatusResponse,
     ConnectionStatusResponse,
     DashboardStatsResponse,
     DashboardTrendResponse,
-    TroubleshootingAdviceResponse,
     FeedbackStatsResponse,
     IsolationForestConfigResponse,
     IsolationForestStatsResponse,
-    ScoreDistributionResponse,
-    ScoreDistributionBin,
-    LocationHeatmapResponse,
     LocationDataResponse,
+    LocationHeatmapResponse,
+    ScoreDistributionBin,
+    ScoreDistributionResponse,
+    TroubleshootingAdviceResponse,
 )
 from device_anomaly.config.settings import get_settings
-from device_anomaly.database.schema import AnomalyResult, AnomalyStatus, DeviceMetadata
-import logging
+from device_anomaly.database.schema import (
+    AnomalyResult,
+    AnomalyStatus,
+    DeviceMetadata,
+    TroubleshootingCache,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -46,48 +49,48 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 def _parse_connection_error(error_str: str) -> str:
     """Parse SQL Server connection errors into user-friendly messages."""
     error_lower = error_str.lower()
-    
+
     # Timeout errors
     if "login timeout" in error_lower or "timeout expired" in error_lower:
         return "Connection timed out — server may be unreachable or firewall is blocking"
-    
+
     # Network/connectivity errors
     if "unable to connect" in error_lower or "connection refused" in error_lower:
         return "Cannot reach server — check if server is running and network is accessible"
-    
+
     if "network-related" in error_lower or "instance-specific" in error_lower:
         return "Network error — server not found or SQL Browser service not running"
-    
+
     # Authentication errors
     if "login failed for user" in error_lower:
         return "Login failed — invalid username or password"
-    
+
     if "login failed" in error_lower and "not associated with a trusted" in error_lower:
         return "Login failed — Windows authentication not configured"
-    
+
     # Database errors
     if "cannot open database" in error_lower:
         # Extract database name if possible
         if "requested by the login" in error_lower:
             return "Database not found or access denied — check database name and permissions"
         return "Cannot open database — database may not exist"
-    
+
     # SSL/Certificate errors
     if "ssl" in error_lower or "certificate" in error_lower:
         return "SSL/Certificate error — server certificate not trusted"
-    
+
     # Driver errors
     if "odbc driver" in error_lower and "not found" in error_lower:
         return "Database driver not installed"
-    
+
     # Permission errors
     if "permission" in error_lower or "access denied" in error_lower:
         return "Access denied — insufficient permissions"
-    
+
     # Generic connection errors
     if "connection" in error_lower and ("failed" in error_lower or "error" in error_lower):
         return "Connection failed — check server address and credentials"
-    
+
     # Fallback: return a truncated, cleaned version
     # Remove the Python exception prefix if present
     if ")" in error_str and error_str.startswith("("):
@@ -97,41 +100,41 @@ def _parse_connection_error(error_str: str) -> str:
             message = parts[-1].strip().rstrip(")")
             if message:
                 return message[:100] + ("..." if len(message) > 100 else "")
-    
+
     return error_str[:100] + ("..." if len(error_str) > 100 else "")
 
 
 def _parse_api_error(error_str: str) -> str:
     """Parse API connection errors into user-friendly messages."""
     error_lower = error_str.lower()
-    
+
     # Timeout
     if "timeout" in error_lower:
         return "Request timed out — server may be slow or unreachable"
-    
+
     # Authentication errors
     if "401" in error_str:
         return "Authentication failed — check client ID and secret"
     if "403" in error_str:
         return "Access forbidden — insufficient API permissions"
-    
+
     # Connection errors
     if "connection" in error_lower and ("refused" in error_lower or "error" in error_lower):
         return "Cannot connect to API — check server URL"
-    
+
     if "name or service not known" in error_lower or "nodename nor servname" in error_lower:
         return "Server not found — check the server URL"
-    
+
     # SSL errors
     if "ssl" in error_lower or "certificate" in error_lower:
         return "SSL error — certificate verification failed"
-    
+
     # HTTP errors
     if "404" in error_str:
         return "API endpoint not found — check server URL"
     if "500" in error_str or "502" in error_str or "503" in error_str:
         return "Server error — the API server is having issues"
-    
+
     return error_str[:100] + ("..." if len(error_str) > 100 else "")
 
 
@@ -152,8 +155,8 @@ def get_dashboard_stats(
         mock_data = get_mock_dashboard_stats()
         return DashboardStatsResponse(**mock_data)
 
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+    today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    thirty_days_ago = datetime.now(UTC) - timedelta(days=30)
 
     tenant_id = get_tenant_id()
 
@@ -240,14 +243,14 @@ def get_dashboard_stats(
 
 @router.get("/trends", response_model=list[DashboardTrendResponse])
 def get_dashboard_trends(
-    days: Optional[int] = Query(None, ge=1, le=90),
-    start_date: Optional[datetime] = Query(None),
-    end_date: Optional[datetime] = Query(None),
+    days: int | None = Query(None, ge=1, le=90),
+    start_date: datetime | None = Query(None),
+    end_date: datetime | None = Query(None),
     mock_mode: bool = Depends(get_mock_mode),
     db: Session = Depends(get_db),
 ):
     """Get anomaly trends over time.
-    
+
     Can use either 'days' parameter (for backward compatibility) or 'start_date'/'end_date' for custom ranges.
     If both are provided, start_date/end_date take precedence.
     """
@@ -255,9 +258,9 @@ def get_dashboard_trends(
     if mock_mode:
         mock_data = get_mock_dashboard_trends(days or 7, start_date, end_date)
         return [DashboardTrendResponse(**item) for item in mock_data]
-    
-    now = datetime.now(timezone.utc)
-    
+
+    now = datetime.now(UTC)
+
     # Determine date range: prioritize start_date/end_date over days
     if start_date and end_date:
         # Use provided date range
@@ -427,7 +430,7 @@ def get_connection_status(mock_mode: bool = Depends(get_mock_mode)):
     llm_connected = False
     llm_config = get_llm_config_snapshot()
     llm_base_url = llm_config["resolved_base_url"]
-    llm_model = llm_config["resolved_model"] or ""
+    llm_config["resolved_model"] or ""
     llm_server = llm_base_url
     llm_error = None
 
@@ -560,7 +563,7 @@ def get_connection_status(mock_mode: bool = Depends(get_mock_mode)):
             error=qdrant_error,
             status=qdrant_status,
         ),
-        last_checked=datetime.now(timezone.utc),
+        last_checked=datetime.now(UTC),
     )
 
 
@@ -620,20 +623,20 @@ def get_llm_diagnostics():
         "config": config,
         "models_check": models_check,
         "client": client_info,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 
 def _generate_error_signature(failed_connections: list) -> str:
     """Generate a unique signature/hash for similar error patterns.
-    
+
     This creates a normalized signature that groups similar errors together,
     ignoring server-specific details like hostnames/IPs.
     """
     import hashlib
     import json
     import re
-    
+
     # Normalize errors by removing server-specific details
     normalized = []
     for conn in failed_connections:
@@ -642,17 +645,17 @@ def _generate_error_signature(failed_connections: list) -> str:
         error = re.sub(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b', '[IP]', error)
         error = re.sub(r'\b[a-z0-9\-]+\.(com|net|org|local|lan)\b', '[HOST]', error)
         error = re.sub(r'\b[A-Z0-9\-]+\b', lambda m: m.group().lower() if len(m.group()) > 10 else m.group(), error)
-        
+
         normalized.append({
             "service": conn.get("service", "").lower(),
             "error_pattern": error,
             "status": conn.get("status", "").lower()
         })
-    
+
     # Sort to ensure consistent hashing regardless of order
     normalized.sort(key=lambda x: x["service"])
     signature_data = json.dumps(normalized, sort_keys=True)
-    
+
     # Generate hash
     return hashlib.sha256(signature_data.encode()).hexdigest()
 
@@ -668,25 +671,25 @@ def _find_similar_cached_advice(
         TroubleshootingCache.error_signature == error_signature,
         TroubleshootingCache.tenant_id == tenant_id,
     )
-    
+
     if service_type:
         query = query.filter(TroubleshootingCache.service_type == service_type)
-    
+
     cached = query.first()
-    
+
     if cached:
         # Update usage statistics
         cached.use_count += 1
-        cached.last_used = datetime.now(timezone.utc)
+        cached.last_used = datetime.now(UTC)
         db.commit()
         logger.info(f"Reusing cached troubleshooting advice (signature: {error_signature[:16]}..., uses: {cached.use_count})")
-    
+
     return cached
 
 
 def _generate_rule_based_advice(failed_connections: list) -> tuple[str, str]:
     """Generate troubleshooting advice using rule-based logic when LLM is unavailable.
-    
+
     Returns (advice, summary) tuple.
     """
     advice_parts = [
@@ -696,12 +699,12 @@ def _generate_rule_based_advice(failed_connections: list) -> tuple[str, str]:
         "---\n\n"
     ]
     summary_parts = []
-    
+
     for conn in failed_connections:
         service = conn.get("service", "")
         error = conn.get("error", "").lower()
-        status = conn.get("status", "").lower()
-        
+        conn.get("status", "").lower()
+
         if "sql" in service.lower():
             if "timeout" in error or "login timeout" in error:
                 advice_parts.append(f"**{service}**: Connection timeout detected. This usually means:\n- The database server is unreachable or slow\n- Firewall is blocking the connection\n- Network connectivity issues\n\n**Steps**:\n1. Verify the server is running: Check if the SQL Server service is active\n2. Test network connectivity: Try pinging the server\n3. Check firewall rules: Ensure port 1433 (or your configured port) is open\n4. Verify credentials: Ensure username and password are correct")
@@ -718,7 +721,7 @@ def _generate_rule_based_advice(failed_connections: list) -> tuple[str, str]:
             else:
                 advice_parts.append(f"**{service}**: Connection failed with error: {conn.get('error', 'Unknown error')}\n\n**General SQL Server troubleshooting**:\n1. Verify SQL Server service is running\n2. Check network connectivity\n3. Review firewall settings\n4. Validate credentials and permissions\n5. Check SQL Server error logs for details")
                 summary_parts.append(f"{service} connection error")
-        
+
         elif "api" in service.lower():
             if "401" in error or "authentication" in error:
                 advice_parts.append(f"**{service}**: Authentication failed (401). This means:\n- Invalid API credentials (client ID/secret)\n- Token expired or invalid\n- Insufficient permissions\n\n**Steps**:\n1. Verify API credentials in configuration\n2. Check if credentials need to be regenerated\n3. Ensure the API client has required permissions\n4. Contact API administrator for credential verification")
@@ -735,7 +738,7 @@ def _generate_rule_based_advice(failed_connections: list) -> tuple[str, str]:
             else:
                 advice_parts.append(f"**{service}**: API connection failed: {conn.get('error', 'Unknown error')}\n\n**General API troubleshooting**:\n1. Verify API server URL is correct\n2. Check API server status\n3. Validate credentials\n4. Review network connectivity\n5. Check API documentation for specific error codes")
                 summary_parts.append(f"{service} API error")
-        
+
         elif "llm" in service.lower():
             if "cannot connect" in error or "connection" in error:
                 advice_parts.append(f"**{service}**: Cannot connect to LLM service. This means:\n- LLM service (e.g., LM Studio) is not running\n- Server URL is incorrect\n- Port is blocked or incorrect\n\n**Steps**:\n1. Start the LLM service (e.g., launch LM Studio)\n2. Verify the service is listening on the configured port\n3. Check LLM_BASE_URL environment variable\n4. Test connection: curl http://localhost:1234/v1/models")
@@ -746,17 +749,17 @@ def _generate_rule_based_advice(failed_connections: list) -> tuple[str, str]:
             else:
                 advice_parts.append(f"**{service}**: LLM service error: {conn.get('error', 'Unknown error')}\n\n**Steps**:\n1. Verify LLM service is running\n2. Check LLM_BASE_URL configuration\n3. Ensure a model is loaded\n4. Review LLM service logs")
                 summary_parts.append("LLM service error")
-        
+
         else:
             advice_parts.append(f"**{service}**: Connection failed: {conn.get('error', 'Unknown error')}\n\n**General troubleshooting**:\n1. Verify service is running\n2. Check network connectivity\n3. Review configuration settings\n4. Check service logs for details")
             summary_parts.append(f"{service} connection error")
-    
+
     summary = "Multiple connection issues detected" if len(summary_parts) > 1 else summary_parts[0] if summary_parts else "Connection issues"
     advice = "\n\n---\n\n".join(advice_parts)
-    
+
     if len(failed_connections) > 1:
         advice = f"**SUMMARY**: {summary}\n\nMultiple services are experiencing connection failures. Address each service individually:\n\n{advice}\n\n**GENERAL RECOMMENDATIONS**:\n- Check if this is a network-wide issue\n- Verify firewall rules allow all required connections\n- Contact IT support if multiple services fail simultaneously"
-    
+
     return advice, summary
 
 
@@ -778,7 +781,7 @@ def _save_troubleshooting_cache(
         tenant_id=tenant_id,
         service_type=service_type,
         use_count=1,
-        last_used=datetime.now(timezone.utc)
+        last_used=datetime.now(UTC)
     )
     db.add(cached)
     db.commit()
@@ -793,12 +796,12 @@ def get_troubleshooting_advice(
     db: Session = Depends(get_db)
 ):
     """Get intelligent troubleshooting advice from LLM based on connection errors.
-    
+
     Analyzes all connection failures and provides actionable troubleshooting steps.
     Uses caching to learn from previous similar errors and avoid redundant LLM calls.
     """
     failed_connections = []
-    
+
     if not connection_status.dw_sql.connected and connection_status.dw_sql.error:
         failed_connections.append({
             "service": "XSight Database SQL Server",
@@ -806,7 +809,7 @@ def get_troubleshooting_advice(
             "error": connection_status.dw_sql.error,
             "status": connection_status.dw_sql.status
         })
-    
+
     if not connection_status.mc_sql.connected and connection_status.mc_sql.error:
         failed_connections.append({
             "service": "MobiControl SQL Server",
@@ -814,7 +817,7 @@ def get_troubleshooting_advice(
             "error": connection_status.mc_sql.error,
             "status": connection_status.mc_sql.status
         })
-    
+
     if not connection_status.mobicontrol_api.connected and connection_status.mobicontrol_api.error:
         failed_connections.append({
             "service": "MobiControl API",
@@ -822,7 +825,7 @@ def get_troubleshooting_advice(
             "error": connection_status.mobicontrol_api.error,
             "status": connection_status.mobicontrol_api.status
         })
-    
+
     if not connection_status.llm.connected and connection_status.llm.error:
         failed_connections.append({
             "service": "LLM Service",
@@ -830,19 +833,19 @@ def get_troubleshooting_advice(
             "error": connection_status.llm.error,
             "status": connection_status.llm.status
         })
-    
+
     if not failed_connections:
         return TroubleshootingAdviceResponse(
             advice="All connections are healthy. No troubleshooting needed.",
             summary="All systems operational"
         )
-    
+
     tenant_id = get_tenant_id()
     # Generate error signature for caching
     import json
     error_signature = _generate_error_signature(failed_connections)
     error_pattern_json = json.dumps(failed_connections, indent=2)
-    
+
     # Determine service type (for filtering)
     service_types = set()
     for conn in failed_connections:
@@ -854,7 +857,7 @@ def get_troubleshooting_advice(
         elif "llm" in service:
             service_types.add("llm")
     service_type = list(service_types)[0] if len(service_types) == 1 else None
-    
+
     # Check cache first
     cached = _find_similar_cached_advice(db, error_signature, tenant_id, service_type)
     if cached:
@@ -862,10 +865,10 @@ def get_troubleshooting_advice(
             advice=cached.advice,
             summary=cached.summary
         )
-    
+
     # Cache miss - generate new advice from LLM
     errors_json = json.dumps(failed_connections, indent=2)
-    
+
     prompt = f"""<role>
 You are Stella, an AI assistant for SOTI MobiControl administrators. You help troubleshoot connection issues in an enterprise mobile device management system that monitors thousands of mobile devices (Android, iOS, Windows) across warehouses, retail stores, and field operations.
 </role>
@@ -912,19 +915,23 @@ Services in this system:
 5. Keep total response under 400 words
 6. If multiple services fail with similar errors, note potential common cause (network, firewall, DNS)
 </instructions>"""
-    
+
     # Try LLM first, fallback to rule-based if unavailable
     try:
-        from device_anomaly.llm.client import get_default_llm_client, DummyLLMClient, strip_thinking_tags
-        
+        from device_anomaly.llm.client import (
+            DummyLLMClient,
+            get_default_llm_client,
+            strip_thinking_tags,
+        )
+
         llm_client = get_default_llm_client()
-        
+
         # Check if it's a DummyLLMClient (no real LLM configured)
         if isinstance(llm_client, DummyLLMClient):
             # Use rule-based advice instead of dummy output
             logger.info("LLM not configured or unavailable, using rule-based troubleshooting advice")
             raise ValueError("LLM not configured")
-        
+
         logger.info(f"Using LLM client: {type(llm_client).__name__} to generate troubleshooting advice")
         raw_advice = llm_client.generate(prompt, max_tokens=800, temperature=0.2)
         advice = strip_thinking_tags(raw_advice)
@@ -933,14 +940,14 @@ Services in this system:
         if "DUMMY LLM CLIENT" in advice or "Dummy explanation" in advice or ("Dummy" in advice and len(advice) < 200):
             logger.warning("Received dummy LLM output despite using real client, falling back to rule-based advice")
             raise ValueError("Dummy LLM output received")
-        
+
         logger.info(f"Successfully generated LLM troubleshooting advice from {type(llm_client).__name__} (length: {len(advice)} chars)")
-        
+
         # Extract summary if present
         summary = None
         if "SUMMARY:" in advice:
             summary = advice.split("SUMMARY:")[1].split("\n")[0].strip() if "SUMMARY:" in advice else None
-        
+
         # Save to cache for future use
         try:
             _save_troubleshooting_cache(
@@ -955,7 +962,7 @@ Services in this system:
         except Exception as cache_error:
             # Don't fail if caching fails, just log it
             logger.warning(f"Failed to cache troubleshooting advice: {cache_error}")
-        
+
         logger.info(f"Successfully generated LLM troubleshooting advice (length: {len(advice)})")
         return TroubleshootingAdviceResponse(
             advice=advice,
@@ -964,9 +971,9 @@ Services in this system:
     except Exception as e:
         # Fallback to rule-based troubleshooting advice
         logger.info(f"Using rule-based troubleshooting (LLM unavailable: {e})")
-        
+
         rule_advice, rule_summary = _generate_rule_based_advice(failed_connections)
-        
+
         # Add note about why rule-based is being used
         if isinstance(e, ValueError) and "LLM not configured" in str(e):
             rule_advice = (
@@ -979,7 +986,7 @@ Services in this system:
                 "3. Verify your LLM service is running and accessible\n\n"
                 "---\n\n" + rule_advice
             )
-        
+
         # Save rule-based advice to cache too
         try:
             _save_troubleshooting_cache(
@@ -993,7 +1000,7 @@ Services in this system:
             )
         except Exception as cache_error:
             logger.warning(f"Failed to cache rule-based troubleshooting advice: {cache_error}")
-        
+
         return TroubleshootingAdviceResponse(
             advice=rule_advice,
             summary=rule_summary
@@ -1020,7 +1027,7 @@ def get_troubleshooting_cache_stats(db: Session = Depends(get_db)):
         .limit(5)
         .all()
     )
-    
+
     return {
         "total_cached_advice": total_cached,
         "total_times_reused": total_uses,
@@ -1083,12 +1090,12 @@ def get_model_info():
 
 @router.get("/isolation-forest/stats", response_model=IsolationForestStatsResponse)
 def get_isolation_forest_stats(
-    days: Optional[int] = Query(30, ge=1, le=365),
+    days: int | None = Query(30, ge=1, le=365),
     mock_mode: bool = Depends(get_mock_mode),
     db: Session = Depends(get_db),
 ):
     """Get Isolation Forest model statistics and score distribution.
-    
+
     Returns model configuration, score distribution histogram, and statistics
     for the specified time period (default: last 30 days).
     """
@@ -1110,11 +1117,11 @@ def get_isolation_forest_stats(
             total_predictions=mock_data["total_predictions"],
             anomaly_rate=mock_data["anomaly_rate"],
         )
-    
+
     # Get model configuration from code (default values)
     from device_anomaly.models.anomaly_detector import AnomalyDetectorConfig
     from device_anomaly.models.model_registry import load_latest_training_metadata
-    
+
     default_cfg = AnomalyDetectorConfig()
     defaults = IsolationForestConfigResponse(
         n_estimators=default_cfg.n_estimators,
@@ -1139,11 +1146,11 @@ def get_isolation_forest_stats(
         feature_count=len(feature_cols) if feature_cols else None,
         model_type="isolation_forest",
     )
-    
+
     # Calculate date range
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     filter_start = (now - timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)
-    
+
     # Get all scores (both normal and anomalies) from the time period
     tenant_id = get_tenant_id()
     results = (
@@ -1155,7 +1162,7 @@ def get_isolation_forest_stats(
         .filter(AnomalyResult.timestamp >= filter_start)
         .all()
     )
-    
+
     if not results:
         # Return empty distribution if no data
         return IsolationForestStatsResponse(
@@ -1174,7 +1181,7 @@ def get_isolation_forest_stats(
             total_predictions=0,
             anomaly_rate=0.0,
         )
-    
+
     # Extract scores and labels
     scores = [r.anomaly_score for r in results]
     labels = [r.anomaly_label for r in results]
@@ -1190,17 +1197,17 @@ def get_isolation_forest_stats(
     # Use the configured contamination rate instead, which represents the expected
     # proportion of anomalies the model is tuned to detect.
     anomaly_rate = config.contamination if total_normal == 0 else total_anomalies / total_predictions
-    
+
     mean_score = float(np.mean(scores_array))
     median_score = float(np.median(scores_array))
     min_score = float(np.min(scores_array))
     max_score = float(np.max(scores_array))
     std_score = float(np.std(scores_array))
-    
+
     # Create histogram bins (30 bins from min to max)
     num_bins = 30
-    normal_scores = np.array([score for score, label in zip(scores, labels) if label == 1])
-    anomaly_scores = np.array([score for score, label in zip(scores, labels) if label == -1])
+    normal_scores = np.array([score for score, label in zip(scores, labels, strict=False) if label == 1])
+    anomaly_scores = np.array([score for score, label in zip(scores, labels, strict=False) if label == -1])
 
     bins = []
     if min_score == max_score:
@@ -1247,7 +1254,7 @@ def get_isolation_forest_stats(
                     count=anomaly_count,
                     is_anomaly=True,
                 ))
-    
+
     score_distribution = ScoreDistributionResponse(
         bins=bins,
         total_normal=total_normal,
@@ -1310,28 +1317,28 @@ def get_isolation_forest_stats(
 @router.get("/custom-attributes")
 def get_custom_attributes(mock_mode: bool = Depends(get_mock_mode)):
     """Get list of available custom attributes from MobiControl devices.
-    
+
     Fetches a sample of devices from MobiControl and extracts unique custom attribute names.
     Returns a list of custom attribute names that can be used for location grouping.
     """
     # Return mock data if Mock Mode is enabled
     if mock_mode:
         return get_mock_custom_attributes()
-    
+
     try:
         from device_anomaly.data_access.mobicontrol_client import MobiControlClient
-        
+
         settings = get_settings()
         if not settings.mobicontrol.server_url:
             return {"custom_attributes": [], "error": "MobiControl server URL not configured"}
-        
+
         client = MobiControlClient()
         client._ensure_authenticated()
-        
+
         # Fetch a sample of devices to extract custom attributes
         # We'll fetch up to 100 devices to get a good sample
         devices_response = client.get_devices(page=1, page_size=100)
-        
+
         # Extract custom attributes from devices
         # The response structure may vary, so we handle different formats
         if isinstance(devices_response, list):
@@ -1340,32 +1347,32 @@ def get_custom_attributes(mock_mode: bool = Depends(get_mock_mode)):
             devices = devices_response.get("data", [])
         else:
             devices = []
-        
+
         logger.info(f"Fetched {len(devices)} devices from MobiControl")
-        
+
         # Log sample device keys for debugging
         if devices and isinstance(devices[0], dict):
             sample_device = devices[0]
             logger.debug(f"Sample device keys: {list(sample_device.keys())[:20]}")
             # Log if we see any custom attribute related fields
-            custom_fields = [k for k in sample_device.keys() if 'custom' in k.lower() or 'attribute' in k.lower() or 'Custom' in k]
+            custom_fields = [k for k in sample_device if 'custom' in k.lower() or 'attribute' in k.lower() or 'Custom' in k]
             if custom_fields:
                 logger.info(f"Found custom attribute related fields: {custom_fields}")
-        
+
         custom_attributes = set()
-        
+
         # Try to extract custom attributes from device list
         # Custom attributes might be in CustomAttributes, customAttributes, or CustomData fields
         for device in devices:
             if not isinstance(device, dict):
                 continue
-            
+
             # Only extract from CustomAttributes field (not CustomData)
             for field_name in ["CustomAttributes", "customAttributes"]:
                 custom_attrs = device.get(field_name)
                 if custom_attrs is None:
                     continue
-                
+
                 if isinstance(custom_attrs, dict):
                     # If it's a dict, extract the keys (attribute names)
                     custom_attributes.update(custom_attrs.keys())
@@ -1386,7 +1393,7 @@ def get_custom_attributes(mock_mode: bool = Depends(get_mock_mode)):
                             name = attr.get("name") or attr.get("Name") or attr.get("key") or attr.get("Key") or attr.get("attributeName") or attr.get("AttributeName")
                             if name:
                                 custom_attributes.add(name)
-        
+
         # If no custom attributes found in list, try fetching individual device details
         # Custom attributes might only be available in full device details
         if not custom_attributes and devices:
@@ -1397,23 +1404,23 @@ def get_custom_attributes(mock_mode: bool = Depends(get_mock_mode)):
                 for device in devices[:sample_size]:
                     if not isinstance(device, dict):
                         continue
-                    
+
                     # Get device ID from various possible fields
                     device_id = device.get("DeviceId") or device.get("deviceId") or device.get("id") or device.get("ID")
                     if not device_id:
                         continue
-                    
+
                     try:
                         device_details = client.get_device(str(device_id))
                         if not isinstance(device_details, dict):
                             continue
-                        
+
                         # Only extract from CustomAttributes field (not CustomData)
                         for field_name in ["CustomAttributes", "customAttributes"]:
                             custom_attrs = device_details.get(field_name)
                             if custom_attrs is None:
                                 continue
-                            
+
                             if isinstance(custom_attrs, dict):
                                 custom_attributes.update(custom_attrs.keys())
                             elif isinstance(custom_attrs, str):
@@ -1429,12 +1436,12 @@ def get_custom_attributes(mock_mode: bool = Depends(get_mock_mode)):
                         continue
             except Exception as e:
                 logger.warning(f"Error fetching individual device details: {e}")
-        
+
         # Convert to sorted list
-        custom_attributes_list = sorted(list(custom_attributes))
-        
+        custom_attributes_list = sorted(custom_attributes)
+
         return {"custom_attributes": custom_attributes_list}
-        
+
     except Exception as e:
         logger.warning(f"Failed to fetch custom attributes from MobiControl: {e}")
         # Return empty list on error, don't fail the request
@@ -1443,15 +1450,15 @@ def get_custom_attributes(mock_mode: bool = Depends(get_mock_mode)):
 
 @router.get("/location-heatmap", response_model=LocationHeatmapResponse)
 def get_location_heatmap(
-    attribute_name: Optional[str] = Query(None, description="Custom attribute name (e.g., 'Store', 'Warehouse')"),
+    attribute_name: str | None = Query(None, description="Custom attribute name (e.g., 'Store', 'Warehouse')"),
     mock_mode: bool = Depends(get_mock_mode),
     db: Session = Depends(get_db),
 ):
     """Get location heatmap data grouped by custom attribute.
-    
+
     Groups devices by the specified custom attribute (e.g., Store, Warehouse, Location)
     and calculates utilization metrics and baselines for each location.
-    
+
     Note: This is a placeholder implementation. When custom attributes are properly
     synced from MobiControl into the device metadata (extra_data JSON field),
     this endpoint should be updated to query actual data.
@@ -1465,13 +1472,13 @@ def get_location_heatmap(
             totalLocations=mock_data["totalLocations"],
             totalDevices=mock_data["totalDevices"],
         )
-    
+
     # Default attribute name
     attr_name = attribute_name or "Store"
-    
+
     # TODO: Implement actual data aggregation when custom attributes are available
     # For now, return empty data structure that matches the expected response
-    # 
+    #
     # Future implementation should:
     # 1. Query devices from DeviceMetadata table
     # 2. Extract custom attribute values from extra_data JSON field (or join with MobiControl data)
@@ -1479,9 +1486,9 @@ def get_location_heatmap(
     # 4. Calculate utilization metrics (active devices / total devices per location)
     # 5. Calculate baselines (historical averages or configured baselines)
     # 6. Count anomalies per location
-    
+
     locations: List[LocationDataResponse] = []
-    
+
     # Placeholder: Return empty list for now
     # When custom attributes are available, this will be populated with actual data
     # Example structure:
@@ -1498,7 +1505,7 @@ def get_location_heatmap(
     #     ),
     #     ...
     # ]
-    
+
     return LocationHeatmapResponse(
         locations=locations,
         attributeName=attr_name,
@@ -1523,6 +1530,7 @@ def get_dashboard_ai_summary(
     Results are cached in Redis for 5 minutes to avoid excessive LLM calls.
     """
     import json
+
     import redis as redis_client
 
     # Return mock data if Mock Mode is enabled
@@ -1535,7 +1543,7 @@ def get_dashboard_ai_summary(
                 "Schedule firmware update for devices showing connectivity issues"
             ],
             "health_status": "degraded",
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": datetime.now(UTC).isoformat(),
             "cached": False,
             "based_on": {
                 "open_cases": 15,
@@ -1565,7 +1573,7 @@ def get_dashboard_ai_summary(
             logger.warning(f"Redis cache read failed: {e}")
 
     # Get current stats for the summary
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
 
     # Anomalies today
     anomalies_today = (
@@ -1665,7 +1673,11 @@ Respond in this exact JSON format (no markdown, just raw JSON):
 
     # Try to generate with LLM
     try:
-        from device_anomaly.llm.client import get_default_llm_client, DummyLLMClient, strip_thinking_tags
+        from device_anomaly.llm.client import (
+            DummyLLMClient,
+            get_default_llm_client,
+            strip_thinking_tags,
+        )
 
         llm_client = get_default_llm_client()
 
@@ -1714,7 +1726,7 @@ Respond in this exact JSON format (no markdown, just raw JSON):
         "summary": summary,
         "priority_actions": priority_actions[:3],  # Limit to 3 actions
         "health_status": health_status,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "cached": False,
         "based_on": stats
     }

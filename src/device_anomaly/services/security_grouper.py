@@ -11,8 +11,7 @@ from __future__ import annotations
 import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Tuple
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +22,8 @@ class DeviceSecurityStatus:
 
     device_id: int
     device_name: str
-    device_group_id: Optional[int] = None
-    full_path: Optional[str] = None
+    device_group_id: int | None = None
+    full_path: str | None = None
     security_score: float = 100.0
     is_encrypted: bool = True
     is_rooted: bool = False
@@ -33,9 +32,9 @@ class DeviceSecurityStatus:
     usb_debugging: bool = False
     developer_mode: bool = False
     risk_level: str = "low"
-    violations: List[str] = field(default_factory=list)
-    last_check_in: Optional[datetime] = None
-    security_issue_detected_at: Optional[datetime] = None
+    violations: list[str] = field(default_factory=list)
+    last_check_in: datetime | None = None
+    security_issue_detected_at: datetime | None = None
 
 
 @dataclass
@@ -48,9 +47,9 @@ class RiskCluster:
     severity: str  # critical, high, medium, low
     device_count: int
     avg_security_score: float
-    affected_paths: List[str]
-    first_detected: Optional[datetime]
-    sample_devices: List[DeviceSecurityStatus]
+    affected_paths: list[str]
+    first_detected: datetime | None
+    sample_devices: list[DeviceSecurityStatus]
     recommendation: str
 
 
@@ -96,10 +95,10 @@ class TemporalCluster:
     cluster_name: str
     issue_appeared_at: datetime
     device_count: int
-    common_violations: List[str]
-    affected_paths: List[str]
+    common_violations: list[str]
+    affected_paths: list[str]
     correlation_insight: str
-    sample_devices: List[DeviceSecurityStatus]
+    sample_devices: list[DeviceSecurityStatus]
 
 
 class SecurityGrouper:
@@ -155,17 +154,17 @@ class SecurityGrouper:
     SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 
     def __init__(self):
-        self._devices: List[DeviceSecurityStatus] = []
+        self._devices: list[DeviceSecurityStatus] = []
 
-    def set_devices(self, devices: List[DeviceSecurityStatus]) -> None:
+    def set_devices(self, devices: list[DeviceSecurityStatus]) -> None:
         """Set the devices to analyze."""
         self._devices = devices
 
     def group_by_violation_type(
         self,
-        devices: Optional[List[DeviceSecurityStatus]] = None,
+        devices: list[DeviceSecurityStatus] | None = None,
         min_cluster_size: int = 1,
-    ) -> List[RiskCluster]:
+    ) -> list[RiskCluster]:
         """
         Group devices by violation type into risk clusters.
 
@@ -188,7 +187,7 @@ class SecurityGrouper:
                 continue
 
             # Get unique paths affected
-            paths = list(set(d.full_path for d in affected if d.full_path))
+            paths = list({d.full_path for d in affected if d.full_path})
             paths.sort()
 
             # Calculate average score
@@ -224,8 +223,8 @@ class SecurityGrouper:
 
     def group_by_path(
         self,
-        devices: Optional[List[DeviceSecurityStatus]] = None,
-    ) -> Dict[str, PathSecuritySummary]:
+        devices: list[DeviceSecurityStatus] | None = None,
+    ) -> dict[str, PathSecuritySummary]:
         """
         Group devices by PATH and compute security summaries.
 
@@ -238,7 +237,7 @@ class SecurityGrouper:
         if devices is None:
             devices = self._devices
 
-        by_path: Dict[str, List[DeviceSecurityStatus]] = defaultdict(list)
+        by_path: dict[str, list[DeviceSecurityStatus]] = defaultdict(list)
 
         for device in devices:
             path = device.full_path or "Unknown"
@@ -286,9 +285,9 @@ class SecurityGrouper:
 
     def compare_paths(
         self,
-        paths: List[str],
-        devices: Optional[List[DeviceSecurityStatus]] = None,
-    ) -> Tuple[List[PathComparison], float, List[str]]:
+        paths: list[str],
+        devices: list[DeviceSecurityStatus] | None = None,
+    ) -> tuple[list[PathComparison], float, list[str]]:
         """
         Compare security posture across multiple paths.
 
@@ -348,9 +347,9 @@ class SecurityGrouper:
 
     def _generate_comparison_insights(
         self,
-        comparisons: List[PathComparison],
+        comparisons: list[PathComparison],
         fleet_avg: float,
-    ) -> List[str]:
+    ) -> list[str]:
         """Generate human-readable insights from path comparison."""
         insights = []
 
@@ -391,10 +390,10 @@ class SecurityGrouper:
 
     def find_temporal_correlations(
         self,
-        devices: Optional[List[DeviceSecurityStatus]] = None,
+        devices: list[DeviceSecurityStatus] | None = None,
         window_hours: int = 72,
         min_cluster_size: int = 3,
-    ) -> List[TemporalCluster]:
+    ) -> list[TemporalCluster]:
         """
         Find devices that developed security issues around the same time.
 
@@ -462,7 +461,7 @@ class SecurityGrouper:
                 common = [v for v, c in violation_counts.items() if c >= len(cluster_devices) // 2]
 
                 # Get affected paths
-                paths = list(set(d.full_path for d in cluster_devices if d.full_path))
+                paths = list({d.full_path for d in cluster_devices if d.full_path})
 
                 # Generate insight
                 insight = self._generate_temporal_insight(cluster_devices, common, paths)
@@ -483,9 +482,9 @@ class SecurityGrouper:
 
     def _generate_temporal_insight(
         self,
-        devices: List[DeviceSecurityStatus],
-        violations: List[str],
-        paths: List[str],
+        devices: list[DeviceSecurityStatus],
+        violations: list[str],
+        paths: list[str],
     ) -> str:
         """Generate insight about temporal correlation."""
         if len(paths) == 1:
@@ -507,7 +506,7 @@ def compute_security_score(
     usb_debugging: bool = False,
     developer_mode: bool = False,
     patch_age_days: int = 0,
-) -> Tuple[float, str, List[str]]:
+) -> tuple[float, str, list[str]]:
     """
     Compute security score, risk level, and violations for a device.
 

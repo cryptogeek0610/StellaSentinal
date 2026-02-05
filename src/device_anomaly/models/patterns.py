@@ -1,18 +1,15 @@
 from __future__ import annotations
 
 import json
-from typing import List, Optional
 
 import pandas as pd
 
-from device_anomaly.llm.client import get_default_llm_client
+from device_anomaly.config.feature_config import FeatureConfig
 from device_anomaly.llm.prompt_utils import (
-    get_health_status,
     NO_THINKING_INSTRUCTION,
+    get_health_status,
 )
-from device_anomaly.config.feature_config import (
-    FeatureConfig
-)
+
 
 def _build_device_pattern_payload(
     device_id: int,
@@ -180,7 +177,7 @@ def build_device_pattern_results(
     model_version: str,
     period_start,
     period_end,
-    device_ids: Optional[List[int]] = None,
+    device_ids: list[int] | None = None,
 ) -> pd.DataFrame:
     if df_scored.empty or events_df.empty:
         return pd.DataFrame()

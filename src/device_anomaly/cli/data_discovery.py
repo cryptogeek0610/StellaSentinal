@@ -14,15 +14,14 @@ from pathlib import Path
 
 from device_anomaly.config.logging_config import setup_logging
 from device_anomaly.data_access.data_profiler import (
+    DW_TELEMETRY_TABLES,
+    analyze_temporal_patterns,
+    generate_profile_report,
+    get_available_metrics,
     profile_dw_tables,
     profile_mc_tables,
-    generate_profile_report,
-    analyze_temporal_patterns,
-    get_available_metrics,
-    DW_TELEMETRY_TABLES,
 )
 from device_anomaly.data_access.unified_loader import load_unified_device_dataset
-
 
 logger = logging.getLogger(__name__)
 
@@ -221,7 +220,7 @@ def main() -> None:
     logger.info("Starting data discovery...")
     logger.info(f"Date range: {args.start_date} to {args.end_date}")
 
-    results = run_data_discovery(
+    run_data_discovery(
         start_date=args.start_date,
         end_date=args.end_date,
         output_dir=args.output_dir,

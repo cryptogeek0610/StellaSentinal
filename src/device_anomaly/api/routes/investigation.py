@@ -6,8 +6,7 @@ import json
 import logging
 import re
 import uuid
-from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -26,7 +25,6 @@ from device_anomaly.api.models import (
     HistoricalTimelineResponse,
     InvestigationPanelResponse,
     LearnFromFixRequest,
-    RemediationExecuteRequest,
     RemediationOutcomeRequest,
     RemediationSuggestion,
     RootCauseHypothesis,
@@ -42,10 +40,10 @@ from device_anomaly.database.schema import (
 )
 from device_anomaly.llm.client import get_default_llm_client, strip_thinking_tags
 from device_anomaly.llm.prompt_utils import (
-    get_severity_word,
-    get_severity_emoji,
-    get_common_root_causes,
     NO_THINKING_INSTRUCTION,
+    get_common_root_causes,
+    get_severity_emoji,
+    get_severity_word,
 )
 
 logger = logging.getLogger(__name__)
@@ -182,7 +180,7 @@ def _calculate_baseline_stats(db: Session, tenant_id: str, device_id: int, days:
         "connection_time": {"mean": 2.0, "std": 1.5, "min": 0.5, "max": 10.0, "count": 0},
     }
 
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff = datetime.now(UTC) - timedelta(days=days)
 
     # Get historical normal readings for this device
     results = (
@@ -223,7 +221,7 @@ def _calculate_baseline_stats(db: Session, tenant_id: str, device_id: int, days:
     return baseline_stats
 
 
-def _build_feature_contributions(anomaly: AnomalyResult, baseline_stats: dict) -> List[FeatureContribution]:
+def _build_feature_contributions(anomaly: AnomalyResult, baseline_stats: dict) -> list[FeatureContribution]:
     """Build feature contribution breakdown for an anomaly."""
     contributions = []
 
@@ -301,7 +299,7 @@ def _build_feature_contributions(anomaly: AnomalyResult, baseline_stats: dict) -
     return contributions
 
 
-def _build_explanation(anomaly: AnomalyResult, contributions: List[FeatureContribution]) -> AnomalyExplanation:
+def _build_explanation(anomaly: AnomalyResult, contributions: list[FeatureContribution]) -> AnomalyExplanation:
     """Build the anomaly explanation from contributions."""
     if not contributions:
         return AnomalyExplanation(
@@ -310,7 +308,7 @@ def _build_explanation(anomaly: AnomalyResult, contributions: List[FeatureContri
             feature_contributions=[],
             top_contributing_features=[],
             explanation_method="z_score",
-            explanation_generated_at=datetime.now(timezone.utc),
+            explanation_generated_at=datetime.now(UTC),
         )
 
     # Filter to contributions that have actual values
@@ -360,11 +358,11 @@ def _build_explanation(anomaly: AnomalyResult, contributions: List[FeatureContri
         feature_contributions=contributions,
         top_contributing_features=[c.feature_name for c in contributions_with_data[:5]] if contributions_with_data else [],
         explanation_method="z_score",
-        explanation_generated_at=datetime.now(timezone.utc),
+        explanation_generated_at=datetime.now(UTC),
     )
 
 
-def _build_baseline_comparison(anomaly: AnomalyResult, baseline_stats: dict) -> Optional[BaselineComparison]:
+def _build_baseline_comparison(anomaly: AnomalyResult, baseline_stats: dict) -> BaselineComparison | None:
     """Build baseline comparison data."""
     if not baseline_stats:
         return None
@@ -427,14 +425,14 @@ def _build_baseline_comparison(anomaly: AnomalyResult, baseline_stats: dict) -> 
             baseline_period_days=30,
             comparison_window_hours=24,
             statistical_method="z_score",
-            baseline_calculated_at=datetime.now(timezone.utc),
+            baseline_calculated_at=datetime.now(UTC),
         ),
         metrics=metrics,
         overall_deviation_score=round(total_deviation / len(metrics_with_values), 2) if metrics_with_values else 0,
     )
 
 
-def _generate_evidence_events(anomaly: AnomalyResult) -> List[EvidenceEvent]:
+def _generate_evidence_events(anomaly: AnomalyResult) -> list[EvidenceEvent]:
     """Generate synthetic evidence events based on anomaly data."""
     events = []
     timestamp = anomaly.timestamp
@@ -510,7 +508,7 @@ def _generate_evidence_events(anomaly: AnomalyResult) -> List[EvidenceEvent]:
     return events
 
 
-def _generate_remediation_suggestions(anomaly: AnomalyResult, contributions: List[FeatureContribution]) -> List[RemediationSuggestion]:
+def _generate_remediation_suggestions(anomaly: AnomalyResult, contributions: list[FeatureContribution]) -> list[RemediationSuggestion]:
     """Generate remediation suggestions based on anomaly characteristics."""
     suggestions = []
     priority = 1
@@ -603,7 +601,7 @@ def _generate_remediation_suggestions(anomaly: AnomalyResult, contributions: Lis
     return suggestions
 
 
-def _find_similar_cases(db: Session, tenant_id: str, anomaly: AnomalyResult, limit: int = 5) -> List[SimilarCase]:
+def _find_similar_cases(db: Session, tenant_id: str, anomaly: AnomalyResult, limit: int = 5) -> list[SimilarCase]:
     """Find similar historical anomaly cases."""
     # Find resolved anomalies with similar characteristics, joined with device metadata
     similar = (
@@ -809,7 +807,7 @@ def get_historical_timeline(
         raise HTTPException(status_code=400, detail=f"Invalid metric. Valid options: {valid_metrics}")
 
     # Get historical data
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff = datetime.now(UTC) - timedelta(days=days)
     results = (
         db.query(AnomalyResult)
         .filter(AnomalyResult.tenant_id == tenant_id)
@@ -1048,7 +1046,7 @@ Top Contributing Factors (metrics most different from normal):
 
     analysis = AIAnalysisResponse(
         analysis_id=analysis_id,
-        generated_at=datetime.now(timezone.utc),
+        generated_at=datetime.now(UTC),
         model_used=model_used,
         primary_hypothesis=primary_hypothesis,
         alternative_hypotheses=[
@@ -1086,7 +1084,7 @@ Top Contributing Factors (metrics most different from normal):
         if existing_cache:
             existing_cache.ai_analysis_json = json.dumps(analysis.model_dump(), default=str)
             existing_cache.ai_model_used = model_used
-            existing_cache.updated_at = datetime.now(timezone.utc)
+            existing_cache.updated_at = datetime.now(UTC)
         else:
             explanation = _build_explanation(anomaly, contributions)
             cache_entry = AnomalyExplanationCache(
@@ -1133,14 +1131,14 @@ def submit_ai_feedback(
     cached.feedback_rating = request.rating
     cached.feedback_text = request.feedback_text
     cached.actual_root_cause = request.actual_root_cause
-    cached.updated_at = datetime.now(timezone.utc)
+    cached.updated_at = datetime.now(UTC)
 
     db.commit()
 
     return {"success": True, "message": "Feedback recorded"}
 
 
-@router.get("/{anomaly_id}/similar-cases", response_model=List[SimilarCase])
+@router.get("/{anomaly_id}/similar-cases", response_model=list[SimilarCase])
 def get_similar_cases(
     anomaly_id: int,
     limit: int = Query(10, ge=1, le=50),
@@ -1162,7 +1160,7 @@ def get_similar_cases(
     return _find_similar_cases(db, tenant_id, anomaly, limit=limit)
 
 
-@router.get("/{anomaly_id}/remediations", response_model=List[RemediationSuggestion])
+@router.get("/{anomaly_id}/remediations", response_model=list[RemediationSuggestion])
 def get_remediations(
     anomaly_id: int,
     db: Session = Depends(get_db),
@@ -1216,7 +1214,7 @@ def record_remediation_outcome(
         remediation_source="user_applied",
         applied_by=user.user_id if user else "unknown",
         outcome=request.outcome,
-        outcome_recorded_at=datetime.now(timezone.utc),
+        outcome_recorded_at=datetime.now(UTC),
         outcome_notes=request.notes,
         anomaly_context_json=json.dumps({
             "anomaly_score": anomaly.anomaly_score,
@@ -1279,7 +1277,7 @@ def learn_from_fix(
             cases.append(anomaly_id)
             existing.learned_from_cases_json = json.dumps(cases[-20:])  # Keep last 20
 
-        existing.updated_at = datetime.now(timezone.utc)
+        existing.updated_at = datetime.now(UTC)
         db.commit()
 
         return {

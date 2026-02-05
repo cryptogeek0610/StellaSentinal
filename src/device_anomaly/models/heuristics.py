@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from typing import Callable, Iterable, List, Optional
 
 import pandas as pd
 
@@ -26,8 +26,8 @@ def _op_map() -> dict[str, Callable[[pd.Series, float], pd.Series]]:
     }
 
 
-def build_rules_from_dicts(configs: Iterable[dict]) -> List[HeuristicRule]:
-    rules: List[HeuristicRule] = []
+def build_rules_from_dicts(configs: Iterable[dict]) -> list[HeuristicRule]:
+    rules: list[HeuristicRule] = []
     for cfg in configs:
         op_str = cfg.get("op", ">=")
         op = _op_map().get(op_str)

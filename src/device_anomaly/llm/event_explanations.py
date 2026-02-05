@@ -9,12 +9,11 @@ from sqlalchemy.engine import Engine
 
 from device_anomaly.llm.client import get_default_llm_client, strip_thinking_tags
 from device_anomaly.llm.prompt_utils import (
-    get_severity_word,
-    get_severity_emoji,
-    get_duration_interpretation,
     NO_THINKING_INSTRUCTION,
+    get_duration_interpretation,
+    get_severity_emoji,
+    get_severity_word,
 )
-from device_anomaly.config.feature_config import FeatureConfig
 
 
 def build_event_llm_payload(row: pd.Series) -> dict[str, Any]:

@@ -1,44 +1,48 @@
 from __future__ import annotations
 
 import argparse
-import logging
 import json
+import logging
 from pathlib import Path
 
 import pandas as pd
 
 from device_anomaly import __version__
-from device_anomaly.config.logging_config import setup_logging
-from device_anomaly.config.experiment_config import DWExperimentConfig
-from device_anomaly.config.model_config import make_model_version
 from device_anomaly.config.config_loader import load_dw_config
-
-from device_anomaly.data_access.unified_loader import load_unified_device_dataset
+from device_anomaly.config.experiment_config import DWExperimentConfig
+from device_anomaly.config.logging_config import setup_logging
+from device_anomaly.config.model_config import make_model_version
 from device_anomaly.data_access.persistence import (
     build_anomaly_results_df,
-    save_anomaly_results,
     save_anomaly_events,
+    save_anomaly_results,
     save_device_patterns,
 )
+from device_anomaly.data_access.unified_loader import load_unified_device_dataset
 from device_anomaly.features.device_features import DeviceFeatureBuilder
+from device_anomaly.models.actionable import build_actionable_outputs
 from device_anomaly.models.anomaly_detector import AnomalyDetectorConfig
-from device_anomaly.models.hybrid import HybridAnomalyDetector, HybridAnomalyDetectorConfig
-from device_anomaly.models.calibration import IsoScoreCalibrator, IsoScoreCalibratorConfig
-from device_anomaly.models.drift_monitor import compute_feature_stats, load_stats, save_stats, compare_stats
 from device_anomaly.models.baseline import (
     BaselineLevel,
-    compute_baselines,
     apply_baselines,
+    compute_baselines,
     save_baselines,
     suggest_baseline_adjustments,
+)
+from device_anomaly.models.calibration import IsoScoreCalibrator, IsoScoreCalibratorConfig
+from device_anomaly.models.drift_monitor import (
+    compare_stats,
+    compute_feature_stats,
+    load_stats,
+    save_stats,
 )
 from device_anomaly.models.events import (
     build_event_results,
     select_top_anomalous_devices,
 )
+from device_anomaly.models.heuristics import apply_heuristics, build_rules_from_dicts
+from device_anomaly.models.hybrid import HybridAnomalyDetector, HybridAnomalyDetectorConfig
 from device_anomaly.models.patterns import build_device_pattern_results
-from device_anomaly.models.actionable import build_actionable_outputs
-from device_anomaly.models.heuristics import build_rules_from_dicts, apply_heuristics
 from device_anomaly.pipeline import (
     PipelineStage,
     PipelineTracker,
@@ -380,10 +384,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    if args.config:
-        cfg = load_dw_config(args.config)
-    else:
-        cfg = DWExperimentConfig()
+    cfg = load_dw_config(args.config) if args.config else DWExperimentConfig()
 
     run_dw_experiment(config=cfg)
 

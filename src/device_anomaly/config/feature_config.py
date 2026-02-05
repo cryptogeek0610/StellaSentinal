@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import ClassVar, Dict, List, Set
+from dataclasses import dataclass
+from typing import ClassVar
 
 
 @dataclass
@@ -25,7 +25,7 @@ class FeatureConfig:
     # =========================================================================
 
     # --- Battery Statistics (cs_BatteryStat) ---
-    battery_features: ClassVar[List[str]] = [
+    battery_features: ClassVar[list[str]] = [
         # Core battery metrics
         "TotalBatteryLevelDrop",
         "TotalDischargeTime_Sec",
@@ -71,7 +71,7 @@ class FeatureConfig:
     ]
 
     # --- App Usage (cs_AppUsage) ---
-    app_usage_features: ClassVar[List[str]] = [
+    app_usage_features: ClassVar[list[str]] = [
         # Core app metrics
         "AppVisitCount",
         "AppForegroundTime",
@@ -103,7 +103,7 @@ class FeatureConfig:
     ]
 
     # --- Web Usage (cs_AppUsage or separate) ---
-    web_usage_features: ClassVar[List[str]] = [
+    web_usage_features: ClassVar[list[str]] = [
         "WebVisitCount",
         "WebForegroundTime",
         "WebErrorCount",
@@ -116,7 +116,7 @@ class FeatureConfig:
     ]
 
     # --- Data Usage (cs_DataUsage) ---
-    data_usage_features: ClassVar[List[str]] = [
+    data_usage_features: ClassVar[list[str]] = [
         # Core data metrics
         "Download",
         "Upload",
@@ -145,7 +145,7 @@ class FeatureConfig:
     ]
 
     # --- Battery App Drain (cs_BatteryAppDrain) ---
-    battery_drain_features: ClassVar[List[str]] = [
+    battery_drain_features: ClassVar[list[str]] = [
         "TotalBatteryAppDrain",
         "TopAppBatteryDrain",
         "SystemAppBatteryDrain",
@@ -157,7 +157,7 @@ class FeatureConfig:
     ]
 
     # --- RF/Signal Heatmap (cs_Heatmap) ---
-    rf_signal_features: ClassVar[List[str]] = [
+    rf_signal_features: ClassVar[list[str]] = [
         # Signal strength
         "AvgSignalStrength",
         "MinSignalStrength",
@@ -200,7 +200,7 @@ class FeatureConfig:
     # =========================================================================
 
     # --- Device Identity & Status ---
-    mc_device_features: ClassVar[List[str]] = [
+    mc_device_features: ClassVar[list[str]] = [
         # Identity
         "DeviceId",
         "DevId",
@@ -227,7 +227,7 @@ class FeatureConfig:
     ]
 
     # --- Hardware & Platform ---
-    mc_hardware_features: ClassVar[List[str]] = [
+    mc_hardware_features: ClassVar[list[str]] = [
         "Manufacturer",
         "Model",
         "OSVersion",
@@ -238,7 +238,7 @@ class FeatureConfig:
     ]
 
     # --- Memory & Storage ---
-    mc_memory_features: ClassVar[List[str]] = [
+    mc_memory_features: ClassVar[list[str]] = [
         "TotalRAM",
         "AvailableRAM",
         "TotalStorage",
@@ -250,14 +250,14 @@ class FeatureConfig:
     ]
 
     # --- Battery Status ---
-    mc_battery_features: ClassVar[List[str]] = [
+    mc_battery_features: ClassVar[list[str]] = [
         "BatteryStatus",
         "BackupBatteryStatus",
         "IsCharging",
     ]
 
     # --- Security & Compliance ---
-    mc_security_features: ClassVar[List[str]] = [
+    mc_security_features: ClassVar[list[str]] = [
         "HasPasscode",
         "IsEncrypted",
         "SecurityStatus",
@@ -267,7 +267,7 @@ class FeatureConfig:
     ]
 
     # --- Network ---
-    mc_network_features: ClassVar[List[str]] = [
+    mc_network_features: ClassVar[list[str]] = [
         "HostName",
         "IPV6",
         "MAC",
@@ -280,7 +280,7 @@ class FeatureConfig:
     ]
 
     # --- iOS Specific ---
-    mc_ios_features: ClassVar[List[str]] = [
+    mc_ios_features: ClassVar[list[str]] = [
         "IsSupervised",
         "IsLostModeEnabled",
         "IsActivationLockEnabled",
@@ -290,7 +290,7 @@ class FeatureConfig:
     ]
 
     # --- Windows Specific ---
-    mc_windows_features: ClassVar[List[str]] = [
+    mc_windows_features: ClassVar[list[str]] = [
         "WindowsIsLocked",
         "WifiSubnet",
         "AntivirusLastQuickScanTime",
@@ -300,7 +300,7 @@ class FeatureConfig:
     ]
 
     # --- Mac Specific ---
-    mc_mac_features: ClassVar[List[str]] = [
+    mc_mac_features: ClassVar[list[str]] = [
         "IsAppleSilicon",
         "IsActivationLockSupported",
         "IsContentCachingEnabled",
@@ -310,12 +310,12 @@ class FeatureConfig:
     ]
 
     # --- Linux Specific ---
-    mc_linux_features: ClassVar[List[str]] = [
+    mc_linux_features: ClassVar[list[str]] = [
         "LastOSUpdateScanTime",
     ]
 
     # --- Zebra Android Specific ---
-    mc_zebra_features: ClassVar[List[str]] = [
+    mc_zebra_features: ClassVar[list[str]] = [
         "MXVersion",
         "UserAccountsCount",
     ]
@@ -324,7 +324,7 @@ class FeatureConfig:
     # CONNECTIVITY & DISCONNECT FEATURES
     # =========================================================================
 
-    connectivity_features: ClassVar[List[str]] = [
+    connectivity_features: ClassVar[list[str]] = [
         "DisconnectCount",
         "DisconnectFlag",
         "DisconnectWithinWindow",
@@ -341,7 +341,7 @@ class FeatureConfig:
     # LEGACY GENERIC FEATURES (backward compatibility)
     # =========================================================================
 
-    genericFeatures: ClassVar[List[str]] = [
+    genericFeatures: ClassVar[list[str]] = [
         "TotalBatteryLevelDrop",
         "TotalDischargeTime_Sec",
         "TotalFreeStorageKb",
@@ -376,7 +376,7 @@ class FeatureConfig:
     # FEATURE DOMAIN MAPPING
     # =========================================================================
 
-    feature_domains: ClassVar[Dict[str, str]] = {
+    feature_domains: ClassVar[dict[str, str]] = {
         # Battery domain
         "TotalBatteryLevelDrop": "battery",
         "TotalDischargeTime_Sec": "battery",
@@ -535,7 +535,7 @@ class FeatureConfig:
     # DOMAIN WEIGHTS FOR ML
     # =========================================================================
 
-    domain_weights: ClassVar[Dict[str, float]] = {
+    domain_weights: ClassVar[dict[str, float]] = {
         "battery": 0.6,       # Lower to prevent domination
         "rf": 1.1,            # Higher for connectivity issues
         "throughput": 1.0,
@@ -556,13 +556,13 @@ class FeatureConfig:
         """Definition of a computed feature."""
         name: str
         formula: str  # Description of calculation
-        dependencies: List[str]
+        dependencies: list[str]
         domain: str
 
-    derived_features: ClassVar[List["FeatureConfig.DerivedFeature"]] = []
+    derived_features: ClassVar[list[FeatureConfig.DerivedFeature]] = []
 
     # Battery efficiency features
-    derived_feature_definitions: ClassVar[Dict[str, Dict]] = {
+    derived_feature_definitions: ClassVar[dict[str, dict]] = {
         # Battery efficiency
         "BatteryDrainPerHour": {
             "formula": "TotalBatteryLevelDrop / (TotalDischargeTime_Sec / 3600 + 1)",
@@ -730,9 +730,9 @@ class FeatureConfig:
     # ROLLING WINDOW FEATURE DEFINITIONS
     # =========================================================================
 
-    rolling_windows: ClassVar[List[int]] = [7, 14, 30]  # Days
+    rolling_windows: ClassVar[list[int]] = [7, 14, 30]  # Days
 
-    rolling_aggregations: ClassVar[List[str]] = [
+    rolling_aggregations: ClassVar[list[str]] = [
         "mean",
         "std",
         "min",
@@ -741,7 +741,7 @@ class FeatureConfig:
     ]
 
     # Features to compute rolling statistics for
-    rolling_feature_candidates: ClassVar[List[str]] = [
+    rolling_feature_candidates: ClassVar[list[str]] = [
         "TotalBatteryLevelDrop",
         "TotalDischargeTime_Sec",
         "AppForegroundTime",
@@ -763,7 +763,7 @@ class FeatureConfig:
     # TEMPORAL FEATURES
     # =========================================================================
 
-    temporal_features: ClassVar[List[str]] = [
+    temporal_features: ClassVar[list[str]] = [
         "hour_of_day",
         "hour_of_day_norm",
         "day_of_week",
@@ -780,7 +780,7 @@ class FeatureConfig:
     # COHORT GROUPING COLUMNS
     # =========================================================================
 
-    cohort_columns: ClassVar[List[str]] = [
+    cohort_columns: ClassVar[list[str]] = [
         "ManufacturerId",
         "ModelId",
         "OsVersionId",
@@ -792,7 +792,7 @@ class FeatureConfig:
     # =========================================================================
 
     # Columns to never use as ML features
-    excluded_columns: ClassVar[Set[str]] = {
+    excluded_columns: ClassVar[set[str]] = {
         "DeviceId",
         "DevId",
         "DevName",
@@ -817,7 +817,7 @@ class FeatureConfig:
     # CEO REQUIREMENTS: SHIFT-AWARE FEATURES (Carl's Requirements)
     # =========================================================================
 
-    shift_aware_features: ClassVar[Dict[str, Dict]] = {
+    shift_aware_features: ClassVar[dict[str, dict]] = {
         # Battery shift features
         "BatteryAtShiftStart": {
             "formula": "BatteryLevel at shift start time",
@@ -968,7 +968,7 @@ class FeatureConfig:
     # CEO REQUIREMENTS: HEURISTIC RULES (Shift-Aware)
     # =========================================================================
 
-    heuristic_rules: ClassVar[List[Dict]] = [
+    heuristic_rules: ClassVar[list[dict]] = [
         # Battery shift failures (Carl: "Batteries not lasting a shift")
         {
             "name": "battery_shift_failure_risk",
@@ -1147,7 +1147,7 @@ class FeatureConfig:
     # =========================================================================
 
     @classmethod
-    def get_all_raw_features(cls) -> List[str]:
+    def get_all_raw_features(cls) -> list[str]:
         """Get all raw feature names from all categories."""
         features = []
         features.extend(cls.battery_features)
@@ -1190,33 +1190,33 @@ class FeatureConfig:
         return cls.domain_weights.get(domain, 1.0)
 
     @classmethod
-    def get_derived_feature_names(cls) -> List[str]:
+    def get_derived_feature_names(cls) -> list[str]:
         """Get all derived feature names."""
         return list(cls.derived_feature_definitions.keys())
 
     @classmethod
-    def get_features_for_domain(cls, domain: str) -> List[str]:
+    def get_features_for_domain(cls, domain: str) -> list[str]:
         """Get all features belonging to a specific domain."""
         return [f for f, d in cls.feature_domains.items() if d == domain]
 
     @classmethod
-    def get_shift_aware_features(cls) -> List[str]:
+    def get_shift_aware_features(cls) -> list[str]:
         """Get all shift-aware feature names."""
         return list(cls.shift_aware_features.keys())
 
     @classmethod
-    def get_heuristic_rules(cls) -> List[Dict]:
+    def get_heuristic_rules(cls) -> list[dict]:
         """Get all heuristic rule configurations."""
         return cls.heuristic_rules
 
     @classmethod
-    def get_heuristic_rules_for_domain(cls, domain: str) -> List[Dict]:
+    def get_heuristic_rules_for_domain(cls, domain: str) -> list[dict]:
         """Get heuristic rules for a specific domain."""
         domain_columns = cls.get_features_for_domain(domain)
         return [r for r in cls.heuristic_rules if r.get("column") in domain_columns]
 
     @classmethod
-    def get_all_insight_features(cls) -> List[str]:
+    def get_all_insight_features(cls) -> list[str]:
         """Get all features relevant for CEO insight requirements."""
         features = []
         features.extend(cls.get_derived_feature_names())

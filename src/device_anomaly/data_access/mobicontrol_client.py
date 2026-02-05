@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import datetime
+from typing import Any
 
 import requests
 
@@ -22,7 +22,7 @@ from device_anomaly.config.settings import get_settings
 class MobiControlAPIError(Exception):
     """Exception raised for MobiControl API errors."""
 
-    def __init__(self, message: str, status_code: Optional[int] = None, response: Optional[Dict] = None):
+    def __init__(self, message: str, status_code: int | None = None, response: dict | None = None):
         super().__init__(message)
         self.status_code = status_code
         self.response = response
@@ -33,12 +33,12 @@ class MobiControlClient:
 
     def __init__(
         self,
-        server_url: Optional[str] = None,
-        client_id: Optional[str] = None,
-        client_secret: Optional[str] = None,
-        username: Optional[str] = None,
-        password: Optional[str] = None,
-        tenant_id: Optional[str] = None,
+        server_url: str | None = None,
+        client_id: str | None = None,
+        client_secret: str | None = None,
+        username: str | None = None,
+        password: str | None = None,
+        tenant_id: str | None = None,
     ):
         """Initialize MobiControl API client.
 
@@ -72,8 +72,8 @@ class MobiControlClient:
         self.session.mount("https://", adapter)
 
         # Authentication
-        self.access_token: Optional[str] = None
-        self.token_expiry: Optional[float] = None
+        self.access_token: str | None = None
+        self.token_expiry: float | None = None
 
         # Set up authentication
         self._authenticate()
@@ -174,18 +174,17 @@ class MobiControlClient:
 
     def _ensure_authenticated(self) -> None:
         """Ensure authentication token is valid, refresh if needed."""
-        if self.access_token and self.token_expiry:
-            if time.time() >= self.token_expiry:
-                self._authenticate_oauth()
+        if self.access_token and self.token_expiry and time.time() >= self.token_expiry:
+            self._authenticate_oauth()
 
     def _request(
         self,
         method: str,
         endpoint: str,
-        params: Optional[Dict] = None,
-        json_data: Optional[Dict] = None,
+        params: dict | None = None,
+        json_data: dict | None = None,
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Make HTTP request to MobiControl API.
 
         Args:
@@ -244,9 +243,9 @@ class MobiControlClient:
         self,
         page: int = 1,
         page_size: int = 100,
-        filter_expr: Optional[str] = None,
-        site_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        filter_expr: str | None = None,
+        site_id: str | None = None,
+    ) -> dict[str, Any]:
         """Get paginated list of devices.
 
         Args:
@@ -275,7 +274,7 @@ class MobiControlClient:
 
         return self._request("GET", endpoint, params=params)
 
-    def get_device(self, device_id: str) -> Dict[str, Any]:
+    def get_device(self, device_id: str) -> dict[str, Any]:
         """Get single device details.
 
         Args:
@@ -287,7 +286,7 @@ class MobiControlClient:
         endpoint = f"/MobiControl/api/devices/{device_id}"
         return self._request("GET", endpoint)
 
-    def get_device_applications(self, device_id: str) -> List[Dict[str, Any]]:
+    def get_device_applications(self, device_id: str) -> list[dict[str, Any]]:
         """Get installed applications for a device.
 
         Args:
@@ -305,7 +304,7 @@ class MobiControlClient:
                 return []  # Endpoint not available
             raise
 
-    def test_connection(self) -> Dict[str, Any]:
+    def test_connection(self) -> dict[str, Any]:
         """Test API connection and return server information.
 
         Returns:
@@ -402,7 +401,7 @@ class MobiControlClient:
     # Device Control Actions (SOTI MobiControl Remote Actions)
     # =========================================================================
 
-    def lock_device(self, device_id: str) -> Dict[str, Any]:
+    def lock_device(self, device_id: str) -> dict[str, Any]:
         """Lock a device remotely.
 
         Args:
@@ -414,7 +413,7 @@ class MobiControlClient:
         endpoint = f"/MobiControl/api/devices/{device_id}/actions/lock"
         return self._request("POST", endpoint)
 
-    def restart_device(self, device_id: str) -> Dict[str, Any]:
+    def restart_device(self, device_id: str) -> dict[str, Any]:
         """Restart a device remotely.
 
         Args:
@@ -426,7 +425,7 @@ class MobiControlClient:
         endpoint = f"/MobiControl/api/devices/{device_id}/actions/restart"
         return self._request("POST", endpoint)
 
-    def wipe_device(self, device_id: str, factory_reset: bool = False) -> Dict[str, Any]:
+    def wipe_device(self, device_id: str, factory_reset: bool = False) -> dict[str, Any]:
         """Wipe a device remotely (enterprise or factory reset).
 
         Args:
@@ -444,7 +443,7 @@ class MobiControlClient:
         device_id: str,
         message: str,
         title: str = "Message from Admin",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Send a message to a device.
 
         Args:
@@ -462,7 +461,7 @@ class MobiControlClient:
             json_data={"title": title, "message": message},
         )
 
-    def locate_device(self, device_id: str) -> Dict[str, Any]:
+    def locate_device(self, device_id: str) -> dict[str, Any]:
         """Request current location of a device.
 
         Args:
@@ -474,7 +473,7 @@ class MobiControlClient:
         endpoint = f"/MobiControl/api/devices/{device_id}/actions/locate"
         return self._request("POST", endpoint)
 
-    def sync_device(self, device_id: str) -> Dict[str, Any]:
+    def sync_device(self, device_id: str) -> dict[str, Any]:
         """Force sync/check-in for a device.
 
         Args:
@@ -486,7 +485,7 @@ class MobiControlClient:
         endpoint = f"/MobiControl/api/devices/{device_id}/actions/checkin"
         return self._request("POST", endpoint)
 
-    def clear_passcode(self, device_id: str) -> Dict[str, Any]:
+    def clear_passcode(self, device_id: str) -> dict[str, Any]:
         """Clear passcode on a device.
 
         Args:
@@ -498,7 +497,7 @@ class MobiControlClient:
         endpoint = f"/MobiControl/api/devices/{device_id}/actions/clearpasscode"
         return self._request("POST", endpoint)
 
-    def clear_app_data(self, device_id: str, package_name: str) -> Dict[str, Any]:
+    def clear_app_data(self, device_id: str, package_name: str) -> dict[str, Any]:
         """Clear data for a specific app on the device.
 
         Args:
@@ -514,9 +513,9 @@ class MobiControlClient:
     def get_device_location_history(
         self,
         device_id: str,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
-    ) -> List[Dict[str, Any]]:
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+    ) -> list[dict[str, Any]]:
         """Get location history for a device.
 
         Args:
@@ -546,7 +545,7 @@ class MobiControlClient:
     # Custom Attributes Management
     # =========================================================================
 
-    def get_custom_attributes(self, device_id: str) -> Dict[str, Any]:
+    def get_custom_attributes(self, device_id: str) -> dict[str, Any]:
         """Get custom attributes for a device.
 
         Args:
@@ -572,7 +571,7 @@ class MobiControlClient:
         device_id: str,
         attribute_name: str,
         attribute_value: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Set a single custom attribute on a device.
 
         Args:
@@ -593,8 +592,8 @@ class MobiControlClient:
     def set_custom_attributes(
         self,
         device_id: str,
-        attributes: Dict[str, str],
-    ) -> Dict[str, Any]:
+        attributes: dict[str, str],
+    ) -> dict[str, Any]:
         """Set multiple custom attributes on a device.
 
         Args:
@@ -611,12 +610,12 @@ class MobiControlClient:
     def set_battery_status_attributes(
         self,
         device_id: str,
-        battery_health_percent: Optional[float] = None,
-        battery_status: Optional[str] = None,
-        replacement_due: Optional[bool] = None,
-        replacement_urgency: Optional[str] = None,
-        estimated_replacement_date: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        battery_health_percent: float | None = None,
+        battery_status: str | None = None,
+        replacement_due: bool | None = None,
+        replacement_urgency: str | None = None,
+        estimated_replacement_date: str | None = None,
+    ) -> dict[str, Any]:
         """Set battery-related custom attributes on a device.
 
         This is a convenience method for updating battery status in MobiControl.
@@ -664,8 +663,8 @@ class MobiControlClient:
 
     def bulk_set_custom_attributes(
         self,
-        device_attributes: Dict[str, Dict[str, str]],
-    ) -> Dict[str, Any]:
+        device_attributes: dict[str, dict[str, str]],
+    ) -> dict[str, Any]:
         """Set custom attributes on multiple devices.
 
         Args:

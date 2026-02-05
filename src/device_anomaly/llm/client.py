@@ -1,18 +1,18 @@
 from __future__ import annotations
 
 import hashlib
+import logging
+import os
 import re
-import time
 import threading
+import time
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from typing import Any, Optional
+from dataclasses import dataclass
+from typing import Any
+
 from openai import AzureOpenAI, OpenAI
 
 from device_anomaly.config.settings import get_settings
-import logging
-import os
-
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ class LLMResponseCache:
         key_data = f"{model}|{temperature:.2f}|{prompt}"
         return hashlib.sha256(key_data.encode()).hexdigest()[:32]
 
-    def get(self, prompt: str, model: str, temperature: float = 0.2) -> Optional[str]:
+    def get(self, prompt: str, model: str, temperature: float = 0.2) -> str | None:
         """Get cached response if available and not expired."""
         key = self._hash_key(prompt, model, temperature)
 
@@ -227,10 +227,10 @@ class DummyLLMClient(BaseLLMClient):
 class OpenAICompatibleClient(BaseLLMClient):
     """
     Client for OpenAI-compatible APIs (LM Studio, vLLM, Ollama, etc.).
-    
+
     Works with local LLM services that implement the OpenAI API format.
     """
-    
+
     def __init__(
         self,
         base_url: str,
@@ -243,11 +243,11 @@ class OpenAICompatibleClient(BaseLLMClient):
             base_url=base_url,
             api_key=api_key or "not-needed",  # Local services often don't require real keys
         )
-    
+
     def generate(self, prompt: str, **kwargs: Any) -> str:
         temperature = kwargs.get("temperature", 0.2)
         max_tokens = kwargs.get("max_tokens", 600)
-        
+
         resp = self.client.chat.completions.create(
             model=self.model_name,
             messages=[
@@ -265,10 +265,10 @@ class OpenAICompatibleClient(BaseLLMClient):
             temperature=temperature,
             max_tokens=max_tokens,
         )
-        
+
         message = resp.choices[0].message
         content = getattr(message, "content", "")
-        
+
         if isinstance(content, list):
             content = "".join(
                 part.get("text", "") if isinstance(part, dict) else str(part)
@@ -388,7 +388,7 @@ class LocalLLMClient(BaseLLMClient):
         self.timeout_seconds = timeout_seconds
 
         # Lazy-init OpenAI client
-        self._client: Optional[OpenAI] = None
+        self._client: OpenAI | None = None
         self._available_models: list[str] = []
         self._last_health_check: float = 0
         self._is_healthy: bool = False
@@ -514,7 +514,7 @@ class LocalLLMClient(BaseLLMClient):
                 return cached
 
         # Try to generate with retries
-        last_error: Optional[Exception] = None
+        last_error: Exception | None = None
         for attempt in range(self.max_retries):
             try:
                 response = self._do_generate(prompt, model, temperature, max_tokens)
@@ -606,7 +606,7 @@ class LocalLLMClient(BaseLLMClient):
         try:
             from device_anomaly.insights.root_cause import RootCauseAnalyzer
 
-            analyzer = RootCauseAnalyzer()
+            RootCauseAnalyzer()
 
             # Try to extract context from the prompt
             prompt_lower = prompt.lower()
@@ -820,7 +820,7 @@ def get_default_llm_client() -> BaseLLMClient:
     llm_api_version = config["resolved_api_version"]
 
     logger.info("LLM resolved: base_url=%s model=%s api_key_set=%s api_version=%s", llm_base_url, llm_model, bool(llm_api_key), llm_api_version)
-    
+
     # Auto-fix localhost URLs when running in Docker
     if os.path.exists("/.dockerenv") and llm_base_url and "localhost" in llm_base_url:
         original_url = llm_base_url

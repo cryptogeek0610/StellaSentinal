@@ -14,8 +14,10 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, date, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import date, datetime, timedelta
+
+# Import for optional financial impact (avoid circular imports)
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 from sqlalchemy.orm import Session
@@ -23,17 +25,14 @@ from sqlalchemy.orm import Session
 from device_anomaly.database.schema import AggregatedInsight, DeviceFeature
 from device_anomaly.insights.app_power import AppPowerAnalyzer
 from device_anomaly.insights.battery_shift import BatteryShiftAnalyzer
-from device_anomaly.insights.categories import InsightCategory, InsightSeverity, EntityType
-from device_anomaly.insights.classifier import ClassifiedInsight, InsightClassifier
+from device_anomaly.insights.categories import EntityType, InsightCategory, InsightSeverity
+from device_anomaly.insights.classifier import InsightClassifier
 from device_anomaly.insights.comparisons import ComparisonEngine
 from device_anomaly.insights.device_abuse import DeviceAbuseAnalyzer
-from device_anomaly.insights.entities import EntityAggregator, LocationInsight
+from device_anomaly.insights.entities import EntityAggregator
 from device_anomaly.insights.location_mapper import LocationMapper
 from device_anomaly.insights.network_patterns import NetworkPatternAnalyzer
 from device_anomaly.insights.templates import get_template, render_headline, render_impact
-
-# Import for optional financial impact (avoid circular imports)
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from device_anomaly.costs.models import FinancialImpactSummary
@@ -57,7 +56,7 @@ class CustomerInsight:
     headline: str
     impact_statement: str
     comparison_context: str
-    recommended_actions: List[str]
+    recommended_actions: list[str]
 
     # Metadata
     entity_type: EntityType
@@ -68,24 +67,24 @@ class CustomerInsight:
     # Technical details (for drill-down)
     primary_metric: str
     primary_value: float
-    threshold_exceeded: Optional[float]
+    threshold_exceeded: float | None
     confidence_score: float
 
     # Trend
     trend_direction: str  # improving, stable, worsening
-    trend_change_percent: Optional[float]
+    trend_change_percent: float | None
 
     # Timestamps
     detected_at: datetime
     last_updated: datetime
 
     # For ticket creation
-    ticket_summary: Optional[str] = None
-    ticket_description: Optional[str] = None
+    ticket_summary: str | None = None
+    ticket_description: str | None = None
 
     # Financial impact (optional, populated by cost calculator)
-    financial_impact: Optional["FinancialImpactSummary"] = None
-    financial_impact_usd: Optional[float] = None  # Quick access to total impact
+    financial_impact: FinancialImpactSummary | None = None
+    financial_impact_usd: float | None = None  # Quick access to total impact
 
 
 @dataclass
@@ -103,31 +102,31 @@ class DailyInsightDigest:
     medium_count: int
 
     # Top priority insights
-    top_insights: List[CustomerInsight]
+    top_insights: list[CustomerInsight]
 
     # By domain
-    battery_insights: List[CustomerInsight]
-    network_insights: List[CustomerInsight]
-    device_insights: List[CustomerInsight]
-    app_insights: List[CustomerInsight]
-    location_insights: List[CustomerInsight]
+    battery_insights: list[CustomerInsight]
+    network_insights: list[CustomerInsight]
+    device_insights: list[CustomerInsight]
+    app_insights: list[CustomerInsight]
+    location_insights: list[CustomerInsight]
 
     # Trending issues (getting worse)
-    trending_issues: List[CustomerInsight]
+    trending_issues: list[CustomerInsight]
 
     # New issues (first seen today)
-    new_issues: List[CustomerInsight]
+    new_issues: list[CustomerInsight]
 
     # Executive summary
     executive_summary: str
 
     # All insights combined (required for save_insights_to_db)
-    all_insights: List[CustomerInsight] = field(default_factory=list)
+    all_insights: list[CustomerInsight] = field(default_factory=list)
 
     # Financial summary (if cost data available)
-    total_financial_impact_usd: Optional[float] = None
+    total_financial_impact_usd: float | None = None
     high_impact_count: int = 0
-    potential_savings_usd: Optional[float] = None
+    potential_savings_usd: float | None = None
 
 
 @dataclass
@@ -137,7 +136,7 @@ class TrendingInsight:
     insight: CustomerInsight
     trend_period_days: int
     change_percent: float
-    predicted_severity_change: Optional[str]  # e.g., "may become critical in 3 days"
+    predicted_severity_change: str | None  # e.g., "may become critical in 3 days"
 
 
 @dataclass
@@ -154,20 +153,20 @@ class LocationInsightReport:
     issue_rate: float
 
     # Shift readiness (if applicable)
-    shift_readiness: Optional[Dict[str, Any]]
+    shift_readiness: dict[str, Any] | None
 
     # All insights for this location
-    insights: List[CustomerInsight]
+    insights: list[CustomerInsight]
 
     # Top issues
-    top_issues: List[Tuple[InsightCategory, int]]
+    top_issues: list[tuple[InsightCategory, int]]
 
     # Comparison to other locations
     rank_among_locations: int
     better_than_percent: float
 
     # Recommendations
-    recommendations: List[str]
+    recommendations: list[str]
 
 
 class InsightGenerator:
@@ -225,7 +224,7 @@ class InsightGenerator:
         logger.info(f"Generating daily insights for {insight_date}")
 
         # Collect insights from all analyzers
-        all_insights: List[CustomerInsight] = []
+        all_insights: list[CustomerInsight] = []
 
         # Battery insights
         battery_insights = self._generate_battery_insights(insight_date, period_days)
@@ -281,7 +280,7 @@ class InsightGenerator:
             device_insights=device_insights[:5],
             app_insights=app_insights[:5],
             location_insights=location_insights[:5],
-            trending_issues=[i for i in trending[:5]],
+            trending_issues=list(trending[:5]),
             new_issues=new_issues[:5],
             executive_summary=executive_summary,
             all_insights=all_insights,
@@ -291,10 +290,10 @@ class InsightGenerator:
         self,
         device_id: int,
         anomaly_score: float,
-        features: Dict[str, float],
-        feature_contributions: Dict[str, float],
-        device_context: Optional[Dict[str, Any]] = None,
-    ) -> Optional[CustomerInsight]:
+        features: dict[str, float],
+        feature_contributions: dict[str, float],
+        device_context: dict[str, Any] | None = None,
+    ) -> CustomerInsight | None:
         """Generate a customer insight from a device anomaly.
 
         Args:
@@ -340,7 +339,7 @@ class InsightGenerator:
             "metric": primary_metric,
             "manufacturer": device_context.get("Manufacturer", "Unknown"),
             "model": device_context.get("Model", "Unknown"),
-            **{k: v for k, v in features.items()},
+            **dict(features.items()),
         }
 
         headline = render_headline(top_classification.category, template_context)
@@ -387,7 +386,7 @@ class InsightGenerator:
         location_name = location.location_name if location else location_id
 
         # Collect all insights for this location
-        insights: List[CustomerInsight] = []
+        insights: list[CustomerInsight] = []
 
         # Battery/shift insights
         shift_readiness = None
@@ -423,7 +422,7 @@ class InsightGenerator:
         insights.sort(key=lambda x: self._get_priority_score(x), reverse=True)
 
         # Count issues by category
-        category_counts: Dict[InsightCategory, int] = {}
+        category_counts: dict[InsightCategory, int] = {}
         for insight in insights:
             category_counts[insight.category] = category_counts.get(insight.category, 0) + 1
 
@@ -432,10 +431,10 @@ class InsightGenerator:
         # Get devices at location
         devices_df = self._get_location_devices(location_id, period_days)
         total_devices = len(devices_df["device_id"].unique()) if not devices_df.empty else 0
-        devices_with_issues = len(set(i.entity_id for i in insights))
+        devices_with_issues = len({i.entity_id for i in insights})
 
         # Location ranking
-        all_locations = self.location_mapper.get_all_locations()
+        self.location_mapper.get_all_locations()
         rank = 1  # Would calculate actual rank
 
         # Generate recommendations
@@ -462,7 +461,7 @@ class InsightGenerator:
         self,
         lookback_days: int = 14,
         limit: int = 10,
-    ) -> List[TrendingInsight]:
+    ) -> list[TrendingInsight]:
         """Get issues that are trending worse.
 
         Args:
@@ -487,7 +486,7 @@ class InsightGenerator:
             .all()
         )
 
-        trending: List[TrendingInsight] = []
+        trending: list[TrendingInsight] = []
 
         for record in historical:
             insight = self._aggregated_to_customer_insight(record)
@@ -508,7 +507,7 @@ class InsightGenerator:
 
     def save_insights_to_db(
         self,
-        insights: List[CustomerInsight],
+        insights: list[CustomerInsight],
     ) -> int:
         """Save generated insights to the database.
 
@@ -573,9 +572,9 @@ class InsightGenerator:
         self,
         insight_date: date,
         period_days: int,
-    ) -> List[CustomerInsight]:
+    ) -> list[CustomerInsight]:
         """Generate battery-related insights."""
-        insights: List[CustomerInsight] = []
+        insights: list[CustomerInsight] = []
 
         # Get all locations
         locations = self.location_mapper.get_all_locations()
@@ -593,7 +592,7 @@ class InsightGenerator:
                     category=InsightCategory.BATTERY_SHIFT_FAILURE,
                     severity=InsightSeverity.HIGH if report.devices_at_risk > 5 else InsightSeverity.MEDIUM,
                     headline=f"{report.devices_at_risk} devices at {location.location_name} won't last shift",
-                    impact_statement=f"At current drain rates, these devices will die before shift end",
+                    impact_statement="At current drain rates, these devices will die before shift end",
                     comparison_context=f"{report.readiness_percentage:.0f}% shift readiness",
                     recommended_actions=["Charge devices before shift", "Check drain rates"],
                     entity_type=EntityType.LOCATION,
@@ -640,9 +639,9 @@ class InsightGenerator:
 
         return insights
 
-    def _generate_network_insights(self, period_days: int) -> List[CustomerInsight]:
+    def _generate_network_insights(self, period_days: int) -> list[CustomerInsight]:
         """Generate network-related insights."""
-        insights: List[CustomerInsight] = []
+        insights: list[CustomerInsight] = []
 
         # WiFi roaming analysis
         wifi_report = self.network_analyzer.analyze_wifi_roaming(None, period_days)
@@ -698,9 +697,9 @@ class InsightGenerator:
 
         return insights
 
-    def _generate_device_insights(self, period_days: int) -> List[CustomerInsight]:
+    def _generate_device_insights(self, period_days: int) -> list[CustomerInsight]:
         """Generate device abuse insights."""
-        insights: List[CustomerInsight] = []
+        insights: list[CustomerInsight] = []
 
         # Drop analysis
         drop_report = self.abuse_analyzer.analyze_drops(period_days)
@@ -782,9 +781,9 @@ class InsightGenerator:
 
         return insights
 
-    def _generate_app_insights(self, period_days: int) -> List[CustomerInsight]:
+    def _generate_app_insights(self, period_days: int) -> list[CustomerInsight]:
         """Generate app-related insights."""
-        insights: List[CustomerInsight] = []
+        insights: list[CustomerInsight] = []
 
         # App crashes
         crash_report = self.app_analyzer.analyze_app_crashes(period_days)
@@ -843,9 +842,9 @@ class InsightGenerator:
     def _generate_location_aggregated_insights(
         self,
         period_days: int,
-    ) -> List[CustomerInsight]:
+    ) -> list[CustomerInsight]:
         """Generate location-level aggregated insights."""
-        insights: List[CustomerInsight] = []
+        insights: list[CustomerInsight] = []
 
         # Get all classified insights and aggregate by location
         # This would use the entity aggregator to roll up device insights
@@ -905,11 +904,11 @@ class InsightGenerator:
 
     def _generate_executive_summary(
         self,
-        all_insights: List[CustomerInsight],
-        critical: List[CustomerInsight],
-        high: List[CustomerInsight],
-        trending: List[CustomerInsight],
-        new_issues: List[CustomerInsight],
+        all_insights: list[CustomerInsight],
+        critical: list[CustomerInsight],
+        high: list[CustomerInsight],
+        trending: list[CustomerInsight],
+        new_issues: list[CustomerInsight],
     ) -> str:
         """Generate executive summary text."""
         lines = []
@@ -971,7 +970,7 @@ class InsightGenerator:
     def _aggregated_to_customer_insight(
         self,
         record: AggregatedInsight,
-    ) -> Optional[CustomerInsight]:
+    ) -> CustomerInsight | None:
         """Convert database record to CustomerInsight."""
         try:
             return CustomerInsight(
@@ -1084,10 +1083,10 @@ class InsightGenerator:
 
     def _generate_location_recommendations(
         self,
-        insights: List[CustomerInsight],
-        shift_readiness: Optional[Dict],
-        top_issues: List[Tuple[InsightCategory, int]],
-    ) -> List[str]:
+        insights: list[CustomerInsight],
+        shift_readiness: dict | None,
+        top_issues: list[tuple[InsightCategory, int]],
+    ) -> list[str]:
         """Generate recommendations for a location."""
         recs = []
 

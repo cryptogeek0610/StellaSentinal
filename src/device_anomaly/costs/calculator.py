@@ -10,9 +10,8 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
 
 from device_anomaly.costs.config import CostConfig, get_cost_config
 from device_anomaly.costs.models import (
@@ -20,7 +19,6 @@ from device_anomaly.costs.models import (
     CostCalculationResult,
     CostComponentType,
     CostContext,
-    DeviceCostContext,
     FinancialImpactSummary,
     ImpactLevel,
     InsightFinancialData,
@@ -37,7 +35,7 @@ class CostCalculator:
     are computed here and injected into prompts.
     """
 
-    def __init__(self, config: Optional[CostConfig] = None):
+    def __init__(self, config: CostConfig | None = None):
         """Initialize calculator with configuration.
 
         Args:
@@ -49,7 +47,7 @@ class CostCalculator:
         self,
         device_count: int,
         days_unused: int,
-        device_value_usd: Optional[Decimal] = None,
+        device_value_usd: Decimal | None = None,
     ) -> CostCalculationResult:
         """Calculate financial impact of unused devices.
 
@@ -132,7 +130,7 @@ class CostCalculator:
                 recommendations=recommendations,
                 confidence_score=0.8,
                 confidence_explanation="Based on device value and standard depreciation schedule",
-                calculated_at=datetime.now(timezone.utc),
+                calculated_at=datetime.now(UTC),
             )
 
             financial_data = InsightFinancialData(
@@ -164,7 +162,7 @@ class CostCalculator:
         self,
         devices_needing_replacement: int,
         average_battery_health: float,
-        battery_cost_usd: Optional[Decimal] = None,
+        battery_cost_usd: Decimal | None = None,
     ) -> CostCalculationResult:
         """Calculate cost impact of battery replacements.
 
@@ -244,7 +242,7 @@ class CostCalculator:
                 investment_required_usd=investment_required.quantize(Decimal("0.01")),
                 confidence_score=0.85,
                 confidence_explanation="Based on standard battery costs and IT labor rates",
-                calculated_at=datetime.now(timezone.utc),
+                calculated_at=datetime.now(UTC),
             )
 
             financial_data = InsightFinancialData(
@@ -364,7 +362,7 @@ class CostCalculator:
                 recommendations=recommendations,
                 confidence_score=0.7,
                 confidence_explanation="Based on average downtime costs and IT labor rates",
-                calculated_at=datetime.now(timezone.utc),
+                calculated_at=datetime.now(UTC),
             )
 
             financial_data = InsightFinancialData(
@@ -396,7 +394,7 @@ class CostCalculator:
         self,
         total_drops: int,
         affected_devices: int,
-        avg_device_value_usd: Optional[Decimal] = None,
+        avg_device_value_usd: Decimal | None = None,
     ) -> CostCalculationResult:
         """Calculate potential damage cost from device drops.
 
@@ -496,7 +494,7 @@ class CostCalculator:
                 recommendations=recommendations,
                 confidence_score=0.5,  # Lower confidence due to estimated damage rates
                 confidence_explanation="Based on industry estimates for drop damage rates",
-                calculated_at=datetime.now(timezone.utc),
+                calculated_at=datetime.now(UTC),
             )
 
             financial_data = InsightFinancialData(
@@ -657,7 +655,7 @@ class CostCalculator:
                 recommendations=recommendations,
                 confidence_score=confidence,
                 confidence_explanation="Based on anomaly severity, device value, and operational costs",
-                calculated_at=datetime.now(timezone.utc),
+                calculated_at=datetime.now(UTC),
             )
 
             financial_data = InsightFinancialData(
@@ -719,7 +717,7 @@ class CostCalculator:
     def get_allowed_amounts(
         self,
         result: CostCalculationResult,
-    ) -> List[Decimal]:
+    ) -> list[Decimal]:
         """Get list of allowed monetary amounts from calculation.
 
         Used by the anti-hallucination validator to verify LLM output.

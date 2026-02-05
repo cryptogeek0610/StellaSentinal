@@ -12,15 +12,16 @@ Instead of dashboards showing data, this service:
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
-from typing import List, Optional, Dict, Any, Callable
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class IssueCategory(str, Enum):
+class IssueCategory(StrEnum):
     """Categories that matter to the business, not technical silos."""
     PRODUCTIVITY_LOSS = "productivity_loss"  # Devices not working = people not working
     SECURITY_RISK = "security_risk"          # Exposure to breach/compliance failure
@@ -28,7 +29,7 @@ class IssueCategory(str, Enum):
     IMPENDING_FAILURE = "impending_failure"  # About to break, fix before it does
 
 
-class RemediationStatus(str, Enum):
+class RemediationStatus(StrEnum):
     SUGGESTED = "suggested"
     APPROVED = "approved"
     IN_PROGRESS = "in_progress"
@@ -58,7 +59,7 @@ class Remediation:
     automated: bool  # Can we just do it?
     estimated_fix_time_minutes: int
     success_probability: float  # 0-1 based on historical data
-    parameters: Dict[str, Any] = field(default_factory=dict)
+    parameters: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -70,8 +71,8 @@ class DetectedIssue:
     root_cause: str  # "Developer devices not returned to secure config"
     impact: BusinessImpact
     remediation: Remediation
-    detected_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    device_ids: List[int] = field(default_factory=list)
+    detected_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    device_ids: list[int] = field(default_factory=list)
 
     @property
     def one_liner(self) -> str:
@@ -94,8 +95,8 @@ class ProactiveResolver:
     """
 
     def __init__(self):
-        self.issue_detectors: List[Callable] = []
-        self.remediation_executors: Dict[str, Callable] = {}
+        self.issue_detectors: list[Callable] = []
+        self.remediation_executors: dict[str, Callable] = {}
         self._register_default_detectors()
 
     def _register_default_detectors(self):
@@ -109,13 +110,13 @@ class ProactiveResolver:
             self._detect_cost_anomalies,
         ]
 
-    def scan_fleet(self, tenant_id: str) -> List[DetectedIssue]:
+    def scan_fleet(self, tenant_id: str) -> list[DetectedIssue]:
         """
         Scan everything, return prioritized list of issues to fix.
 
         This replaces the need for users to check multiple dashboards.
         """
-        all_issues: List[DetectedIssue] = []
+        all_issues: list[DetectedIssue] = []
 
         for detector in self.issue_detectors:
             try:
@@ -129,7 +130,7 @@ class ProactiveResolver:
 
         return all_issues
 
-    def get_executive_summary(self, issues: List[DetectedIssue]) -> Dict[str, Any]:
+    def get_executive_summary(self, issues: list[DetectedIssue]) -> dict[str, Any]:
         """
         One-page summary for executives.
 
@@ -160,7 +161,7 @@ class ProactiveResolver:
             "recommended_action": self._get_recommended_action(issues),
         }
 
-    def _get_recommended_action(self, issues: List[DetectedIssue]) -> str:
+    def _get_recommended_action(self, issues: list[DetectedIssue]) -> str:
         """Single most impactful thing to do right now."""
         if not issues:
             return "Fleet is healthy. No action needed."
@@ -175,7 +176,7 @@ class ProactiveResolver:
     # Issue Detectors - Each returns list of issues
     # =========================================================================
 
-    def _detect_security_exposures(self, tenant_id: str) -> List[DetectedIssue]:
+    def _detect_security_exposures(self, tenant_id: str) -> list[DetectedIssue]:
         """Find security issues that create real business risk."""
         issues = []
 
@@ -232,7 +233,7 @@ class ProactiveResolver:
 
         return issues
 
-    def _detect_network_dead_zones(self, tenant_id: str) -> List[DetectedIssue]:
+    def _detect_network_dead_zones(self, tenant_id: str) -> list[DetectedIssue]:
         """Find locations where devices can't connect reliably."""
         issues = []
 
@@ -262,7 +263,7 @@ class ProactiveResolver:
 
         return issues
 
-    def _detect_battery_failures(self, tenant_id: str) -> List[DetectedIssue]:
+    def _detect_battery_failures(self, tenant_id: str) -> list[DetectedIssue]:
         """Find devices with degraded batteries that will fail soon."""
         issues = []
 
@@ -292,7 +293,7 @@ class ProactiveResolver:
 
         return issues
 
-    def _detect_storage_exhaustion(self, tenant_id: str) -> List[DetectedIssue]:
+    def _detect_storage_exhaustion(self, tenant_id: str) -> list[DetectedIssue]:
         """Find devices about to run out of storage."""
         issues = []
 
@@ -322,12 +323,12 @@ class ProactiveResolver:
 
         return issues
 
-    def _detect_connectivity_issues(self, tenant_id: str) -> List[DetectedIssue]:
+    def _detect_connectivity_issues(self, tenant_id: str) -> list[DetectedIssue]:
         """Find devices with frequent disconnections."""
         # Similar pattern - query data, create issues
         return []
 
-    def _detect_cost_anomalies(self, tenant_id: str) -> List[DetectedIssue]:
+    def _detect_cost_anomalies(self, tenant_id: str) -> list[DetectedIssue]:
         """Find unusual data usage or other cost drivers."""
         issues = []
 
@@ -370,25 +371,25 @@ class ProactiveResolver:
         """Query DevInfo for encryption status."""
         return 0
 
-    def _query_network_dead_zones(self, tenant_id: str) -> List[Dict]:
+    def _query_network_dead_zones(self, tenant_id: str) -> list[dict]:
         """Query WiFi data for dead zones."""
         return []
 
-    def _query_degraded_batteries(self, tenant_id: str) -> List[int]:
+    def _query_degraded_batteries(self, tenant_id: str) -> list[int]:
         """Query battery health predictions."""
         return []
 
-    def _query_low_storage_devices(self, tenant_id: str) -> List[int]:
+    def _query_low_storage_devices(self, tenant_id: str) -> list[int]:
         """Query storage levels."""
         return []
 
-    def _query_data_usage_anomalies(self, tenant_id: str) -> List[Dict]:
+    def _query_data_usage_anomalies(self, tenant_id: str) -> list[dict]:
         """Query data usage for anomalies."""
         return []
 
 
 # Singleton instance
-_resolver: Optional[ProactiveResolver] = None
+_resolver: ProactiveResolver | None = None
 
 
 def get_resolver() -> ProactiveResolver:

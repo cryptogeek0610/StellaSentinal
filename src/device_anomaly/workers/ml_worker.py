@@ -14,11 +14,10 @@ import logging
 import os
 import re
 import signal
-import sys
 import time
 from dataclasses import asdict
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 import redis
 
@@ -82,13 +81,13 @@ class TrainingJobProcessor:
             "progress": progress,
             "message": message,
             "stage": stage,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
         }
         self.redis.set(STATUS_KEY, json.dumps(status))
         self.redis.set(CURRENT_JOB_KEY, json.dumps(status))
         logger.info(f"[{run_id}] {progress:.0f}% - {message}")
 
-    def get_status(self) -> Optional[Dict[str, Any]]:
+    def get_status(self) -> dict[str, Any] | None:
         """Get current training status."""
         data = self.redis.get(STATUS_KEY)
         if data:
@@ -100,14 +99,14 @@ class TrainingJobProcessor:
         history = self.redis.lrange(HISTORY_KEY, 0, limit - 1)
         return [json.loads(h) for h in history]
 
-    def submit_job(self, config: Dict[str, Any], tenant_id: str = "default") -> str:
+    def submit_job(self, config: dict[str, Any], tenant_id: str = "default") -> str:
         """Submit a new training job to the queue."""
-        job_id = f"job_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+        job_id = f"job_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
         job = {
             "job_id": job_id,
             "config": config,
             "tenant_id": tenant_id,
-            "submitted_at": datetime.now(timezone.utc).isoformat(),
+            "submitted_at": datetime.now(UTC).isoformat(),
             "status": "pending",
         }
         self.redis.rpush(QUEUE_KEY, json.dumps(job))
@@ -127,7 +126,7 @@ class TrainingJobProcessor:
         logger.info(f"Job {job_id} submitted to queue")
         return job_id
 
-    def process_job(self, job_data: Dict[str, Any]) -> TrainingResult:
+    def process_job(self, job_data: dict[str, Any]) -> TrainingResult:
         """Process a single training job with progress updates."""
         job_id = job_data["job_id"]
         config_dict = job_data["config"]
@@ -222,7 +221,7 @@ class TrainingJobProcessor:
             )
 
             # Create result
-            completed_at = datetime.now(timezone.utc).isoformat()
+            completed_at = datetime.now(UTC).isoformat()
 
             result = TrainingResult(
                 run_id=run_id,
@@ -269,7 +268,7 @@ class TrainingJobProcessor:
                 "progress": 0,
                 "message": str(e),
                 "error": str(e),
-                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "completed_at": datetime.now(UTC).isoformat(),
             }
             self.redis.set(STATUS_KEY, json.dumps(error_status))
 

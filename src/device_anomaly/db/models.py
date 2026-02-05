@@ -9,26 +9,25 @@ This module defines the canonical data model for storing:
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 
 def _utc_now() -> datetime:
     """Return current UTC time. Used as default for DateTime columns."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 from sqlalchemy import (
-    Column,
-    String,
-    Integer,
-    Float,
-    DateTime,
-    Text,
-    ForeignKey,
-    Index,
     BigInteger,
     Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
     LargeBinary,
+    String,
+    Text,
 )
 from sqlalchemy.orm import declarative_base
 

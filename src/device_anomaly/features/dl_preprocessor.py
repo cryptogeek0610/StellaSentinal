@@ -11,11 +11,11 @@ DL models. It handles:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
+from sklearn.preprocessing import MinMaxScaler, RobustScaler, StandardScaler
 
 
 @dataclass
@@ -37,12 +37,12 @@ class DLPreprocessorConfig:
     clip_outliers: bool = True
     outlier_std: float = 5.0
     min_variance: float = 1e-6
-    exclude_patterns: List[str] = field(default_factory=lambda: [
+    exclude_patterns: list[str] = field(default_factory=lambda: [
         "DeviceId", "ModelId", "ManufacturerId", "OsVersionId",
         "is_injected_anomaly", "anomaly_score", "anomaly_label",
     ])
     prefer_cohort_features: bool = True
-    max_features: Optional[int] = None
+    max_features: int | None = None
 
 
 class DLFeaturePreprocessor:
@@ -61,21 +61,21 @@ class DLFeaturePreprocessor:
         detector.fit(train_df)  # Uses internal preprocessing
     """
 
-    def __init__(self, config: Optional[DLPreprocessorConfig] = None):
+    def __init__(self, config: DLPreprocessorConfig | None = None):
         """Initialize the preprocessor.
 
         Args:
             config: DLPreprocessorConfig with preprocessing settings
         """
         self.config = config or DLPreprocessorConfig()
-        self._feature_cols: List[str] = []
-        self._impute_values: Optional[pd.Series] = None
-        self._scaler: Optional[Any] = None
-        self._clip_bounds: Optional[Dict[str, Tuple[float, float]]] = None
+        self._feature_cols: list[str] = []
+        self._impute_values: pd.Series | None = None
+        self._scaler: Any | None = None
+        self._clip_bounds: dict[str, tuple[float, float]] | None = None
         self._is_fitted = False
 
     @property
-    def feature_cols(self) -> List[str]:
+    def feature_cols(self) -> list[str]:
         """Get the selected feature columns."""
         return self._feature_cols
 
@@ -84,7 +84,7 @@ class DLFeaturePreprocessor:
         """Check if preprocessor has been fitted."""
         return self._is_fitted
 
-    def _select_features(self, df: pd.DataFrame) -> List[str]:
+    def _select_features(self, df: pd.DataFrame) -> list[str]:
         """Select numeric feature columns for training.
 
         Args:
@@ -135,7 +135,7 @@ class DLFeaturePreprocessor:
         else:
             raise ValueError(f"Unknown normalize_method: {method}")
 
-    def fit(self, df: pd.DataFrame) -> "DLFeaturePreprocessor":
+    def fit(self, df: pd.DataFrame) -> DLFeaturePreprocessor:
         """Fit the preprocessor on training data.
 
         Args:
@@ -274,14 +274,11 @@ class DLFeaturePreprocessor:
         if not self._is_fitted:
             raise RuntimeError("Preprocessor has not been fitted")
 
-        if self._scaler is not None:
-            unscaled = self._scaler.inverse_transform(data)
-        else:
-            unscaled = data
+        unscaled = self._scaler.inverse_transform(data) if self._scaler is not None else data
 
         return pd.DataFrame(unscaled, columns=self._feature_cols)
 
-    def get_feature_stats(self) -> Dict[str, Dict[str, float]]:
+    def get_feature_stats(self) -> dict[str, dict[str, float]]:
         """Get statistics for each feature.
 
         Returns:
@@ -329,7 +326,7 @@ class DLFeaturePreprocessor:
         joblib.dump(state, path)
 
     @classmethod
-    def load(cls, path: str) -> "DLFeaturePreprocessor":
+    def load(cls, path: str) -> DLFeaturePreprocessor:
         """Load preprocessor from file.
 
         Args:

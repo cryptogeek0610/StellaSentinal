@@ -9,13 +9,13 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy.orm import Session
 
 from device_anomaly.config.settings import get_settings
-from device_anomaly.data_access.mobicontrol_client import MobiControlClient, MobiControlAPIError
+from device_anomaly.data_access.mobicontrol_client import MobiControlAPIError, MobiControlClient
 from device_anomaly.database.schema import DeviceFeature, DeviceMetadata
 
 logger = logging.getLogger(__name__)
@@ -27,11 +27,11 @@ class BatteryStatusUpdate:
 
     device_id: str
     mc_device_id: str  # MobiControl device ID (may differ from internal ID)
-    battery_health_percent: Optional[float] = None
+    battery_health_percent: float | None = None
     battery_status: str = "Unknown"
     replacement_due: bool = False
     replacement_urgency: str = "None"
-    estimated_replacement_date: Optional[str] = None
+    estimated_replacement_date: str | None = None
 
 
 class BatteryStatusSyncService:
@@ -46,7 +46,7 @@ class BatteryStatusSyncService:
         self,
         results_db: Session,
         tenant_id: str,
-        mc_client: Optional[MobiControlClient] = None,
+        mc_client: MobiControlClient | None = None,
     ):
         """Initialize the battery status sync service.
 
@@ -68,7 +68,7 @@ class BatteryStatusSyncService:
             self.mc_client = MobiControlClient()
         return self.mc_client
 
-    def _determine_battery_status(self, health: Optional[float]) -> tuple[str, str, bool]:
+    def _determine_battery_status(self, health: float | None) -> tuple[str, str, bool]:
         """Determine battery status, urgency, and replacement due flag.
 
         Args:
@@ -91,8 +91,8 @@ class BatteryStatusSyncService:
 
     def get_devices_battery_status(
         self,
-        device_ids: Optional[List[int]] = None,
-    ) -> List[BatteryStatusUpdate]:
+        device_ids: list[int] | None = None,
+    ) -> list[BatteryStatusUpdate]:
         """Get battery status for devices from feature data.
 
         Args:
@@ -178,9 +178,9 @@ class BatteryStatusSyncService:
 
     def sync_battery_status(
         self,
-        device_ids: Optional[List[int]] = None,
+        device_ids: list[int] | None = None,
         dry_run: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Sync battery status to MobiControl Custom Attributes.
 
         Args:
@@ -190,7 +190,7 @@ class BatteryStatusSyncService:
         Returns:
             Dictionary with sync results
         """
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
         result = {
             "success": True,
             "devices_processed": 0,
@@ -283,9 +283,9 @@ class BatteryStatusSyncService:
             result["error"] = str(e)
             logger.exception("Battery status sync failed")
 
-        result["completed_at"] = datetime.now(timezone.utc).isoformat()
+        result["completed_at"] = datetime.now(UTC).isoformat()
         result["duration_seconds"] = (
-            datetime.now(timezone.utc) - start_time
+            datetime.now(UTC) - start_time
         ).total_seconds()
 
         return result
@@ -294,7 +294,7 @@ class BatteryStatusSyncService:
         self,
         device_id: int,
         dry_run: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Sync battery status for a single device.
 
         Args:
@@ -310,9 +310,9 @@ class BatteryStatusSyncService:
 def sync_battery_status_to_mobicontrol(
     results_db: Session,
     tenant_id: str,
-    device_ids: Optional[List[int]] = None,
+    device_ids: list[int] | None = None,
     dry_run: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Convenience function to sync battery status to MobiControl.
 
     Args:

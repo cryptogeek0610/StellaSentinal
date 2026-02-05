@@ -1,15 +1,16 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import logging
-from typing import Dict, List, Optional
+from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
 
-from device_anomaly.models.anomaly_detector import AnomalyDetectorIsolationForest, AnomalyDetectorConfig
+from device_anomaly.models.anomaly_detector import (
+    AnomalyDetectorConfig,
+    AnomalyDetectorIsolationForest,
+)
 from device_anomaly.models.heuristics import summarize_heuristics
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -26,13 +27,13 @@ class TemporalResidualDetector:
     Large jumps relative to historical deltas push the score negative (more anomalous).
     """
 
-    def __init__(self, config: Optional[TemporalResidualConfig] = None):
+    def __init__(self, config: TemporalResidualConfig | None = None):
         self.config = config or TemporalResidualConfig()
-        self.feature_cols: List[str] = []
-        self.delta_median: Optional[pd.Series] = None
-        self.delta_mad: Optional[pd.Series] = None
+        self.feature_cols: list[str] = []
+        self.delta_median: pd.Series | None = None
+        self.delta_mad: pd.Series | None = None
 
-    def fit(self, df: pd.DataFrame, feature_cols: List[str]) -> None:
+    def fit(self, df: pd.DataFrame, feature_cols: list[str]) -> None:
         if "Timestamp" not in df.columns or "DeviceId" not in df.columns:
             self.feature_cols = []
             self.delta_median = None
@@ -81,7 +82,7 @@ class HybridAnomalyDetectorConfig:
     temporal_weight: float = 0.4
     use_cohort_models: bool = True
     min_cohort_rows: int = 200
-    feature_overrides: Optional[List[str]] = None
+    feature_overrides: list[str] | None = None
     heuristic_weight: float = 0.2
 
 
@@ -91,21 +92,21 @@ class HybridAnomalyDetector:
     Optionally trains per-cohort IsolationForest models for cohorts with enough data.
     """
 
-    def __init__(self, config: Optional[HybridAnomalyDetectorConfig] = None):
+    def __init__(self, config: HybridAnomalyDetectorConfig | None = None):
         self.config = config or HybridAnomalyDetectorConfig()
         self.global_detector = AnomalyDetectorIsolationForest(
             config=self.config.iso_config,
             feature_overrides=self.config.feature_overrides,
         )
         self.temporal_detector = TemporalResidualDetector(config=self.config.temporal_config)
-        self.cohort_models: Dict[str, AnomalyDetectorIsolationForest] = {}
+        self.cohort_models: dict[str, AnomalyDetectorIsolationForest] = {}
         self.iso_score_mean: float = 0.0
         self.iso_score_std: float = 1.0
         self.threshold: float = 0.0
         self._score_scale: float = 1.0
 
     @property
-    def feature_columns(self) -> List[str]:
+    def feature_columns(self) -> list[str]:
         return self.global_detector.feature_cols
 
     def fit(self, df: pd.DataFrame) -> None:
@@ -142,7 +143,7 @@ class HybridAnomalyDetector:
             if self.cohort_models:
                 LOGGER.info("Trained %d cohort-specific IsolationForest models.", len(self.cohort_models))
 
-    def score_dataframe(self, df: pd.DataFrame, heuristic_flags: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+    def score_dataframe(self, df: pd.DataFrame, heuristic_flags: pd.DataFrame | None = None) -> pd.DataFrame:
         df_scored = df.copy()
         iso_scores = pd.Series(self.global_detector.score(df), index=df.index, name="iforest_score")
         iso_preds = pd.Series(self.global_detector.predict(df), index=df.index)

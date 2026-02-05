@@ -19,8 +19,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Set
+from datetime import datetime
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -81,13 +81,13 @@ class CohortIssueTracker:
         self.lookback_days = lookback_days
 
         # Track per-cohort statistics
-        self._cohort_stats: Dict[str, Dict[str, _RunningStats]] = {}
+        self._cohort_stats: dict[str, dict[str, _RunningStats]] = {}
 
         # Detected issues
-        self._issues: Dict[str, List[CohortIssue]] = {}
+        self._issues: dict[str, list[CohortIssue]] = {}
 
         # Device observations per cohort (for counting unique devices)
-        self._cohort_devices: Dict[str, Set[int]] = {}
+        self._cohort_devices: dict[str, set[int]] = {}
 
     def register_observation(
         self,
@@ -95,7 +95,7 @@ class CohortIssueTracker:
         device_id: int,
         metric: str,
         value: float,
-    ) -> Optional[CohortIssue]:
+    ) -> CohortIssue | None:
         """
         Register an observation and detect potential cohort-level issues.
 
@@ -121,8 +121,8 @@ class CohortIssueTracker:
         cohort_id: str,
         metric: str,
         value: float,
-        stats: "_RunningStats",
-    ) -> Optional[CohortIssue]:
+        stats: _RunningStats,
+    ) -> CohortIssue | None:
         """Detect if current observations indicate a cohort-level issue."""
         # Need minimum observations
         if stats.count < self.min_devices_for_issue:
@@ -169,7 +169,7 @@ class CohortIssueTracker:
 
         return None
 
-    def _classify_issue(self, metric: str) -> Optional[str]:
+    def _classify_issue(self, metric: str) -> str | None:
         """Classify issue type based on affected metric."""
         metric_lower = metric.lower()
 
@@ -190,8 +190,8 @@ class CohortIssueTracker:
     def get_issue_context(
         self,
         cohort_id: str,
-        features: Dict[str, float],
-    ) -> Dict[str, Any]:
+        features: dict[str, float],
+    ) -> dict[str, Any]:
         """
         Get issue context for a device's features.
 
@@ -234,7 +234,7 @@ class CohortIssueTracker:
             "adjustment_factors": adjustment_factors,
         }
 
-    def get_all_issues(self) -> List[CohortIssue]:
+    def get_all_issues(self) -> list[CohortIssue]:
         """Get all detected cohort issues."""
         all_issues = []
         for issues in self._issues.values():
@@ -289,7 +289,7 @@ class CrossCorrelationFeatureBuilder:
 
     def __init__(
         self,
-        issue_tracker: Optional[CohortIssueTracker] = None,
+        issue_tracker: CohortIssueTracker | None = None,
         enable_known_issue_features: bool = True,
         enable_interaction_features: bool = True,
         enable_relative_features: bool = True,
@@ -300,13 +300,13 @@ class CrossCorrelationFeatureBuilder:
         self.enable_relative_features = enable_relative_features
 
         # Known problematic firmware versions (would be loaded from database in production)
-        self._known_firmware_issues: Dict[str, Dict[str, float]] = {}
+        self._known_firmware_issues: dict[str, dict[str, float]] = {}
 
         # Known model-specific battery issues
-        self._known_battery_models: Dict[str, float] = {}
+        self._known_battery_models: dict[str, float] = {}
 
         # Known OS stability issues
-        self._known_os_issues: Dict[str, float] = {}
+        self._known_os_issues: dict[str, float] = {}
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         """Apply all cross-correlation transformations."""
@@ -694,7 +694,7 @@ class CrossCorrelationFeatureBuilder:
 
 def build_cross_correlation_features(
     df: pd.DataFrame,
-    issue_tracker: Optional[CohortIssueTracker] = None,
+    issue_tracker: CohortIssueTracker | None = None,
 ) -> pd.DataFrame:
     """
     Convenience function to add all cross-correlation features.
@@ -713,9 +713,9 @@ def build_cross_correlation_features(
 def get_cohort_context(
     device_id: int,
     cohort_id: str,
-    features: Dict[str, float],
+    features: dict[str, float],
     issue_tracker: CohortIssueTracker,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Get context about known cohort issues for a device.
 

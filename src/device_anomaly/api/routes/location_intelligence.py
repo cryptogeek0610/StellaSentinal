@@ -2,8 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
@@ -34,18 +33,18 @@ class HeatmapCellResponse(BaseModel):
     signal_strength: float
     reading_count: int
     is_dead_zone: bool = False
-    access_point_id: Optional[str] = None
+    access_point_id: str | None = None
 
 
 class WiFiHeatmapResponse(BaseModel):
     """Complete WiFi heatmap response."""
     tenant_id: str
-    grid_cells: List[HeatmapCellResponse]
-    bounds: Optional[GeoBoundsResponse]
+    grid_cells: list[HeatmapCellResponse]
+    bounds: GeoBoundsResponse | None
     total_readings: int
     avg_signal_strength: float
     dead_zone_count: int
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class DeadZoneResponse(BaseModel):
@@ -56,17 +55,17 @@ class DeadZoneResponse(BaseModel):
     avg_signal: float
     affected_devices: int
     total_readings: int
-    first_detected: Optional[datetime] = None
-    last_detected: Optional[datetime] = None
+    first_detected: datetime | None = None
+    last_detected: datetime | None = None
 
 
 class DeadZonesResponse(BaseModel):
     """List of dead zones."""
     tenant_id: str
-    dead_zones: List[DeadZoneResponse]
+    dead_zones: list[DeadZoneResponse]
     total_count: int
-    recommendations: List[str]
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    recommendations: list[str]
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class MovementPointResponse(BaseModel):
@@ -81,11 +80,11 @@ class MovementPointResponse(BaseModel):
 class DeviceMovementResponse(BaseModel):
     """Device movement summary."""
     device_id: int
-    movements: List[MovementPointResponse]
+    movements: list[MovementPointResponse]
     total_distance_km: float
     avg_speed_kmh: float
     stationary_time_pct: float
-    active_hours: List[int]
+    active_hours: list[int]
 
 
 class DwellZoneResponse(BaseModel):
@@ -96,16 +95,16 @@ class DwellZoneResponse(BaseModel):
     avg_dwell_minutes: float
     device_count: int
     visit_count: int
-    peak_hours: List[int]
+    peak_hours: list[int]
 
 
 class DwellTimeResponse(BaseModel):
     """Dwell time analysis response."""
     tenant_id: str
-    dwell_zones: List[DwellZoneResponse]
+    dwell_zones: list[DwellZoneResponse]
     total_zones: int
-    recommendations: List[str]
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    recommendations: list[str]
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class CoverageSummaryResponse(BaseModel):
@@ -115,8 +114,8 @@ class CoverageSummaryResponse(BaseModel):
     avg_signal: float
     coverage_distribution: dict
     coverage_percentage: float
-    recommendations: List[str]
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    recommendations: list[str]
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 # ============================================================================
@@ -174,7 +173,7 @@ def get_mock_wifi_heatmap(period_days: int) -> WiFiHeatmapResponse:
 
 def get_mock_dead_zones() -> DeadZonesResponse:
     """Generate mock dead zone data."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     zones = [
         DeadZoneResponse(
             zone_id="dz_0",
@@ -215,7 +214,7 @@ def get_mock_device_movements(device_id: int) -> DeviceMovementResponse:
     import random
     random.seed(device_id)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     base_lat, base_long = 37.7749, -122.4194
     movements = []
 
@@ -575,7 +574,9 @@ def get_coverage_summary(
     tenant_id = get_tenant_id()
 
     try:
-        from device_anomaly.data_access.location_intelligence_loader import get_coverage_summary as get_coverage
+        from device_anomaly.data_access.location_intelligence_loader import (
+            get_coverage_summary as get_coverage,
+        )
 
         coverage = get_coverage(period_days=period_days)
 

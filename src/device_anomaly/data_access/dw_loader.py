@@ -13,7 +13,7 @@ Tables queried:
 - cs_Heatmap: RF signal strength and connectivity metrics
 """
 import logging
-from typing import Iterable, Optional
+from collections.abc import Iterable
 
 import pandas as pd
 from sqlalchemy import bindparam, text

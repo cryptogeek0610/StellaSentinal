@@ -4,12 +4,12 @@ import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import pandas as pd
 
 from device_anomaly.models.baseline import load_baselines, load_data_driven_baselines_payload
-from device_anomaly.models.model_registry import resolve_model_artifacts, resolve_artifact_path
+from device_anomaly.models.model_registry import resolve_artifact_path, resolve_model_artifacts
 
 
 @dataclass
@@ -18,8 +18,8 @@ class BaselineResolution:
     path: Path
     payload: dict[str, Any]
     schema_version: str
-    model_version: Optional[str] = None
-    device_type_col: Optional[str] = None
+    model_version: str | None = None
+    device_type_col: str | None = None
 
 
 def _normalize_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -41,7 +41,7 @@ def _detect_baseline_kind(payload: dict[str, Any]) -> str:
     return "data_driven"
 
 
-def resolve_production_baselines(models_dir: Optional[Path] = None) -> Optional[BaselineResolution]:
+def resolve_production_baselines(models_dir: Path | None = None) -> BaselineResolution | None:
     artifacts = resolve_model_artifacts(models_dir)
     metadata = artifacts.metadata or {}
 
@@ -73,7 +73,7 @@ def resolve_production_baselines(models_dir: Optional[Path] = None) -> Optional[
     )
 
 
-def resolve_legacy_baselines(source: str) -> Optional[BaselineResolution]:
+def resolve_legacy_baselines(source: str) -> BaselineResolution | None:
     path = (Path("artifacts") / f"{source}_baselines.json").resolve()
     if not path.exists():
         return None
@@ -88,7 +88,7 @@ def resolve_legacy_baselines(source: str) -> Optional[BaselineResolution]:
     )
 
 
-def resolve_baselines(source: str, models_dir: Optional[Path] = None) -> Optional[BaselineResolution]:
+def resolve_baselines(source: str, models_dir: Path | None = None) -> BaselineResolution | None:
     if source == "dw":
         production = resolve_production_baselines(models_dir)
         if production is not None:
@@ -99,7 +99,7 @@ def resolve_baselines(source: str, models_dir: Optional[Path] = None) -> Optiona
     return resolve_legacy_baselines(source)
 
 
-def data_driven_to_legacy(payload: dict[str, Any], device_type_col: Optional[str]) -> dict[str, pd.DataFrame]:
+def data_driven_to_legacy(payload: dict[str, Any], device_type_col: str | None) -> dict[str, pd.DataFrame]:
     baselines = payload.get("baselines", {})
     rows = []
     for metric, data in baselines.items():
@@ -145,7 +145,7 @@ def update_data_driven_baseline(
     group_key: str,
     feature: str,
     adjustment: float,
-    device_type_col: Optional[str],
+    device_type_col: str | None,
 ) -> dict[str, Any]:
     baselines = payload.get("baselines", {})
     if feature not in baselines:

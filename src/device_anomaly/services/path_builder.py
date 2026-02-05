@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
 
 import pandas as pd
 
@@ -27,9 +26,9 @@ class PathNode:
 
     group_id: int
     name: str
-    parent_id: Optional[int] = None
+    parent_id: int | None = None
     device_count: int = 0
-    children: List[PathNode] = field(default_factory=list)
+    children: list[PathNode] = field(default_factory=list)
     full_path: str = ""
     depth: int = 0
 
@@ -58,8 +57,8 @@ class PathBuilder:
     """
 
     def __init__(self):
-        self._nodes: Dict[int, PathNode] = {}
-        self._roots: List[PathNode] = []
+        self._nodes: dict[int, PathNode] = {}
+        self._roots: list[PathNode] = []
         self._loaded = False
 
     def load_hierarchy(self, limit: int = 5000) -> None:
@@ -100,10 +99,7 @@ class PathBuilder:
         for _, row in df.iterrows():
             group_id = int(row["DeviceGroupId"])
             parent_id = row["ParentDeviceGroupId"]
-            if pd.notna(parent_id):
-                parent_id = int(parent_id)
-            else:
-                parent_id = None
+            parent_id = int(parent_id) if pd.notna(parent_id) else None
 
             self._nodes[group_id] = PathNode(
                 group_id=group_id,
@@ -125,7 +121,7 @@ class PathBuilder:
         # Third pass: compute full paths and depths
         self._compute_paths(self._roots, "", 0)
 
-    def _compute_paths(self, nodes: List[PathNode], parent_path: str, depth: int) -> None:
+    def _compute_paths(self, nodes: list[PathNode], parent_path: str, depth: int) -> None:
         """Recursively compute full paths for all nodes."""
         for node in nodes:
             if parent_path:
@@ -135,7 +131,7 @@ class PathBuilder:
             node.depth = depth
             self._compute_paths(node.children, node.full_path, depth + 1)
 
-    def get_device_path(self, device_group_id: int) -> Optional[str]:
+    def get_device_path(self, device_group_id: int) -> str | None:
         """
         Get full PATH string for a device group ID.
 
@@ -154,7 +150,7 @@ class PathBuilder:
             return node.full_path
         return None
 
-    def get_hierarchy_tree(self) -> List[dict]:
+    def get_hierarchy_tree(self) -> list[dict]:
         """
         Get the full hierarchy as a nested dictionary structure.
 
@@ -166,7 +162,7 @@ class PathBuilder:
 
         return [root.to_dict() for root in self._roots]
 
-    def get_all_paths(self) -> Dict[int, str]:
+    def get_all_paths(self) -> dict[int, str]:
         """
         Get mapping of all group IDs to their full paths.
 
@@ -178,7 +174,7 @@ class PathBuilder:
 
         return {gid: node.full_path for gid, node in self._nodes.items()}
 
-    def get_nodes_at_depth(self, depth: int) -> List[PathNode]:
+    def get_nodes_at_depth(self, depth: int) -> list[PathNode]:
         """
         Get all nodes at a specific depth level.
 
@@ -193,7 +189,7 @@ class PathBuilder:
 
         return [node for node in self._nodes.values() if node.depth == depth]
 
-    def get_children(self, group_id: int) -> List[PathNode]:
+    def get_children(self, group_id: int) -> list[PathNode]:
         """
         Get direct children of a group.
 
@@ -239,7 +235,7 @@ class PathBuilder:
 
 
 # Singleton instance for caching
-_path_builder: Optional[PathBuilder] = None
+_path_builder: PathBuilder | None = None
 
 
 def get_path_builder() -> PathBuilder:
@@ -250,7 +246,7 @@ def get_path_builder() -> PathBuilder:
     return _path_builder
 
 
-def get_device_path(device_group_id: int) -> Optional[str]:
+def get_device_path(device_group_id: int) -> str | None:
     """
     Convenience function to get PATH for a device group.
 
@@ -263,7 +259,7 @@ def get_device_path(device_group_id: int) -> Optional[str]:
     return get_path_builder().get_device_path(device_group_id)
 
 
-def get_path_hierarchy() -> List[dict]:
+def get_path_hierarchy() -> list[dict]:
     """
     Convenience function to get the full hierarchy tree.
 

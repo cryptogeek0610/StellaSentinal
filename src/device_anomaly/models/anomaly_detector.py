@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
 
 import joblib
 import numpy as np
@@ -35,7 +34,7 @@ class AnomalyDetectorIsolationForest:
         df_scored = detector.score_dataframe(df_features)
     """
 
-    def __init__(self, config: Optional[AnomalyDetectorConfig] = None, feature_overrides: Optional[List[str]] = None):
+    def __init__(self, config: AnomalyDetectorConfig | None = None, feature_overrides: list[str] | None = None):
         self.config = config or AnomalyDetectorConfig()
         self.model = IsolationForest(
             n_estimators=self.config.n_estimators,
@@ -43,12 +42,12 @@ class AnomalyDetectorIsolationForest:
             random_state=self.config.random_state,
             n_jobs=-1,
         )
-        self.feature_cols: List[str] = []
-        self.impute_values: Optional[pd.Series] = None
-        self.scaler: Optional[StandardScaler] = None
+        self.feature_cols: list[str] = []
+        self.impute_values: pd.Series | None = None
+        self.scaler: StandardScaler | None = None
         self.feature_overrides = feature_overrides
         self.feature_weights: dict[str, float] = {}
-        self.model_path: Optional[Path] = None
+        self.model_path: Path | None = None
         self.onnx_engine = None
 
     def _select_feature_columns(self, df: pd.DataFrame) -> list[str]:
@@ -228,7 +227,7 @@ class AnomalyDetectorIsolationForest:
         # Export to ONNX if requested
         if export_onnx:
             try:
-                from device_anomaly.models.onnx_exporter import ONNXModelExporter, ONNXExportConfig
+                from device_anomaly.models.onnx_exporter import ONNXExportConfig, ONNXModelExporter
 
                 onnx_path = output_path.with_suffix(".onnx")
                 exporter = ONNXModelExporter(ONNXExportConfig())
@@ -334,13 +333,16 @@ class AnomalyDetectorIsolationForest:
         df_scored["anomaly_label"] = labels     # 1 normal, -1 anomaly
         return df_scored
 
-    def _resolve_onnx_path(self) -> Optional[Path]:
+    def _resolve_onnx_path(self) -> Path | None:
         if self.model_path:
             candidate = self.model_path.with_suffix(".onnx")
             if candidate.exists():
                 return candidate
         try:
-            from device_anomaly.models.model_registry import resolve_model_artifacts, resolve_artifact_path
+            from device_anomaly.models.model_registry import (
+                resolve_artifact_path,
+                resolve_model_artifacts,
+            )
 
             artifacts = resolve_model_artifacts()
             if artifacts.metadata and artifacts.metadata.get("artifacts"):
@@ -357,7 +359,11 @@ class AnomalyDetectorIsolationForest:
             return self.onnx_engine
         try:
             from device_anomaly.config.onnx_config import get_onnx_config
-            from device_anomaly.models.inference_engine import EngineConfig, EngineType, ONNXInferenceEngine
+            from device_anomaly.models.inference_engine import (
+                EngineConfig,
+                EngineType,
+                ONNXInferenceEngine,
+            )
 
             onnx_config = get_onnx_config()
             if onnx_config.inference.engine_type != EngineType.ONNX:
@@ -437,7 +443,7 @@ class AnomalyDetectorIsolationForest:
         return df.mul(aligned, axis=1)
 
     @classmethod
-    def load_model(cls, model_path: str | Path) -> "AnomalyDetectorIsolationForest":
+    def load_model(cls, model_path: str | Path) -> AnomalyDetectorIsolationForest:
         """
         Load a trained model from disk.
 
@@ -511,7 +517,7 @@ class AnomalyDetectorIsolationForest:
         return instance
 
     @classmethod
-    def load_latest(cls, models_dir: str | Path | None = None) -> Optional["AnomalyDetectorIsolationForest"]:
+    def load_latest(cls, models_dir: str | Path | None = None) -> AnomalyDetectorIsolationForest | None:
         """
         Load the most recently trained production model.
 

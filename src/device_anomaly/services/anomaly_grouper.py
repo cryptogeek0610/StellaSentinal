@@ -13,9 +13,8 @@ import hashlib
 import logging
 import uuid
 from collections import defaultdict
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Set, Tuple
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
@@ -27,9 +26,7 @@ from device_anomaly.api.models import (
 )
 from device_anomaly.database.schema import AnomalyResult, DeviceMetadata
 from device_anomaly.insights.categories import (
-    CATEGORY_METADATA,
     InsightCategory,
-    InsightSeverity,
 )
 
 logger = logging.getLogger(__name__)
@@ -101,12 +98,12 @@ class ClassifiedAnomaly:
 
     anomaly: AnomalyResult
     severity: str
-    primary_metric: Optional[str]
-    primary_category: Optional[InsightCategory]
-    suggested_remediation_title: Optional[str]
-    device_name: Optional[str]
-    device_model: Optional[str]
-    location: Optional[str]
+    primary_metric: str | None
+    primary_category: InsightCategory | None
+    suggested_remediation_title: str | None
+    device_name: str | None
+    device_model: str | None
+    location: str | None
     grouped: bool = False
 
 
@@ -127,7 +124,7 @@ def _get_severity_rank(severity: str) -> int:
     return ranks.get(severity, 3)
 
 
-def _find_primary_metric(anomaly: AnomalyResult) -> Optional[str]:
+def _find_primary_metric(anomaly: AnomalyResult) -> str | None:
     """Find the primary contributing metric for an anomaly."""
     metrics = {
         "total_battery_level_drop": (anomaly.total_battery_level_drop, 30, True),  # threshold, above_is_bad
@@ -164,7 +161,7 @@ def _find_primary_metric(anomaly: AnomalyResult) -> Optional[str]:
     return worst_metric
 
 
-def _get_suggested_remediation_title(anomaly: AnomalyResult) -> Optional[str]:
+def _get_suggested_remediation_title(anomaly: AnomalyResult) -> str | None:
     """Determine suggested remediation based on anomaly metrics."""
     # Storage issues
     if anomaly.total_free_storage_kb and anomaly.total_free_storage_kb < 500000:
@@ -197,9 +194,9 @@ class AnomalyGrouper:
     def __init__(self, db: Session, tenant_id: str):
         self.db = db
         self.tenant_id = tenant_id
-        self._device_metadata: Dict[int, DeviceMetadata] = {}
+        self._device_metadata: dict[int, DeviceMetadata] = {}
 
-    def _load_device_metadata(self, device_ids: Set[int]) -> None:
+    def _load_device_metadata(self, device_ids: set[int]) -> None:
         """Load device metadata for a set of device IDs."""
         if not device_ids:
             return
@@ -292,7 +289,7 @@ class AnomalyGrouper:
         return RemediationSuggestion(
             remediation_id=str(uuid.uuid4()),
             title=title,
-            description=f"Apply this fix to all devices in the group",
+            description="Apply this fix to all devices in the group",
             detailed_steps=steps,
             priority=1,
             confidence_score=0.8,
@@ -308,9 +305,9 @@ class AnomalyGrouper:
         group_type: str,
         group_category: str,
         group_name: str,
-        classified_anomalies: List[ClassifiedAnomaly],
-        grouping_factors: List[str],
-        suggested_remediation: Optional[RemediationSuggestion] = None,
+        classified_anomalies: list[ClassifiedAnomaly],
+        grouping_factors: list[str],
+        suggested_remediation: RemediationSuggestion | None = None,
     ) -> AnomalyGroup:
         """Build an AnomalyGroup from classified anomalies."""
         # Mark anomalies as grouped
@@ -318,7 +315,7 @@ class AnomalyGrouper:
             c.grouped = True
 
         # Calculate group metrics
-        device_ids = set(c.anomaly.device_id for c in classified_anomalies)
+        device_ids = {c.anomaly.device_id for c in classified_anomalies}
         open_count = sum(
             1 for c in classified_anomalies
             if c.anomaly.status in ("open", "investigating")
@@ -364,13 +361,13 @@ class AnomalyGrouper:
 
     def _group_by_remediation(
         self,
-        classified: List[ClassifiedAnomaly],
-    ) -> List[AnomalyGroup]:
+        classified: list[ClassifiedAnomaly],
+    ) -> list[AnomalyGroup]:
         """Group anomalies by common remediation (highest priority)."""
         groups = []
 
         # Group by remediation title
-        by_remediation: Dict[str, List[ClassifiedAnomaly]] = defaultdict(list)
+        by_remediation: dict[str, list[ClassifiedAnomaly]] = defaultdict(list)
         for c in classified:
             if c.grouped or not c.suggested_remediation_title:
                 continue
@@ -384,7 +381,7 @@ class AnomalyGrouper:
             anomalies.sort(key=lambda c: (_get_severity_rank(c.severity), c.anomaly.anomaly_score))
 
             group_id = hashlib.md5(f"remediation:{title}".encode()).hexdigest()[:12]
-            device_count = len(set(c.anomaly.device_id for c in anomalies))
+            device_count = len({c.anomaly.device_id for c in anomalies})
             group_name = f"{title} ({device_count} devices)"
 
             groups.append(self._build_group(
@@ -401,13 +398,13 @@ class AnomalyGrouper:
 
     def _group_by_category(
         self,
-        classified: List[ClassifiedAnomaly],
-    ) -> List[AnomalyGroup]:
+        classified: list[ClassifiedAnomaly],
+    ) -> list[AnomalyGroup]:
         """Group remaining anomalies by insight category."""
         groups = []
 
         # Group by category
-        by_category: Dict[InsightCategory, List[ClassifiedAnomaly]] = defaultdict(list)
+        by_category: dict[InsightCategory, list[ClassifiedAnomaly]] = defaultdict(list)
         for c in classified:
             if c.grouped or not c.primary_category:
                 continue
@@ -422,7 +419,7 @@ class AnomalyGrouper:
 
             category_name = CATEGORY_DISPLAY_NAMES.get(category, category.value)
             group_id = hashlib.md5(f"category:{category.value}".encode()).hexdigest()[:12]
-            device_count = len(set(c.anomaly.device_id for c in anomalies))
+            device_count = len({c.anomaly.device_id for c in anomalies})
 
             # Check for common location
             locations = [c.location for c in anomalies if c.location]
@@ -449,9 +446,9 @@ class AnomalyGrouper:
 
     def _group_by_temporal_cohort(
         self,
-        classified: List[ClassifiedAnomaly],
+        classified: list[ClassifiedAnomaly],
         window_hours: int = 24,
-    ) -> List[AnomalyGroup]:
+    ) -> list[AnomalyGroup]:
         """Group remaining anomalies by device model and time window."""
         groups = []
 
@@ -461,7 +458,7 @@ class AnomalyGrouper:
             return groups
 
         # Group by device model
-        by_model: Dict[str, List[ClassifiedAnomaly]] = defaultdict(list)
+        by_model: dict[str, list[ClassifiedAnomaly]] = defaultdict(list)
         for c in ungrouped:
             by_model[c.device_model].append(c)
 
@@ -477,7 +474,7 @@ class AnomalyGrouper:
                 anomalies.sort(key=lambda c: (_get_severity_rank(c.severity), c.anomaly.anomaly_score))
 
                 group_id = hashlib.md5(f"cohort:{model}".encode()).hexdigest()[:12]
-                device_count = len(set(c.anomaly.device_id for c in anomalies))
+                device_count = len({c.anomaly.device_id for c in anomalies})
                 group_name = f"Issues on {model} ({device_count} devices)"
 
                 groups.append(self._build_group(
@@ -496,8 +493,8 @@ class AnomalyGrouper:
 
     def _group_by_location(
         self,
-        classified: List[ClassifiedAnomaly],
-    ) -> List[AnomalyGroup]:
+        classified: list[ClassifiedAnomaly],
+    ) -> list[AnomalyGroup]:
         """Group remaining anomalies by location."""
         groups = []
 
@@ -507,7 +504,7 @@ class AnomalyGrouper:
             return groups
 
         # Group by location
-        by_location: Dict[str, List[ClassifiedAnomaly]] = defaultdict(list)
+        by_location: dict[str, list[ClassifiedAnomaly]] = defaultdict(list)
         for c in ungrouped:
             by_location[c.location].append(c)
 
@@ -518,7 +515,7 @@ class AnomalyGrouper:
             anomalies.sort(key=lambda c: (_get_severity_rank(c.severity), c.anomaly.anomaly_score))
 
             group_id = hashlib.md5(f"location:{location}".encode()).hexdigest()[:12]
-            device_count = len(set(c.anomaly.device_id for c in anomalies))
+            device_count = len({c.anomaly.device_id for c in anomalies})
             group_name = f"Multiple Issues at {location} ({device_count} devices)"
 
             groups.append(self._build_group(
@@ -534,7 +531,7 @@ class AnomalyGrouper:
 
     def group_anomalies(
         self,
-        anomalies: List[AnomalyResult],
+        anomalies: list[AnomalyResult],
         min_group_size: int = 2,
         temporal_window_hours: int = 24,
     ) -> GroupedAnomaliesResponse:
@@ -556,17 +553,17 @@ class AnomalyGrouper:
                 ungrouped_count=0,
                 ungrouped_anomalies=[],
                 grouping_method="smart_auto",
-                computed_at=datetime.now(timezone.utc),
+                computed_at=datetime.now(UTC),
             )
 
         # Load device metadata
-        device_ids = set(a.device_id for a in anomalies)
+        device_ids = {a.device_id for a in anomalies}
         self._load_device_metadata(device_ids)
 
         # Classify all anomalies
         classified = [self._classify_anomaly(a) for a in anomalies]
 
-        all_groups: List[AnomalyGroup] = []
+        all_groups: list[AnomalyGroup] = []
 
         # Priority 1: Group by remediation (most actionable)
         remediation_groups = self._group_by_remediation(classified)
@@ -592,7 +589,7 @@ class AnomalyGrouper:
 
         # Collect ungrouped anomalies, deduplicated by device_id (keep worst score per device)
         ungrouped_classified = [c for c in classified if not c.grouped]
-        seen_devices: Dict[int, ClassifiedAnomaly] = {}
+        seen_devices: dict[int, ClassifiedAnomaly] = {}
         for c in ungrouped_classified:
             device_id = c.anomaly.device_id
             if device_id not in seen_devices:
@@ -625,7 +622,7 @@ class AnomalyGrouper:
             ungrouped_count=len(ungrouped),
             ungrouped_anomalies=ungrouped[:20],  # Limit ungrouped to 20 for response size
             grouping_method="smart_auto",
-            computed_at=datetime.now(timezone.utc),
+            computed_at=datetime.now(UTC),
             coverage_percent=round(coverage_percent, 1),
             top_impact_group_id=top_impact_group.group_id if top_impact_group else None,
             top_impact_group_name=top_impact_group.group_name if top_impact_group else None,

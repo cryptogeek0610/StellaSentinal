@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -80,7 +80,7 @@ class PyTorchONNXExporter:
         is_valid = exporter.validate_vae_export(vae_model, "vae.onnx", input_dim=100)
     """
 
-    def __init__(self, config: Optional[PyTorchONNXExportConfig] = None):
+    def __init__(self, config: PyTorchONNXExportConfig | None = None):
         """Initialize the exporter.
 
         Args:
@@ -98,9 +98,9 @@ class PyTorchONNXExporter:
         model: nn.Module,
         input_dim: int,
         output_path: str | Path,
-        input_names: List[str] = None,
-        output_names: List[str] = None,
-        dynamic_axes: Dict[str, Dict[int, str]] = None,
+        input_names: list[str] = None,
+        output_names: list[str] = None,
+        dynamic_axes: dict[str, dict[int, str]] = None,
     ) -> Path:
         """Export a generic PyTorch model to ONNX.
 
@@ -380,7 +380,7 @@ class PyTorchONNXExporter:
     def add_metadata(
         self,
         onnx_path: str | Path,
-        metadata: Dict[str, Any],
+        metadata: dict[str, Any],
     ) -> None:
         """Add metadata to ONNX model.
 
@@ -398,7 +398,7 @@ class PyTorchONNXExporter:
         onnx.save(model, str(onnx_path))
         logger.info("Added metadata to %s", onnx_path)
 
-    def get_model_info(self, onnx_path: str | Path) -> Dict[str, Any]:
+    def get_model_info(self, onnx_path: str | Path) -> dict[str, Any]:
         """Get information about an ONNX model.
 
         Args:
@@ -473,7 +473,7 @@ class VAEFullWrapper(nn.Module):
         super().__init__()
         self.vae = vae
 
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Forward pass returning reconstruction, mu, and log_var."""
         return self.vae(x)
 
@@ -492,7 +492,7 @@ class ONNXVAEInference:
     def __init__(
         self,
         onnx_path: str | Path,
-        providers: List[str] = None,
+        providers: list[str] = None,
     ):
         """Initialize ONNX inference.
 

@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Set
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pandas as pd
 
@@ -29,7 +29,7 @@ class DataFreshness:
     """Data freshness metrics for a source."""
 
     source_name: str
-    latest_timestamp: Optional[datetime] = None
+    latest_timestamp: datetime | None = None
     staleness_hours: float = 0.0
     device_count: int = 0
     record_count: int = 0
@@ -51,8 +51,8 @@ class ReconciliationReport:
     match_rate: float
 
     # Data freshness
-    xsight_latest_data: Optional[datetime] = None
-    mobicontrol_latest_data: Optional[datetime] = None
+    xsight_latest_data: datetime | None = None
+    mobicontrol_latest_data: datetime | None = None
     xsight_staleness_hours: float = 0.0
     mobicontrol_staleness_hours: float = 0.0
 
@@ -69,8 +69,8 @@ class ReconciliationReport:
     quality_grade: str = "Unknown"  # A, B, C, D, F
 
     # Issues and recommendations
-    issues: List[str] = field(default_factory=list)
-    recommendations: List[str] = field(default_factory=list)
+    issues: list[str] = field(default_factory=list)
+    recommendations: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -80,9 +80,9 @@ class MissingDevice:
     device_id: int
     present_in: str  # "xsight" or "mobicontrol"
     missing_from: str
-    last_seen: Optional[datetime] = None
-    device_name: Optional[str] = None
-    device_model: Optional[str] = None
+    last_seen: datetime | None = None
+    device_name: str | None = None
+    device_model: str | None = None
 
 
 # =============================================================================
@@ -124,9 +124,9 @@ class DataReconciliationService:
 
     def generate_reconciliation_report(
         self,
-        xsight_df: Optional[pd.DataFrame] = None,
-        mobicontrol_df: Optional[pd.DataFrame] = None,
-        report_date: Optional[datetime] = None,
+        xsight_df: pd.DataFrame | None = None,
+        mobicontrol_df: pd.DataFrame | None = None,
+        report_date: datetime | None = None,
     ) -> ReconciliationReport:
         """
         Generate comprehensive reconciliation report.
@@ -139,7 +139,7 @@ class DataReconciliationService:
         Returns:
             ReconciliationReport with quality metrics
         """
-        report_date = report_date or datetime.now(timezone.utc)
+        report_date = report_date or datetime.now(UTC)
 
         # Load data if not provided
         if xsight_df is None:
@@ -217,16 +217,16 @@ class DataReconciliationService:
 
     def get_data_freshness(
         self,
-        xsight_df: Optional[pd.DataFrame] = None,
-        mobicontrol_df: Optional[pd.DataFrame] = None,
-    ) -> Dict[str, DataFreshness]:
+        xsight_df: pd.DataFrame | None = None,
+        mobicontrol_df: pd.DataFrame | None = None,
+    ) -> dict[str, DataFreshness]:
         """
         Get data freshness metrics for all sources.
 
         Returns:
             Dictionary of source name to freshness metrics
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Load data if not provided
         if xsight_df is None:
@@ -281,10 +281,10 @@ class DataReconciliationService:
     def get_missing_devices(
         self,
         source: str = "xsight",
-        xsight_df: Optional[pd.DataFrame] = None,
-        mobicontrol_df: Optional[pd.DataFrame] = None,
+        xsight_df: pd.DataFrame | None = None,
+        mobicontrol_df: pd.DataFrame | None = None,
         limit: int = 100,
-    ) -> List[MissingDevice]:
+    ) -> list[MissingDevice]:
         """
         Get list of devices missing from one source but present in another.
 
@@ -344,12 +344,12 @@ class DataReconciliationService:
     # Private Methods
     # =========================================================================
 
-    def _load_xsight_data(self) -> Optional[pd.DataFrame]:
+    def _load_xsight_data(self) -> pd.DataFrame | None:
         """Load XSight telemetry data."""
         try:
             from device_anomaly.data_access.unified_loader import load_unified_device_dataset
 
-            end_date = datetime.now(timezone.utc).date()
+            end_date = datetime.now(UTC).date()
             start_date = end_date - timedelta(days=7)
 
             return load_unified_device_dataset(start_date=start_date, end_date=end_date)
@@ -357,12 +357,12 @@ class DataReconciliationService:
             logger.warning(f"Failed to load XSight data: {e}")
             return None
 
-    def _load_mobicontrol_data(self) -> Optional[pd.DataFrame]:
+    def _load_mobicontrol_data(self) -> pd.DataFrame | None:
         """Load MobiControl inventory data."""
         try:
             from device_anomaly.data_access.mc_loader import load_mc_device_inventory_snapshot
 
-            end_date = datetime.now(timezone.utc).date()
+            end_date = datetime.now(UTC).date()
             start_date = end_date - timedelta(days=7)
 
             return load_mc_device_inventory_snapshot(start_date=start_date, end_date=end_date)
@@ -374,7 +374,7 @@ class DataReconciliationService:
         self,
         df: pd.DataFrame,
         timestamp_col: str,
-    ) -> Optional[datetime]:
+    ) -> datetime | None:
         """Get latest timestamp from DataFrame."""
         if df.empty or timestamp_col not in df.columns:
             return None
@@ -384,13 +384,13 @@ class DataReconciliationService:
             latest = ts_series.max()
             if pd.isna(latest):
                 return None
-            return latest.to_pydatetime().replace(tzinfo=timezone.utc)
+            return latest.to_pydatetime().replace(tzinfo=UTC)
         except Exception:
             return None
 
     def _compute_staleness_hours(
         self,
-        latest: Optional[datetime],
+        latest: datetime | None,
         reference: datetime,
     ) -> float:
         """Compute staleness in hours."""
@@ -400,9 +400,9 @@ class DataReconciliationService:
 
         # Ensure both are timezone-aware
         if latest.tzinfo is None:
-            latest = latest.replace(tzinfo=timezone.utc)
+            latest = latest.replace(tzinfo=UTC)
         if reference.tzinfo is None:
-            reference = reference.replace(tzinfo=timezone.utc)
+            reference = reference.replace(tzinfo=UTC)
 
         delta = reference - latest
         return delta.total_seconds() / 3600
@@ -411,8 +411,8 @@ class DataReconciliationService:
         self,
         xsight_df: pd.DataFrame,
         mc_df: pd.DataFrame,
-        matched_devices: Set[int],
-    ) -> Dict[str, float]:
+        matched_devices: set[int],
+    ) -> dict[str, float]:
         """Compute temporal alignment gaps between sources."""
         if not matched_devices:
             return {"avg": 0, "max": 0}
@@ -460,10 +460,10 @@ class DataReconciliationService:
         match_rate: float,
         xsight_staleness: float,
         mc_staleness: float,
-        time_gaps: Dict[str, float],
+        time_gaps: dict[str, float],
         xsight_only_count: int,
         mc_only_count: int,
-    ) -> tuple[List[str], List[str]]:
+    ) -> tuple[list[str], list[str]]:
         """Analyze data quality issues and generate recommendations."""
         issues = []
         recommendations = []
@@ -557,7 +557,7 @@ class DataReconciliationService:
 # =============================================================================
 
 
-def get_data_quality_summary() -> Dict[str, Any]:
+def get_data_quality_summary() -> dict[str, Any]:
     """Get quick data quality summary."""
     service = DataReconciliationService()
     report = service.generate_reconciliation_report()

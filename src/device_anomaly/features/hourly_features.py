@@ -14,7 +14,6 @@ Data Sources:
 from __future__ import annotations
 
 import logging
-from typing import List, Optional
 
 import numpy as np
 import pandas as pd
@@ -39,7 +38,7 @@ class HourlyFeatureBuilder:
         business_hour_end: int = 17,
         night_hour_start: int = 22,
         night_hour_end: int = 6,
-        rolling_windows: Optional[List[int]] = None,
+        rolling_windows: list[int] | None = None,
     ):
         """
         Initialize the hourly feature builder.
@@ -60,7 +59,7 @@ class HourlyFeatureBuilder:
     def transform(
         self,
         df: pd.DataFrame,
-        metric_columns: Optional[List[str]] = None,
+        metric_columns: list[str] | None = None,
     ) -> pd.DataFrame:
         """
         Build hourly features from time-series data.
@@ -129,7 +128,7 @@ class HourlyFeatureBuilder:
         logger.warning("No Hour or timestamp column found")
         return df
 
-    def _get_default_metric_columns(self, df: pd.DataFrame) -> List[str]:
+    def _get_default_metric_columns(self, df: pd.DataFrame) -> list[str]:
         """Get default metric columns for hourly analysis."""
         candidates = [
             "BatteryDrop", "BatteryLevelDrop", "TotalBatteryLevelDrop",
@@ -168,7 +167,7 @@ class HourlyFeatureBuilder:
     def _add_peak_hour_features(
         self,
         df: pd.DataFrame,
-        metric_columns: List[str],
+        metric_columns: list[str],
     ) -> pd.DataFrame:
         """Add peak hour detection features per device."""
         if "DeviceId" not in df.columns or "Hour" not in df.columns:
@@ -192,7 +191,7 @@ class HourlyFeatureBuilder:
     def _add_temporal_distribution_features(
         self,
         df: pd.DataFrame,
-        metric_columns: List[str],
+        metric_columns: list[str],
     ) -> pd.DataFrame:
         """Add temporal distribution features per device."""
         if "DeviceId" not in df.columns:
@@ -245,7 +244,7 @@ class HourlyFeatureBuilder:
     def _add_rolling_statistics(
         self,
         df: pd.DataFrame,
-        metric_columns: List[str],
+        metric_columns: list[str],
     ) -> pd.DataFrame:
         """Add rolling window statistics."""
         if "DeviceId" not in df.columns:
@@ -281,7 +280,7 @@ class HourlyFeatureBuilder:
     def _add_consistency_metrics(
         self,
         df: pd.DataFrame,
-        metric_columns: List[str],
+        metric_columns: list[str],
     ) -> pd.DataFrame:
         """Add consistency metrics (coefficient of variation) per device."""
         if "DeviceId" not in df.columns:
@@ -320,7 +319,7 @@ class HourlyFeatureBuilder:
 
 def build_hourly_features(
     df: pd.DataFrame,
-    metric_columns: Optional[List[str]] = None,
+    metric_columns: list[str] | None = None,
 ) -> pd.DataFrame:
     """
     Convenience function to build hourly features.
@@ -338,7 +337,7 @@ def build_hourly_features(
 
 def aggregate_hourly_to_daily(
     df: pd.DataFrame,
-    metric_columns: Optional[List[str]] = None,
+    metric_columns: list[str] | None = None,
 ) -> pd.DataFrame:
     """
     Aggregate hourly data to daily level with rich statistics.
@@ -389,7 +388,7 @@ def aggregate_hourly_to_daily(
     return daily
 
 
-def get_hourly_feature_names() -> List[str]:
+def get_hourly_feature_names() -> list[str]:
     """Get list of hourly feature names that this module generates."""
     base_features = [
         "is_business_hour",
@@ -398,20 +397,7 @@ def get_hourly_feature_names() -> List[str]:
     ]
 
     # Template features (applied per metric)
-    template_features = [
-        "{metric}_peak_hour",
-        "{metric}_business_ratio",
-        "{metric}_night_ratio",
-        "{metric}_weekend_ratio",
-        "{metric}_entropy",
-        "{metric}_cv",
-        "{metric}_consistency",
-    ]
 
     # Rolling features (per metric, per window)
-    rolling_features = [
-        "{metric}_roll_{window}h_mean",
-        "{metric}_roll_{window}h_std",
-    ]
 
     return base_features

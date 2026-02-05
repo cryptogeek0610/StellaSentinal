@@ -8,17 +8,15 @@ anomaly alerts in real-time.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Optional
-
-import numpy as np
+from typing import Any
 
 from device_anomaly.models.anomaly_detector import AnomalyDetectorIsolationForest
 from device_anomaly.streaming.engine import (
+    MessageType,
     StreamingEngine,
     StreamMessage,
-    MessageType,
 )
 
 logger = logging.getLogger(__name__)
@@ -35,8 +33,8 @@ class StreamingAnomalyResult:
     confidence: float
     severity: str  # "low", "medium", "high", "critical"
     contributing_features: list[tuple[str, float]]  # Top features with z-scores
-    cohort_id: Optional[str] = None
-    tenant_id: Optional[str] = None
+    cohort_id: str | None = None
+    tenant_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -74,8 +72,8 @@ class AnomalyStreamProcessor:
     def __init__(
         self,
         engine: StreamingEngine,
-        model_path: Optional[str] = None,
-        anomaly_threshold: Optional[float] = None,  # Override model threshold if set
+        model_path: str | None = None,
+        anomaly_threshold: float | None = None,  # Override model threshold if set
         alert_cooldown_seconds: float = 300,  # 5 minutes between alerts per device
     ):
         self.engine = engine
@@ -83,7 +81,7 @@ class AnomalyStreamProcessor:
         self.anomaly_threshold = anomaly_threshold
         self.alert_cooldown_seconds = alert_cooldown_seconds
 
-        self._model: Optional[AnomalyDetectorIsolationForest] = None
+        self._model: AnomalyDetectorIsolationForest | None = None
         self._running = False
         self._last_alert_time: dict[int, datetime] = {}
         self._alert_count = 0
@@ -194,15 +192,15 @@ class AnomalyStreamProcessor:
         device_id: int,
         timestamp: datetime,
         features: dict[str, float],
-        cohort_id: Optional[str],
-        tenant_id: Optional[str],
+        cohort_id: str | None,
+        tenant_id: str | None,
     ) -> StreamingAnomalyResult:
         """Score features and create result."""
         import pandas as pd
 
         if self._model.impute_values is None:
             self._model.impute_values = pd.Series(
-                {col: 0.0 for col in self._model.feature_cols}
+                dict.fromkeys(self._model.feature_cols, 0.0)
             )
 
         # Build feature vector matching model's expected features

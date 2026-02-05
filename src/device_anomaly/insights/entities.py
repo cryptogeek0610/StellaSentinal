@@ -10,13 +10,12 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime
 
 import pandas as pd
 from sqlalchemy.orm import Session
 
-from device_anomaly.database.schema import AggregatedInsight, LocationMetadata
+from device_anomaly.database.schema import AggregatedInsight
 from device_anomaly.insights.categories import EntityType, InsightCategory, InsightSeverity
 from device_anomaly.insights.classifier import ClassifiedInsight
 from device_anomaly.insights.location_mapper import LocationMapper
@@ -38,10 +37,10 @@ class EntityMetrics:
     anomaly_rate: float = 0.0
 
     # Insight counts by category
-    insight_counts: Dict[InsightCategory, int] = field(default_factory=dict)
+    insight_counts: dict[InsightCategory, int] = field(default_factory=dict)
 
     # Insight counts by severity
-    severity_counts: Dict[InsightSeverity, int] = field(default_factory=dict)
+    severity_counts: dict[InsightSeverity, int] = field(default_factory=dict)
 
     # Key metrics (aggregated from devices)
     avg_battery_drain_per_hour: float = 0.0
@@ -53,8 +52,8 @@ class EntityMetrics:
     total_crashes: int = 0
 
     # Comparison data
-    vs_fleet_percentile: Optional[int] = None
-    vs_baseline_percent: Optional[float] = None
+    vs_fleet_percentile: int | None = None
+    vs_baseline_percent: float | None = None
 
 
 @dataclass
@@ -63,7 +62,7 @@ class LocationInsight:
 
     location_id: str
     location_name: str
-    parent_region: Optional[str]
+    parent_region: str | None
 
     # Summary metrics
     total_devices: int
@@ -71,7 +70,7 @@ class LocationInsight:
     issue_rate: float
 
     # Top issues at this location
-    top_issues: List[Tuple[InsightCategory, int]]  # (category, count)
+    top_issues: list[tuple[InsightCategory, int]]  # (category, count)
 
     # Comparison to other locations
     rank_among_locations: int
@@ -88,8 +87,8 @@ class UserInsight:
     """Insight aggregated at the user level."""
 
     user_id: str
-    user_name: Optional[str]
-    location_id: Optional[str]
+    user_name: str | None
+    location_id: str | None
 
     # Devices
     device_count: int
@@ -113,7 +112,7 @@ class CohortInsight:
     manufacturer: str
     model: str
     os_version: str
-    firmware_version: Optional[str]
+    firmware_version: str | None
 
     # Devices
     device_count: int
@@ -143,7 +142,7 @@ class EntityAggregator:
         self,
         db_session: Session,
         tenant_id: str,
-        location_mapper: Optional[LocationMapper] = None,
+        location_mapper: LocationMapper | None = None,
     ):
         """Initialize the aggregator.
 
@@ -158,10 +157,10 @@ class EntityAggregator:
 
     def aggregate_by_location(
         self,
-        insights: List[ClassifiedInsight],
+        insights: list[ClassifiedInsight],
         devices_df: pd.DataFrame,
         period_days: int = 7,
-    ) -> Dict[str, LocationInsight]:
+    ) -> dict[str, LocationInsight]:
         """Aggregate insights by location.
 
         Args:
@@ -178,7 +177,7 @@ class EntityAggregator:
 
         # Get all locations
         locations = self.location_mapper.get_all_locations()
-        location_insights: Dict[str, LocationInsight] = {}
+        location_insights: dict[str, LocationInsight] = {}
 
         # Group devices by location
         for location in locations:
@@ -195,7 +194,7 @@ class EntityAggregator:
             ]
 
             # Count issues by category
-            category_counts: Dict[InsightCategory, int] = {}
+            category_counts: dict[InsightCategory, int] = {}
             devices_with_issues = set()
 
             for insight in loc_insights:
@@ -238,10 +237,10 @@ class EntityAggregator:
 
     def aggregate_by_user(
         self,
-        insights: List[ClassifiedInsight],
-        device_user_map: Dict[int, str],
-        user_names: Optional[Dict[str, str]] = None,
-    ) -> Dict[str, UserInsight]:
+        insights: list[ClassifiedInsight],
+        device_user_map: dict[int, str],
+        user_names: dict[str, str] | None = None,
+    ) -> dict[str, UserInsight]:
         """Aggregate insights by user.
 
         Args:
@@ -253,11 +252,11 @@ class EntityAggregator:
             Dict mapping user_id -> UserInsight
         """
         user_names = user_names or {}
-        user_insights: Dict[str, UserInsight] = {}
+        user_insights: dict[str, UserInsight] = {}
 
         # Group insights by user
-        user_device_insights: Dict[str, List[ClassifiedInsight]] = {}
-        user_devices: Dict[str, set] = {}
+        user_device_insights: dict[str, list[ClassifiedInsight]] = {}
+        user_devices: dict[str, set] = {}
 
         for insight in insights:
             device_id = insight.metadata.get("device_id") or insight.affected_entity_id
@@ -323,9 +322,9 @@ class EntityAggregator:
 
     def aggregate_by_cohort(
         self,
-        insights: List[ClassifiedInsight],
+        insights: list[ClassifiedInsight],
         device_metadata: pd.DataFrame,
-    ) -> Dict[str, CohortInsight]:
+    ) -> dict[str, CohortInsight]:
         """Aggregate insights by device cohort (manufacturer+model+OS+firmware).
 
         Args:
@@ -336,7 +335,7 @@ class EntityAggregator:
         Returns:
             Dict mapping cohort_id -> CohortInsight
         """
-        cohort_insights: Dict[str, CohortInsight] = {}
+        cohort_insights: dict[str, CohortInsight] = {}
 
         # Build cohort ID for each device
         def get_cohort_id(row: pd.Series) -> str:
@@ -356,12 +355,12 @@ class EntityAggregator:
         device_id_col = "DeviceId" if "DeviceId" in device_metadata.columns else "device_id"
         device_cohort_map = dict(zip(
             device_metadata[device_id_col].astype(str),
-            device_metadata["cohort_id"]
+            device_metadata["cohort_id"], strict=False
         ))
 
         # Group insights by cohort
-        cohort_device_insights: Dict[str, List[ClassifiedInsight]] = {}
-        cohort_devices: Dict[str, set] = {}
+        cohort_device_insights: dict[str, list[ClassifiedInsight]] = {}
+        cohort_devices: dict[str, set] = {}
 
         for insight in insights:
             device_id = str(insight.metadata.get("device_id") or insight.affected_entity_id or "")
@@ -435,11 +434,11 @@ class EntityAggregator:
 
     def rank_entities(
         self,
-        entity_metrics: Dict[str, EntityMetrics],
+        entity_metrics: dict[str, EntityMetrics],
         metric: str = "anomaly_rate",
         order: str = "worst",
         limit: int = 10,
-    ) -> List[Tuple[str, EntityMetrics]]:
+    ) -> list[tuple[str, EntityMetrics]]:
         """Rank entities by a specific metric.
 
         Args:
@@ -453,7 +452,7 @@ class EntityAggregator:
         """
         items = list(entity_metrics.items())
 
-        def get_metric_value(item: Tuple[str, EntityMetrics]) -> float:
+        def get_metric_value(item: tuple[str, EntityMetrics]) -> float:
             metrics = item[1]
             return getattr(metrics, metric, 0)
 
@@ -464,8 +463,8 @@ class EntityAggregator:
 
     def save_aggregated_insights(
         self,
-        location_insights: Dict[str, LocationInsight],
-        computed_at: Optional[datetime] = None,
+        location_insights: dict[str, LocationInsight],
+        computed_at: datetime | None = None,
     ) -> int:
         """Save location-level insights to the database.
 

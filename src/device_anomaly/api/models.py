@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -12,25 +11,25 @@ class AnomalyResponse(BaseModel):
 
     id: int
     device_id: int
-    device_name: Optional[str] = None
+    device_name: str | None = None
     timestamp: datetime
     anomaly_score: float
     anomaly_label: int
     status: str
-    assigned_to: Optional[str] = None
+    assigned_to: str | None = None
 
     # Metric values
-    total_battery_level_drop: Optional[float] = None
-    total_free_storage_kb: Optional[float] = None
-    download: Optional[float] = None
-    upload: Optional[float] = None
-    offline_time: Optional[float] = None
-    disconnect_count: Optional[float] = None
-    wifi_signal_strength: Optional[float] = None
-    connection_time: Optional[float] = None
+    total_battery_level_drop: float | None = None
+    total_free_storage_kb: float | None = None
+    download: float | None = None
+    upload: float | None = None
+    offline_time: float | None = None
+    disconnect_count: float | None = None
+    wifi_signal_strength: float | None = None
+    connection_time: float | None = None
 
     # Feature values (as JSON string)
-    feature_values_json: Optional[str] = None
+    feature_values_json: str | None = None
 
     created_at: datetime
     updated_at: datetime
@@ -41,7 +40,7 @@ class AnomalyResponse(BaseModel):
 class AnomalyListResponse(BaseModel):
     """Response model for paginated anomaly list."""
 
-    anomalies: List[AnomalyResponse]
+    anomalies: list[AnomalyResponse]
     total: int
     page: int
     page_size: int
@@ -51,23 +50,23 @@ class AnomalyListResponse(BaseModel):
 class AnomalyDetailResponse(AnomalyResponse):
     """Extended response model for anomaly detail page."""
 
-    notes: Optional[str] = None
-    investigation_notes: List[dict] = Field(default_factory=list)
+    notes: str | None = None
+    investigation_notes: list[dict] = Field(default_factory=list)
 
 
 class DeviceResponse(BaseModel):
     """Response model for device metadata."""
 
     device_id: int
-    device_model: Optional[str] = None
-    device_name: Optional[str] = None
-    location: Optional[str] = None
-    store_id: Optional[str] = None
+    device_model: str | None = None
+    device_name: str | None = None
+    location: str | None = None
+    store_id: str | None = None
     status: str
-    last_seen: Optional[datetime] = None
-    os_version: Optional[str] = None
-    agent_version: Optional[str] = None
-    custom_attributes: Optional[dict[str, str]] = None
+    last_seen: datetime | None = None
+    os_version: str | None = None
+    agent_version: str | None = None
+    custom_attributes: dict[str, str] | None = None
 
     model_config = {"from_attributes": True}
 
@@ -76,7 +75,7 @@ class DeviceDetailResponse(DeviceResponse):
     """Extended response model for device detail page."""
 
     anomaly_count: int = 0
-    recent_anomalies: List[AnomalyResponse] = Field(default_factory=list)
+    recent_anomalies: list[AnomalyResponse] = Field(default_factory=list)
 
 
 class DashboardStatsResponse(BaseModel):
@@ -103,12 +102,12 @@ class DashboardTrendResponse(BaseModel):
 class AnomalyFilters(BaseModel):
     """Filter parameters for anomaly list."""
 
-    device_id: Optional[int] = None
-    start_date: Optional[datetime] = None
-    end_date: Optional[datetime] = None
-    status: Optional[str] = None
-    min_score: Optional[float] = None
-    max_score: Optional[float] = None
+    device_id: int | None = None
+    start_date: datetime | None = None
+    end_date: datetime | None = None
+    status: str | None = None
+    min_score: float | None = None
+    max_score: float | None = None
     page: int = Field(default=1, ge=1)
     page_size: int = Field(default=50, ge=1, le=100)
 
@@ -117,14 +116,14 @@ class ResolveAnomalyRequest(BaseModel):
     """Request model for resolving an anomaly."""
 
     status: str = "resolved"
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class AddNoteRequest(BaseModel):
     """Request model for adding investigation notes."""
 
     note: str
-    action_type: Optional[str] = None
+    action_type: str | None = None
 
 
 class ConnectionStatusResponse(BaseModel):
@@ -132,7 +131,7 @@ class ConnectionStatusResponse(BaseModel):
 
     connected: bool
     server: str
-    error: Optional[str] = None
+    error: str | None = None
     status: str = "unknown"  # connected, disconnected, error, not_configured
 
 
@@ -154,7 +153,7 @@ class TroubleshootingAdviceResponse(BaseModel):
     """Response model for LLM-generated troubleshooting advice."""
 
     advice: str
-    summary: Optional[str] = None
+    summary: str | None = None
 
 
 class IsolationForestConfigResponse(BaseModel):
@@ -165,7 +164,7 @@ class IsolationForestConfigResponse(BaseModel):
     random_state: int
     scale_features: bool
     min_variance: float
-    feature_count: Optional[int] = None
+    feature_count: int | None = None
     model_type: str = "isolation_forest"
 
 
@@ -181,7 +180,7 @@ class ScoreDistributionBin(BaseModel):
 class ScoreDistributionResponse(BaseModel):
     """Response model for anomaly score distribution."""
 
-    bins: List[ScoreDistributionBin]
+    bins: list[ScoreDistributionBin]
     total_normal: int
     total_anomalies: int
     mean_score: float
@@ -198,18 +197,18 @@ class FeedbackStatsResponse(BaseModel):
     false_positives: int
     confirmed_anomalies: int
     projected_accuracy_gain: float
-    last_retrain: Optional[str] = None
+    last_retrain: str | None = None
 
 
 class IsolationForestStatsResponse(BaseModel):
     """Response model for Isolation Forest statistics."""
 
     config: IsolationForestConfigResponse
-    defaults: Optional[IsolationForestConfigResponse] = None
+    defaults: IsolationForestConfigResponse | None = None
     score_distribution: ScoreDistributionResponse
     total_predictions: int
     anomaly_rate: float
-    feedback_stats: Optional[FeedbackStatsResponse] = None
+    feedback_stats: FeedbackStatsResponse | None = None
 
 
 class LocationDataResponse(BaseModel):
@@ -221,14 +220,14 @@ class LocationDataResponse(BaseModel):
     baseline: float
     deviceCount: int
     activeDeviceCount: int
-    region: Optional[str] = None
-    anomalyCount: Optional[int] = None
+    region: str | None = None
+    anomalyCount: int | None = None
 
 
 class LocationHeatmapResponse(BaseModel):
     """Response model for location heatmap data."""
 
-    locations: List[LocationDataResponse]
+    locations: list[LocationDataResponse]
     attributeName: str
     totalLocations: int
     totalDevices: int
@@ -260,10 +259,10 @@ class AnomalyExplanation(BaseModel):
 
     summary_text: str  # Human-readable one-liner
     detailed_explanation: str  # 2-3 paragraph explanation
-    feature_contributions: List[FeatureContribution]
-    top_contributing_features: List[str]  # Top 3-5 feature names
+    feature_contributions: list[FeatureContribution]
+    top_contributing_features: list[str]  # Top 3-5 feature names
     explanation_method: str = "z_score"  # z_score, shap, lime, etc.
-    explanation_generated_at: Optional[datetime] = None
+    explanation_generated_at: datetime | None = None
 
 
 class BaselineMetric(BaseModel):
@@ -292,8 +291,8 @@ class BaselineConfig(BaseModel):
     baseline_period_days: int
     comparison_window_hours: int
     statistical_method: str  # 'z_score', 'mad', 'iqr'
-    peer_group_name: Optional[str] = None
-    peer_group_size: Optional[int] = None
+    peer_group_name: str | None = None
+    peer_group_size: int | None = None
     baseline_calculated_at: datetime
 
 
@@ -301,7 +300,7 @@ class BaselineComparison(BaseModel):
     """Complete baseline comparison data."""
 
     baseline_config: BaselineConfig
-    metrics: List[BaselineMetric]
+    metrics: list[BaselineMetric]
     overall_deviation_score: float
 
 
@@ -317,7 +316,7 @@ class HistoricalTimelineResponse(BaseModel):
     """Response for historical metric timeline."""
 
     metric_name: str
-    data_points: List[TimeSeriesDataPoint]
+    data_points: list[TimeSeriesDataPoint]
     baseline_mean: float
     baseline_std: float
     baseline_upper: float  # μ + 2σ
@@ -334,9 +333,9 @@ class EvidenceEvent(BaseModel):
     severity: str  # critical, high, medium, low, info
     title: str
     description: str
-    details: Optional[dict] = None
+    details: dict | None = None
     is_contributing_event: bool = False
-    contribution_note: Optional[str] = None
+    contribution_note: str | None = None
 
 
 class EvidenceHypothesis(BaseModel):
@@ -345,7 +344,7 @@ class EvidenceHypothesis(BaseModel):
     statement: str
     strength: str  # strong, moderate, weak
     source: str  # telemetry, pattern_match, inference
-    linked_event_id: Optional[str] = None
+    linked_event_id: str | None = None
 
 
 class RootCauseHypothesis(BaseModel):
@@ -355,9 +354,9 @@ class RootCauseHypothesis(BaseModel):
     title: str
     description: str
     likelihood: float  # 0-1
-    evidence_for: List[EvidenceHypothesis]
-    evidence_against: List[EvidenceHypothesis]
-    recommended_actions: List[str]
+    evidence_for: list[EvidenceHypothesis]
+    evidence_against: list[EvidenceHypothesis]
+    recommended_actions: list[str]
 
 
 class AIAnalysisResponse(BaseModel):
@@ -367,13 +366,13 @@ class AIAnalysisResponse(BaseModel):
     generated_at: datetime
     model_used: str
     primary_hypothesis: RootCauseHypothesis
-    alternative_hypotheses: List[RootCauseHypothesis]
+    alternative_hypotheses: list[RootCauseHypothesis]
     confidence_score: float  # 0-1
     confidence_level: str  # high, medium, low, uncertain
     confidence_explanation: str
     similar_cases_analyzed: int
     feedback_received: bool = False
-    feedback_rating: Optional[str] = None  # helpful, not_helpful
+    feedback_rating: str | None = None  # helpful, not_helpful
 
 
 class RemediationSuggestion(BaseModel):
@@ -382,17 +381,17 @@ class RemediationSuggestion(BaseModel):
     remediation_id: str
     title: str
     description: str
-    detailed_steps: List[str]
+    detailed_steps: list[str]
     priority: int  # 1 = highest
     confidence_score: float
     confidence_level: str
     source: str  # learned, ai_generated, policy
     source_details: str
-    historical_success_rate: Optional[float] = None
-    historical_sample_size: Optional[int] = None
-    estimated_impact: Optional[str] = None
+    historical_success_rate: float | None = None
+    historical_sample_size: int | None = None
+    estimated_impact: str | None = None
     is_automated: bool = False
-    automation_type: Optional[str] = None  # mobicontrol_action, script, notification
+    automation_type: str | None = None  # mobicontrol_action, script, notification
 
 
 class SimilarCase(BaseModel):
@@ -401,17 +400,17 @@ class SimilarCase(BaseModel):
     case_id: str
     anomaly_id: int
     device_id: int
-    device_name: Optional[str] = None
+    device_name: str | None = None
     detected_at: datetime
-    resolved_at: Optional[datetime] = None
+    resolved_at: datetime | None = None
     similarity_score: float
-    similarity_factors: List[str]
+    similarity_factors: list[str]
     anomaly_type: str
     severity: str
     resolution_status: str
-    resolution_summary: Optional[str] = None
-    successful_remediation: Optional[str] = None
-    time_to_resolution_hours: Optional[float] = None
+    resolution_summary: str | None = None
+    successful_remediation: str | None = None
+    time_to_resolution_hours: float | None = None
 
 
 class InvestigationPanelResponse(BaseModel):
@@ -430,49 +429,49 @@ class InvestigationPanelResponse(BaseModel):
     explanation: AnomalyExplanation
 
     # Baseline comparison (the "How it deviates")
-    baseline_comparison: Optional[BaselineComparison] = None
+    baseline_comparison: BaselineComparison | None = None
 
     # Evidence timeline
-    evidence_events: List[EvidenceEvent]
+    evidence_events: list[EvidenceEvent]
     evidence_event_count: int
 
     # AI Analysis (if available)
-    ai_analysis: Optional[AIAnalysisResponse] = None
+    ai_analysis: AIAnalysisResponse | None = None
 
     # Remediation suggestions
-    suggested_remediations: List[RemediationSuggestion]
+    suggested_remediations: list[RemediationSuggestion]
 
     # Similar cases
-    similar_cases: List[SimilarCase]
+    similar_cases: list[SimilarCase]
 
 
 class AIAnalysisFeedbackRequest(BaseModel):
     """Request to submit feedback on AI analysis."""
 
     rating: str  # helpful, not_helpful
-    feedback_text: Optional[str] = None
-    actual_root_cause: Optional[str] = None
+    feedback_text: str | None = None
+    actual_root_cause: str | None = None
 
 
 class RemediationExecuteRequest(BaseModel):
     """Request to execute a remediation action."""
 
     confirm: bool = False
-    custom_params: Optional[dict] = None
+    custom_params: dict | None = None
 
 
 class RemediationOutcomeRequest(BaseModel):
     """Request to record remediation outcome."""
 
     outcome: str  # resolved, partially_resolved, no_effect, made_worse
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class LearnFromFixRequest(BaseModel):
     """Request to learn from a successful fix."""
 
     remediation_description: str
-    tags: List[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
 
 
 # ============================================
@@ -489,10 +488,10 @@ class AnomalyGroupMember(BaseModel):
     severity: str  # critical, high, medium, low
     status: str  # open, investigating, resolved, false_positive
     timestamp: datetime
-    device_name: Optional[str] = None
-    device_model: Optional[str] = None
-    location: Optional[str] = None
-    primary_metric: Optional[str] = None  # Main contributing factor
+    device_name: str | None = None
+    device_model: str | None = None
+    location: str | None = None
+    primary_metric: str | None = None  # Main contributing factor
 
 
 class AnomalyGroup(BaseModel):
@@ -508,43 +507,43 @@ class AnomalyGroup(BaseModel):
     device_count: int  # Unique devices affected
 
     # Optional group context
-    suggested_remediation: Optional[RemediationSuggestion] = None
-    common_location: Optional[str] = None
-    common_device_model: Optional[str] = None
+    suggested_remediation: RemediationSuggestion | None = None
+    common_location: str | None = None
+    common_device_model: str | None = None
     time_range_start: datetime
     time_range_end: datetime
 
     # Sample anomalies for preview (first 5)
-    sample_anomalies: List[AnomalyGroupMember]
+    sample_anomalies: list[AnomalyGroupMember]
 
     # Explanation of why these are grouped
-    grouping_factors: List[str]  # e.g., ["Same category: BATTERY_RAPID_DRAIN", "Similar score range"]
-    avg_similarity_score: Optional[float] = None
+    grouping_factors: list[str]  # e.g., ["Same category: BATTERY_RAPID_DRAIN", "Similar score range"]
+    avg_similarity_score: float | None = None
 
 
 class GroupedAnomaliesResponse(BaseModel):
     """Response containing grouped anomalies."""
 
-    groups: List[AnomalyGroup]
+    groups: list[AnomalyGroup]
     total_anomalies: int
     total_groups: int
     ungrouped_count: int  # Anomalies that don't fit any group
-    ungrouped_anomalies: List[AnomalyGroupMember] = Field(default_factory=list)
+    ungrouped_anomalies: list[AnomalyGroupMember] = Field(default_factory=list)
     grouping_method: str = "smart_auto"
     computed_at: datetime
 
     # Impact metrics for hero card
     coverage_percent: float = 0.0  # % of anomalies in groups
-    top_impact_group_id: Optional[str] = None  # Group with highest impact (count * severity)
-    top_impact_group_name: Optional[str] = None  # Name of top impact group
+    top_impact_group_id: str | None = None  # Group with highest impact (count * severity)
+    top_impact_group_name: str | None = None  # Name of top impact group
 
 
 class BulkActionRequest(BaseModel):
     """Request for bulk status changes on anomalies."""
 
     action: str  # resolve, dismiss, investigate, false_positive
-    anomaly_ids: List[int]  # IDs of anomalies to update
-    notes: Optional[str] = None  # Optional note to add
+    anomaly_ids: list[int]  # IDs of anomalies to update
+    notes: str | None = None  # Optional note to add
 
 
 class BulkActionResponse(BaseModel):
@@ -552,7 +551,7 @@ class BulkActionResponse(BaseModel):
 
     success: bool
     affected_count: int
-    failed_ids: List[int] = Field(default_factory=list)
+    failed_ids: list[int] = Field(default_factory=list)
     message: str
 
 
@@ -565,15 +564,15 @@ class ImpactedDeviceResponse(BaseModel):
     """Device affected by an insight."""
 
     device_id: int
-    device_name: Optional[str] = None
-    device_model: Optional[str] = None
-    location: Optional[str] = None
+    device_name: str | None = None
+    device_model: str | None = None
+    location: str | None = None
     status: str = "unknown"
-    last_seen: Optional[datetime] = None
-    os_version: Optional[str] = None
+    last_seen: datetime | None = None
+    os_version: str | None = None
     anomaly_count: int = 0
-    severity: Optional[str] = None
-    primary_metric: Optional[str] = None
+    severity: str | None = None
+    primary_metric: str | None = None
 
 
 class DeviceGroupingResponse(BaseModel):
@@ -582,7 +581,7 @@ class DeviceGroupingResponse(BaseModel):
     group_key: str
     group_label: str
     device_count: int
-    devices: List[ImpactedDeviceResponse]
+    devices: list[ImpactedDeviceResponse]
 
 
 class InsightDevicesResponse(BaseModel):
@@ -590,10 +589,10 @@ class InsightDevicesResponse(BaseModel):
 
     insight_id: str
     insight_headline: str
-    insight_category: Optional[str] = None
-    insight_severity: Optional[str] = None
+    insight_category: str | None = None
+    insight_severity: str | None = None
     total_devices: int
-    devices: List[ImpactedDeviceResponse]
-    groupings: dict[str, List[DeviceGroupingResponse]]
-    ai_pattern_analysis: Optional[str] = None
+    devices: list[ImpactedDeviceResponse]
+    groupings: dict[str, list[DeviceGroupingResponse]]
+    ai_pattern_analysis: str | None = None
     generated_at: datetime

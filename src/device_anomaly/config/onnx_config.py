@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 from device_anomaly.models.inference_engine import EngineType, ExecutionProvider
 
@@ -150,7 +149,7 @@ class ONNXConfig:
 
 
 # Global configuration instance
-_global_config: Optional[ONNXConfig] = None
+_global_config: ONNXConfig | None = None
 
 
 def get_onnx_config() -> ONNXConfig:

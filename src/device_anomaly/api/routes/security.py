@@ -7,19 +7,13 @@ from __future__ import annotations
 
 import logging
 import random
-from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 from device_anomaly.api.dependencies import get_mock_mode, get_tenant_id
-from device_anomaly.services.path_builder import get_path_builder, get_path_hierarchy
-from device_anomaly.services.security_grouper import (
-    DeviceSecurityStatus,
-    SecurityGrouper,
-    compute_security_score,
-)
+from device_anomaly.services.path_builder import get_path_hierarchy
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +28,7 @@ class DeviceSecurityResponse(BaseModel):
     """Individual device security status."""
     device_id: int
     device_name: str
-    device_path: Optional[str] = Field(default=None, description="Full hierarchical path")
+    device_path: str | None = Field(default=None, description="Full hierarchical path")
     security_score: float = Field(description="Security score 0-100")
     is_encrypted: bool
     is_rooted: bool
@@ -43,7 +37,7 @@ class DeviceSecurityResponse(BaseModel):
     usb_debugging: bool
     developer_mode: bool
     risk_level: str = Field(description="low, medium, high, or critical")
-    violations: List[str] = []
+    violations: list[str] = []
 
 
 class ComplianceBreakdownResponse(BaseModel):
@@ -76,24 +70,24 @@ class SecuritySummaryResponse(BaseModel):
     usb_debugging_enabled: int
     developer_mode_enabled: int
     no_passcode_devices: int
-    recommendations: List[str] = []
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    recommendations: list[str] = []
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class DeviceListResponse(BaseModel):
     """List of devices with security status."""
-    devices: List[DeviceSecurityResponse]
+    devices: list[DeviceSecurityResponse]
     total_count: int
 
 
 class ComplianceListResponse(BaseModel):
     """Compliance breakdown by category."""
-    categories: List[ComplianceBreakdownResponse]
+    categories: list[ComplianceBreakdownResponse]
 
 
 class TrendListResponse(BaseModel):
     """Security trend data."""
-    trends: List[SecurityTrendResponse]
+    trends: list[SecurityTrendResponse]
     period_days: int
 
 
@@ -106,23 +100,23 @@ class PathNodeResponse(BaseModel):
     path_id: str
     path_name: str
     full_path: str
-    parent_path_id: Optional[str] = None
+    parent_path_id: str | None = None
     depth: int
     device_count: int
     security_score: float = 0.0
     compliant_count: int = 0
     at_risk_count: int = 0
     critical_count: int = 0
-    children: List["PathNodeResponse"] = []
+    children: list[PathNodeResponse] = []
 
 
 class PathHierarchyResponse(BaseModel):
     """PATH hierarchy with security metrics."""
     tenant_id: str
-    hierarchy: List[PathNodeResponse]
+    hierarchy: list[PathNodeResponse]
     total_paths: int
     total_devices: int
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class PathSecuritySummaryResponse(BaseModel):
@@ -145,10 +139,10 @@ class PathSecuritySummaryResponse(BaseModel):
 class PathSecurityResponse(BaseModel):
     """Security summaries grouped by PATH."""
     tenant_id: str
-    summaries: List[PathSecuritySummaryResponse]
-    selected_path: Optional[str] = None
+    summaries: list[PathSecuritySummaryResponse]
+    selected_path: str | None = None
     depth: int
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class RiskClusterResponse(BaseModel):
@@ -159,19 +153,19 @@ class RiskClusterResponse(BaseModel):
     severity: str
     device_count: int
     avg_security_score: float
-    affected_paths: List[str]
-    first_detected: Optional[datetime] = None
-    sample_devices: List[DeviceSecurityResponse]
+    affected_paths: list[str]
+    first_detected: datetime | None = None
+    sample_devices: list[DeviceSecurityResponse]
     recommendation: str
 
 
 class RiskClustersResponse(BaseModel):
     """Collection of risk clusters."""
     tenant_id: str
-    clusters: List[RiskClusterResponse]
+    clusters: list[RiskClusterResponse]
     total_devices_affected: int
     coverage_percent: float
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class PathComparisonItemResponse(BaseModel):
@@ -190,12 +184,12 @@ class PathComparisonItemResponse(BaseModel):
 class PathComparisonResponse(BaseModel):
     """Comparison results across multiple PATHs."""
     tenant_id: str
-    paths: List[PathComparisonItemResponse]
+    paths: list[PathComparisonItemResponse]
     fleet_average_score: float
-    best_path: Optional[str] = None
-    worst_path: Optional[str] = None
-    insights: List[str] = []
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    best_path: str | None = None
+    worst_path: str | None = None
+    insights: list[str] = []
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class TemporalClusterResponse(BaseModel):
@@ -204,18 +198,18 @@ class TemporalClusterResponse(BaseModel):
     cluster_name: str
     issue_appeared_at: datetime
     device_count: int
-    common_violations: List[str]
-    affected_paths: List[str]
+    common_violations: list[str]
+    affected_paths: list[str]
     correlation_insight: str
-    sample_devices: List[DeviceSecurityResponse]
+    sample_devices: list[DeviceSecurityResponse]
 
 
 class TemporalClustersResponse(BaseModel):
     """Collection of temporal correlation clusters."""
     tenant_id: str
-    clusters: List[TemporalClusterResponse]
+    clusters: list[TemporalClusterResponse]
     window_hours: int
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 # ============================================================================
@@ -235,7 +229,7 @@ MOCK_PATHS = [
 ]
 
 
-def _generate_mock_devices(count: int = 25, with_paths: bool = True) -> List[DeviceSecurityResponse]:
+def _generate_mock_devices(count: int = 25, with_paths: bool = True) -> list[DeviceSecurityResponse]:
     """Generate mock device security data with optional PATH assignment."""
     random.seed(42)
     devices = []
@@ -302,7 +296,7 @@ def _generate_mock_devices(count: int = 25, with_paths: bool = True) -> List[Dev
     return sorted(devices, key=lambda d: d.security_score)
 
 
-def _generate_mock_compliance() -> List[ComplianceBreakdownResponse]:
+def _generate_mock_compliance() -> list[ComplianceBreakdownResponse]:
     """Generate mock compliance breakdown."""
     data = [
         ('Encryption', 438, 12),
@@ -324,10 +318,10 @@ def _generate_mock_compliance() -> List[ComplianceBreakdownResponse]:
     ]
 
 
-def _generate_mock_trends(days: int = 30) -> List[SecurityTrendResponse]:
+def _generate_mock_trends(days: int = 30) -> list[SecurityTrendResponse]:
     """Generate mock security trends."""
     random.seed(42)
-    today = datetime.now(timezone.utc)
+    today = datetime.now(UTC)
     return [
         SecurityTrendResponse(
             date=(today - timedelta(days=days - 1 - i)).strftime('%Y-%m-%d'),
@@ -530,7 +524,7 @@ def _generate_mock_risk_clusters(tenant_id: str) -> RiskClustersResponse:
                 "North America / East Region / Warehouse-NYC",
                 "North America / West Region / Distribution-LA",
             ],
-            first_detected=datetime.now(timezone.utc) - timedelta(days=7),
+            first_detected=datetime.now(UTC) - timedelta(days=7),
             sample_devices=[d for d in devices if d.is_rooted][:5],
             recommendation="Investigate for potential compromise and consider device wipe",
         ),
@@ -545,7 +539,7 @@ def _generate_mock_risk_clusters(tenant_id: str) -> RiskClustersResponse:
                 "North America / West Region / Distribution-LA",
                 "Europe / Germany / Store-Berlin-001",
             ],
-            first_detected=datetime.now(timezone.utc) - timedelta(days=14),
+            first_detected=datetime.now(UTC) - timedelta(days=14),
             sample_devices=[d for d in devices if not d.is_encrypted][:5],
             recommendation="Enable encryption policy and verify compliance",
         ),
@@ -561,7 +555,7 @@ def _generate_mock_risk_clusters(tenant_id: str) -> RiskClustersResponse:
                 "North America / West Region / Store-LA-001",
                 "Europe / UK / Warehouse-Manchester",
             ],
-            first_detected=datetime.now(timezone.utc) - timedelta(days=30),
+            first_detected=datetime.now(UTC) - timedelta(days=30),
             sample_devices=[d for d in devices if d.patch_age_days > 60][:5],
             recommendation="Schedule security patch deployment across affected locations",
         ),
@@ -576,7 +570,7 @@ def _generate_mock_risk_clusters(tenant_id: str) -> RiskClustersResponse:
                 "North America / East Region / Store-NYC-001",
                 "North America / West Region / Store-LA-001",
             ],
-            first_detected=datetime.now(timezone.utc) - timedelta(days=5),
+            first_detected=datetime.now(UTC) - timedelta(days=5),
             sample_devices=[d for d in devices if d.usb_debugging][:5],
             recommendation="Push policy to disable USB debugging on production devices",
         ),
@@ -591,7 +585,7 @@ def _generate_mock_risk_clusters(tenant_id: str) -> RiskClustersResponse:
                 "North America / East Region / Warehouse-NYC",
                 "Europe / Germany / Store-Berlin-001",
             ],
-            first_detected=datetime.now(timezone.utc) - timedelta(days=10),
+            first_detected=datetime.now(UTC) - timedelta(days=10),
             sample_devices=[d for d in devices if d.developer_mode][:5],
             recommendation="Disable developer mode on production devices",
         ),
@@ -608,7 +602,7 @@ def _generate_mock_risk_clusters(tenant_id: str) -> RiskClustersResponse:
 
 def _generate_mock_path_comparison(
     tenant_id: str,
-    paths: List[str],
+    paths: list[str],
 ) -> PathComparisonResponse:
     """Generate mock path comparison data."""
     path_data = {
@@ -679,7 +673,7 @@ def _generate_mock_temporal_clusters(
         TemporalClusterResponse(
             cluster_id="temporal-1",
             cluster_name="Correlated Patch Issues (12 devices)",
-            issue_appeared_at=datetime.now(timezone.utc) - timedelta(hours=48),
+            issue_appeared_at=datetime.now(UTC) - timedelta(hours=48),
             device_count=12,
             common_violations=["Security patch 75 days old", "Security patch 82 days old"],
             affected_paths=[
@@ -695,7 +689,7 @@ def _generate_mock_temporal_clusters(
         TemporalClusterResponse(
             cluster_id="temporal-2",
             cluster_name="USB Debugging Wave (8 devices)",
-            issue_appeared_at=datetime.now(timezone.utc) - timedelta(hours=24),
+            issue_appeared_at=datetime.now(UTC) - timedelta(hours=24),
             device_count=8,
             common_violations=["USB debugging enabled"],
             affected_paths=["North America / East Region / Store-NYC-001"],
@@ -746,7 +740,7 @@ async def get_security_summary(
         developer_mode_enabled=0,
         no_passcode_devices=0,
         recommendations=["No security data available - connect to data source"],
-        generated_at=datetime.now(timezone.utc),
+        generated_at=datetime.now(UTC),
     )
 
 
@@ -755,7 +749,7 @@ async def get_device_security(
     tenant_id: str = Depends(get_tenant_id),
     mock_mode: bool = Depends(get_mock_mode),
     limit: int = Query(default=50, le=500),
-    risk_level: Optional[str] = Query(default=None, description="Filter by risk level"),
+    risk_level: str | None = Query(default=None, description="Filter by risk level"),
 ):
     """Get per-device security status."""
     if mock_mode:
@@ -864,7 +858,7 @@ async def get_security_path_hierarchy(
 async def get_security_by_path(
     tenant_id: str = Depends(get_tenant_id),
     mock_mode: bool = Depends(get_mock_mode),
-    path: Optional[str] = Query(default=None, description="Filter to specific path"),
+    path: str | None = Query(default=None, description="Filter to specific path"),
     depth: int = Query(default=2, ge=1, le=5, description="Hierarchy depth to aggregate"),
 ):
     """
@@ -877,7 +871,7 @@ async def get_security_by_path(
         # Flatten hierarchy to summaries
         summaries = []
 
-        def flatten(nodes: List[PathNodeResponse], current_depth: int = 0):
+        def flatten(nodes: list[PathNodeResponse], current_depth: int = 0):
             for node in nodes:
                 if current_depth <= depth:
                     summaries.append(PathSecuritySummaryResponse(
@@ -924,7 +918,7 @@ async def get_security_by_path(
 async def get_security_risk_clusters(
     tenant_id: str = Depends(get_tenant_id),
     mock_mode: bool = Depends(get_mock_mode),
-    violation_types: Optional[str] = Query(
+    violation_types: str | None = Query(
         default=None,
         description="Comma-separated violation types to filter"
     ),

@@ -22,8 +22,9 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Generator, List, Optional, Tuple
+from collections.abc import Generator
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pandas as pd
 from sqlalchemy import bindparam, text
@@ -35,13 +36,9 @@ from device_anomaly.data_access.canonical_events import (
     dataframe_to_canonical_events,
 )
 from device_anomaly.data_access.db_connection import create_mc_engine
-from device_anomaly.data_access.schema_discovery import (
-    TableInfo,
-    discover_mobicontrol_schema,
-)
+from device_anomaly.data_access.db_utils import table_exists
 from device_anomaly.data_access.stat_type_mapper import discover_stat_types
 from device_anomaly.data_access.watermark_store import get_watermark_store
-from device_anomaly.data_access.db_utils import table_exists
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +112,7 @@ MC_TIMESERIES_TABLES = {
 }
 
 
-def _validate_columns(engine: Engine, table_name: str, columns: List[str]) -> List[str]:
+def _validate_columns(engine: Engine, table_name: str, columns: list[str]) -> list[str]:
     """Validate which columns exist in the table."""
     query = text("""
         SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
@@ -137,13 +134,13 @@ def _validate_columns(engine: Engine, table_name: str, columns: List[str]) -> Li
 
 def load_mc_timeseries_incremental(
     table_name: str,
-    start_time: Optional[datetime] = None,
-    end_time: Optional[datetime] = None,
-    device_ids: Optional[List[int]] = None,
+    start_time: datetime | None = None,
+    end_time: datetime | None = None,
+    device_ids: list[int] | None = None,
     batch_size: int = DEFAULT_BATCH_SIZE,
     use_watermark: bool = True,
-    engine: Optional[Engine] = None,
-) -> Tuple[pd.DataFrame, Optional[datetime]]:
+    engine: Engine | None = None,
+) -> tuple[pd.DataFrame, datetime | None]:
     """
     Load time-series data incrementally from a MobiControl table.
 
@@ -193,14 +190,14 @@ def load_mc_timeseries_incremental(
         start_time = store.get_watermark("mobicontrol", table_name)
 
     if end_time is None:
-        end_time = datetime.now(timezone.utc)
+        end_time = datetime.now(UTC)
 
     # Build query
     columns_str = ", ".join(valid_columns)
 
     # Build WHERE clause
     where_parts = [f"{ts_col} > :start_time", f"{ts_col} <= :end_time"]
-    params: Dict[str, Any] = {
+    params: dict[str, Any] = {
         "start_time": start_time,
         "end_time": end_time,
     }
@@ -242,7 +239,7 @@ def load_mc_timeseries_incremental(
                     new_watermark = max_ts
 
                 if new_watermark.tzinfo is None:
-                    new_watermark = new_watermark.replace(tzinfo=timezone.utc)
+                    new_watermark = new_watermark.replace(tzinfo=UTC)
             else:
                 new_watermark = None
         else:
@@ -263,7 +260,7 @@ def load_mc_timeseries_incremental(
 def load_and_update_watermark(
     table_name: str,
     batch_size: int = DEFAULT_BATCH_SIZE,
-    engine: Optional[Engine] = None,
+    engine: Engine | None = None,
 ) -> pd.DataFrame:
     """
     Load incremental data and update watermark atomically.
@@ -295,9 +292,9 @@ def load_and_update_watermark(
 
 def load_all_mc_timeseries(
     batch_size: int = DEFAULT_BATCH_SIZE,
-    tables: Optional[List[str]] = None,
-    engine: Optional[Engine] = None,
-) -> Dict[str, pd.DataFrame]:
+    tables: list[str] | None = None,
+    engine: Engine | None = None,
+) -> dict[str, pd.DataFrame]:
     """
     Load incremental data from all configured time-series tables.
 
@@ -335,8 +332,8 @@ def load_mc_timeseries_as_events(
     table_name: str,
     tenant_id: str = "default",
     batch_size: int = DEFAULT_BATCH_SIZE,
-    engine: Optional[Engine] = None,
-) -> List[CanonicalEvent]:
+    engine: Engine | None = None,
+) -> list[CanonicalEvent]:
     """
     Load time-series data and normalize to canonical events.
 
@@ -361,10 +358,10 @@ def load_mc_timeseries_as_events(
 
 def stream_mc_timeseries(
     table_name: str,
-    start_time: Optional[datetime] = None,
-    end_time: Optional[datetime] = None,
+    start_time: datetime | None = None,
+    end_time: datetime | None = None,
     batch_size: int = DEFAULT_BATCH_SIZE,
-    engine: Optional[Engine] = None,
+    engine: Engine | None = None,
 ) -> Generator[pd.DataFrame, None, None]:
     """
     Stream time-series data in batches (for large backfills).
@@ -376,7 +373,7 @@ def stream_mc_timeseries(
 
     current_watermark = start_time
     if current_watermark is None:
-        current_watermark = datetime.now(timezone.utc) - timedelta(days=30)
+        current_watermark = datetime.now(UTC) - timedelta(days=30)
 
     while True:
         df, new_watermark = load_mc_timeseries_incremental(
@@ -403,8 +400,8 @@ def stream_mc_timeseries(
 
 
 def get_mc_timeseries_stats(
-    engine: Optional[Engine] = None,
-) -> Dict[str, Dict[str, Any]]:
+    engine: Engine | None = None,
+) -> dict[str, dict[str, Any]]:
     """
     Get statistics for all time-series tables.
 
@@ -473,9 +470,9 @@ def get_mc_timeseries_stats(
 def backfill_mc_timeseries(
     table_name: str,
     start_time: datetime,
-    end_time: Optional[datetime] = None,
+    end_time: datetime | None = None,
     batch_size: int = DEFAULT_BATCH_SIZE,
-    engine: Optional[Engine] = None,
+    engine: Engine | None = None,
 ) -> int:
     """
     Backfill historical data for a table.

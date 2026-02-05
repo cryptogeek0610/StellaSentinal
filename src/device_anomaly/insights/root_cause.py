@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -38,7 +38,7 @@ class RootCauseAnalysisResult:
     device_id: Any
     anomaly_type: str
     probable_causes: list[RootCause]
-    top_cause: Optional[RootCause]
+    top_cause: RootCause | None
     analysis_confidence: float
     recommendations: list[str] = field(default_factory=list)
 
@@ -224,8 +224,8 @@ class RootCauseAnalyzer:
     def analyze(
         self,
         anomaly_features: dict[str, Any],
-        historical_features: Optional[list[dict[str, Any]]] = None,
-        cohort_baseline: Optional[dict[str, Any]] = None,
+        historical_features: list[dict[str, Any]] | None = None,
+        cohort_baseline: dict[str, Any] | None = None,
         device_id: Any = None,
         anomaly_type: str = "unknown",
     ) -> RootCauseAnalysisResult:
@@ -500,8 +500,8 @@ class RootCauseAnalyzer:
 
 def analyze_root_cause(
     anomaly_features: dict[str, Any],
-    historical_features: Optional[list[dict[str, Any]]] = None,
-    cohort_baseline: Optional[dict[str, Any]] = None,
+    historical_features: list[dict[str, Any]] | None = None,
+    cohort_baseline: dict[str, Any] | None = None,
     device_id: Any = None,
     anomaly_type: str = "unknown",
 ) -> RootCauseAnalysisResult:
@@ -531,7 +531,7 @@ def analyze_root_cause(
 def analyze_dataframe_root_causes(
     df: pd.DataFrame,
     anomaly_col: str = "anomaly_label",
-    feature_cols: Optional[list[str]] = None,
+    feature_cols: list[str] | None = None,
 ) -> pd.DataFrame:
     """
     Analyze root causes for anomalies in a dataframe.
@@ -560,7 +560,7 @@ def analyze_dataframe_root_causes(
         ]
 
     analyses = []
-    for idx, row in df.iterrows():
+    for _idx, row in df.iterrows():
         if row.get(anomaly_col) != -1:
             analyses.append(None)
             continue

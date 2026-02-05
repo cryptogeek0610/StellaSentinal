@@ -2,21 +2,17 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import List, Optional
 
 import pandas as pd
 
+from device_anomaly.config.feature_config import FeatureConfig
 from device_anomaly.data_access.db_connection import create_dw_engine
-from device_anomaly.config.feature_config import (
-    FeatureConfig
-)
-
 
 logger = logging.getLogger(__name__)
 
 def build_anomaly_results_df(
     df_scored: pd.DataFrame,
-    explanations: Optional[List[str]],
+    explanations: list[str] | None,
     source: str,
     model_version: str,
 ) -> pd.DataFrame:
@@ -37,10 +33,7 @@ def build_anomaly_results_df(
     explanations_iter = iter(explanations) if explanations is not None else None
 
     for _, row in df_scored.iterrows():
-        if explanations_iter is not None:
-            explanation = next(explanations_iter)
-        else:
-            explanation = None
+        explanation = next(explanations_iter) if explanations_iter is not None else None
 
         metrics = {
             col: row[col]

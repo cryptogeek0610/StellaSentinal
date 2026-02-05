@@ -9,10 +9,8 @@ Design principle: Inject exact figures, instruct LLM to use them verbatim.
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Any, Dict, Optional
 
 from device_anomaly.costs.models import InsightFinancialData
-
 
 # =============================================================================
 # SYSTEM PROMPTS
@@ -220,7 +218,7 @@ Keep response under 150 words.
 # TEMPLATE FUNCTIONS
 # =============================================================================
 
-def build_financial_context(financial_data: Optional[InsightFinancialData]) -> str:
+def build_financial_context(financial_data: InsightFinancialData | None) -> str:
     """Build the financial context section for prompts.
 
     Args:
@@ -237,7 +235,7 @@ def build_financial_context(financial_data: Optional[InsightFinancialData]) -> s
 
 def build_cost_aware_anomaly_prompt(
     anomaly_json: str,
-    financial_data: Optional[InsightFinancialData],
+    financial_data: InsightFinancialData | None,
     minimal: bool = False,
 ) -> str:
     """Build a cost-aware prompt for anomaly explanation.
@@ -262,7 +260,7 @@ def build_cost_aware_anomaly_prompt(
 
 def build_cost_aware_insight_prompt(
     insight_json: str,
-    financial_data: Optional[InsightFinancialData],
+    financial_data: InsightFinancialData | None,
 ) -> str:
     """Build a cost-aware prompt for insight explanation.
 
@@ -285,7 +283,7 @@ def build_unused_devices_prompt(
     device_count: int,
     days_unused: int,
     percent_affected: float,
-    financial_data: Optional[InsightFinancialData],
+    financial_data: InsightFinancialData | None,
 ) -> str:
     """Build prompt for unused devices insight.
 
@@ -310,7 +308,7 @@ def build_battery_health_prompt(
     devices_count: int,
     avg_health: float,
     critical_count: int,
-    financial_data: Optional[InsightFinancialData],
+    financial_data: InsightFinancialData | None,
 ) -> str:
     """Build prompt for battery health insight.
 
@@ -334,7 +332,7 @@ def build_battery_health_prompt(
 def build_drop_damage_prompt(
     total_drops: int,
     affected_devices: int,
-    financial_data: Optional[InsightFinancialData],
+    financial_data: InsightFinancialData | None,
 ) -> str:
     """Build prompt for drop damage insight.
 
@@ -360,7 +358,7 @@ def build_downtime_prompt(
     incident_count: int,
     avg_duration_minutes: float,
     affected_devices: int,
-    financial_data: Optional[InsightFinancialData],
+    financial_data: InsightFinancialData | None,
 ) -> str:
     """Build prompt for downtime impact insight.
 

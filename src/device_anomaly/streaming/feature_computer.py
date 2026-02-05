@@ -7,32 +7,33 @@ to reprocess the entire history.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 import numpy as np
 
 from device_anomaly.config.feature_config import FeatureConfig
 from device_anomaly.features.cohort_stats import CohortStatsStore, apply_cohort_stats
 from device_anomaly.features.device_features import build_feature_builder, resolve_feature_spec
-from device_anomaly.streaming.engine import (
-    StreamingEngine,
-    StreamMessage,
-    MessageType,
-)
-from device_anomaly.streaming.telemetry_stream import (
-    TelemetryBuffer,
-    TelemetryEvent,
-    DeviceBuffer,
-)
 from device_anomaly.streaming.drift_monitor import (
     DriftMonitorConfig,
     StreamingDriftMonitor,
     resolve_drift_features,
+)
+from device_anomaly.streaming.engine import (
+    MessageType,
+    StreamingEngine,
+    StreamMessage,
+)
+from device_anomaly.streaming.telemetry_stream import (
+    DeviceBuffer,
+    TelemetryBuffer,
+    TelemetryEvent,
 )
 
 logger = logging.getLogger(__name__)
@@ -85,16 +86,16 @@ class CohortStats:
     cohort_id: str
     metrics: dict[str, IncrementalStats] = field(default_factory=dict)
     device_count: int = 0
-    last_update: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    last_update: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def update_metric(self, metric_name: str, value: float) -> None:
         """Update running stats for a metric."""
         if metric_name not in self.metrics:
             self.metrics[metric_name] = IncrementalStats()
         self.metrics[metric_name].update(value)
-        self.last_update = datetime.now(timezone.utc)
+        self.last_update = datetime.now(UTC)
 
-    def get_z_score(self, metric_name: str, value: float) -> Optional[float]:
+    def get_z_score(self, metric_name: str, value: float) -> float | None:
         """Compute z-score relative to cohort."""
         if metric_name not in self.metrics:
             return None
@@ -134,10 +135,10 @@ class StreamingFeatureComputer:
         self,
         engine: StreamingEngine,
         buffer: TelemetryBuffer,
-        cohort_stats: Optional[CohortStatsStore] = None,
-        feature_spec: Optional[dict[str, Any]] = None,
-        feature_norms: Optional[dict[str, float]] = None,
-        feature_mode: Optional[str] = None,
+        cohort_stats: CohortStatsStore | None = None,
+        feature_spec: dict[str, Any] | None = None,
+        feature_norms: dict[str, float] | None = None,
+        feature_mode: str | None = None,
         enable_extended_features: bool = False,
         enable_hourly_features: bool = False,
     ):
@@ -218,7 +219,7 @@ class StreamingFeatureComputer:
         logger.warning("Unrecognized STREAMING_FEATURE_MODE='%s'; defaulting to incremental.", value)
         return "incremental"
 
-    def _init_drift_monitor(self) -> Optional[StreamingDriftMonitor]:
+    def _init_drift_monitor(self) -> StreamingDriftMonitor | None:
         enabled = os.getenv("STREAMING_DRIFT_ENABLED", "true").lower() == "true"
         if not enabled:
             return None
@@ -424,10 +425,8 @@ class StreamingFeatureComputer:
         for evt in buffer.events:
             firmware_version = evt.firmware_version
             if firmware_version is not None:
-                try:
+                with contextlib.suppress(TypeError, ValueError):
                     firmware_version = float(firmware_version)
-                except (TypeError, ValueError):
-                    pass
             row = {
                 "DeviceId": evt.device_id,
                 "Timestamp": evt.timestamp,
@@ -651,7 +650,7 @@ class StreamingFeatureComputer:
             "drift_monitor": self._drift_monitor.get_stats() if self._drift_monitor else {"enabled": False},
         }
 
-    def get_cohort_stats(self, cohort_id: str) -> Optional[dict]:
+    def get_cohort_stats(self, cohort_id: str) -> dict | None:
         """Get statistics for a cohort."""
         if self._cohort_stats_store is not None:
             return self._cohort_stats_store.get_cohort_stats(cohort_id)

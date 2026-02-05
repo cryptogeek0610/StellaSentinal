@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import UTC, datetime
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -30,13 +30,13 @@ class DetectorConfig:
     name: str
     enabled: bool = True
     contamination: float = 0.03
-    severity_thresholds: Dict[str, float] = field(default_factory=lambda: {
+    severity_thresholds: dict[str, float] = field(default_factory=lambda: {
         "critical": -0.5,  # Most extreme anomalies
         "high": -0.3,
         "medium": -0.1,
         "low": 0.0,  # Threshold for any anomaly
     })
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -61,8 +61,8 @@ class AnomalyResult:
     score: float
     is_anomaly: bool
     severity: str
-    contributing_features: Dict[str, float] = field(default_factory=dict)
-    explanation: Optional[str] = None
+    contributing_features: dict[str, float] = field(default_factory=dict)
+    explanation: str | None = None
     detector_name: str = ""
 
 
@@ -92,8 +92,8 @@ class BaseAnomalyDetector(ABC):
         """
         self.config = config
         self._is_fitted = False
-        self._feature_cols: List[str] = []
-        self._fit_timestamp: Optional[datetime] = None
+        self._feature_cols: list[str] = []
+        self._fit_timestamp: datetime | None = None
 
     @property
     def is_fitted(self) -> bool:
@@ -101,7 +101,7 @@ class BaseAnomalyDetector(ABC):
         return self._is_fitted
 
     @property
-    def feature_cols(self) -> List[str]:
+    def feature_cols(self) -> list[str]:
         """Get the feature columns used for detection."""
         return self._feature_cols
 
@@ -154,7 +154,7 @@ class BaseAnomalyDetector(ABC):
         """
         pass
 
-    def detect(self, df: pd.DataFrame) -> List[AnomalyResult]:
+    def detect(self, df: pd.DataFrame) -> list[AnomalyResult]:
         """Detect anomalies and return detailed results.
 
         This is the main entry point for anomaly detection that returns
@@ -175,7 +175,7 @@ class BaseAnomalyDetector(ABC):
         contributing = self.explain_contributions(df)
 
         results = []
-        for i, (score, pred) in enumerate(zip(scores, predictions)):
+        for i, (score, pred) in enumerate(zip(scores, predictions, strict=False)):
             if pred == -1:  # Is anomaly
                 severity = self._score_to_severity(score)
                 contributions = contributing.get(i, {})
@@ -183,7 +183,7 @@ class BaseAnomalyDetector(ABC):
                 result = AnomalyResult(
                     index=i,
                     device_id=str(df.iloc[i].get("device_id", "unknown")),
-                    timestamp=df.iloc[i].get("timestamp", datetime.now(timezone.utc)),
+                    timestamp=df.iloc[i].get("timestamp", datetime.now(UTC)),
                     score=float(score),
                     is_anomaly=True,
                     severity=severity,
@@ -198,7 +198,7 @@ class BaseAnomalyDetector(ABC):
         self,
         df: pd.DataFrame,
         top_k: int = 5,
-    ) -> Dict[int, Dict[str, float]]:
+    ) -> dict[int, dict[str, float]]:
         """Explain which features contributed most to anomaly scores.
 
         This is a default implementation that can be overridden by
@@ -215,7 +215,7 @@ class BaseAnomalyDetector(ABC):
             return {}
 
         contributions = {}
-        scores = self.score(df)
+        self.score(df)
 
         # Simple approach: features with highest deviation from training mean
         for i in range(len(df)):
@@ -268,7 +268,7 @@ class BaseAnomalyDetector(ABC):
         df_scored["anomaly_label"] = self.predict(df)
         return df_scored
 
-    def get_metadata(self) -> Dict[str, Any]:
+    def get_metadata(self) -> dict[str, Any]:
         """Get detector metadata for observability.
 
         Returns:
@@ -294,7 +294,7 @@ class DetectorRegistry:
     Provides a factory pattern for registering and creating detector instances.
     """
 
-    _detectors: Dict[str, type] = {}
+    _detectors: dict[str, type] = {}
 
     @classmethod
     def register(cls, name: str, detector_class: type) -> None:
@@ -328,7 +328,7 @@ class DetectorRegistry:
         return cls._detectors[name](config)
 
     @classmethod
-    def list_detectors(cls) -> List[str]:
+    def list_detectors(cls) -> list[str]:
         """List all registered detector types."""
         return list(cls._detectors.keys())
 

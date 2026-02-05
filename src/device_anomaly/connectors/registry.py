@@ -6,8 +6,6 @@ and provides a unified interface for creating connector instances.
 """
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Type
-
 from device_anomaly.connectors.base import BaseConnector, ConnectorConfig
 
 
@@ -27,10 +25,10 @@ class ConnectorRegistry:
         connector = ConnectorRegistry.create(config)
     """
 
-    _connectors: Dict[str, Type[BaseConnector]] = {}
+    _connectors: dict[str, type[BaseConnector]] = {}
 
     @classmethod
-    def register(cls, source_type: str, connector_class: Type[BaseConnector]) -> None:
+    def register(cls, source_type: str, connector_class: type[BaseConnector]) -> None:
         """Register a connector class for a source type.
 
         Args:
@@ -62,7 +60,7 @@ class ConnectorRegistry:
         del cls._connectors[source_type]
 
     @classmethod
-    def get(cls, source_type: str) -> Type[BaseConnector]:
+    def get(cls, source_type: str) -> type[BaseConnector]:
         """Get a connector class by source type.
 
         Args:
@@ -99,7 +97,7 @@ class ConnectorRegistry:
         return connector_class(config)
 
     @classmethod
-    def list_connectors(cls) -> List[str]:
+    def list_connectors(cls) -> list[str]:
         """List all registered connector source types.
 
         Returns:
@@ -138,7 +136,7 @@ class ConnectorManager:
 
     def __init__(self):
         """Initialize the connector manager."""
-        self._active_connectors: Dict[str, BaseConnector] = {}
+        self._active_connectors: dict[str, BaseConnector] = {}
 
     def add_connector(self, config: ConnectorConfig) -> BaseConnector:
         """Add and connect a new data source.
@@ -194,7 +192,7 @@ class ConnectorManager:
             raise KeyError(f"Connector '{name}' not found")
         return self._active_connectors[name]
 
-    def list_connectors(self) -> List[str]:
+    def list_connectors(self) -> list[str]:
         """List all active connector names.
 
         Returns:
@@ -202,7 +200,7 @@ class ConnectorManager:
         """
         return list(self._active_connectors.keys())
 
-    def get_connected_sources(self) -> List[str]:
+    def get_connected_sources(self) -> list[str]:
         """List names of all currently connected sources.
 
         Returns:
@@ -225,7 +223,7 @@ class ConnectorManager:
             if connector.config.enabled and not connector.is_connected:
                 connector.connect()
 
-    def health_check(self) -> Dict[str, bool]:
+    def health_check(self) -> dict[str, bool]:
         """Check health of all connectors.
 
         Returns:
@@ -236,7 +234,7 @@ class ConnectorManager:
             for name, connector in self._active_connectors.items()
         }
 
-    def __enter__(self) -> "ConnectorManager":
+    def __enter__(self) -> ConnectorManager:
         """Context manager entry."""
         return self
 

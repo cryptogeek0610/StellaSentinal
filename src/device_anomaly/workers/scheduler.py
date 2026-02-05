@@ -19,8 +19,8 @@ import os
 import signal
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
-from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from enum import StrEnum
+from typing import Any
 
 import redis
 
@@ -32,7 +32,7 @@ def is_mock_mode() -> bool:
     return os.getenv("MOCK_MODE", "false").lower() in ("true", "1", "yes")
 
 
-def get_historical_end_date() -> Optional[datetime]:
+def get_historical_end_date() -> datetime | None:
     """
     Get the historical data end date for demo/testing with backup data.
 
@@ -50,7 +50,7 @@ def get_historical_end_date() -> Optional[datetime]:
     return None
 
 
-class ScheduleInterval(str, Enum):
+class ScheduleInterval(StrEnum):
     """Supported scheduling intervals."""
     HOURLY = "hourly"
     EVERY_6_HOURS = "every_6_hours"
@@ -60,7 +60,7 @@ class ScheduleInterval(str, Enum):
     MANUAL = "manual"  # Disabled, only manual triggers
 
 
-class ShiftSchedule(str, Enum):
+class ShiftSchedule(StrEnum):
     """Pre-defined shift schedules for shift readiness analysis."""
     MORNING = "morning"  # 06:00 - 14:00
     AFTERNOON = "afternoon"  # 14:00 - 22:00
@@ -100,7 +100,7 @@ class SchedulerConfig:
     daily_digest_hour: int = 5  # Hour to generate daily digest (5 AM)
     shift_readiness_enabled: bool = True
     shift_readiness_lead_minutes: int = 60  # Generate readiness report N minutes before shift
-    shift_schedules: List[str] = field(default_factory=lambda: ["morning", "afternoon", "day"])
+    shift_schedules: list[str] = field(default_factory=lambda: ["morning", "afternoon", "day"])
     location_baseline_enabled: bool = True
     location_baseline_day_of_week: int = 0  # Monday for weekly baseline computation
     location_baseline_hour: int = 3  # 3 AM for baseline computation
@@ -112,22 +112,22 @@ class SchedulerConfig:
 
     # General
     timezone: str = "UTC"
-    last_training_time: Optional[str] = None
-    last_scoring_time: Optional[str] = None
-    last_auto_retrain_time: Optional[str] = None
-    last_daily_digest_time: Optional[str] = None
-    last_shift_readiness_time: Optional[str] = None
-    last_location_baseline_time: Optional[str] = None
-    last_device_metadata_sync_time: Optional[str] = None
+    last_training_time: str | None = None
+    last_scoring_time: str | None = None
+    last_auto_retrain_time: str | None = None
+    last_daily_digest_time: str | None = None
+    last_shift_readiness_time: str | None = None
+    last_location_baseline_time: str | None = None
+    last_device_metadata_sync_time: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON storage."""
         result = asdict(self)
         result["training_interval"] = self.training_interval.value
         return result
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "SchedulerConfig":
+    def from_dict(cls, data: dict[str, Any]) -> SchedulerConfig:
         """Create from dictionary."""
         if "training_interval" in data and isinstance(data["training_interval"], str):
             data["training_interval"] = ScheduleInterval(data["training_interval"])
@@ -141,17 +141,17 @@ class SchedulerStatus:
     training_status: str = "idle"  # idle, running, completed, failed
     scoring_status: str = "idle"
     insights_status: str = "idle"  # idle, running, completed, failed
-    last_training_result: Optional[Dict] = None
-    last_scoring_result: Optional[Dict] = None
-    last_insight_result: Optional[Dict] = None
-    next_training_time: Optional[str] = None
-    next_scoring_time: Optional[str] = None
-    next_insight_time: Optional[str] = None
+    last_training_result: dict | None = None
+    last_scoring_result: dict | None = None
+    last_insight_result: dict | None = None
+    next_training_time: str | None = None
+    next_scoring_time: str | None = None
+    next_insight_time: str | None = None
     total_anomalies_detected: int = 0
     total_insights_generated: int = 0
     false_positive_rate: float = 0.0
     uptime_seconds: int = 0
-    errors: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
 
 
 class AutomationScheduler:
@@ -169,22 +169,22 @@ class AutomationScheduler:
     REDIS_STATUS_KEY = "scheduler:status"
     REDIS_LOCK_KEY = "scheduler:lock"
 
-    def __init__(self, redis_url: Optional[str] = None):
+    def __init__(self, redis_url: str | None = None):
         """Initialize the scheduler."""
         self.redis_url = redis_url or os.getenv("REDIS_URL", "redis://localhost:6379/0")
-        self._redis: Optional[redis.Redis] = None
+        self._redis: redis.Redis | None = None
         self._redis_available = False
         self._redis_max_retries = 3
         self._redis_retry_delay = 2  # seconds, doubles each retry
         self._running = False
-        self._start_time: Optional[datetime] = None
-        self._config: Optional[SchedulerConfig] = None
-        self._config_last_loaded: Optional[datetime] = None
+        self._start_time: datetime | None = None
+        self._config: SchedulerConfig | None = None
+        self._config_last_loaded: datetime | None = None
         self._config_cache_ttl = 10  # Reload config from Redis every 10 seconds max
         self._status = SchedulerStatus()
-        self._tasks: List[asyncio.Task] = []
+        self._tasks: list[asyncio.Task] = []
 
-    def _connect_redis(self) -> Optional[redis.Redis]:
+    def _connect_redis(self) -> redis.Redis | None:
         """Attempt to connect to Redis with retry and backoff.
 
         Returns the Redis client if successful, None otherwise.
@@ -215,7 +215,7 @@ class AutomationScheduler:
         return None
 
     @property
-    def redis(self) -> Optional[redis.Redis]:
+    def redis(self) -> redis.Redis | None:
         """Get Redis connection with lazy initialization and retry.
 
         Returns None if Redis is unavailable, allowing graceful degradation.
@@ -361,7 +361,7 @@ class AutomationScheduler:
 
         return self._status
 
-    def calculate_next_training_time(self) -> Optional[datetime]:
+    def calculate_next_training_time(self) -> datetime | None:
         """Calculate next scheduled training time."""
         if not self._config or not self._config.training_enabled:
             return None
@@ -409,7 +409,7 @@ class AutomationScheduler:
 
         return next_time
 
-    async def run_training_job(self) -> Dict[str, Any]:
+    async def run_training_job(self) -> dict[str, Any]:
         """Execute a training job."""
         logger.info("Starting scheduled training job...")
         self.update_status(training_status="running")
@@ -497,7 +497,7 @@ class AutomationScheduler:
                 self._status.training_status = "failed"
             return {"success": False, "error": str(e)}
 
-    async def run_scoring_job(self) -> Dict[str, Any]:
+    async def run_scoring_job(self) -> dict[str, Any]:
         """Execute a scoring job on recent data."""
         logger.info("Starting scheduled scoring job...")
         self.update_status(scoring_status="running")
@@ -528,15 +528,18 @@ class AutomationScheduler:
             logger.info(f"Mock scoring completed: {mock_anomalies}/{mock_scored} anomalies")
             return {"success": True, "scored": mock_scored, "anomalies": mock_anomalies, "mock_mode": True}
 
+        from device_anomaly.data_access.anomaly_persistence import persist_anomaly_results
         from device_anomaly.data_access.unified_loader import load_unified_device_dataset
+        from device_anomaly.data_access.watermark_store import get_watermark_store
+        from device_anomaly.features.cohort_stats import (
+            apply_cohort_stats,
+            load_latest_cohort_stats,
+        )
         from device_anomaly.features.device_features import (
             build_feature_builder_from_metadata,
             load_feature_metadata,
         )
-        from device_anomaly.features.cohort_stats import apply_cohort_stats, load_latest_cohort_stats
         from device_anomaly.models.anomaly_detector import AnomalyDetector
-        from device_anomaly.data_access.anomaly_persistence import persist_anomaly_results
-        from device_anomaly.data_access.watermark_store import get_watermark_store
 
         try:
             # Check if there's new source data to score
@@ -699,7 +702,7 @@ class AutomationScheduler:
 
         return False
 
-    async def run_daily_digest_job(self) -> Dict[str, Any]:
+    async def run_daily_digest_job(self) -> dict[str, Any]:
         """Generate daily insight digest for all locations."""
         logger.info("Starting daily insight digest generation...")
         self.update_status(insights_status="running")
@@ -725,8 +728,8 @@ class AutomationScheduler:
             return {"success": True, "insights_generated": 10, "mock_mode": True}
 
         try:
-            from device_anomaly.insights.generator import InsightGenerator
             from device_anomaly.database.connection import get_results_db_session
+            from device_anomaly.insights.generator import InsightGenerator
 
             # Use historical end date if configured
             historical_end = get_historical_end_date()
@@ -789,7 +792,7 @@ class AutomationScheduler:
                 self._status.insights_status = "failed"
             return {"success": False, "error": str(e)}
 
-    async def run_shift_readiness_job(self, shift_name: str) -> Dict[str, Any]:
+    async def run_shift_readiness_job(self, shift_name: str) -> dict[str, Any]:
         """Generate shift readiness reports for all locations."""
         logger.info(f"Starting shift readiness analysis for {shift_name} shift...")
         self.update_status(insights_status="running")
@@ -816,16 +819,13 @@ class AutomationScheduler:
             return {"success": True, "shift_name": shift_name, "mock_mode": True}
 
         try:
-            from device_anomaly.insights.battery_shift import BatteryShiftAnalyzer
-            from device_anomaly.database.schema import LocationMetadata
             from device_anomaly.database.connection import get_results_db_session
+            from device_anomaly.database.schema import LocationMetadata
+            from device_anomaly.insights.battery_shift import BatteryShiftAnalyzer
 
             # Use historical end date if configured
             historical_end = get_historical_end_date()
-            if historical_end:
-                shift_date = historical_end.date()
-            else:
-                shift_date = datetime.utcnow().date()
+            shift_date = historical_end.date() if historical_end else datetime.utcnow().date()
 
             # Get tenant_id from environment or use default
             tenant_id = os.getenv("TENANT_ID", "default")
@@ -836,7 +836,7 @@ class AutomationScheduler:
                 analyzer = BatteryShiftAnalyzer(session, tenant_id)
 
                 locations = session.query(LocationMetadata).filter(
-                    LocationMetadata.is_active == True
+                    LocationMetadata.is_active
                 ).all()
 
                 total_at_risk = 0
@@ -896,7 +896,7 @@ class AutomationScheduler:
             )
             return {"success": False, "error": str(e)}
 
-    async def run_location_baseline_job(self) -> Dict[str, Any]:
+    async def run_location_baseline_job(self) -> dict[str, Any]:
         """Compute weekly location baselines for comparison."""
         logger.info("Starting weekly location baseline computation...")
         self.update_status(insights_status="running")
@@ -921,9 +921,9 @@ class AutomationScheduler:
             return {"success": True, "locations_updated": 5, "mock_mode": True}
 
         try:
-            from device_anomaly.insights.entities import EntityAggregator
-            from device_anomaly.database.schema import LocationMetadata
             from device_anomaly.database.connection import get_results_db_session
+            from device_anomaly.database.schema import LocationMetadata
+            from device_anomaly.insights.entities import EntityAggregator
 
             # Calculate baselines over the past 4 weeks
             baseline_period_days = 28
@@ -936,7 +936,7 @@ class AutomationScheduler:
                 aggregator = EntityAggregator(session, tenant_id)
 
                 locations = session.query(LocationMetadata).filter(
-                    LocationMetadata.is_active == True
+                    LocationMetadata.is_active
                 ).all()
 
                 updated_count = 0
@@ -997,7 +997,7 @@ class AutomationScheduler:
             )
             return {"success": False, "error": str(e)}
 
-    async def run_device_metadata_sync_job(self) -> Dict[str, Any]:
+    async def run_device_metadata_sync_job(self) -> dict[str, Any]:
         """Execute device metadata sync from MobiControl to PostgreSQL."""
         logger.info("Starting device metadata sync job...")
 
@@ -1026,7 +1026,7 @@ class AutomationScheduler:
             logger.error(f"Device metadata sync failed: {e}")
             return {"success": False, "error": str(e)}
 
-    def _get_shift_times(self, shift_name: str) -> Tuple[int, int]:
+    def _get_shift_times(self, shift_name: str) -> tuple[int, int]:
         """Get start hour and end hour for a shift."""
         shift_times = {
             "morning": (6, 14),
@@ -1036,7 +1036,7 @@ class AutomationScheduler:
         }
         return shift_times.get(shift_name, (8, 17))
 
-    def calculate_next_shift_readiness_time(self) -> Optional[Tuple[datetime, str]]:
+    def calculate_next_shift_readiness_time(self) -> tuple[datetime, str] | None:
         """Calculate next time shift readiness should run and which shift."""
         if not self._config or not self._config.shift_readiness_enabled:
             return None
@@ -1149,7 +1149,7 @@ class AutomationScheduler:
                             continue
 
                     # Time to train!
-                    logger.info(f"[Training Loop] Training time reached! Starting scheduled training job...")
+                    logger.info("[Training Loop] Training time reached! Starting scheduled training job...")
                     await self.run_training_job()
 
                     # After training, sleep briefly to avoid immediate re-trigger
@@ -1450,7 +1450,7 @@ class AutomationScheduler:
             wait_hours = (next_training - datetime.utcnow()).total_seconds() / 3600
             logger.info(f"  NEXT TRAINING: {next_training.isoformat()} ({wait_hours:.1f}h from now)")
         else:
-            logger.info(f"  NEXT TRAINING: None (disabled or manual)")
+            logger.info("  NEXT TRAINING: None (disabled or manual)")
 
         # Scoring config
         logger.info("-" * 40)
@@ -1499,7 +1499,7 @@ class AutomationScheduler:
         self.update_status(is_running=False)
         logger.info("Scheduler stopped")
 
-    def _check_redis_command(self) -> Optional[str]:
+    def _check_redis_command(self) -> str | None:
         """Check for and consume any pending command from Redis.
 
         Returns the command if one was found, or None.

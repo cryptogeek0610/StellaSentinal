@@ -1,23 +1,19 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict
 
-import json
 import pandas as pd
 from sqlalchemy import text
 
+from device_anomaly.config.feature_config import FeatureConfig
 from device_anomaly.llm.client import BaseLLMClient, get_default_llm_client, strip_thinking_tags
 from device_anomaly.llm.prompt_utils import (
-    get_metric_info,
-    get_z_score_description,
-    get_severity_word,
     NO_THINKING_INSTRUCTION,
-    DOMAIN_CONTEXT,
-)
-from device_anomaly.config.feature_config import (
-    FeatureConfig
+    get_metric_info,
+    get_severity_word,
+    get_z_score_description,
 )
 from device_anomaly.models.drift_monitor import load_stats
 
@@ -32,7 +28,7 @@ class MetricStats:
 class ExplanationContext:
     """Holds typical stats for metrics so we can talk about what is 'abnormal'."""
 
-    metric_stats: Dict[str, MetricStats]
+    metric_stats: dict[str, MetricStats]
     llm_client: BaseLLMClient
 
 
@@ -40,7 +36,7 @@ def build_explanation_context(df_reference: pd.DataFrame) -> ExplanationContext:
     """
     Compute mean/std for each metric from a reference DataFrame (e.g. training slice).
     """
-    metric_stats: Dict[str, MetricStats] = {}
+    metric_stats: dict[str, MetricStats] = {}
     for col in FeatureConfig.genericFeatures:
         if col not in df_reference.columns:
             continue
@@ -54,7 +50,7 @@ def build_explanation_context(df_reference: pd.DataFrame) -> ExplanationContext:
     return ExplanationContext(metric_stats=metric_stats, llm_client=llm_client)
 
 
-def _build_anomaly_payload(row: pd.Series, ctx: ExplanationContext, top_k: int = 5) -> Dict:
+def _build_anomaly_payload(row: pd.Series, ctx: ExplanationContext, top_k: int = 5) -> dict:
     """
     Build a compact payload describing the anomaly for the LLM.
     Select top-k metrics by z-score magnitude.
@@ -96,7 +92,7 @@ def _build_anomaly_payload(row: pd.Series, ctx: ExplanationContext, top_k: int =
     return payload
 
 
-def _build_prompt(payload: Dict) -> str:
+def _build_prompt(payload: dict) -> str:
     """
     Build a natural-language prompt for the LLM based on the anomaly payload.
     """
@@ -170,7 +166,7 @@ z-score interpretation:
 </instructions>"""
     return prompt.strip()
 
-def explain_anomaly_row(row: pd.Series, ctx: ExplanationContext) -> Dict[str, str]:
+def explain_anomaly_row(row: pd.Series, ctx: ExplanationContext) -> dict[str, str]:
     """
     Given a scored anomaly row and an ExplanationContext, return:
     - 'explanation': LLM-generated text (or dummy)
@@ -377,9 +373,9 @@ def explain_anomaly_with_cost(
     device_id: int,
     timestamp: str,
     anomaly_score: float,
-    cost_context: "CostContext",
-    cost_calculator: "CostCalculator",
-) -> Dict[str, any]:
+    cost_context: CostContext,
+    cost_calculator: CostCalculator,
+) -> dict[str, any]:
     """Generate a cost-aware explanation for an anomaly.
 
     This function combines technical anomaly explanation with pre-calculated
@@ -402,8 +398,6 @@ def explain_anomaly_with_cost(
         - 'financial_impact': The FinancialImpactSummary object
         - 'validation_result': Result of anti-hallucination validation
     """
-    from device_anomaly.costs.calculator import CostCalculator
-    from device_anomaly.costs.models import CostContext
     from device_anomaly.llm.cost_prompts import build_cost_aware_anomaly_prompt
     from device_anomaly.llm.cost_validator import validate_financial_output
 
@@ -454,7 +448,7 @@ def generate_cost_aware_explanation(
     tenant_id: str,
     device_model: str = None,
     device_value_usd: float = None,
-) -> Dict[str, any]:
+) -> dict[str, any]:
     """Generate and save a cost-aware explanation for an anomaly result.
 
     Loads the anomaly result, calculates financial impact based on tenant
@@ -472,6 +466,7 @@ def generate_cost_aware_explanation(
         Dictionary with explanation and financial data.
     """
     from decimal import Decimal
+
     from device_anomaly.costs.calculator import CostCalculator
     from device_anomaly.costs.config import get_cost_config
     from device_anomaly.costs.models import CostContext, DeviceCostContext

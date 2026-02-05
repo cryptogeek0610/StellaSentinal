@@ -2,17 +2,17 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Dict
+from typing import Any
 
 from device_anomaly.config.experiment_config import (
-    SyntheticExperimentConfig,
-    DWExperimentConfig,
     DetectionConfig,
+    DWExperimentConfig,
     EventConfig,
+    SyntheticExperimentConfig,
 )
 
 
-def _load_raw_config(path: str) -> Dict[str, Any]:
+def _load_raw_config(path: str) -> dict[str, Any]:
     """
     Load a dict from a YAML or JSON config file.
 
@@ -30,10 +30,10 @@ def _load_raw_config(path: str) -> Dict[str, Any]:
                 "Install it with: pip install pyyaml"
             ) from e
 
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
     elif ext == ".json":
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
     else:
         raise ValueError(
@@ -50,7 +50,7 @@ def _load_raw_config(path: str) -> Dict[str, Any]:
 
 
 def _apply_synthetic_config_from_dict(
-    data: Dict[str, Any],
+    data: dict[str, Any],
     base: SyntheticExperimentConfig | None = None,
 ) -> SyntheticExperimentConfig:
     """
@@ -111,7 +111,7 @@ def load_synthetic_config(path: str) -> SyntheticExperimentConfig:
 
 
 def _apply_dw_config_from_dict(
-    data: Dict[str, Any],
+    data: dict[str, Any],
     base: DWExperimentConfig | None = None,
 ) -> DWExperimentConfig:
     """

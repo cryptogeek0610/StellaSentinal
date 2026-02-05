@@ -12,7 +12,7 @@ import re
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -126,7 +126,7 @@ def get_curated_xsight_tables(
     include_discovered: bool = False,
     min_rows: int = 10000,
     engine=None,
-) -> List[str]:
+) -> list[str]:
     """
     Get curated list of XSight tables for profiling/training.
 
@@ -167,7 +167,7 @@ def get_curated_mc_tables(
     include_discovered: bool = False,
     min_rows: int = 1000,
     engine=None,
-) -> List[str]:
+) -> list[str]:
     """
     Get curated list of MobiControl tables for profiling/training.
 
@@ -208,7 +208,7 @@ def discover_dw_tables(
     engine=None,
     pattern: str = "cs_%",
     exclude_time_slices: bool = True,
-) -> List[str]:
+) -> list[str]:
     """
     Dynamically discover all available telemetry tables in the DW database.
 
@@ -265,13 +265,13 @@ class ColumnStats:
     null_count: int = 0
     null_percent: float = 0.0
     unique_count: int = 0
-    min_val: Optional[float] = None
-    max_val: Optional[float] = None
-    mean: Optional[float] = None
-    std: Optional[float] = None
-    percentiles: Dict[str, float] = field(default_factory=dict)
+    min_val: float | None = None
+    max_val: float | None = None
+    mean: float | None = None
+    std: float | None = None
+    percentiles: dict[str, float] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -280,10 +280,10 @@ class TemporalPattern:
     """Time-based pattern statistics for a metric."""
 
     metric_name: str
-    hourly_stats: Dict[int, Dict[str, float]] = field(default_factory=dict)  # hour 0-23
-    daily_stats: Dict[int, Dict[str, float]] = field(default_factory=dict)  # day 0-6 (Mon-Sun)
+    hourly_stats: dict[int, dict[str, float]] = field(default_factory=dict)  # hour 0-23
+    daily_stats: dict[int, dict[str, float]] = field(default_factory=dict)  # day 0-6 (Mon-Sun)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -293,12 +293,12 @@ class TableProfile:
 
     table_name: str
     row_count: int
-    date_range: tuple[Optional[str], Optional[str]]
+    date_range: tuple[str | None, str | None]
     device_count: int
-    column_stats: Dict[str, ColumnStats] = field(default_factory=dict)
+    column_stats: dict[str, ColumnStats] = field(default_factory=dict)
     profiled_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         result = {
             "table_name": self.table_name,
             "row_count": self.row_count,
@@ -334,7 +334,7 @@ def _get_table_row_count(engine, table_name: str) -> int:
         return result[0] if result else 0
 
 
-def _get_date_range(engine, table_name: str, date_column: str = "CollectedDate") -> tuple[Optional[str], Optional[str]]:
+def _get_date_range(engine, table_name: str, date_column: str = "CollectedDate") -> tuple[str | None, str | None]:
     """Get min and max dates from a table."""
     table_name = _ensure_safe_table(engine, table_name)
     date_column = _ensure_safe_column(engine, table_name, date_column)
@@ -465,7 +465,7 @@ def profile_table(
     columns_df = _get_table_metadata(engine, table_name)
 
     # Compute stats for each column
-    column_stats: Dict[str, ColumnStats] = {}
+    column_stats: dict[str, ColumnStats] = {}
     for _, row in columns_df.iterrows():
         col_name = row["COLUMN_NAME"]
         dtype = row["DATA_TYPE"]
@@ -486,12 +486,12 @@ def profile_table(
 
 
 def profile_dw_tables(
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    tables: Optional[List[str]] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    tables: list[str] | None = None,
     sample_limit: int = 100_000,
     auto_discover: bool = True,
-) -> Dict[str, TableProfile]:
+) -> dict[str, TableProfile]:
     """
     Profile all telemetry tables in the XSight DW database.
 
@@ -515,7 +515,7 @@ def profile_dw_tables(
     else:
         target_tables = DW_TELEMETRY_TABLES
 
-    profiles: Dict[str, TableProfile] = {}
+    profiles: dict[str, TableProfile] = {}
 
     for table_name in target_tables:
         try:
@@ -530,9 +530,9 @@ def profile_dw_tables(
 
 
 def profile_mc_tables(
-    tables: Optional[List[str]] = None,
+    tables: list[str] | None = None,
     sample_limit: int = 100_000,
-) -> Dict[str, TableProfile]:
+) -> dict[str, TableProfile]:
     """
     Profile tables in the MobiControl database.
 
@@ -545,7 +545,7 @@ def profile_mc_tables(
     """
     engine = create_mc_engine()
     target_tables = tables or ["Device"]  # Default to main Device table
-    profiles: Dict[str, TableProfile] = {}
+    profiles: dict[str, TableProfile] = {}
 
     for table_name in target_tables:
         try:
@@ -565,9 +565,9 @@ def profile_mc_tables(
 
 def analyze_temporal_patterns(
     df: pd.DataFrame,
-    metric_cols: List[str],
+    metric_cols: list[str],
     timestamp_col: str = "Timestamp",
-) -> Dict[str, TemporalPattern]:
+) -> dict[str, TemporalPattern]:
     """
     Analyze time-of-day and day-of-week patterns for metrics.
 
@@ -587,7 +587,7 @@ def analyze_temporal_patterns(
     df["_hour"] = df[timestamp_col].dt.hour
     df["_dayofweek"] = df[timestamp_col].dt.dayofweek
 
-    patterns: Dict[str, TemporalPattern] = {}
+    patterns: dict[str, TemporalPattern] = {}
 
     for metric in metric_cols:
         if metric not in df.columns:
@@ -626,7 +626,7 @@ def compute_metric_distribution(
     column_name: str,
     bins: int = 50,
     sample_limit: int = 500_000,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Compute histogram distribution for a specific metric column.
 
@@ -677,7 +677,7 @@ def compute_metric_distribution(
 
 
 def generate_profile_report(
-    profiles: Dict[str, TableProfile],
+    profiles: dict[str, TableProfile],
     output_path: Path,
     format: str = "json",
 ) -> None:
@@ -727,7 +727,7 @@ def generate_profile_report(
     logger.info(f"Profile report saved to {output_path}")
 
 
-def get_available_metrics(profiles: Dict[str, TableProfile]) -> List[Dict[str, Any]]:
+def get_available_metrics(profiles: dict[str, TableProfile]) -> list[dict[str, Any]]:
     """
     Extract list of available numeric metrics from profiles.
 

@@ -12,8 +12,7 @@ Provides correlation analysis including:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from datetime import UTC, datetime, timedelta
 
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -38,14 +37,13 @@ from device_anomaly.api.schemas.correlations import (
     CorrelationInsightsResponse,
     CorrelationMatrixResponse,
     FilterStats,
-    ScatterAnomalyExplanation,
     ScatterAnomalyExplainRequest,
+    ScatterAnomalyExplanation,
     ScatterDataPoint,
     ScatterPlotResponse,
     TimeLagCorrelation,
     TimeLagCorrelationsResponse,
 )
-
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/correlations", tags=["correlations"])
@@ -129,7 +127,7 @@ def _raise_database_error(error: Exception, database: str = "telemetry") -> None
 
 @router.get("/matrix", response_model=CorrelationMatrixResponse)
 def get_correlation_matrix(
-    domain: Optional[str] = Query(None, description="Filter by domain (battery, rf, throughput, usage, storage, system)"),
+    domain: str | None = Query(None, description="Filter by domain (battery, rf, throughput, usage, storage, system)"),
     method: str = Query("pearson", description="Correlation method: pearson or spearman"),
     threshold: float = Query(0.6, description="Minimum |r| for strong correlations"),
     max_metrics: int = Query(50, description="Maximum metrics to include"),
@@ -158,7 +156,7 @@ def get_correlation_matrix(
         from device_anomaly.services.correlation_service import CorrelationService
 
         # Load recent telemetry data
-        end_date = datetime.now(timezone.utc).date()
+        end_date = datetime.now(UTC).date()
         start_date = end_date - timedelta(days=30)
 
         df = load_unified_device_dataset(
@@ -218,7 +216,7 @@ def get_correlation_matrix(
             p_values=result.get("p_values"),
             strong_correlations=strong,
             method=method,
-            computed_at=result.get("computed_at", datetime.now(timezone.utc).isoformat()),
+            computed_at=result.get("computed_at", datetime.now(UTC).isoformat()),
             total_samples=result.get("sample_count", 0),
             domain_filter=domain,
             date_range={"start": start_date.isoformat(), "end": end_date.isoformat()},
@@ -263,7 +261,7 @@ def get_scatter_data(
 
         from device_anomaly.data_access.unified_loader import load_unified_device_dataset
 
-        end_date = datetime.now(timezone.utc).date()
+        end_date = datetime.now(UTC).date()
         start_date = end_date - timedelta(days=30)
 
         df = load_unified_device_dataset(
@@ -383,7 +381,7 @@ def get_causal_graph(
     try:
         from device_anomaly.insights.root_cause import RootCauseAnalyzer
 
-        analyzer = RootCauseAnalyzer()
+        RootCauseAnalyzer()
         # Build graph from analyzer._causal_graph
         # For now, mock data matches the actual causal graph
     except Exception as e:
@@ -412,7 +410,7 @@ def get_correlation_insights(
         from device_anomaly.data_access.unified_loader import load_unified_device_dataset
         from device_anomaly.services.correlation_service import CorrelationService
 
-        end_date = datetime.now(timezone.utc).date()
+        end_date = datetime.now(UTC).date()
         start_date = end_date - timedelta(days=30)
 
         df = load_unified_device_dataset(
@@ -451,7 +449,7 @@ def get_correlation_insights(
         return CorrelationInsightsResponse(
             insights=insights,
             total_correlations_analyzed=len(df.columns) * (len(df.columns) - 1) // 2,
-            generated_at=datetime.now(timezone.utc).isoformat(),
+            generated_at=datetime.now(UTC).isoformat(),
         )
 
     except HTTPException:
@@ -463,7 +461,7 @@ def get_correlation_insights(
 
 @router.get("/cohort-patterns", response_model=CohortCorrelationPatternsResponse)
 def get_cohort_correlation_patterns(
-    metric_pair: Optional[str] = Query(None, description="Specific metric pair (comma-separated)"),
+    metric_pair: str | None = Query(None, description="Specific metric pair (comma-separated)"),
     mock_mode: bool = Depends(get_mock_mode),
 ) -> CohortCorrelationPatternsResponse:
     """
@@ -479,7 +477,7 @@ def get_cohort_correlation_patterns(
         from device_anomaly.data_access.unified_loader import load_unified_device_dataset
         from device_anomaly.services.correlation_service import CorrelationService
 
-        end_date = datetime.now(timezone.utc).date()
+        end_date = datetime.now(UTC).date()
         start_date = end_date - timedelta(days=30)
 
         df = load_unified_device_dataset(
@@ -539,7 +537,7 @@ def get_cohort_correlation_patterns(
         return CohortCorrelationPatternsResponse(
             patterns=response_patterns,
             anomalous_cohorts=anomalous_count,
-            generated_at=datetime.now(timezone.utc).isoformat(),
+            generated_at=datetime.now(UTC).isoformat(),
         )
 
     except HTTPException:
@@ -560,13 +558,13 @@ def _generate_scatter_explanation_prompt(
     metric_y: str,
     x_value: float,
     y_value: float,
-    regression_slope: Optional[float] = None,
-    regression_intercept: Optional[float] = None,
-    correlation: Optional[float] = None,
-    x_mean: Optional[float] = None,
-    y_mean: Optional[float] = None,
-    x_std: Optional[float] = None,
-    y_std: Optional[float] = None,
+    regression_slope: float | None = None,
+    regression_intercept: float | None = None,
+    correlation: float | None = None,
+    x_mean: float | None = None,
+    y_mean: float | None = None,
+    x_std: float | None = None,
+    y_std: float | None = None,
 ) -> str:
     """Build the LLM prompt for scatter anomaly explanation."""
     # Calculate expected Y from regression if available
@@ -722,7 +720,7 @@ def explain_scatter_anomaly(
 
         # Parse the response into structured sections
         what_happened = ""
-        key_concerns: List[str] = []
+        key_concerns: list[str] = []
         likely_explanation = ""
         suggested_action = ""
 
@@ -805,7 +803,7 @@ def get_time_lagged_correlations(
         from device_anomaly.data_access.unified_loader import load_unified_device_dataset
         from device_anomaly.services.correlation_service import CorrelationService
 
-        end_date = datetime.now(timezone.utc).date()
+        end_date = datetime.now(UTC).date()
         start_date = end_date - timedelta(days=60)  # Need more data for lag analysis
 
         df = load_unified_device_dataset(
@@ -842,7 +840,7 @@ def get_time_lagged_correlations(
         return TimeLagCorrelationsResponse(
             correlations=correlations,
             max_lag_analyzed=max_lag,
-            generated_at=datetime.now(timezone.utc).isoformat(),
+            generated_at=datetime.now(UTC).isoformat(),
         )
 
     except HTTPException:

@@ -4,9 +4,7 @@ Utility functions for cost calculations.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -43,10 +41,10 @@ def create_audit_log(
     entity_type: str,
     entity_id: int,
     action: str,
-    old_values: Optional[dict] = None,
-    new_values: Optional[dict] = None,
-    user_id: Optional[str] = None,
-    user_email: Optional[str] = None,
+    old_values: dict | None = None,
+    new_values: dict | None = None,
+    user_id: str | None = None,
+    user_email: str | None = None,
 ) -> CostAuditLog:
     """Create an audit log entry for cost changes."""
     changed_fields = []

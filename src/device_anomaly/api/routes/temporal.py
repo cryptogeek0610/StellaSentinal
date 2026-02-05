@@ -2,8 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
@@ -33,11 +32,11 @@ class HourlyBreakdownResponse(BaseModel):
     """Hourly breakdown analysis."""
     tenant_id: str
     metric: str
-    hourly_data: List[HourlyDataPointResponse]
-    peak_hours: List[int]
-    low_hours: List[int]
+    hourly_data: list[HourlyDataPointResponse]
+    peak_hours: list[int]
+    low_hours: list[int]
     day_night_ratio: float
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class PeakDetectionResponse(BaseModel):
@@ -52,9 +51,9 @@ class PeakDetectionListResponse(BaseModel):
     """List of detected peaks."""
     tenant_id: str
     metric: str
-    peaks: List[PeakDetectionResponse]
+    peaks: list[PeakDetectionResponse]
     total_peaks: int
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class PeriodStatsResponse(BaseModel):
@@ -76,7 +75,7 @@ class TemporalComparisonResponse(BaseModel):
     change_percent: float
     is_significant: bool
     p_value: float
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class DailyComparisonPoint(BaseModel):
@@ -91,8 +90,8 @@ class DayOverDayResponse(BaseModel):
     """Day over day comparison."""
     tenant_id: str
     metric: str
-    comparisons: List[DailyComparisonPoint]
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    comparisons: list[DailyComparisonPoint]
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class WeeklyComparisonPoint(BaseModel):
@@ -108,8 +107,8 @@ class WeekOverWeekResponse(BaseModel):
     """Week over week comparison."""
     tenant_id: str
     metric: str
-    comparisons: List[WeeklyComparisonPoint]
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    comparisons: list[WeeklyComparisonPoint]
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 # ============================================================================
@@ -161,10 +160,10 @@ def get_mock_peak_detection(metric: str, period_days: int) -> PeakDetectionListR
     import random
     random.seed(42)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     peaks = []
 
-    for i in range(8):
+    for _i in range(8):
         ts = now - timedelta(days=random.uniform(0, period_days), hours=random.randint(0, 23))
         z_score = random.uniform(2.0, 4.5)
 
@@ -229,7 +228,7 @@ def get_mock_day_over_day(metric: str, lookback_days: int) -> DayOverDayResponse
     import random
     random.seed(42)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     comparisons = []
     prev_value = None
 
@@ -237,10 +236,7 @@ def get_mock_day_over_day(metric: str, lookback_days: int) -> DayOverDayResponse
         date = (now - timedelta(days=lookback_days - i - 1)).strftime("%Y-%m-%d")
         value = random.uniform(40, 60)
 
-        if prev_value:
-            change = ((value - prev_value) / prev_value) * 100
-        else:
-            change = 0
+        change = (value - prev_value) / prev_value * 100 if prev_value else 0
 
         comparisons.append(DailyComparisonPoint(
             date=date,
@@ -262,7 +258,7 @@ def get_mock_week_over_week(metric: str, lookback_weeks: int) -> WeekOverWeekRes
     import random
     random.seed(42)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     comparisons = []
     prev_value = None
 
@@ -272,10 +268,7 @@ def get_mock_week_over_week(metric: str, lookback_weeks: int) -> WeekOverWeekRes
         week = week_date.isocalendar()[1]
         value = random.uniform(280, 420)
 
-        if prev_value:
-            change = ((value - prev_value) / prev_value) * 100
-        else:
-            change = 0
+        change = (value - prev_value) / prev_value * 100 if prev_value else 0
 
         comparisons.append(WeeklyComparisonPoint(
             year=year,
@@ -539,7 +532,9 @@ def get_week_over_week(
     tenant_id = get_tenant_id()
 
     try:
-        from device_anomaly.data_access.temporal_analysis_loader import get_week_over_week_comparison
+        from device_anomaly.data_access.temporal_analysis_loader import (
+            get_week_over_week_comparison,
+        )
 
         data = get_week_over_week_comparison(metric=metric, lookback_weeks=lookback_weeks)
 

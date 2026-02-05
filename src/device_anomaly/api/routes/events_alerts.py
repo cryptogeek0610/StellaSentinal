@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
@@ -27,20 +27,20 @@ class EventEntryResponse(BaseModel):
     severity: str
     event_class: str
     message: str
-    device_id: Optional[int] = None
-    login_id: Optional[str] = None
+    device_id: int | None = None
+    login_id: str | None = None
 
 
 class EventTimelineResponse(BaseModel):
     """Paginated event timeline."""
     tenant_id: str
-    events: List[EventEntryResponse]
+    events: list[EventEntryResponse]
     total: int
     page: int
     page_size: int
-    severity_distribution: Dict[str, int]
-    event_class_distribution: Dict[str, int]
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    severity_distribution: dict[str, int]
+    event_class_distribution: dict[str, int]
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class AlertEntryResponse(BaseModel):
@@ -49,10 +49,10 @@ class AlertEntryResponse(BaseModel):
     alert_key: str
     alert_name: str
     severity: str
-    device_id: Optional[str] = None
+    device_id: str | None = None
     status: str
-    set_datetime: Optional[datetime] = None
-    ack_datetime: Optional[datetime] = None
+    set_datetime: datetime | None = None
+    ack_datetime: datetime | None = None
 
 
 class AlertNameCount(BaseModel):
@@ -67,12 +67,12 @@ class AlertSummaryResponse(BaseModel):
     total_active: int
     total_acknowledged: int
     total_resolved: int
-    by_severity: Dict[str, int]
-    by_alert_name: List[AlertNameCount]
-    recent_alerts: List[AlertEntryResponse]
+    by_severity: dict[str, int]
+    by_alert_name: list[AlertNameCount]
+    recent_alerts: list[AlertEntryResponse]
     avg_acknowledge_time_minutes: float
     avg_resolution_time_minutes: float
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class AlertTrendPointResponse(BaseModel):
@@ -85,8 +85,8 @@ class AlertTrendPointResponse(BaseModel):
 class AlertTrendsResponse(BaseModel):
     """Alert trends over time."""
     tenant_id: str
-    trends: List[AlertTrendPointResponse]
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    trends: list[AlertTrendPointResponse]
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class CorrelatedEventResponse(BaseModel):
@@ -101,9 +101,9 @@ class EventCorrelationResponse(BaseModel):
     tenant_id: str
     anomaly_timestamp: datetime
     device_id: int
-    correlated_events: List[CorrelatedEventResponse]
+    correlated_events: list[CorrelatedEventResponse]
     total_events_found: int
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class EventStatisticsResponse(BaseModel):
@@ -112,8 +112,8 @@ class EventStatisticsResponse(BaseModel):
     total_events: int
     events_per_day: int
     unique_devices: int
-    top_event_classes: List[Dict[str, Any]]
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    top_event_classes: list[dict[str, Any]]
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 # ============================================================================
@@ -125,7 +125,7 @@ def get_mock_event_timeline(page: int, page_size: int) -> EventTimelineResponse:
     import random
     random.seed(42 + page)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     severities = ["Info", "Warning", "Error", "Critical"]
     event_classes = ["DeviceConnect", "AppCrash", "BatteryLow", "NetworkDrop", "PolicyApply", "UserLogin"]
 
@@ -166,7 +166,7 @@ def get_mock_event_timeline(page: int, page_size: int) -> EventTimelineResponse:
 
 def get_mock_alert_summary() -> AlertSummaryResponse:
     """Generate mock alert summary."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     recent_alerts = [
         AlertEntryResponse(
@@ -235,7 +235,7 @@ def get_mock_alert_trends(period_days: int, granularity: str) -> AlertTrendsResp
     import random
     random.seed(42)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     trends = []
 
     hours = period_days * 24 if granularity == "hourly" else period_days
@@ -283,11 +283,11 @@ def get_mock_event_statistics() -> EventStatisticsResponse:
 
 @router.get("/timeline", response_model=EventTimelineResponse)
 def get_event_timeline(
-    device_id: Optional[int] = Query(None, description="Filter by device ID"),
-    severity: Optional[str] = Query(None, description="Filter by severity"),
-    event_class: Optional[str] = Query(None, description="Filter by event class"),
-    start_time: Optional[datetime] = Query(None, description="Start of time window"),
-    end_time: Optional[datetime] = Query(None, description="End of time window"),
+    device_id: int | None = Query(None, description="Filter by device ID"),
+    severity: str | None = Query(None, description="Filter by severity"),
+    event_class: str | None = Query(None, description="Filter by event class"),
+    start_time: datetime | None = Query(None, description="Start of time window"),
+    end_time: datetime | None = Query(None, description="End of time window"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=10, le=200, description="Events per page"),
     mock_mode: bool = Depends(get_mock_mode),
@@ -355,8 +355,8 @@ def get_event_timeline(
 @router.get("/alerts/summary", response_model=AlertSummaryResponse)
 def get_alert_summary(
     period_days: int = Query(30, ge=1, le=90, description="Analysis period in days"),
-    status_filter: Optional[str] = Query(None, description="Filter by status"),
-    severity_filter: Optional[str] = Query(None, description="Filter by severity"),
+    status_filter: str | None = Query(None, description="Filter by status"),
+    severity_filter: str | None = Query(None, description="Filter by severity"),
     mock_mode: bool = Depends(get_mock_mode),
 ):
     """
@@ -372,7 +372,7 @@ def get_alert_summary(
     try:
         from device_anomaly.data_access.events_alerts_loader import load_alert_summary
 
-        start_time = datetime.now(timezone.utc) - timedelta(days=period_days)
+        start_time = datetime.now(UTC) - timedelta(days=period_days)
         summary_data = load_alert_summary(
             start_time=start_time,
             status_filter=status_filter,
@@ -589,7 +589,9 @@ def get_event_statistics(
     tenant_id = get_tenant_id()
 
     try:
-        from device_anomaly.data_access.events_alerts_loader import get_event_statistics as get_stats
+        from device_anomaly.data_access.events_alerts_loader import (
+            get_event_statistics as get_stats,
+        )
 
         stats = get_stats(period_days=period_days)
 

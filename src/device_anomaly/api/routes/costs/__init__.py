@@ -12,14 +12,19 @@ This package contains all cost-related endpoints organized by domain:
 """
 from fastapi import APIRouter
 
-from .hardware import router as hardware_router
-from .operational import router as operational_router
-from .summary import router as summary_router
-from .impact import router as impact_router
-from .history import router as history_router
 from .alerts import router as alerts_router
 from .forecasts import router as forecasts_router
-from .utils import cents_to_dollars, dollars_to_cents, calculate_monthly_equivalent, create_audit_log
+from .hardware import router as hardware_router
+from .history import router as history_router
+from .impact import router as impact_router
+from .operational import router as operational_router
+from .summary import router as summary_router
+from .utils import (
+    calculate_monthly_equivalent,
+    cents_to_dollars,
+    create_audit_log,
+    dollars_to_cents,
+)
 
 # Main costs router that combines all sub-routers
 router = APIRouter(prefix="/costs", tags=["costs"])

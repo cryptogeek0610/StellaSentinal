@@ -11,8 +11,34 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from device_anomaly.api.routes import anomalies, dashboard, devices, baselines, llm_settings, data_discovery, training, automation, streaming, setup, investigation, device_actions, insights, costs, system_health, location_intelligence, events_alerts, temporal, correlations, cross_device, data_quality, network, security, action_center, scranton_bridge
 from device_anomaly.api.request_context import clear_request_context, set_request_context
+from device_anomaly.api.routes import (
+    action_center,
+    anomalies,
+    automation,
+    baselines,
+    correlations,
+    costs,
+    cross_device,
+    dashboard,
+    data_discovery,
+    data_quality,
+    device_actions,
+    devices,
+    events_alerts,
+    insights,
+    investigation,
+    llm_settings,
+    location_intelligence,
+    network,
+    scranton_bridge,
+    security,
+    setup,
+    streaming,
+    system_health,
+    temporal,
+    training,
+)
 from device_anomaly.config.logging_config import setup_logging
 from device_anomaly.observability.otel import setup_tracing
 
@@ -29,12 +55,12 @@ async def lifespan(app: FastAPI):
     # Initialize MobiControl device metadata cache for streaming enrichment
     try:
         from device_anomaly.services.device_metadata_sync import (
-            load_mc_device_metadata_cache,
             get_mc_cache_stats,
+            load_mc_device_metadata_cache,
         )
 
         cache_count = load_mc_device_metadata_cache()
-        stats = get_mc_cache_stats()
+        get_mc_cache_stats()
         if cache_count > 0:
             logger.info(
                 "MobiControl device cache initialized: %d devices loaded",
@@ -282,6 +308,7 @@ def readiness():
     # Check results database (SQLite)
     try:
         from sqlalchemy import text
+
         from device_anomaly.database.connection import get_results_db_session
         session = get_results_db_session()
         session.execute(text("SELECT 1"))

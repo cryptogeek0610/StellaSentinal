@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Generator, Optional, Sequence
+from collections.abc import Generator, Sequence
 
 from fastapi import HTTPException, Request
 from sqlalchemy.orm import Session
@@ -119,7 +119,7 @@ class TenantContext:
         set_tenant_id(tenant_id)
 
     @classmethod
-    def get(cls) -> Optional[str]:
+    def get(cls) -> str | None:
         """Get the current tenant ID."""
         return get_tenant_id_value()
 

@@ -16,9 +16,9 @@ from __future__ import annotations
 import hashlib
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -38,7 +38,7 @@ class CohortPattern:
 
     pattern_id: str
     pattern_type: str  # "model_issue", "os_issue", "firmware_issue", "location_issue", "carrier_issue"
-    cohort_definition: Dict[str, str]  # {"manufacturer": "Samsung", "model": "SM-G991B", "os": "13"}
+    cohort_definition: dict[str, str]  # {"manufacturer": "Samsung", "model": "SM-G991B", "os": "13"}
     cohort_name: str  # Human-readable: "Samsung Galaxy S21 (Android 13)"
     affected_devices: int
     fleet_percentage: float
@@ -52,9 +52,9 @@ class CohortPattern:
     confidence: float
     severity: str  # "critical", "high", "medium", "low"
     direction: str  # "elevated" or "reduced"
-    evidence: List[Dict[str, Any]] = field(default_factory=list)
+    evidence: list[dict[str, Any]] = field(default_factory=list)
     recommendation: str = ""
-    detected_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    detected_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 @dataclass
@@ -88,7 +88,7 @@ class SystemicIssue:
     trend: str  # "worsening", "stable", "improving"
     first_detected: str
     recommendation: str
-    related_patterns: List[str] = field(default_factory=list)
+    related_patterns: list[str] = field(default_factory=list)
 
 
 # =============================================================================
@@ -178,8 +178,8 @@ class CrossDevicePatternDetector:
 
     def __init__(
         self,
-        cohort_dimensions: Optional[List[str]] = None,
-        pattern_metrics: Optional[List[str]] = None,
+        cohort_dimensions: list[str] | None = None,
+        pattern_metrics: list[str] | None = None,
         significance_level: float = 0.05,
         min_effect_size: float = 0.5,  # Cohen's d threshold
         min_sample_size: int = 20,
@@ -207,11 +207,11 @@ class CrossDevicePatternDetector:
         self.z_threshold = z_threshold
 
         # Learned baselines from fit()
-        self.fleet_baselines: Dict[str, CohortBaseline] = {}
+        self.fleet_baselines: dict[str, CohortBaseline] = {}
         self.fleet_size: int = 0
         self._fitted = False
 
-    def fit(self, df: pd.DataFrame) -> "CrossDevicePatternDetector":
+    def fit(self, df: pd.DataFrame) -> CrossDevicePatternDetector:
         """
         Learn fleet-wide baselines from training data.
 
@@ -258,8 +258,8 @@ class CrossDevicePatternDetector:
     def detect_patterns(
         self,
         df: pd.DataFrame,
-        metrics: Optional[List[str]] = None,
-    ) -> List[CohortPattern]:
+        metrics: list[str] | None = None,
+    ) -> list[CohortPattern]:
         """
         Detect statistically significant cross-device patterns.
 
@@ -285,7 +285,7 @@ class CrossDevicePatternDetector:
             self.fit(df)
 
         metrics = metrics or self.pattern_metrics
-        patterns: List[CohortPattern] = []
+        patterns: list[CohortPattern] = []
 
         # Generate all cohort dimension combinations to analyze
         dimension_combos = self._get_dimension_combinations(df)
@@ -311,7 +311,7 @@ class CrossDevicePatternDetector:
         df: pd.DataFrame,
         min_devices: int = 10,
         min_z: float = 2.0,
-    ) -> List[SystemicIssue]:
+    ) -> list[SystemicIssue]:
         """
         Detect systemic issues affecting device cohorts.
 
@@ -330,7 +330,7 @@ class CrossDevicePatternDetector:
         patterns = self.detect_patterns(df)
 
         # Filter to significant issues
-        issues: List[SystemicIssue] = []
+        issues: list[SystemicIssue] = []
 
         for pattern in patterns:
             if pattern.affected_devices < min_devices:
@@ -370,7 +370,7 @@ class CrossDevicePatternDetector:
         self,
         df: pd.DataFrame,
         top_n: int = 20,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get device model reliability rankings.
 
@@ -444,7 +444,7 @@ class CrossDevicePatternDetector:
     def get_os_stability_analysis(
         self,
         df: pd.DataFrame,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Analyze OS version stability.
 
@@ -518,9 +518,9 @@ class CrossDevicePatternDetector:
     def get_firmware_impact_analysis(
         self,
         df: pd.DataFrame,
-        manufacturer: Optional[str] = None,
-        model: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
+        manufacturer: str | None = None,
+        model: str | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Analyze firmware version impact on device health.
 
@@ -622,14 +622,14 @@ class CrossDevicePatternDetector:
     def _get_dimension_combinations(
         self,
         df: pd.DataFrame,
-    ) -> List[List[str]]:
+    ) -> list[list[str]]:
         """Generate meaningful dimension combinations to analyze."""
         available_dims = [d for d in self.cohort_dimensions if d in df.columns]
 
         if not available_dims:
             return []
 
-        combos: List[List[str]] = []
+        combos: list[list[str]] = []
 
         # Single dimensions (most general)
         combos.extend([[d] for d in available_dims])
@@ -656,11 +656,11 @@ class CrossDevicePatternDetector:
     def _analyze_cohort_dimension(
         self,
         df: pd.DataFrame,
-        dimensions: List[str],
-        metrics: List[str],
-    ) -> List[CohortPattern]:
+        dimensions: list[str],
+        metrics: list[str],
+    ) -> list[CohortPattern]:
         """Analyze patterns for a specific dimension combination."""
-        patterns: List[CohortPattern] = []
+        patterns: list[CohortPattern] = []
 
         # Group by dimension(s)
         grouped = df.groupby(dimensions)
@@ -680,7 +680,7 @@ class CrossDevicePatternDetector:
                 continue
 
             # Build cohort definition
-            cohort_def = dict(zip(dimensions, [str(k) for k in cohort_key]))
+            cohort_def = dict(zip(dimensions, [str(k) for k in cohort_key], strict=False))
             cohort_name = self._build_cohort_name(cohort_def, cohort_df)
             cohort_id = "_".join(str(k) for k in cohort_key)
 
@@ -710,10 +710,10 @@ class CrossDevicePatternDetector:
         metric: str,
         cohort_id: str,
         cohort_name: str,
-        cohort_def: Dict[str, str],
-        dimensions: List[str],
+        cohort_def: dict[str, str],
+        dimensions: list[str],
         fleet_size: int,
-    ) -> Optional[CohortPattern]:
+    ) -> CohortPattern | None:
         """Analyze a specific metric for a cohort."""
         baseline = self.fleet_baselines[metric]
 
@@ -726,10 +726,7 @@ class CrossDevicePatternDetector:
         cohort_std = float(cohort_series.std()) if cohort_series.std() > 0 else 1e-6
 
         # Compute Z-score (cohort mean vs fleet mean)
-        if baseline.std > 0:
-            z_score = (cohort_mean - baseline.mean) / baseline.std
-        else:
-            z_score = 0
+        z_score = (cohort_mean - baseline.mean) / baseline.std if baseline.std > 0 else 0
 
         # Skip if Z-score not significant
         if abs(z_score) < self.z_threshold:
@@ -820,7 +817,7 @@ class CrossDevicePatternDetector:
 
     def _build_cohort_name(
         self,
-        cohort_def: Dict[str, str],
+        cohort_def: dict[str, str],
         cohort_df: pd.DataFrame,
     ) -> str:
         """Build human-readable cohort name."""
@@ -857,8 +854,8 @@ class CrossDevicePatternDetector:
 
     def _infer_pattern_type(
         self,
-        dimensions: List[str],
-        cohort_def: Dict[str, str],
+        dimensions: list[str],
+        cohort_def: dict[str, str],
     ) -> str:
         """Infer the pattern type from dimensions."""
         if "FirmwareVersion" in dimensions:
@@ -926,11 +923,11 @@ class CrossDevicePatternDetector:
 
     def _deduplicate_patterns(
         self,
-        patterns: List[CohortPattern],
-    ) -> List[CohortPattern]:
+        patterns: list[CohortPattern],
+    ) -> list[CohortPattern]:
         """Remove duplicate patterns, keeping the most specific."""
         # Group by cohort_id and metric
-        seen: Dict[str, CohortPattern] = {}
+        seen: dict[str, CohortPattern] = {}
 
         for pattern in patterns:
             key = f"{pattern.primary_metric}"
@@ -941,18 +938,15 @@ class CrossDevicePatternDetector:
             else:
                 existing = seen[key]
                 # Prefer more specific (more dimensions)
-                if len(pattern.cohort_definition) > len(existing.cohort_definition):
-                    seen[key] = pattern
-                # Or prefer higher severity
-                elif pattern.severity in ("critical", "high") and existing.severity not in ("critical", "high"):
+                if len(pattern.cohort_definition) > len(existing.cohort_definition) or pattern.severity in ("critical", "high") and existing.severity not in ("critical", "high"):
                     seen[key] = pattern
 
         return list(seen.values())
 
     def _rank_patterns(
         self,
-        patterns: List[CohortPattern],
-    ) -> List[CohortPattern]:
+        patterns: list[CohortPattern],
+    ) -> list[CohortPattern]:
         """Rank patterns by impact (severity × affected devices)."""
         severity_weights = {"critical": 4, "high": 3, "medium": 2, "low": 1}
 
@@ -993,7 +987,7 @@ class CrossDevicePatternDetector:
         logger.info(f"Saved CrossDevicePatternDetector to {path}")
 
     @classmethod
-    def load(cls, path: Path) -> "CrossDevicePatternDetector":
+    def load(cls, path: Path) -> CrossDevicePatternDetector:
         """Load detector from file."""
         import pickle
 
@@ -1018,7 +1012,7 @@ def detect_cross_device_patterns(
     df: pd.DataFrame,
     min_devices: int = 20,
     z_threshold: float = 2.0,
-) -> List[CohortPattern]:
+) -> list[CohortPattern]:
     """
     Convenience function to detect cross-device patterns.
 
@@ -1042,7 +1036,7 @@ def get_systemic_issues(
     df: pd.DataFrame,
     min_devices: int = 10,
     min_z: float = 2.0,
-) -> List[SystemicIssue]:
+) -> list[SystemicIssue]:
     """
     Convenience function to get systemic issues.
 

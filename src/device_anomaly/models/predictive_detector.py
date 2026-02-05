@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -46,8 +46,8 @@ class PredictiveResult:
     prediction_type: str
     device_id: Any
     will_occur: bool
-    predicted_value: Optional[float]
-    time_until: Optional[float]  # Hours or days depending on type
+    predicted_value: float | None
+    time_until: float | None  # Hours or days depending on type
     confidence: float
     details: dict[str, Any] = field(default_factory=dict)
     recommendation: str = ""
@@ -64,14 +64,14 @@ class PredictiveAnomalyDetector:
     4. Performance degradation trajectory
     """
 
-    def __init__(self, config: Optional[PredictiveConfig] = None):
+    def __init__(self, config: PredictiveConfig | None = None):
         self.config = config or PredictiveConfig()
 
     def predict_battery_failure(
         self,
         drain_history: np.ndarray,
         current_level: float,
-        shift_duration_hours: Optional[float] = None,
+        shift_duration_hours: float | None = None,
         device_id: Any = None,
     ) -> PredictiveResult:
         """

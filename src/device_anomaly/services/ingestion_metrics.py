@@ -14,10 +14,10 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta, timezone
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from threading import Lock
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
@@ -33,7 +33,7 @@ class TableIngestionMetric:
     source_db: str
     table_name: str
     started_at: datetime
-    completed_at: Optional[datetime] = None
+    completed_at: datetime | None = None
 
     # Row counts
     rows_fetched: int = 0
@@ -42,35 +42,35 @@ class TableIngestionMetric:
     rows_skipped: int = 0  # Skipped due to allowlist, missing table, etc.
 
     # Watermarks
-    watermark_start: Optional[datetime] = None
-    watermark_end: Optional[datetime] = None
+    watermark_start: datetime | None = None
+    watermark_end: datetime | None = None
 
     # Performance
-    query_time_ms: Optional[float] = None
-    transform_time_ms: Optional[float] = None
-    write_time_ms: Optional[float] = None
+    query_time_ms: float | None = None
+    transform_time_ms: float | None = None
+    write_time_ms: float | None = None
 
     # Status
     success: bool = True
-    error: Optional[str] = None
-    warning: Optional[str] = None
+    error: str | None = None
+    warning: str | None = None
 
     # Context
-    batch_id: Optional[str] = None
+    batch_id: str | None = None
     weight: int = 1
 
     @property
-    def duration_ms(self) -> Optional[float]:
+    def duration_ms(self) -> float | None:
         """Total duration in milliseconds."""
         if self.completed_at and self.started_at:
             return (self.completed_at - self.started_at).total_seconds() * 1000
         return None
 
     @property
-    def lag_seconds(self) -> Optional[float]:
+    def lag_seconds(self) -> float | None:
         """Data lag in seconds (now - watermark_end)."""
         if self.watermark_end:
-            return (datetime.now(timezone.utc) - self.watermark_end).total_seconds()
+            return (datetime.now(UTC) - self.watermark_end).total_seconds()
         return None
 
     @property
@@ -80,7 +80,7 @@ class TableIngestionMetric:
             return self.rows_deduped / self.rows_fetched
         return 0.0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for storage."""
         return {
             "source_db": self.source_db,
@@ -111,7 +111,7 @@ class TableIngestionMetric:
 class DailyCoverageReport:
     """Daily aggregated coverage report."""
     report_date: datetime
-    generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    generated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     # Source database stats
     xsight_tables_configured: int = 0
@@ -128,18 +128,18 @@ class DailyCoverageReport:
     total_rows_fetched: int = 0
     total_rows_inserted: int = 0
     total_rows_deduped: int = 0
-    avg_lag_seconds: Optional[float] = None
-    max_lag_seconds: Optional[float] = None
+    avg_lag_seconds: float | None = None
+    max_lag_seconds: float | None = None
 
     # Table-level details
-    table_stats: List[Dict[str, Any]] = field(default_factory=list)
+    table_stats: list[dict[str, Any]] = field(default_factory=list)
 
     # Issues
-    tables_with_errors: List[str] = field(default_factory=list)
-    tables_with_high_lag: List[str] = field(default_factory=list)  # > 1 hour
-    tables_with_high_dedupe: List[str] = field(default_factory=list)  # > 20% dedupe
+    tables_with_errors: list[str] = field(default_factory=list)
+    tables_with_high_lag: list[str] = field(default_factory=list)  # > 1 hour
+    tables_with_high_dedupe: list[str] = field(default_factory=list)  # > 20% dedupe
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for storage."""
         return {
             "report_date": self.report_date.isoformat(),
@@ -173,11 +173,11 @@ class IngestionMetricsStore:
     - telemetry_coverage_report: Daily aggregated reports
     """
 
-    def __init__(self, postgres_url: Optional[str] = None):
+    def __init__(self, postgres_url: str | None = None):
         self._postgres_url = postgres_url
-        self._engine: Optional[Engine] = None
+        self._engine: Engine | None = None
         self._lock = Lock()
-        self._buffer: List[TableIngestionMetric] = []
+        self._buffer: list[TableIngestionMetric] = []
         self._buffer_size = 100  # Flush every N metrics
         self._tables_ready = False
         self._auto_create_tables = False
@@ -414,8 +414,8 @@ class IngestionMetricsStore:
 
     def generate_daily_report(
         self,
-        report_date: Optional[datetime] = None,
-    ) -> Optional[DailyCoverageReport]:
+        report_date: datetime | None = None,
+    ) -> DailyCoverageReport | None:
         """
         Generate daily coverage report from metrics.
 
@@ -433,7 +433,7 @@ class IngestionMetricsStore:
         self.flush()
 
         if report_date is None:
-            report_date = datetime.now(timezone.utc).replace(
+            report_date = datetime.now(UTC).replace(
                 hour=0, minute=0, second=0, microsecond=0
             ) - timedelta(days=1)
 
@@ -612,7 +612,7 @@ class IngestionMetricsStore:
             logger.error(f"Failed to save daily report: {e}")
             return False
 
-    def get_daily_report(self, report_date: datetime) -> Optional[DailyCoverageReport]:
+    def get_daily_report(self, report_date: datetime) -> DailyCoverageReport | None:
         """Retrieve a daily coverage report."""
         if not self._engine:
             return None
@@ -660,7 +660,7 @@ class IngestionMetricsStore:
         source_db: str,
         table_name: str,
         days: int = 7,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get recent metrics for a specific table."""
         if not self._engine:
             return []
@@ -707,7 +707,7 @@ class IngestionMetricsStore:
 
 
 # Global singleton
-_metrics_store: Optional[IngestionMetricsStore] = None
+_metrics_store: IngestionMetricsStore | None = None
 _metrics_lock = Lock()
 
 
@@ -731,20 +731,20 @@ def record_ingestion_metric(
     source_db: str,
     table_name: str,
     started_at: datetime,
-    completed_at: Optional[datetime] = None,
+    completed_at: datetime | None = None,
     rows_fetched: int = 0,
     rows_inserted: int = 0,
     rows_deduped: int = 0,
     rows_skipped: int = 0,
-    watermark_start: Optional[datetime] = None,
-    watermark_end: Optional[datetime] = None,
+    watermark_start: datetime | None = None,
+    watermark_end: datetime | None = None,
     success: bool = True,
-    error: Optional[str] = None,
-    warning: Optional[str] = None,
-    batch_id: Optional[str] = None,
-    query_time_ms: Optional[float] = None,
-    transform_time_ms: Optional[float] = None,
-    write_time_ms: Optional[float] = None,
+    error: str | None = None,
+    warning: str | None = None,
+    batch_id: str | None = None,
+    query_time_ms: float | None = None,
+    transform_time_ms: float | None = None,
+    write_time_ms: float | None = None,
     weight: int = 1,
 ) -> None:
     """
@@ -760,7 +760,7 @@ def record_ingestion_metric(
         source_db=source_db,
         table_name=table_name,
         started_at=started_at,
-        completed_at=completed_at or datetime.now(timezone.utc),
+        completed_at=completed_at or datetime.now(UTC),
         rows_fetched=rows_fetched,
         rows_inserted=rows_inserted,
         rows_deduped=rows_deduped,
@@ -782,8 +782,8 @@ def record_ingestion_metric(
 
 
 def generate_daily_coverage_report(
-    report_date: Optional[datetime] = None,
-) -> Optional[DailyCoverageReport]:
+    report_date: datetime | None = None,
+) -> DailyCoverageReport | None:
     """
     Generate and store daily coverage report.
 

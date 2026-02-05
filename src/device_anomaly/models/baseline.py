@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -18,14 +19,14 @@ DATA_DRIVEN_SCHEMA_VERSION = "data_driven_v1"
 @dataclass
 class BaselineLevel:
     name: str
-    group_columns: List[str]
+    group_columns: list[str]
     min_rows: int = 25
 
 
 @dataclass
 class BaselineFeedback:
     level: str
-    group_key: Dict[str, object] | str
+    group_key: dict[str, object] | str
     feature: str
     adjustment: float
     reason: str | None = None
@@ -41,9 +42,9 @@ def _group_key(df: pd.DataFrame, level: BaselineLevel) -> pd.Series:
 def compute_baselines(
     df: pd.DataFrame,
     feature_cols: Iterable[str],
-    levels: List[BaselineLevel],
-) -> Dict[str, pd.DataFrame]:
-    baselines: Dict[str, pd.DataFrame] = {}
+    levels: list[BaselineLevel],
+) -> dict[str, pd.DataFrame]:
+    baselines: dict[str, pd.DataFrame] = {}
     for level in levels:
         try:
             key = _group_key(df, level)
@@ -80,8 +81,8 @@ def compute_baselines(
 
 def apply_baselines(
     df: pd.DataFrame,
-    baselines: Dict[str, pd.DataFrame],
-    levels: List[BaselineLevel],
+    baselines: dict[str, pd.DataFrame],
+    levels: list[BaselineLevel],
 ) -> pd.DataFrame:
     if not baselines:
         return df
@@ -119,7 +120,7 @@ def apply_baselines(
     return out
 
 
-def save_baselines(baselines: Dict[str, pd.DataFrame], path: Path) -> None:
+def save_baselines(baselines: dict[str, pd.DataFrame], path: Path) -> None:
     payload = {
         level: df.to_dict(orient="records")
         for level, df in baselines.items()
@@ -128,7 +129,7 @@ def save_baselines(baselines: Dict[str, pd.DataFrame], path: Path) -> None:
     path.write_text(json.dumps(payload, indent=2, default=float))
 
 
-def load_baselines(path: Path) -> Dict[str, pd.DataFrame]:
+def load_baselines(path: Path) -> dict[str, pd.DataFrame]:
     if not path.exists():
         return {}
     raw = json.loads(path.read_text())
@@ -138,10 +139,10 @@ def load_baselines(path: Path) -> Dict[str, pd.DataFrame]:
     return parsed
 
 
-def save_baselines_versioned(baselines: Dict[str, pd.DataFrame], path: Path) -> Path | None:
+def save_baselines_versioned(baselines: dict[str, pd.DataFrame], path: Path) -> Path | None:
     backup_path = None
     if path.exists():
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
         backup_path = path.with_name(f"{path.stem}_{timestamp}{path.suffix}")
         path.replace(backup_path)
     save_baselines(baselines, path)
@@ -149,10 +150,10 @@ def save_baselines_versioned(baselines: Dict[str, pd.DataFrame], path: Path) -> 
 
 
 def apply_feedback(
-    baselines: Dict[str, pd.DataFrame],
-    feedback_items: List[BaselineFeedback],
+    baselines: dict[str, pd.DataFrame],
+    feedback_items: list[BaselineFeedback],
     learning_rate: float = 0.3,
-) -> Dict[str, pd.DataFrame]:
+) -> dict[str, pd.DataFrame]:
     if not baselines or not feedback_items:
         return baselines
 
@@ -184,14 +185,14 @@ def apply_feedback(
 
 def suggest_baseline_adjustments(
     anomalies_df: pd.DataFrame,
-    baselines: Dict[str, pd.DataFrame],
-    levels: List[BaselineLevel],
+    baselines: dict[str, pd.DataFrame],
+    levels: list[BaselineLevel],
     z_threshold: float = 3.0,
-) -> List[dict]:
+) -> list[dict]:
     """
     Propose baseline adjustments (do not apply automatically) based on repeated anomalies.
     """
-    suggestions: List[dict] = []
+    suggestions: list[dict] = []
     if anomalies_df.empty or not baselines:
         return suggestions
 
@@ -248,13 +249,13 @@ class EnhancedBaselineStats:
     mean: float
     std: float
     sample_count: int
-    percentiles: Dict[str, float] = field(default_factory=dict)
+    percentiles: dict[str, float] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_series(cls, series: pd.Series) -> "EnhancedBaselineStats":
+    def from_series(cls, series: pd.Series) -> EnhancedBaselineStats:
         """Compute enhanced statistics from a pandas Series."""
         series = pd.to_numeric(series, errors="coerce").dropna()
         if len(series) == 0:
@@ -294,10 +295,10 @@ class TemporalBaseline:
     """Time-segmented baselines for a metric."""
 
     metric_name: str
-    hourly_stats: Dict[int, EnhancedBaselineStats] = field(default_factory=dict)
-    daily_stats: Dict[int, EnhancedBaselineStats] = field(default_factory=dict)
+    hourly_stats: dict[int, EnhancedBaselineStats] = field(default_factory=dict)
+    daily_stats: dict[int, EnhancedBaselineStats] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "metric_name": self.metric_name,
             "hourly_stats": {
@@ -318,7 +319,7 @@ class AnomalyThresholds:
     critical_lower: float
     critical_upper: float
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "warning": {"lower": self.warning_lower, "upper": self.warning_upper},
             "critical": {"lower": self.critical_lower, "upper": self.critical_upper},
@@ -327,10 +328,10 @@ class AnomalyThresholds:
     @classmethod
     def from_percentiles(
         cls,
-        percentiles: Dict[str, float],
-        warning_percentile: Tuple[str, str] = ("p5", "p95"),
-        critical_percentile: Tuple[str, str] = ("p5", "p99"),
-    ) -> "AnomalyThresholds":
+        percentiles: dict[str, float],
+        warning_percentile: tuple[str, str] = ("p5", "p95"),
+        critical_percentile: tuple[str, str] = ("p5", "p99"),
+    ) -> AnomalyThresholds:
         """Compute thresholds from percentiles."""
         return cls(
             warning_lower=percentiles.get(warning_percentile[0], 0.0),
@@ -346,11 +347,11 @@ class DataDrivenBaseline:
 
     metric_name: str
     global_stats: EnhancedBaselineStats
-    by_hour: Optional[Dict[int, EnhancedBaselineStats]] = None
-    by_device_type: Optional[Dict[str, EnhancedBaselineStats]] = None
-    thresholds: Optional[AnomalyThresholds] = None
+    by_hour: dict[int, EnhancedBaselineStats] | None = None
+    by_device_type: dict[str, EnhancedBaselineStats] | None = None
+    thresholds: AnomalyThresholds | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         result = {
             "metric_name": self.metric_name,
             "global": self.global_stats.to_dict(),
@@ -371,9 +372,9 @@ class DataDrivenBaseline:
 def compute_enhanced_baselines(
     df: pd.DataFrame,
     feature_cols: Iterable[str],
-    levels: List[BaselineLevel],
+    levels: list[BaselineLevel],
     include_percentiles: bool = True,
-) -> Dict[str, pd.DataFrame]:
+) -> dict[str, pd.DataFrame]:
     """
     Compute enhanced baselines with percentiles for each feature and level.
 
@@ -386,7 +387,7 @@ def compute_enhanced_baselines(
     Returns:
         Dictionary mapping level names to DataFrames with enhanced statistics
     """
-    baselines: Dict[str, pd.DataFrame] = {}
+    baselines: dict[str, pd.DataFrame] = {}
 
     for level in levels:
         try:
@@ -431,7 +432,7 @@ def compute_temporal_baselines(
     feature_cols: Iterable[str],
     timestamp_col: str = "Timestamp",
     min_samples_per_segment: int = 10,
-) -> Dict[str, TemporalBaseline]:
+) -> dict[str, TemporalBaseline]:
     """
     Compute time-segmented baselines (hourly and daily patterns).
 
@@ -452,7 +453,7 @@ def compute_temporal_baselines(
     df["_hour"] = df[timestamp_col].dt.hour
     df["_dayofweek"] = df[timestamp_col].dt.dayofweek
 
-    temporal_baselines: Dict[str, TemporalBaseline] = {}
+    temporal_baselines: dict[str, TemporalBaseline] = {}
 
     for col in feature_cols:
         if col not in df.columns:
@@ -482,10 +483,10 @@ def compute_data_driven_baselines(
     df: pd.DataFrame,
     feature_cols: Iterable[str],
     timestamp_col: str = "Timestamp",
-    device_type_col: Optional[str] = None,
+    device_type_col: str | None = None,
     include_temporal: bool = True,
     min_samples: int = 25,
-) -> Dict[str, DataDrivenBaseline]:
+) -> dict[str, DataDrivenBaseline]:
     """
     Compute comprehensive data-driven baselines for each metric.
 
@@ -510,7 +511,7 @@ def compute_data_driven_baselines(
     Returns:
         Dictionary mapping metric names to DataDrivenBaseline objects
     """
-    baselines: Dict[str, DataDrivenBaseline] = {}
+    baselines: dict[str, DataDrivenBaseline] = {}
 
     for col in feature_cols:
         if col not in df.columns:
@@ -525,7 +526,7 @@ def compute_data_driven_baselines(
         thresholds = AnomalyThresholds.from_percentiles(global_stats.percentiles)
 
         # Device type specific baselines
-        by_device_type: Optional[Dict[str, EnhancedBaselineStats]] = None
+        by_device_type: dict[str, EnhancedBaselineStats] | None = None
         if device_type_col and device_type_col in df.columns:
             by_device_type = {}
             for dtype, grp in df.groupby(device_type_col):
@@ -533,7 +534,7 @@ def compute_data_driven_baselines(
                     by_device_type[str(dtype)] = EnhancedBaselineStats.from_series(grp[col])
 
         # Temporal baselines
-        by_hour: Optional[Dict[int, EnhancedBaselineStats]] = None
+        by_hour: dict[int, EnhancedBaselineStats] | None = None
         if include_temporal and timestamp_col in df.columns:
             temporal = compute_temporal_baselines(df, [col], timestamp_col, min_samples // 2)
             if col in temporal:
@@ -551,14 +552,14 @@ def compute_data_driven_baselines(
 
 
 def save_data_driven_baselines(
-    baselines: Dict[str, DataDrivenBaseline],
+    baselines: dict[str, DataDrivenBaseline],
     path: Path,
 ) -> None:
     """Save data-driven baselines to JSON file in the requested format."""
     payload = {
         "schema_version": DATA_DRIVEN_SCHEMA_VERSION,
         "baseline_type": "data_driven",
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "baselines": {name: baseline.to_dict() for name, baseline in baselines.items()},
     }
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -566,7 +567,7 @@ def save_data_driven_baselines(
     logger.info(f"Saved data-driven baselines to {path}")
 
 
-def load_data_driven_baselines(path: Path) -> Dict[str, Dict[str, Any]]:
+def load_data_driven_baselines(path: Path) -> dict[str, dict[str, Any]]:
     """Load data-driven baselines from JSON file."""
     if not path.exists():
         return {}
@@ -576,7 +577,7 @@ def load_data_driven_baselines(path: Path) -> Dict[str, Dict[str, Any]]:
     return payload
 
 
-def load_data_driven_baselines_payload(path: Path) -> Dict[str, Any]:
+def load_data_driven_baselines_payload(path: Path) -> dict[str, Any]:
     """Load the full data-driven baseline payload (including schema metadata)."""
     if not path.exists():
         return {}
@@ -593,9 +594,9 @@ def load_data_driven_baselines_payload(path: Path) -> Dict[str, Any]:
 def compute_cohort_baselines_from_real_data(
     df: pd.DataFrame,
     feature_cols: Iterable[str],
-    cohort_columns: List[str],
+    cohort_columns: list[str],
     min_devices_per_cohort: int = 25,
-) -> Dict[str, pd.DataFrame]:
+) -> dict[str, pd.DataFrame]:
     """
     Compute per-cohort baselines from real telemetry data.
 

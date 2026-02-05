@@ -10,7 +10,6 @@ This module provides advanced time-series features including:
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -49,7 +48,7 @@ class TemporalFeatureBuilder:
     def transform(
         self,
         df: pd.DataFrame,
-        target_columns: Optional[list[str]] = None,
+        target_columns: list[str] | None = None,
     ) -> pd.DataFrame:
         """
         Build temporal features for specified columns.
@@ -258,7 +257,7 @@ class TemporalFeatureBuilder:
 
 def build_temporal_features(
     df: pd.DataFrame,
-    target_columns: Optional[list[str]] = None,
+    target_columns: list[str] | None = None,
     seasonal_period: int = 24,
 ) -> pd.DataFrame:
     """

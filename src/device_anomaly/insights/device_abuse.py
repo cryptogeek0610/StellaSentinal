@@ -12,23 +12,22 @@ This analyzer identifies device misuse and hardware/software issues.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
-from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from enum import StrEnum
+from typing import Any
 
 import numpy as np
 import pandas as pd
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from device_anomaly.database.schema import DeviceFeature, LocationMetadata
-from device_anomaly.insights.categories import InsightCategory, InsightSeverity, EntityType
+from device_anomaly.database.schema import DeviceFeature
+from device_anomaly.insights.categories import InsightSeverity
 
 logger = logging.getLogger(__name__)
 
 
-class AbuseType(str, Enum):
+class AbuseType(StrEnum):
     """Types of device abuse patterns."""
 
     EXCESSIVE_DROPS = "excessive_drops"
@@ -44,7 +43,7 @@ class DeviceAbuseIndicator:
     """Abuse indicator for a single device."""
 
     device_id: int
-    device_name: Optional[str]
+    device_name: str | None
     abuse_type: AbuseType
 
     # Metrics
@@ -60,13 +59,13 @@ class DeviceAbuseIndicator:
     vs_cohort_multiplier: float  # e.g., 2.5x = 2.5x worse than cohort average
 
     # Context
-    assigned_user: Optional[str]
-    assigned_location: Optional[str]
+    assigned_user: str | None
+    assigned_location: str | None
     device_cohort: str  # manufacturer_model_os
 
     severity: InsightSeverity
     description: str
-    recommendations: List[str]
+    recommendations: list[str]
 
 
 @dataclass
@@ -85,20 +84,20 @@ class DropAnalysisReport:
     devices_with_excessive_drops: int
 
     # Breakdown by entity
-    by_location: Dict[str, Tuple[int, float]]  # location -> (drops, rate)
-    by_user: Dict[str, Tuple[int, float]]  # user -> (drops, rate)
-    by_cohort: Dict[str, Tuple[int, float]]  # cohort -> (drops, rate)
+    by_location: dict[str, tuple[int, float]]  # location -> (drops, rate)
+    by_user: dict[str, tuple[int, float]]  # user -> (drops, rate)
+    by_cohort: dict[str, tuple[int, float]]  # cohort -> (drops, rate)
 
     # Top offenders
-    worst_devices: List[DeviceAbuseIndicator]
-    worst_locations: List[Tuple[str, int, float]]  # (location, drops, rate)
-    worst_users: List[Tuple[str, int, float]]  # (user, drops, rate)
+    worst_devices: list[DeviceAbuseIndicator]
+    worst_locations: list[tuple[str, int, float]]  # (location, drops, rate)
+    worst_users: list[tuple[str, int, float]]  # (user, drops, rate)
 
     # Trend
     trend_direction: str  # improving, stable, worsening
     trend_change_percent: float
 
-    recommendations: List[str]
+    recommendations: list[str]
 
 
 @dataclass
@@ -121,15 +120,15 @@ class RebootAnalysisReport:
     crash_induced_reboots_percent: float  # % reboots likely caused by crashes
 
     # Breakdown
-    by_location: Dict[str, Tuple[int, float]]
-    by_user: Dict[str, Tuple[int, float]]
-    by_cohort: Dict[str, Tuple[int, float]]
+    by_location: dict[str, tuple[int, float]]
+    by_user: dict[str, tuple[int, float]]
+    by_cohort: dict[str, tuple[int, float]]
 
     # Top offenders
-    worst_devices: List[DeviceAbuseIndicator]
-    worst_cohorts: List[Tuple[str, int, float]]  # (cohort, reboots, rate)
+    worst_devices: list[DeviceAbuseIndicator]
+    worst_cohorts: list[tuple[str, int, float]]  # (cohort, reboots, rate)
 
-    recommendations: List[str]
+    recommendations: list[str]
 
 
 @dataclass
@@ -140,7 +139,7 @@ class ProblemCombination:
     manufacturer: str
     model: str
     os_version: str
-    firmware_version: Optional[str]
+    firmware_version: str | None
 
     # Metrics
     device_count: int
@@ -158,7 +157,7 @@ class ProblemCombination:
     severity: InsightSeverity
 
     description: str
-    recommendations: List[str]
+    recommendations: list[str]
 
 
 @dataclass
@@ -174,15 +173,15 @@ class ProblemCombinationReport:
     devices_in_problem_cohorts: int
 
     # Problem combinations
-    problem_combinations: List[ProblemCombination]
+    problem_combinations: list[ProblemCombination]
 
     # By manufacturer
-    worst_manufacturers: List[Tuple[str, float]]  # (manufacturer, issue_rate)
+    worst_manufacturers: list[tuple[str, float]]  # (manufacturer, issue_rate)
 
     # By OS version
-    worst_os_versions: List[Tuple[str, float]]  # (os_version, issue_rate)
+    worst_os_versions: list[tuple[str, float]]  # (os_version, issue_rate)
 
-    recommendations: List[str]
+    recommendations: list[str]
 
 
 class DeviceAbuseAnalyzer:
@@ -225,7 +224,7 @@ class DeviceAbuseAnalyzer:
         self,
         period_days: int = 7,
         group_by: str = "tenant",  # "tenant", "location", "user"
-        entity_id: Optional[str] = None,
+        entity_id: str | None = None,
     ) -> DropAnalysisReport:
         """Analyze drop patterns.
 
@@ -340,7 +339,7 @@ class DeviceAbuseAnalyzer:
         self,
         period_days: int = 7,
         group_by: str = "tenant",
-        entity_id: Optional[str] = None,
+        entity_id: str | None = None,
     ) -> RebootAnalysisReport:
         """Analyze reboot patterns.
 
@@ -473,7 +472,7 @@ class DeviceAbuseAnalyzer:
         # Calculate issue rate (simplified: devices with any issue / total devices)
         # In production would be more sophisticated
 
-        problem_combinations: List[ProblemCombination] = []
+        problem_combinations: list[ProblemCombination] = []
 
         for _, row in cohort_agg.iterrows():
             if row["device_id"] < self.MIN_COHORT_SIZE:
@@ -512,8 +511,8 @@ class DeviceAbuseAnalyzer:
                 # Calculate issue rate (% of devices with any issue)
                 # Simplified: if above threshold = has issue
                 issue_rate = (
-                    (row["avg_drops"] > self.EXCESSIVE_DROPS_THRESHOLD or
-                     row["avg_reboots"] > self.EXCESSIVE_REBOOTS_THRESHOLD)
+                    row["avg_drops"] > self.EXCESSIVE_DROPS_THRESHOLD or
+                     row["avg_reboots"] > self.EXCESSIVE_REBOOTS_THRESHOLD
                 )
 
                 problem_combinations.append(ProblemCombination(
@@ -582,7 +581,7 @@ class DeviceAbuseAnalyzer:
         self,
         device_id: int,
         period_days: int = 7,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get abuse score for a single device.
 
         Args:
@@ -630,7 +629,7 @@ class DeviceAbuseAnalyzer:
     def _get_device_abuse_data(
         self,
         period_days: int,
-        location_id: Optional[str],
+        location_id: str | None,
     ) -> pd.DataFrame:
         """Get device data for abuse analysis.
 
@@ -816,7 +815,7 @@ class DeviceAbuseAnalyzer:
         self,
         period_days: int = 7,
         top_n: int = 10,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Analyze drops grouped by assigned user.
 
         Carl's requirement: "People with excessive drops"
@@ -929,7 +928,7 @@ class DeviceAbuseAnalyzer:
         self,
         period_days: int = 7,
         top_n: int = 10,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Analyze reboots grouped by assigned user.
 
         Args:
@@ -1045,7 +1044,7 @@ class DeviceAbuseAnalyzer:
         metric_col: str,
         entity_col: str,
         period_days: int,
-    ) -> Dict[str, Tuple[int, float]]:
+    ) -> dict[str, tuple[int, float]]:
         """Group a metric by entity and return (total, rate per week)."""
         result = {}
 
@@ -1070,7 +1069,7 @@ class DeviceAbuseAnalyzer:
         device_data: pd.DataFrame,
         period_days: int,
         limit: int = 10,
-    ) -> List[DeviceAbuseIndicator]:
+    ) -> list[DeviceAbuseIndicator]:
         """Get devices with worst drop rates."""
         if device_totals.empty:
             return []
@@ -1133,7 +1132,7 @@ class DeviceAbuseAnalyzer:
         device_data: pd.DataFrame,
         period_days: int,
         limit: int = 10,
-    ) -> List[DeviceAbuseIndicator]:
+    ) -> list[DeviceAbuseIndicator]:
         """Get devices with worst reboot rates."""
         if device_totals.empty:
             return []
@@ -1194,7 +1193,7 @@ class DeviceAbuseAnalyzer:
         self,
         primary_issue: str,
         has_firmware: bool,
-    ) -> List[str]:
+    ) -> list[str]:
         """Get recommendations for a problem cohort."""
         recs = []
 
@@ -1216,12 +1215,12 @@ class DeviceAbuseAnalyzer:
 
     def _generate_drop_recommendations(
         self,
-        worst_devices: List[DeviceAbuseIndicator],
-        worst_locations: List[Tuple[str, int, float]],
-        worst_users: List[Tuple[str, int, float]],
+        worst_devices: list[DeviceAbuseIndicator],
+        worst_locations: list[tuple[str, int, float]],
+        worst_users: list[tuple[str, int, float]],
         excessive_count: int,
         total_devices: int,
-    ) -> List[str]:
+    ) -> list[str]:
         """Generate recommendations for drop analysis."""
         recs = []
 
@@ -1249,12 +1248,12 @@ class DeviceAbuseAnalyzer:
 
     def _generate_reboot_recommendations(
         self,
-        worst_devices: List[DeviceAbuseIndicator],
-        worst_cohorts: List[Tuple[str, int, float]],
+        worst_devices: list[DeviceAbuseIndicator],
+        worst_cohorts: list[tuple[str, int, float]],
         crash_induced: float,
         excessive_count: int,
         total_devices: int,
-    ) -> List[str]:
+    ) -> list[str]:
         """Generate recommendations for reboot analysis."""
         recs = []
 
@@ -1281,8 +1280,8 @@ class DeviceAbuseAnalyzer:
 
     def _generate_combination_recommendations(
         self,
-        problem_combinations: List[ProblemCombination],
-    ) -> List[str]:
+        problem_combinations: list[ProblemCombination],
+    ) -> list[str]:
         """Generate recommendations for problem combinations."""
         recs = []
 
@@ -1294,7 +1293,7 @@ class DeviceAbuseAnalyzer:
             )
 
         # Check for OS-specific issues
-        os_issues: Dict[str, int] = {}
+        os_issues: dict[str, int] = {}
         for p in problem_combinations:
             os_issues[p.os_version] = os_issues.get(p.os_version, 0) + 1
 
@@ -1307,7 +1306,7 @@ class DeviceAbuseAnalyzer:
     def _empty_drop_report(
         self,
         group_by: str,
-        entity_id: Optional[str],
+        entity_id: str | None,
         period_days: int,
     ) -> DropAnalysisReport:
         """Return empty drop report."""
@@ -1334,7 +1333,7 @@ class DeviceAbuseAnalyzer:
     def _empty_reboot_report(
         self,
         group_by: str,
-        entity_id: Optional[str],
+        entity_id: str | None,
         period_days: int,
     ) -> RebootAnalysisReport:
         """Return empty reboot report."""

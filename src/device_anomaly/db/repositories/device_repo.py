@@ -6,8 +6,8 @@ supporting multi-source devices (XSight, MobiControl, etc.).
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
@@ -33,11 +33,11 @@ class DeviceRepository(BaseRepository[Device]):
     def get_by_tenant(
         self,
         tenant_id: str,
-        source: Optional[str] = None,
-        device_type: Optional[str] = None,
+        source: str | None = None,
+        device_type: str | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> List[Device]:
+    ) -> list[Device]:
         """Get devices for a tenant.
 
         Args:
@@ -63,8 +63,8 @@ class DeviceRepository(BaseRepository[Device]):
         self,
         external_id: str,
         source: str,
-        tenant_id: Optional[str] = None,
-    ) -> Optional[Device]:
+        tenant_id: str | None = None,
+    ) -> Device | None:
         """Get a device by its external source ID.
 
         Args:
@@ -92,7 +92,7 @@ class DeviceRepository(BaseRepository[Device]):
         tenant_id: str,
         source: str,
         limit: int = 100,
-    ) -> List[Device]:
+    ) -> list[Device]:
         """Get all devices from a specific source.
 
         Args:
@@ -111,10 +111,10 @@ class DeviceRepository(BaseRepository[Device]):
         tenant_id: str,
         source: str,
         external_id: str,
-        name: Optional[str] = None,
-        device_type: Optional[str] = None,
-        os_version: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        name: str | None = None,
+        device_type: str | None = None,
+        os_version: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> Device:
         """Create or update a device.
 
@@ -144,7 +144,7 @@ class DeviceRepository(BaseRepository[Device]):
                 device.os_version = os_version
             if metadata:
                 device.metadata = json.dumps(metadata)
-            device.last_seen = datetime.now(timezone.utc)
+            device.last_seen = datetime.now(UTC)
             self.session.flush()
         else:
             # Create new device
@@ -157,7 +157,7 @@ class DeviceRepository(BaseRepository[Device]):
                 device_type=device_type,
                 os_version=os_version,
                 metadata=json.dumps(metadata) if metadata else None,
-                last_seen=datetime.now(timezone.utc),
+                last_seen=datetime.now(UTC),
             )
             self.create(device)
 
@@ -167,7 +167,7 @@ class DeviceRepository(BaseRepository[Device]):
         self,
         device_id: str,
         tenant_id: str,
-    ) -> Optional[Device]:
+    ) -> Device | None:
         """Update the last_seen timestamp for a device.
 
         Args:
@@ -179,11 +179,11 @@ class DeviceRepository(BaseRepository[Device]):
         """
         device = self.get_by_id(device_id, tenant_id)
         if device:
-            device.last_seen = datetime.now(timezone.utc)
+            device.last_seen = datetime.now(UTC)
             self.session.flush()
         return device
 
-    def count_by_source(self, tenant_id: str) -> Dict[str, int]:
+    def count_by_source(self, tenant_id: str) -> dict[str, int]:
         """Count devices grouped by source.
 
         Args:
@@ -198,9 +198,9 @@ class DeviceRepository(BaseRepository[Device]):
             .group_by(Device.source)
             .all()
         )
-        return {source: count for source, count in results}
+        return dict(results)
 
-    def count_by_type(self, tenant_id: str) -> Dict[str, int]:
+    def count_by_type(self, tenant_id: str) -> dict[str, int]:
         """Count devices grouped by device type.
 
         Args:
@@ -222,7 +222,7 @@ class DeviceRepository(BaseRepository[Device]):
         tenant_id: str,
         stale_threshold_hours: int = 24,
         limit: int = 100,
-    ) -> List[Device]:
+    ) -> list[Device]:
         """Get devices that haven't been seen recently.
 
         Args:
@@ -233,9 +233,8 @@ class DeviceRepository(BaseRepository[Device]):
         Returns:
             List of stale devices
         """
-        from datetime import timedelta
 
-        threshold = datetime.now(timezone.utc) - timedelta(hours=stale_threshold_hours)
+        threshold = datetime.now(UTC) - timedelta(hours=stale_threshold_hours)
 
         return (
             self.session.query(Device)
@@ -255,7 +254,7 @@ class DeviceRepository(BaseRepository[Device]):
         tenant_id: str,
         name_pattern: str,
         limit: int = 50,
-    ) -> List[Device]:
+    ) -> list[Device]:
         """Search devices by name pattern.
 
         Args:
@@ -278,7 +277,7 @@ class DeviceRepository(BaseRepository[Device]):
             .all()
         )
 
-    def get_metadata(self, device: Device) -> Dict[str, Any]:
+    def get_metadata(self, device: Device) -> dict[str, Any]:
         """Parse and return device metadata.
 
         Args:

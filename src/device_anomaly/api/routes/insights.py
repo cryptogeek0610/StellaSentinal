@@ -7,11 +7,12 @@ Aligned with Carl's (CEO) vision:
 """
 from __future__ import annotations
 
+import contextlib
 from datetime import date, datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from device_anomaly.api.dependencies import get_db, get_tenant_id
@@ -20,7 +21,6 @@ from device_anomaly.insights import (
     AppPowerAnalyzer,
     BatteryShiftAnalyzer,
     CustomerInsight,
-    DailyInsightDigest,
     DeviceAbuseAnalyzer,
     InsightCategory,
     InsightGenerator,
@@ -44,7 +44,7 @@ class InsightResponse(BaseModel):
     headline: str
     impact_statement: str
     comparison_context: str
-    recommended_actions: List[str]
+    recommended_actions: list[str]
     entity_type: str
     entity_id: str
     entity_name: str
@@ -52,7 +52,7 @@ class InsightResponse(BaseModel):
     primary_metric: str
     primary_value: float
     trend_direction: str
-    trend_change_percent: Optional[float]
+    trend_change_percent: float | None
     detected_at: datetime
     confidence_score: float
 
@@ -70,10 +70,10 @@ class DailyDigestResponse(BaseModel):
     critical_count: int
     high_count: int
     medium_count: int
-    top_insights: List[InsightResponse]
+    top_insights: list[InsightResponse]
     executive_summary: str
-    trending_issues: List[InsightResponse]
-    new_issues: List[InsightResponse]
+    trending_issues: list[InsightResponse]
+    new_issues: list[InsightResponse]
 
 
 class LocationInsightResponse(BaseModel):
@@ -85,12 +85,12 @@ class LocationInsightResponse(BaseModel):
     total_devices: int
     devices_with_issues: int
     issue_rate: float
-    shift_readiness: Optional[Dict[str, Any]]
-    insights: List[InsightResponse]
-    top_issues: List[Dict[str, Any]]
+    shift_readiness: dict[str, Any] | None
+    insights: list[InsightResponse]
+    top_issues: list[dict[str, Any]]
     rank_among_locations: int
     better_than_percent: float
-    recommendations: List[str]
+    recommendations: list[str]
 
 
 class ShiftReadinessResponse(BaseModel):
@@ -108,9 +108,9 @@ class ShiftReadinessResponse(BaseModel):
     avg_battery_at_start: float
     avg_drain_rate: float
     devices_not_fully_charged: int
-    vs_last_week_readiness: Optional[float]
-    device_details: List[Dict[str, Any]]
-    recommendations: List[str]
+    vs_last_week_readiness: float | None
+    device_details: list[dict[str, Any]]
+    recommendations: list[str]
 
 
 class NetworkAnalysisResponse(BaseModel):
@@ -118,19 +118,19 @@ class NetworkAnalysisResponse(BaseModel):
 
     tenant_id: str
     analysis_period_days: int
-    wifi_summary: Dict[str, Any]
-    cellular_summary: Optional[Dict[str, Any]]
-    disconnect_summary: Dict[str, Any]
+    wifi_summary: dict[str, Any]
+    cellular_summary: dict[str, Any] | None
+    disconnect_summary: dict[str, Any]
     hidden_devices_count: int
-    recommendations: List[str]
+    recommendations: list[str]
 
 
 class UserAbuseItem(BaseModel):
     """User abuse item for by-user analysis."""
 
     user_id: str
-    user_name: Optional[str]
-    user_email: Optional[str]
+    user_name: str | None
+    user_email: str | None
     total_drops: int
     total_reboots: int
     device_count: int
@@ -149,8 +149,8 @@ class UserAbuseResponse(BaseModel):
     total_drops: int
     fleet_avg_drops_per_device: float
     users_with_excessive_drops: int
-    worst_users: List[UserAbuseItem]
-    recommendations: List[str]
+    worst_users: list[UserAbuseItem]
+    recommendations: list[str]
 
 
 class DeviceAbuseResponse(BaseModel):
@@ -163,12 +163,12 @@ class DeviceAbuseResponse(BaseModel):
     total_reboots: int
     devices_with_excessive_drops: int
     devices_with_excessive_reboots: int
-    worst_locations: List[Dict[str, Any]]
-    worst_cohorts: List[Dict[str, Any]]
-    worst_users: Optional[List[UserAbuseItem]] = None
-    problem_combinations: List[Dict[str, Any]]
-    recommendations: List[str]
-    financial_impact: Optional[Dict[str, Any]] = None
+    worst_locations: list[dict[str, Any]]
+    worst_cohorts: list[dict[str, Any]]
+    worst_users: list[UserAbuseItem] | None = None
+    problem_combinations: list[dict[str, Any]]
+    recommendations: list[str]
+    financial_impact: dict[str, Any] | None = None
 
 
 class AppAnalysisResponse(BaseModel):
@@ -180,9 +180,9 @@ class AppAnalysisResponse(BaseModel):
     apps_with_issues: int
     total_crashes: int
     total_anrs: int
-    top_power_consumers: List[Dict[str, Any]]
-    top_crashers: List[Dict[str, Any]]
-    recommendations: List[str]
+    top_power_consumers: list[dict[str, Any]]
+    top_crashers: list[dict[str, Any]]
+    recommendations: list[str]
 
 
 class LocationCompareRequest(BaseModel):
@@ -190,7 +190,7 @@ class LocationCompareRequest(BaseModel):
 
     location_a_id: str
     location_b_id: str
-    metrics: Optional[List[str]] = None
+    metrics: list[str] | None = None
 
 
 class LocationCompareResponse(BaseModel):
@@ -202,9 +202,9 @@ class LocationCompareResponse(BaseModel):
     location_b_name: str
     device_count_a: int
     device_count_b: int
-    metric_comparisons: Dict[str, Dict[str, float]]
-    overall_winner: Optional[str]
-    key_differences: List[str]
+    metric_comparisons: dict[str, dict[str, float]]
+    overall_winner: str | None
+    key_differences: list[str]
 
 
 # Helper functions
@@ -238,7 +238,7 @@ def _customer_insight_to_response(insight: CustomerInsight) -> InsightResponse:
 
 @router.get("/daily-digest", response_model=DailyDigestResponse)
 def get_daily_digest(
-    digest_date: Optional[date] = Query(None, description="Date for digest (defaults to today)"),
+    digest_date: date | None = Query(None, description="Date for digest (defaults to today)"),
     period_days: int = Query(7, ge=1, le=30, description="Days of data to analyze"),
     db: Session = Depends(get_db),
 ):
@@ -306,8 +306,8 @@ def get_location_insights(
 @router.get("/location/{location_id}/shift-readiness", response_model=ShiftReadinessResponse)
 def get_shift_readiness(
     location_id: str,
-    shift_date: Optional[date] = Query(None, description="Date for shift analysis"),
-    shift_name: Optional[str] = Query(None, description="Specific shift name"),
+    shift_date: date | None = Query(None, description="Date for shift analysis"),
+    shift_name: str | None = Query(None, description="Specific shift name"),
     db: Session = Depends(get_db),
 ):
     """Get battery shift readiness analysis for a location.
@@ -367,7 +367,7 @@ def get_shift_readiness(
     )
 
 
-@router.get("/trending", response_model=List[InsightResponse])
+@router.get("/trending", response_model=list[InsightResponse])
 def get_trending_issues(
     lookback_days: int = Query(14, ge=1, le=30),
     limit: int = Query(10, ge=1, le=50),
@@ -433,7 +433,7 @@ def compare_locations(
     )
 
 
-@router.get("/cohort/{cohort_id}/issues", response_model=List[InsightResponse])
+@router.get("/cohort/{cohort_id}/issues", response_model=list[InsightResponse])
 def get_cohort_issues(
     cohort_id: str,
     period_days: int = Query(30, ge=1, le=90),
@@ -540,7 +540,7 @@ def get_power_hungry_apps(
 
 @router.get("/network/analysis", response_model=NetworkAnalysisResponse)
 def get_network_analysis(
-    location_id: Optional[str] = Query(None),
+    location_id: str | None = Query(None),
     period_days: int = Query(7, ge=1, le=30),
     db: Session = Depends(get_db),
 ):
@@ -746,11 +746,11 @@ def get_drops_by_user_analysis(
     )
 
 
-@router.get("/by-category/{category}", response_model=List[InsightResponse])
+@router.get("/by-category/{category}", response_model=list[InsightResponse])
 def get_insights_by_category(
     category: str,
     period_days: int = Query(7, ge=1, le=30),
-    severity: Optional[str] = Query(None),
+    severity: str | None = Query(None),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
@@ -837,6 +837,7 @@ def get_insight_devices(
     are affected and take targeted action.
     """
     import json
+
     from device_anomaly.api.models import (
         DeviceGroupingResponse,
         ImpactedDeviceResponse,
@@ -861,12 +862,10 @@ def get_insight_devices(
         raise HTTPException(status_code=404, detail="Insight not found")
 
     # Parse affected device IDs from JSON
-    device_ids: List[int] = []
+    device_ids: list[int] = []
     if insight.affected_devices_json:
-        try:
+        with contextlib.suppress(json.JSONDecodeError):
             device_ids = json.loads(insight.affected_devices_json)
-        except json.JSONDecodeError:
-            pass
 
     # If no device list stored, return empty response
     if not device_ids:
@@ -897,7 +896,7 @@ def get_insight_devices(
     )
 
     # Build device response list
-    devices: List[ImpactedDeviceResponse] = []
+    devices: list[ImpactedDeviceResponse] = []
     for d in device_records:
         devices.append(
             ImpactedDeviceResponse(
@@ -940,8 +939,8 @@ def get_insight_devices(
     by_model = grouper.group_by_model(devices)
 
     # AI pattern grouping (only if requested)
-    by_pattern: List[DeviceGroupingResponse] = []
-    ai_analysis: Optional[str] = None
+    by_pattern: list[DeviceGroupingResponse] = []
+    ai_analysis: str | None = None
 
     if include_ai_grouping and len(devices) >= 3:
         by_pattern, ai_analysis = grouper.group_by_pattern_similarity(

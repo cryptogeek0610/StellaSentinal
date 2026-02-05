@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import json
 import math
-from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
@@ -26,8 +25,8 @@ router = APIRouter()
 def get_cost_history(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
-    entity_type: Optional[str] = Query(None, pattern="^(device_type_cost|operational_cost)$"),
-    action: Optional[AuditAction] = Query(None),
+    entity_type: str | None = Query(None, pattern="^(device_type_cost|operational_cost)$"),
+    action: AuditAction | None = Query(None),
     _: None = Depends(require_role(["admin"])),
     db: Session = Depends(get_backend_db),
 ):
@@ -58,7 +57,7 @@ def get_cost_history(
         .group_by(CostAuditLog.action)
         .all()
     )
-    action_count_map = {a: c for a, c in action_counts}
+    action_count_map = dict(action_counts)
 
     # Get unique users
     unique_users = (

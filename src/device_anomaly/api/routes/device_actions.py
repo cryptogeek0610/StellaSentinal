@@ -11,9 +11,8 @@ These endpoints enable remote device management via the MobiControl API:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from enum import Enum
-from typing import Optional
+from datetime import UTC, datetime
+from enum import StrEnum
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -33,7 +32,7 @@ router = APIRouter(prefix="/devices", tags=["device-actions"])
 # =============================================================================
 
 
-class ActionType(str, Enum):
+class ActionType(StrEnum):
     """Available device control actions."""
     LOCK = "lock"
     RESTART = "restart"
@@ -47,7 +46,7 @@ class ActionType(str, Enum):
 
 class DeviceActionRequest(BaseModel):
     """Base request for device actions."""
-    reason: Optional[str] = Field(None, description="Reason for the action (for audit)")
+    reason: str | None = Field(None, description="Reason for the action (for audit)")
 
 
 class SendMessageRequest(DeviceActionRequest):
@@ -73,7 +72,7 @@ class DeviceActionResponse(BaseModel):
     action: str
     device_id: int
     message: str
-    action_id: Optional[str] = None
+    action_id: str | None = None
     timestamp: str
 
 
@@ -81,10 +80,10 @@ class DeviceLocationResponse(BaseModel):
     """Response for device location."""
     success: bool
     device_id: int
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    accuracy: Optional[float] = None
-    timestamp: Optional[str] = None
+    latitude: float | None = None
+    longitude: float | None = None
+    accuracy: float | None = None
+    timestamp: str | None = None
     message: str
 
 
@@ -117,9 +116,9 @@ def log_device_action(
     action_type: str,
     tenant_id: str,
     user: str = "system",
-    reason: Optional[str] = None,
+    reason: str | None = None,
     success: bool = True,
-    error_message: Optional[str] = None,
+    error_message: str | None = None,
 ) -> DeviceActionLog:
     """Log a device action to the database for audit purposes."""
     try:
@@ -131,7 +130,7 @@ def log_device_action(
             reason=reason,
             success=success,
             error_message=error_message,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
         db.add(log_entry)
         db.commit()
@@ -156,7 +155,7 @@ def create_mock_response(
         device_id=device_id,
         message=message,
         action_id=f"mock-{action}-{device_id}",
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
     )
 
 
@@ -200,7 +199,7 @@ def lock_device(
             device_id=device_id,
             message="Device lock command sent successfully",
             action_id=result.get("actionId"),
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
     except Exception as e:
         logger.error(f"Failed to lock device {device_id}: {e}")
@@ -242,7 +241,7 @@ def restart_device(
             device_id=device_id,
             message="Device restart command sent successfully",
             action_id=result.get("actionId"),
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
     except Exception as e:
         logger.error(f"Failed to restart device {device_id}: {e}")
@@ -296,7 +295,7 @@ def wipe_device(
             device_id=device_id,
             message=f"Device {wipe_type.replace('_', ' ')} command sent successfully",
             action_id=result.get("actionId"),
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
     except Exception as e:
         logger.error(f"Failed to wipe device {device_id}: {e}")
@@ -337,7 +336,7 @@ def send_message_to_device(
             device_id=device_id,
             message="Message sent to device successfully",
             action_id=result.get("actionId"),
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
     except Exception as e:
         logger.error(f"Failed to send message to device {device_id}: {e}")
@@ -367,7 +366,7 @@ def locate_device(
             latitude=52.3676,  # Example: Amsterdam
             longitude=4.9041,
             accuracy=10.0,
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             message="Location retrieved successfully (mock mode)",
         )
 
@@ -390,7 +389,7 @@ def locate_device(
             latitude=location.get("latitude"),
             longitude=location.get("longitude"),
             accuracy=location.get("accuracy"),
-            timestamp=location.get("timestamp", datetime.now(timezone.utc).isoformat()),
+            timestamp=location.get("timestamp", datetime.now(UTC).isoformat()),
             message="Location request sent. Device will report location when online.",
         )
     except Exception as e:
@@ -433,7 +432,7 @@ def sync_device(
             device_id=device_id,
             message="Device sync command sent successfully",
             action_id=result.get("actionId"),
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
     except Exception as e:
         logger.error(f"Failed to sync device {device_id}: {e}")
@@ -482,7 +481,7 @@ def clear_device_cache(
             device_id=device_id,
             message=message,
             action_id=result.get("actionId"),
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
     except Exception as e:
         logger.error(f"Failed to clear cache on device {device_id}: {e}")
@@ -541,7 +540,7 @@ def get_device_action_history(
 
 class BatterySyncRequest(BaseModel):
     """Request to sync battery status to MobiControl."""
-    device_ids: Optional[list[int]] = Field(
+    device_ids: list[int] | None = Field(
         None,
         description="Specific device IDs to sync (all devices if not provided)"
     )
@@ -559,9 +558,9 @@ class BatterySyncResponse(BaseModel):
     devices_failed: int
     message: str
     dry_run: bool
-    duration_seconds: Optional[float] = None
+    duration_seconds: float | None = None
     errors: list[dict] = []
-    updates: Optional[list[dict]] = None
+    updates: list[dict] | None = None
 
 
 @router.post("/battery-status/sync", response_model=BatterySyncResponse)

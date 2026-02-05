@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 
@@ -41,7 +41,7 @@ class PyTorchEngineConfig:
     """
     device: str = "cpu"
     use_half_precision: bool = False
-    batch_size: Optional[int] = None
+    batch_size: int | None = None
     num_workers: int = 0
     collect_metrics: bool = True
     warmup_iterations: int = 3
@@ -91,10 +91,10 @@ class PyTorchInferenceEngine:
         self,
         model: nn.Module,
         threshold: float = 0.0,
-        config: Optional[PyTorchEngineConfig] = None,
-        feature_cols: Optional[List[str]] = None,
-        scaler: Optional[Any] = None,
-        impute_values: Optional[Dict[str, float]] = None,
+        config: PyTorchEngineConfig | None = None,
+        feature_cols: list[str] | None = None,
+        scaler: Any | None = None,
+        impute_values: dict[str, float] | None = None,
     ):
         """Initialize the inference engine.
 
@@ -130,7 +130,7 @@ class PyTorchInferenceEngine:
             device=str(self.device),
             model_type=self.model.__class__.__name__,
         )
-        self._batch_times: List[float] = []
+        self._batch_times: list[float] = []
 
         # Warmup
         if self.config.warmup_iterations > 0:
@@ -269,8 +269,8 @@ class PyTorchInferenceEngine:
     def from_checkpoint(
         cls,
         checkpoint_path: str | Path,
-        config: Optional[PyTorchEngineConfig] = None,
-    ) -> "PyTorchInferenceEngine":
+        config: PyTorchEngineConfig | None = None,
+    ) -> PyTorchInferenceEngine:
         """Load engine from saved checkpoint.
 
         Args:
@@ -314,8 +314,8 @@ class FallbackPyTorchEngine:
 
     def __init__(
         self,
-        pytorch_path: Optional[str | Path] = None,
-        sklearn_path: Optional[str | Path] = None,
+        pytorch_path: str | Path | None = None,
+        sklearn_path: str | Path | None = None,
         prefer_pytorch: bool = True,
     ):
         """Initialize fallback engine.
@@ -325,7 +325,7 @@ class FallbackPyTorchEngine:
             sklearn_path: Path to sklearn model
             prefer_pytorch: Try PyTorch first if True
         """
-        self.pytorch_engine: Optional[PyTorchInferenceEngine] = None
+        self.pytorch_engine: PyTorchInferenceEngine | None = None
         self.sklearn_engine = None
         self.prefer_pytorch = prefer_pytorch
         self._active_engine: str = "none"
@@ -403,7 +403,7 @@ class FallbackPyTorchEngine:
         """Get the currently active engine type."""
         return self._active_engine
 
-    def get_metrics(self) -> Optional[PyTorchInferenceMetrics]:
+    def get_metrics(self) -> PyTorchInferenceMetrics | None:
         """Get metrics if PyTorch engine is active."""
         if self.pytorch_engine and self._active_engine == "pytorch":
             return self.pytorch_engine.get_metrics()

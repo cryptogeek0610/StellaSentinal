@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import joblib
 import numpy as np
@@ -76,16 +76,16 @@ class EnsembleAnomalyDetector:
 
     def __init__(
         self,
-        config: Optional[EnsembleConfig] = None,
-        feature_overrides: Optional[list[str]] = None,
+        config: EnsembleConfig | None = None,
+        feature_overrides: list[str] | None = None,
     ):
         self.config = config or EnsembleConfig()
         self.feature_overrides = feature_overrides
 
         self.models: dict[str, Any] = {}
         self.feature_cols: list[str] = []
-        self.impute_values: Optional[pd.Series] = None
-        self.scaler: Optional[StandardScaler] = None
+        self.impute_values: pd.Series | None = None
+        self.scaler: StandardScaler | None = None
         self.feature_weights: dict[str, float] = {}
 
         self._init_models()
@@ -218,7 +218,7 @@ class EnsembleAnomalyDetector:
             domains = FeatureConfig.feature_domains
             weights = FeatureConfig.domain_weights
         except ImportError:
-            return {col: 1.0 for col in columns}
+            return dict.fromkeys(columns, 1.0)
 
         resolved: dict[str, float] = {}
         for col in columns:
@@ -422,7 +422,7 @@ class EnsembleAnomalyDetector:
         return {"sklearn": pkl_path}
 
     @classmethod
-    def load_model(cls, model_path: str | Path) -> "EnsembleAnomalyDetector":
+    def load_model(cls, model_path: str | Path) -> EnsembleAnomalyDetector:
         """Load ensemble model from disk."""
         model_path = Path(model_path)
 
@@ -451,7 +451,7 @@ class EnsembleAnomalyDetector:
 
 def create_ensemble_detector(
     contamination: float = 0.05,
-    weights: Optional[dict[str, float]] = None,
+    weights: dict[str, float] | None = None,
 ) -> EnsembleAnomalyDetector:
     """
     Create an ensemble detector with default configuration.

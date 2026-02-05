@@ -14,11 +14,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any
 
 from device_anomaly.config.settings import get_settings
 
@@ -29,14 +29,14 @@ logger = logging.getLogger(__name__)
 DEFAULT_MAX_INGEST_WEIGHT = 5
 
 # Table weight assignments
-XSIGHT_HOURLY_HUGE_TABLES: Set[str] = {
+XSIGHT_HOURLY_HUGE_TABLES: set[str] = {
     "cs_DataUsageByHour",
     "cs_DataUsageByHourApp",
     "cs_PresetApps",
     "cs_WiFiLocation",  # 6M+ rows
 }
 
-XSIGHT_EXTENDED_TABLES: Set[str] = {
+XSIGHT_EXTENDED_TABLES: set[str] = {
     "cs_BatteryDrain",
     "cs_CrashLogs",
     "cs_WiFiByHour",
@@ -44,7 +44,7 @@ XSIGHT_EXTENDED_TABLES: Set[str] = {
     "cs_RoamingByHour",
 }
 
-MC_TIMESERIES_TABLES: Set[str] = {
+MC_TIMESERIES_TABLES: set[str] = {
     "DeviceStatInt",
     "DeviceStatString",
     "DeviceStatLocation",
@@ -53,7 +53,7 @@ MC_TIMESERIES_TABLES: Set[str] = {
     "DeviceInstalledApp",
 }
 
-SMALL_TABLES: Set[str] = {
+SMALL_TABLES: set[str] = {
     "Alert",
     "Events",
     "Devices",
@@ -79,9 +79,7 @@ def get_table_weight(table_name: str) -> int:
     """
     if table_name in XSIGHT_HOURLY_HUGE_TABLES:
         return 5  # Full capacity - only one at a time
-    elif table_name in XSIGHT_EXTENDED_TABLES:
-        return 2  # Can run 2 in parallel
-    elif table_name in MC_TIMESERIES_TABLES:
+    elif table_name in XSIGHT_EXTENDED_TABLES or table_name in MC_TIMESERIES_TABLES:
         return 2  # Can run 2 in parallel
     elif table_name in SMALL_TABLES:
         return 1  # Can run 5 in parallel
@@ -122,7 +120,7 @@ class WeightedSemaphore:
         self._current_weight = 0
         self._lock = asyncio.Lock()
         self._condition = asyncio.Condition(self._lock)
-        self._waiters: List[int] = []  # Track waiting weights for fairness
+        self._waiters: list[int] = []  # Track waiting weights for fairness
 
     @property
     def current_weight(self) -> int:
@@ -134,7 +132,7 @@ class WeightedSemaphore:
         """Weight available for new operations."""
         return self.max_weight - self._current_weight
 
-    async def acquire(self, weight: int = 1) -> "WeightedSemaphoreContext":
+    async def acquire(self, weight: int = 1) -> WeightedSemaphoreContext:
         """
         Acquire the semaphore with the given weight.
 
@@ -195,7 +193,7 @@ class WeightedSemaphoreContext:
         self._semaphore = semaphore
         self._weight = weight
 
-    async def __aenter__(self) -> "WeightedSemaphoreContext":
+    async def __aenter__(self) -> WeightedSemaphoreContext:
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
@@ -211,12 +209,12 @@ class IngestionTask:
     category: TableCategory = field(default=TableCategory.DEFAULT)
 
     # Execution tracking
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     rows_fetched: int = 0
     rows_inserted: int = 0
     rows_deduped: int = 0
-    error: Optional[str] = None
+    error: str | None = None
 
     def __post_init__(self):
         if self.weight == 1:  # Only auto-assign if not explicitly set
@@ -225,7 +223,7 @@ class IngestionTask:
             self.category = get_table_category(self.table_name)
 
     @property
-    def duration_seconds(self) -> Optional[float]:
+    def duration_seconds(self) -> float | None:
         """Duration of the task in seconds."""
         if self.started_at and self.completed_at:
             return (self.completed_at - self.started_at).total_seconds()
@@ -242,7 +240,7 @@ class IngestionBatchResult:
     """Result of an ingestion batch run."""
     started_at: datetime
     completed_at: datetime
-    tasks: List[IngestionTask]
+    tasks: list[IngestionTask]
     total_rows_fetched: int = 0
     total_rows_inserted: int = 0
     total_rows_deduped: int = 0
@@ -259,7 +257,7 @@ class IngestionBatchResult:
     def failure_count(self) -> int:
         return sum(1 for t in self.tasks if not t.success)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for logging/storage."""
         return {
             "started_at": self.started_at.isoformat(),
@@ -300,17 +298,17 @@ class IngestionOrchestrator:
 
     def __init__(
         self,
-        max_weight: Optional[int] = None,
+        max_weight: int | None = None,
     ):
         settings = get_settings()
         self.max_weight = max_weight or settings.ingest_max_tables_parallel
         self._semaphore = WeightedSemaphore(max_weight=self.max_weight)
-        self._active_tasks: Dict[str, IngestionTask] = {}
+        self._active_tasks: dict[str, IngestionTask] = {}
 
     async def _run_task(
         self,
         task: IngestionTask,
-        loader_func: Callable[[str, str], Dict[str, Any]],
+        loader_func: Callable[[str, str], dict[str, Any]],
     ) -> IngestionTask:
         """
         Run a single ingestion task with weight-based throttling.
@@ -330,7 +328,7 @@ class IngestionOrchestrator:
 
         ctx = await self._semaphore.acquire(weight)
         async with ctx:
-            task.started_at = datetime.now(timezone.utc)
+            task.started_at = datetime.now(UTC)
             self._active_tasks[table_key] = task
 
             logger.info(
@@ -351,7 +349,7 @@ class IngestionOrchestrator:
                 task.rows_fetched = result.get("rows_fetched", 0)
                 task.rows_inserted = result.get("rows_inserted", 0)
                 task.rows_deduped = result.get("rows_deduped", 0)
-                task.completed_at = datetime.now(timezone.utc)
+                task.completed_at = datetime.now(UTC)
 
                 logger.info(
                     f"Completed {table_key}: "
@@ -363,7 +361,7 @@ class IngestionOrchestrator:
 
             except Exception as e:
                 task.error = str(e)
-                task.completed_at = datetime.now(timezone.utc)
+                task.completed_at = datetime.now(UTC)
                 logger.error(f"Failed {table_key}: {e}")
 
             finally:
@@ -373,8 +371,8 @@ class IngestionOrchestrator:
 
     async def run_batch(
         self,
-        tables: List[Dict[str, str]],
-        loader_func: Callable[[str, str], Dict[str, Any]],
+        tables: list[dict[str, str]],
+        loader_func: Callable[[str, str], dict[str, Any]],
     ) -> IngestionBatchResult:
         """
         Run ingestion for a batch of tables with weight-based parallelism.
@@ -387,7 +385,7 @@ class IngestionOrchestrator:
         Returns:
             IngestionBatchResult with all task results
         """
-        started_at = datetime.now(timezone.utc)
+        started_at = datetime.now(UTC)
 
         # Create tasks with weights
         tasks = [
@@ -413,7 +411,7 @@ class IngestionOrchestrator:
             return_exceptions=False,
         )
 
-        completed_at = datetime.now(timezone.utc)
+        completed_at = datetime.now(UTC)
 
         result = IngestionBatchResult(
             started_at=started_at,
@@ -432,11 +430,11 @@ class IngestionOrchestrator:
 
         return result
 
-    def get_active_tasks(self) -> Dict[str, IngestionTask]:
+    def get_active_tasks(self) -> dict[str, IngestionTask]:
         """Get currently running tasks."""
         return dict(self._active_tasks)
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Get current orchestrator status."""
         return {
             "max_weight": self.max_weight,
@@ -454,9 +452,9 @@ class IngestionOrchestrator:
 
 
 def create_table_list_for_ingestion(
-    xsight_tables: Optional[List[str]] = None,
-    mc_tables: Optional[List[str]] = None,
-) -> List[Dict[str, str]]:
+    xsight_tables: list[str] | None = None,
+    mc_tables: list[str] | None = None,
+) -> list[dict[str, str]]:
     """
     Create a list of tables for ingestion with source database info.
 
@@ -486,9 +484,9 @@ def create_table_list_for_ingestion(
 
 # Synchronous wrapper for non-async contexts
 def run_batch_sync(
-    tables: List[Dict[str, str]],
-    loader_func: Callable[[str, str], Dict[str, Any]],
-    max_weight: Optional[int] = None,
+    tables: list[dict[str, str]],
+    loader_func: Callable[[str, str], dict[str, Any]],
+    max_weight: int | None = None,
 ) -> IngestionBatchResult:
     """
     Synchronous wrapper for batch ingestion.

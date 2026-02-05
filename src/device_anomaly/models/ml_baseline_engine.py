@@ -21,19 +21,17 @@ Architecture:
 
 from __future__ import annotations
 
-import logging
 import json
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone, timedelta
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+import logging
 from collections import deque
-import hashlib
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
 from scipy import stats
-from scipy.special import expit  # Sigmoid function
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +68,7 @@ class MLBaselineConfig:
     concept_drift_lookback_days: int = 30
 
     # Multi-source fusion
-    source_weights: Dict[str, float] = field(default_factory=lambda: {
+    source_weights: dict[str, float] = field(default_factory=lambda: {
         "xsight": 1.0,
         "mobicontrol": 0.9,
         "custom_telemetry": 0.8,
@@ -124,11 +122,11 @@ class BayesianMetricStats:
     n_observations: int = 0
     last_updated: str = ""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "BayesianMetricStats":
+    def from_dict(cls, data: dict[str, Any]) -> BayesianMetricStats:
         return cls(**data)
 
 
@@ -154,8 +152,8 @@ class BayesianBaselineAdapter:
 
     def __init__(self, config: MLBaselineConfig):
         self.config = config
-        self.metric_stats: Dict[str, BayesianMetricStats] = {}
-        self._observation_buffer: Dict[str, deque] = {}
+        self.metric_stats: dict[str, BayesianMetricStats] = {}
+        self._observation_buffer: dict[str, deque] = {}
 
     def initialize_prior(
         self,
@@ -212,7 +210,7 @@ class BayesianBaselineAdapter:
                 credible_interval_lower=ci_lower,
                 credible_interval_upper=ci_upper,
                 n_observations=n,
-                last_updated=datetime.now(timezone.utc).isoformat(),
+                last_updated=datetime.now(UTC).isoformat(),
             )
 
         self.metric_stats[metric_name] = stats_obj
@@ -223,7 +221,7 @@ class BayesianBaselineAdapter:
     def update(
         self,
         metric_name: str,
-        new_observations: Union[float, np.ndarray, pd.Series],
+        new_observations: float | np.ndarray | pd.Series,
         batch_update: bool = True,
     ) -> BayesianMetricStats:
         """
@@ -312,13 +310,13 @@ class BayesianBaselineAdapter:
         stats_obj.credible_interval_lower = mu_n - ci_half
         stats_obj.credible_interval_upper = mu_n + ci_half
         stats_obj.n_observations += n
-        stats_obj.last_updated = datetime.now(timezone.utc).isoformat()
+        stats_obj.last_updated = datetime.now(UTC).isoformat()
 
     def get_anomaly_probability(
         self,
         metric_name: str,
         value: float,
-    ) -> Tuple[float, str]:
+    ) -> tuple[float, str]:
         """
         Compute probability that a value is anomalous given the posterior.
 
@@ -356,16 +354,16 @@ class BayesianBaselineAdapter:
             return True
         return self.metric_stats[metric_name].uncertainty > self.config.uncertainty_threshold
 
-    def export_state(self) -> Dict[str, Any]:
+    def export_state(self) -> dict[str, Any]:
         """Export current state for persistence."""
         return {
             "version": "bayesian_v1",
             "config": asdict(self.config),
             "metrics": {k: v.to_dict() for k, v in self.metric_stats.items()},
-            "exported_at": datetime.now(timezone.utc).isoformat(),
+            "exported_at": datetime.now(UTC).isoformat(),
         }
 
-    def import_state(self, state: Dict[str, Any]) -> None:
+    def import_state(self, state: dict[str, Any]) -> None:
         """Import state from persistence."""
         for metric_name, metric_data in state.get("metrics", {}).items():
             self.metric_stats[metric_name] = BayesianMetricStats.from_dict(metric_data)
@@ -390,7 +388,7 @@ class EnsembleScore:
     confidence: float = 0.0
     is_anomaly: bool = False
     anomaly_type: str = "unknown"
-    contributing_factors: List[str] = field(default_factory=list)
+    contributing_factors: list[str] = field(default_factory=list)
 
 
 class EnsembleAnomalyDetector:
@@ -411,8 +409,8 @@ class EnsembleAnomalyDetector:
 
     def __init__(self, config: MLBaselineConfig):
         self.config = config
-        self.models: Dict[str, Any] = {}
-        self.feature_cols: List[str] = []
+        self.models: dict[str, Any] = {}
+        self.feature_cols: list[str] = []
         self.scaler = None
         self._is_fitted = False
 
@@ -424,11 +422,11 @@ class EnsembleAnomalyDetector:
             "dbscan": 0.15,
         }
 
-    def fit(self, df: pd.DataFrame, feature_cols: Optional[List[str]] = None) -> None:
+    def fit(self, df: pd.DataFrame, feature_cols: list[str] | None = None) -> None:
         """Fit all ensemble components."""
+        from sklearn.cluster import DBSCAN
         from sklearn.ensemble import IsolationForest
         from sklearn.neighbors import LocalOutlierFactor
-        from sklearn.cluster import DBSCAN
         from sklearn.preprocessing import StandardScaler
 
         # Select features
@@ -549,7 +547,7 @@ class EnsembleAnomalyDetector:
             logger.warning(f"Autoencoder training failed: {e}")
             self.config.enable_autoencoder = False
 
-    def _auto_select_features(self, df: pd.DataFrame) -> List[str]:
+    def _auto_select_features(self, df: pd.DataFrame) -> list[str]:
         """Automatically select numeric features for training."""
         exclude = {
             "DeviceId", "ModelId", "ManufacturerId", "OsVersionId",
@@ -687,15 +685,15 @@ class CausalCorrelationEngine:
 
     def __init__(self, config: MLBaselineConfig):
         self.config = config
-        self._cache: Dict[str, Tuple[Any, datetime]] = {}
-        self.discovered_relationships: List[CausalRelationship] = []
+        self._cache: dict[str, tuple[Any, datetime]] = {}
+        self.discovered_relationships: list[CausalRelationship] = []
 
     def discover_causal_relationships(
         self,
         df: pd.DataFrame,
-        target_metrics: Optional[List[str]] = None,
+        target_metrics: list[str] | None = None,
         timestamp_col: str = "Timestamp",
-    ) -> List[CausalRelationship]:
+    ) -> list[CausalRelationship]:
         """
         Discover causal relationships between metrics.
 
@@ -744,7 +742,7 @@ class CausalCorrelationEngine:
         df: pd.DataFrame,
         metric_a: str,
         metric_b: str,
-    ) -> Optional[CausalRelationship]:
+    ) -> CausalRelationship | None:
         """Test causal relationship between two metrics."""
         x = df[metric_a].dropna().values
         y = df[metric_b].dropna().values
@@ -858,7 +856,7 @@ class CausalCorrelationEngine:
         self,
         x: np.ndarray,
         y: np.ndarray,
-    ) -> Tuple[int, float]:
+    ) -> tuple[int, float]:
         """Find optimal lag for time-lagged correlation."""
         best_lag = 0
         best_corr = 0.0
@@ -961,12 +959,12 @@ class MultiSourceDataFuser:
 
     def __init__(self, config: MLBaselineConfig):
         self.config = config
-        self._source_quality: Dict[str, float] = {}
+        self._source_quality: dict[str, float] = {}
 
     def fuse(
         self,
-        sources: Dict[str, pd.DataFrame],
-        join_keys: List[str] = None,
+        sources: dict[str, pd.DataFrame],
+        join_keys: list[str] = None,
         timestamp_col: str = "Timestamp",
     ) -> pd.DataFrame:
         """
@@ -1093,7 +1091,6 @@ class MultiSourceDataFuser:
 
         elif method == "iterative":
             try:
-                from sklearn.experimental import enable_iterative_imputer
                 from sklearn.impute import IterativeImputer
                 imputer = IterativeImputer(random_state=42, max_iter=10)
                 result[numeric_cols] = imputer.fit_transform(result[numeric_cols])
@@ -1123,23 +1120,23 @@ class OnlineLearningBaseline:
 
     def __init__(self, config: MLBaselineConfig):
         self.config = config
-        self._stats: Dict[str, "_OnlineStats"] = {}
-        self._change_points: Dict[str, List[datetime]] = {}
+        self._stats: dict[str, _OnlineStats] = {}
+        self._change_points: dict[str, list[datetime]] = {}
         self._observation_count = 0
 
     def update(
         self,
         metric_name: str,
         value: float,
-        timestamp: Optional[datetime] = None,
-    ) -> Dict[str, Any]:
+        timestamp: datetime | None = None,
+    ) -> dict[str, Any]:
         """
         Update statistics with a single observation.
 
         Returns current statistics and any detected changes.
         """
         if timestamp is None:
-            timestamp = datetime.now(timezone.utc)
+            timestamp = datetime.now(UTC)
 
         if metric_name not in self._stats:
             self._stats[metric_name] = _OnlineStats(
@@ -1148,7 +1145,6 @@ class OnlineLearningBaseline:
             self._change_points[metric_name] = []
 
         stats = self._stats[metric_name]
-        old_mean = stats.mean
 
         # Update statistics
         stats.update(value)
@@ -1177,9 +1173,9 @@ class OnlineLearningBaseline:
     def batch_update(
         self,
         df: pd.DataFrame,
-        metric_cols: List[str],
+        metric_cols: list[str],
         timestamp_col: str = "Timestamp",
-    ) -> Dict[str, Dict[str, Any]]:
+    ) -> dict[str, dict[str, Any]]:
         """Update statistics for multiple metrics from a DataFrame."""
         results = {}
 
@@ -1199,7 +1195,7 @@ class OnlineLearningBaseline:
 
         return results
 
-    def get_baseline(self, metric_name: str) -> Optional[Dict[str, Any]]:
+    def get_baseline(self, metric_name: str) -> dict[str, Any] | None:
         """Get current baseline for a metric."""
         if metric_name not in self._stats:
             return None
@@ -1220,7 +1216,7 @@ class OnlineLearningBaseline:
         if metric_name not in self._change_points:
             return False
 
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=lookback_hours)
+        cutoff = datetime.now(UTC) - timedelta(hours=lookback_hours)
         recent_changes = [
             cp for cp in self._change_points[metric_name]
             if cp > cutoff
@@ -1292,8 +1288,8 @@ class AdvancedDriftDetector:
 
     def __init__(self, config: MLBaselineConfig):
         self.config = config
-        self._reference_distributions: Dict[str, np.ndarray] = {}
-        self._page_hinkley: Dict[str, "_PageHinkley"] = {}
+        self._reference_distributions: dict[str, np.ndarray] = {}
+        self._page_hinkley: dict[str, _PageHinkley] = {}
 
     def set_reference(self, metric_name: str, values: np.ndarray) -> None:
         """Set reference distribution for a metric."""
@@ -1306,7 +1302,7 @@ class AdvancedDriftDetector:
         self,
         metric_name: str,
         current_values: np.ndarray,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Detect drift using multiple methods.
 
@@ -1491,7 +1487,7 @@ class MLBaselineEngine:
         drift_report = engine.check_drift()
     """
 
-    def __init__(self, config: Optional[MLBaselineConfig] = None):
+    def __init__(self, config: MLBaselineConfig | None = None):
         self.config = config or MLBaselineConfig()
 
         # Initialize components
@@ -1503,15 +1499,15 @@ class MLBaselineEngine:
         self.drift_detector = AdvancedDriftDetector(self.config)
 
         self._is_fitted = False
-        self._feature_cols: List[str] = []
-        self._metric_cols: List[str] = []
+        self._feature_cols: list[str] = []
+        self._metric_cols: list[str] = []
 
     def fit(
         self,
         df: pd.DataFrame,
-        feature_cols: Optional[List[str]] = None,
-        metric_cols: Optional[List[str]] = None,
-    ) -> "MLBaselineEngine":
+        feature_cols: list[str] | None = None,
+        metric_cols: list[str] | None = None,
+    ) -> MLBaselineEngine:
         """
         Fit the baseline engine on historical data.
 
@@ -1599,7 +1595,7 @@ class MLBaselineEngine:
         self,
         df: pd.DataFrame,
         timestamp_col: str = "Timestamp",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Update baselines with new streaming data.
 
@@ -1629,17 +1625,17 @@ class MLBaselineEngine:
             "updated_metrics": list(update_results.keys()),
             "update_count": len(df),
             "needs_retraining": list(set(needs_retraining)),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
-    def check_drift(self, df: pd.DataFrame) -> Dict[str, Any]:
+    def check_drift(self, df: pd.DataFrame) -> dict[str, Any]:
         """
         Check for drift across all tracked metrics.
 
         Returns comprehensive drift report.
         """
         drift_report = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "metrics_checked": 0,
             "metrics_drifted": 0,
             "details": {},
@@ -1667,7 +1663,7 @@ class MLBaselineEngine:
 
         return drift_report
 
-    def get_causal_insights(self) -> List[Dict[str, Any]]:
+    def get_causal_insights(self) -> list[dict[str, Any]]:
         """Get discovered causal relationships."""
         return [
             {
@@ -1691,7 +1687,7 @@ class MLBaselineEngine:
             "feature_cols": self._feature_cols,
             "metric_cols": self._metric_cols,
             "causal_relationships": self.get_causal_insights(),
-            "exported_at": datetime.now(timezone.utc).isoformat(),
+            "exported_at": datetime.now(UTC).isoformat(),
         }
 
         path.parent.mkdir(parents=True, exist_ok=True)

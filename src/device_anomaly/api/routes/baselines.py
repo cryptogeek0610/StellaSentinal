@@ -8,34 +8,33 @@ This module provides:
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-import logging
-from typing import Any, Dict, List, Optional
-from pathlib import Path
 import json
+import logging
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
 from device_anomaly.api.dependencies import get_db, get_tenant_id, require_role
+from device_anomaly.database.schema import AnomalyResult
+from device_anomaly.llm.client import get_default_llm_client, strip_thinking_tags
+from device_anomaly.llm.prompt_utils import NO_THINKING_INSTRUCTION
 from device_anomaly.models.baseline import (
-    BaselineLevel,
     BaselineFeedback,
-    load_baselines,
-    save_baselines,
+    BaselineLevel,
     apply_feedback,
+    save_baselines,
     suggest_baseline_adjustments,
 )
 from device_anomaly.models.baseline_store import (
-    resolve_baselines,
     load_legacy_frames,
-    update_data_driven_baseline,
+    resolve_baselines,
     save_baseline_payload,
+    update_data_driven_baseline,
 )
-from device_anomaly.llm.client import get_default_llm_client, strip_thinking_tags
-from device_anomaly.llm.prompt_utils import translate_metric, NO_THINKING_INSTRUCTION
-from device_anomaly.database.schema import AnomalyResult
 
 router = APIRouter(prefix="/baselines", tags=["baselines"])
 logger = logging.getLogger(__name__)
@@ -89,7 +88,7 @@ class BaselineFeatureResponse(BaseModel):
     drift_percent: float
     mad: float
     sample_count: int
-    last_updated: Optional[str] = None
+    last_updated: str | None = None
 
 
 class BaselineHistoryEntry(BaseModel):
@@ -100,7 +99,7 @@ class BaselineHistoryEntry(BaseModel):
     old_value: float
     new_value: float
     type: str  # 'auto' or 'manual'
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 class BaselineAdjustmentRequest(BaseModel):
@@ -108,7 +107,7 @@ class BaselineAdjustmentRequest(BaseModel):
     group_key: dict | str
     feature: str
     adjustment: float
-    reason: Optional[str] = None
+    reason: str | None = None
     auto_retrain: bool = False
 
 
@@ -119,7 +118,7 @@ class BaselineAdjustmentResponse(BaseModel):
     model_retrained: bool = False
 
 
-@router.get("/suggestions", response_model=List[BaselineSuggestionResponse])
+@router.get("/suggestions", response_model=list[BaselineSuggestionResponse])
 def get_baseline_suggestions(
     source: str = Query("dw", description="Data source: 'dw' or 'synthetic'"),
     days: int = Query(30, ge=1, le=365),
@@ -127,18 +126,18 @@ def get_baseline_suggestions(
     db: Session = Depends(get_db),
 ):
     """Get baseline adjustment suggestions based on anomaly patterns.
-    
+
     Analyzes recent anomalies and suggests baseline adjustments where
     systematic drift is detected.
     """
     source = _normalize_source(source)
     tenant_id = get_tenant_id()
     resolution, baselines = _load_baseline_resolution(source)
-    
+
     # Get recent anomalies
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     filter_start = (now - timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)
-    
+
     anomalies = (
         db.query(AnomalyResult)
         .filter(AnomalyResult.tenant_id == tenant_id)
@@ -146,13 +145,13 @@ def get_baseline_suggestions(
         .filter(AnomalyResult.timestamp >= filter_start)
         .all()
     )
-    
+
     if not anomalies:
         return []
-    
+
     # Convert to DataFrame for analysis
     import pandas as pd
-    
+
     # Build anomalies DataFrame with available data
     anomalies_data = []
     for a in anomalies:
@@ -160,7 +159,7 @@ def get_baseline_suggestions(
             "DeviceId": a.device_id,
             "anomaly_score": a.anomaly_score,
         }
-        
+
         # Try to parse feature values if available
         if a.feature_values_json:
             try:
@@ -168,14 +167,14 @@ def get_baseline_suggestions(
                 row_data.update(feature_values)
             except (json.JSONDecodeError, TypeError):
                 pass
-        
+
         anomalies_data.append(row_data)
-    
+
     anomalies_df = pd.DataFrame(anomalies_data)
-    
+
     if anomalies_df.empty:
         return []
-    
+
     # Define baseline levels (should match experiment config)
     baseline_levels = [BaselineLevel(name="global", group_columns=["__all__"], min_rows=10)]
 
@@ -183,18 +182,18 @@ def get_baseline_suggestions(
         baseline_levels.append(
             BaselineLevel(name="device_type", group_columns=[resolution.device_type_col])
         )
-    
+
     # Add __all__ column for global baseline
     if "__all__" not in anomalies_df.columns:
         anomalies_df["__all__"] = "all"
-    
+
     suggestions = suggest_baseline_adjustments(
         anomalies_df=anomalies_df,
         baselines=baselines,
         levels=baseline_levels,
         z_threshold=z_threshold,
     )
-    
+
     if not suggestions and resolution.kind == "data_driven":
         logger = logging.getLogger(__name__)
         logger.info("No baseline suggestions generated from production baselines.")
@@ -202,14 +201,14 @@ def get_baseline_suggestions(
     return [BaselineSuggestionResponse(**s) for s in suggestions]
 
 
-@router.post("/analyze-with-llm", response_model=List[BaselineSuggestionResponse])
+@router.post("/analyze-with-llm", response_model=list[BaselineSuggestionResponse])
 def analyze_baselines_with_llm(
     source: str = Query("dw"),
     days: int = Query(30),
     db: Session = Depends(get_db),
 ):
     """Use LLM to analyze anomaly patterns and suggest baseline adjustments.
-    
+
     This endpoint uses the LLM to intelligently analyze false positives
     and recurring anomalies to suggest baseline improvements.
     """
@@ -217,14 +216,14 @@ def analyze_baselines_with_llm(
     tenant_id = get_tenant_id()
     # Get baseline suggestions first
     suggestions = get_baseline_suggestions(source=source, days=days, db=db)
-    
+
     if not suggestions:
         return []
-    
+
     # Get false positive feedback (anomalies marked as false_positive)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     filter_start = (now - timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)
-    
+
     false_positives = (
         db.query(AnomalyResult)
         .filter(AnomalyResult.tenant_id == tenant_id)
@@ -233,7 +232,7 @@ def analyze_baselines_with_llm(
         .filter(AnomalyResult.timestamp >= filter_start)
         .count()
     )
-    
+
     total_anomalies = (
         db.query(AnomalyResult)
         .filter(AnomalyResult.tenant_id == tenant_id)
@@ -241,14 +240,14 @@ def analyze_baselines_with_llm(
         .filter(AnomalyResult.timestamp >= filter_start)
         .count()
     )
-    
+
     fp_rate = false_positives / max(total_anomalies, 1)
-    
+
     # Build LLM prompt
     llm_client = get_default_llm_client()
-    
+
     suggestions_json = json.dumps([s.dict() for s in suggestions], indent=2)
-    
+
     prompt = f"""<role>
 You are an ML operations analyst reviewing anomaly detection baseline adjustments for an enterprise mobile device management system. The system uses Isolation Forest to detect unusual device behavior in warehouses, retail stores, and field operations.
 </role>
@@ -299,7 +298,7 @@ Rank adjustments by priority (1=highest, 5=lowest):
 5. Enhance the rationale field with business context
 6. Be conservative: estimate 5-15% FP reduction per adjustment is realistic
 </instructions>"""
-    
+
     try:
         raw_llm_response = llm_client.generate(prompt, max_tokens=1200, temperature=0.1)
         llm_response = strip_thinking_tags(raw_llm_response)
@@ -312,7 +311,7 @@ Rank adjustments by priority (1=highest, 5=lowest):
                 llm_response = llm_response.split("```json")[1].split("```")[0].strip()
             elif "```" in llm_response:
                 llm_response = llm_response.split("```")[1].split("```")[0].strip()
-            
+
             enhanced_suggestions_data = json.loads(llm_response)
             # Validate and convert to response format
             enhanced_suggestions = []
@@ -324,7 +323,7 @@ Rank adjustments by priority (1=highest, 5=lowest):
                     elif not isinstance(s["group_key"], str):
                         s["group_key"] = json.dumps(s["group_key"]) if isinstance(s["group_key"], dict) else str(s["group_key"])
                     enhanced_suggestions.append(BaselineSuggestionResponse(**s))
-            
+
             if enhanced_suggestions:
                 return enhanced_suggestions
         except (json.JSONDecodeError, KeyError, TypeError):
@@ -342,7 +341,7 @@ Rank adjustments by priority (1=highest, 5=lowest):
                 )
                 enhanced_suggestions.append(enhanced_s)
             return enhanced_suggestions
-        
+
         return suggestions
     except Exception as e:
         # Fallback to original suggestions if LLM fails
@@ -360,12 +359,12 @@ def apply_baseline_adjustment(
     db: Session = Depends(get_db),
 ):
     """Apply a baseline adjustment and optionally retrain the model.
-    
+
     This applies the feedback to baselines and can trigger model retraining.
     """
     source = _normalize_source(source)
     resolution, baselines = _load_baseline_resolution(source)
-    
+
     # Create feedback object
     feedback = BaselineFeedback(
         level=request.level,
@@ -374,7 +373,7 @@ def apply_baseline_adjustment(
         adjustment=request.adjustment,
         reason=request.reason,
     )
-    
+
     if resolution.kind == "data_driven":
         group_key = request.group_key
         if isinstance(group_key, dict):
@@ -388,21 +387,21 @@ def apply_baseline_adjustment(
             request.adjustment,
             resolution.device_type_col,
         )
-        payload["updated_at"] = datetime.now(timezone.utc).isoformat()
+        payload["updated_at"] = datetime.now(UTC).isoformat()
         save_baseline_payload(payload, resolution.path)
     else:
         # Apply feedback
         updated_baselines = apply_feedback(baselines, [feedback], learning_rate=0.3)
         # Save updated baselines
         save_baselines(updated_baselines, resolution.path)
-    
+
     # Optionally trigger retraining
     model_retrained = False
     if request.auto_retrain:
         # This would trigger a background job to retrain
         # For now, just return success - actual retraining would be async
         model_retrained = True
-    
+
     return BaselineAdjustmentResponse(
         success=True,
         message=f"Baseline adjusted for {request.level}/{request.feature}",
@@ -412,7 +411,7 @@ def apply_baseline_adjustment(
 
 
 # Feature unit mapping for display purposes
-_FEATURE_UNITS: Dict[str, str] = {
+_FEATURE_UNITS: dict[str, str] = {
     "BatteryDrop": "%/day",
     "OfflineTime": "min/day",
     "UploadSize": "MB/day",
@@ -429,7 +428,7 @@ _FEATURE_UNITS: Dict[str, str] = {
 }
 
 
-@router.get("/features", response_model=List[BaselineFeatureResponse])
+@router.get("/features", response_model=list[BaselineFeatureResponse])
 def get_baseline_features(
     source: str = Query("dw", description="Data source: 'dw' or 'synthetic'"),
     days: int = Query(30, ge=1, le=365, description="Days to analyze for observed values"),
@@ -446,7 +445,7 @@ def get_baseline_features(
     resolution, baselines = _load_baseline_resolution(source)
 
     # Get recent anomaly data to compute observed values
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     filter_start = (now - timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)
 
     # Query recent data (both normal and anomalous)
@@ -460,7 +459,7 @@ def get_baseline_features(
     # Build feature values from stored data
     import pandas as pd
 
-    feature_values: Dict[str, List[float]] = {}
+    feature_values: dict[str, list[float]] = {}
     for record in recent_data:
         if record.feature_values_json:
             try:
@@ -474,7 +473,7 @@ def get_baseline_features(
                 pass
 
     # Build response from baselines
-    features: List[BaselineFeatureResponse] = []
+    features: list[BaselineFeatureResponse] = []
 
     if resolution.kind == "data_driven":
         data_driven = resolution.payload.get("baselines", {})
@@ -579,7 +578,7 @@ def get_baseline_features(
     return features
 
 
-@router.get("/history", response_model=List[BaselineHistoryEntry])
+@router.get("/history", response_model=list[BaselineHistoryEntry])
 def get_baseline_history(
     source: str = Query("dw", description="Data source: 'dw' or 'synthetic'"),
     limit: int = Query(50, ge=1, le=500, description="Maximum entries to return"),
@@ -642,8 +641,8 @@ async def _get_ml_service():
 class MLBaselineStatusResponse(BaseModel):
     """Status of the ML baseline engine."""
     initialized: bool
-    last_train_time: Optional[str] = None
-    last_drift_check: Optional[str] = None
+    last_train_time: str | None = None
+    last_drift_check: str | None = None
     feature_count: int = 0
     metric_count: int = 0
     training_history_count: int = 0
@@ -653,9 +652,9 @@ class MLBaselineStatusResponse(BaseModel):
 class MLTrainRequest(BaseModel):
     """Request to train the ML baseline engine."""
     lookback_days: int = Field(default=90, ge=7, le=365)
-    sources: Optional[List[str]] = None
-    feature_cols: Optional[List[str]] = None
-    metric_cols: Optional[List[str]] = None
+    sources: list[str] | None = None
+    feature_cols: list[str] | None = None
+    metric_cols: list[str] | None = None
 
 
 class MLTrainResponse(BaseModel):
@@ -665,21 +664,21 @@ class MLTrainResponse(BaseModel):
     feature_count: int = 0
     metric_count: int = 0
     duration_seconds: float = 0.0
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class MLScoreRequest(BaseModel):
     """Request to score device telemetry."""
-    device_data: Dict[str, Any]
+    device_data: dict[str, Any]
 
 
 class MLScoreResponse(BaseModel):
     """Response from ML scoring."""
-    device_id: Optional[str] = None
+    device_id: str | None = None
     overall_anomaly_score: float
     is_anomaly: bool
     anomaly_type: str
-    metrics: Dict[str, Any]
+    metrics: dict[str, Any]
 
 
 class CausalInsightResponse(BaseModel):
@@ -700,7 +699,7 @@ class DriftReportResponse(BaseModel):
     metrics_drifted: int
     drift_rate: float
     auto_retrained: bool = False
-    details: Dict[str, Any] = {}
+    details: dict[str, Any] = {}
 
 
 class MLSuggestionResponse(BaseModel):
@@ -713,8 +712,8 @@ class MLSuggestionResponse(BaseModel):
     proposed_adjustment: float
     confidence: float
     rationale: str
-    bayesian_uncertainty: Optional[float] = None
-    credible_interval: Optional[List[float]] = None
+    bayesian_uncertainty: float | None = None
+    credible_interval: list[float] | None = None
 
 
 @router.get("/ml/status", response_model=MLBaselineStatusResponse, tags=["ml-baselines"])
@@ -809,7 +808,7 @@ async def score_device_with_ml(request: MLScoreRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/ml/causal-insights", response_model=List[CausalInsightResponse], tags=["ml-baselines"])
+@router.get("/ml/causal-insights", response_model=list[CausalInsightResponse], tags=["ml-baselines"])
 async def get_causal_insights():
     """Get discovered causal relationships between metrics.
 
@@ -856,7 +855,6 @@ async def check_baseline_drift(
         service = await _get_ml_service()
 
         # Load recent data for drift check
-        import pandas as pd
         df = await service.load_training_data(lookback_days=lookback_days)
 
         if df.empty:
@@ -865,7 +863,7 @@ async def check_baseline_drift(
         report = await service.check_drift(df)
 
         return DriftReportResponse(
-            timestamp=report.get("timestamp", datetime.now(timezone.utc).isoformat()),
+            timestamp=report.get("timestamp", datetime.now(UTC).isoformat()),
             metrics_checked=report.get("metrics_checked", 0),
             metrics_drifted=report.get("metrics_drifted", 0),
             drift_rate=report.get("drift_rate", 0.0),
@@ -880,7 +878,7 @@ async def check_baseline_drift(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/ml/suggestions", response_model=List[MLSuggestionResponse], tags=["ml-baselines"])
+@router.get("/ml/suggestions", response_model=list[MLSuggestionResponse], tags=["ml-baselines"])
 async def get_ml_baseline_suggestions(
     days: int = Query(default=30, ge=1, le=365),
     z_threshold: float = Query(default=3.0, ge=1.0, le=10.0),
@@ -901,7 +899,6 @@ async def get_ml_baseline_suggestions(
         service = await _get_ml_service()
 
         # Load recent data
-        import pandas as pd
         df = await service.load_training_data(lookback_days=days)
 
         if df.empty:
@@ -934,7 +931,7 @@ async def get_ml_baseline_suggestions(
 
 @router.post("/ml/update-online", tags=["ml-baselines"])
 async def update_baselines_online(
-    device_data: Dict[str, Any],
+    device_data: dict[str, Any],
 ):
     """Update baselines with new streaming data (online learning).
 

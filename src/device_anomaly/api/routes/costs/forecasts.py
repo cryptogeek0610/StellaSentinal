@@ -4,9 +4,8 @@ Battery forecast and NFF (No Fault Found) summary endpoints.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
@@ -32,7 +31,7 @@ router = APIRouter()
 
 @router.get("/battery-forecast", response_model=BatteryForecastResponse)
 def get_battery_forecast(
-    device_id: Optional[int] = Query(None, ge=1),
+    device_id: int | None = Query(None, ge=1),
     horizon_days: int = Query(90, ge=30, le=365),
     db: Session = Depends(get_backend_db),
     results_db: Session = Depends(get_db),
@@ -49,13 +48,13 @@ def get_battery_forecast(
         device_query = device_query.filter(DeviceMetadata.device_id == device_id)
 
     devices = device_query.all()
-    device_ids_by_model: Dict[str, List[int]] = {}
+    device_ids_by_model: dict[str, list[int]] = {}
     for model, dev_id in devices:
         if model:
             device_ids_by_model.setdefault(model, []).append(dev_id)
 
     # Try to get real battery health data from DeviceFeature
-    battery_health_by_device: Dict[int, Optional[float]] = {}
+    battery_health_by_device: dict[int, float | None] = {}
     devices_with_health = 0
 
     # Query latest DeviceFeature per device
@@ -97,9 +96,9 @@ def get_battery_forecast(
         )
         .all()
     )
-    cost_map: Dict[str, DeviceTypeCost] = {entry.device_model: entry for entry in cost_entries}
+    cost_map: dict[str, DeviceTypeCost] = {entry.device_model: entry for entry in cost_entries}
 
-    forecasts: List[BatteryForecastEntry] = []
+    forecasts: list[BatteryForecastEntry] = []
     total_cost_30 = Decimal(0)
     total_cost_90 = Decimal(0)
     total_due_30 = 0
@@ -208,7 +207,7 @@ def get_battery_forecast(
         total_estimated_cost_90_days=total_cost_90,
         total_replacements_due_30_days=total_due_30,
         total_replacements_due_90_days=total_due_90,
-        forecast_generated_at=datetime.now(timezone.utc),
+        forecast_generated_at=datetime.now(UTC),
         data_quality=overall_data_quality,
         devices_with_health_data=devices_with_health,
     )
@@ -216,13 +215,13 @@ def get_battery_forecast(
 
 @router.get("/nff/summary", response_model=NFFSummaryResponse)
 def get_nff_summary(
-    start_date: Optional[datetime] = Query(None),
-    end_date: Optional[datetime] = Query(None),
+    start_date: datetime | None = Query(None),
+    end_date: datetime | None = Query(None),
     results_db: Session = Depends(get_db),
 ) -> NFFSummaryResponse:
     """Return summary of No Fault Found (false positive) investigations."""
     tenant_id = get_tenant_id()
-    end_dt = end_date or datetime.now(timezone.utc)
+    end_dt = end_date or datetime.now(UTC)
     start_dt = start_date or (end_dt - timedelta(days=30))
     prev_start = start_dt - timedelta(days=30)
 
@@ -384,7 +383,7 @@ def get_device_cost_impact(
     )
 
     monthly_trend = {}
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     for idx in range(6):
         month = (now - timedelta(days=30 * idx)).strftime("%Y-%m")
         monthly_trend[month] = Decimal(0)

@@ -9,7 +9,6 @@ import os
 from dataclasses import dataclass, field
 from decimal import Decimal
 from functools import lru_cache
-from typing import Dict, Optional
 
 from pydantic import BaseModel, Field
 
@@ -164,8 +163,8 @@ class CostConfig(BaseModel):
         self,
         purchase_cost: Decimal,
         age_months: int,
-        depreciation_months: Optional[int] = None,
-        residual_percent: Optional[int] = None,
+        depreciation_months: int | None = None,
+        residual_percent: int | None = None,
     ) -> Decimal:
         """Calculate current depreciated value of a device.
 
@@ -214,7 +213,7 @@ class TenantCostOverrides:
     """
 
     tenant_id: str
-    overrides: Dict[str, Decimal] = field(default_factory=dict)
+    overrides: dict[str, Decimal] = field(default_factory=dict)
 
     def apply_to_config(self, base_config: CostConfig) -> CostConfig:
         """Apply tenant overrides to base configuration.

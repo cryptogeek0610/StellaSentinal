@@ -2,16 +2,15 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
 
 from device_anomaly.config.feature_config import FeatureConfig
 from device_anomaly.models.model_registry import resolve_artifact_path, resolve_model_artifacts
-
 
 COHORT_STATS_SCHEMA_VERSION = "cohort_stats_v2"
 _REQUIRED_COHORT_COLUMNS = ("ManufacturerId", "ModelId", "OsVersionId")
@@ -31,7 +30,7 @@ EXTENDED_COHORT_COLUMNS = (
 )
 
 
-def build_cohort_id(df: pd.DataFrame, cohort_columns: Optional[list[str]] = None) -> Optional[pd.Series]:
+def build_cohort_id(df: pd.DataFrame, cohort_columns: list[str] | None = None) -> pd.Series | None:
     columns = cohort_columns or FeatureConfig.cohort_columns
     if not all(col in df.columns for col in _REQUIRED_COHORT_COLUMNS):
         return None
@@ -67,15 +66,15 @@ def select_cohort_feature_cols(df: pd.DataFrame) -> list[str]:
 
 def compute_cohort_stats(
     df: pd.DataFrame,
-    cohort_columns: Optional[list[str]] = None,
-    feature_cols: Optional[list[str]] = None,
+    cohort_columns: list[str] | None = None,
+    feature_cols: list[str] | None = None,
     min_samples: int = 25,
     min_mad: float = 1e-6,
 ) -> dict[str, Any]:
     feature_cols = list(feature_cols or select_cohort_feature_cols(df))
     payload = {
         "schema_version": COHORT_STATS_SCHEMA_VERSION,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "cohort_columns": cohort_columns or FeatureConfig.cohort_columns,
         "feature_columns": feature_cols,
         "min_samples": min_samples,
@@ -179,7 +178,7 @@ class CohortStatsStore:
         mads = {cohort: float(values.get("mad", 0.0)) for cohort, values in stats.items()}
         return medians, mads
 
-    def get_z_score(self, cohort_id: str, metric: str, value: Optional[float]) -> Optional[float]:
+    def get_z_score(self, cohort_id: str, metric: str, value: float | None) -> float | None:
         if value is None or (isinstance(value, float) and np.isnan(value)):
             return None
 
@@ -197,7 +196,7 @@ class CohortStatsStore:
         median = float(stats.get("median", 0.0))
         return (float(value) - median) / (mad + 1e-6)
 
-    def get_cohort_stats(self, cohort_id: str) -> Optional[dict[str, Any]]:
+    def get_cohort_stats(self, cohort_id: str) -> dict[str, Any] | None:
         stats = (self.payload.get("stats") or {}).get(cohort_id)
         if not stats:
             return None
@@ -211,7 +210,7 @@ class CohortStatsStore:
         return list((self.payload.get("stats") or {}).keys())
 
 
-def apply_cohort_stats(df: pd.DataFrame, store: Optional[CohortStatsStore]) -> pd.DataFrame:
+def apply_cohort_stats(df: pd.DataFrame, store: CohortStatsStore | None) -> pd.DataFrame:
     if store is None or df.empty:
         return df
 
@@ -246,7 +245,7 @@ def apply_cohort_stats(df: pd.DataFrame, store: Optional[CohortStatsStore]) -> p
     return df_local
 
 
-def load_latest_cohort_stats(models_dir: Optional[Path] = None) -> Optional[CohortStatsStore]:
+def load_latest_cohort_stats(models_dir: Path | None = None) -> CohortStatsStore | None:
     artifacts = resolve_model_artifacts(models_dir)
     metadata = artifacts.metadata or {}
     stats_path = resolve_artifact_path(
@@ -288,7 +287,7 @@ def build_extended_cohort_id(
     include_carrier: bool = True,
     include_location: bool = True,
     include_business_unit: bool = True,
-) -> Optional[pd.Series]:
+) -> pd.Series | None:
     """
     Build cohort ID with extended dimensions.
 
@@ -356,7 +355,7 @@ def compute_extended_cohort_stats(
     include_carrier: bool = True,
     include_location: bool = True,
     include_business_unit: bool = True,
-    feature_cols: Optional[list[str]] = None,
+    feature_cols: list[str] | None = None,
     min_samples: int = 25,
     min_mad: float = 1e-6,
 ) -> dict[str, Any]:
@@ -409,7 +408,7 @@ def compute_extended_cohort_stats(
 
     payload = {
         "schema_version": COHORT_STATS_SCHEMA_VERSION,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "cohort_columns": used_cohort_cols,
         "available_columns": available_cohort_cols,
         "feature_columns": feature_cols,
@@ -508,7 +507,7 @@ def compute_extended_cohort_stats(
 def compute_cohort_fairness(
     df: pd.DataFrame,
     anomaly_col: str = "anomaly_label",
-    cohort_columns: Optional[list[str]] = None,
+    cohort_columns: list[str] | None = None,
 ) -> dict[str, Any]:
     """
     Compute fairness metrics across cohorts.
@@ -573,8 +572,8 @@ def compute_cohort_fairness(
 
 def compute_cohort_fleet_comparison(
     df: pd.DataFrame,
-    cohort_columns: Optional[list[str]] = None,
-    feature_cols: Optional[list[str]] = None,
+    cohort_columns: list[str] | None = None,
+    feature_cols: list[str] | None = None,
     min_cohort_size: int = 20,
     z_threshold: float = 2.0,
 ) -> dict[str, Any]:
@@ -604,7 +603,7 @@ def compute_cohort_fleet_comparison(
     cohort_columns = cohort_columns or list(_REQUIRED_COHORT_COLUMNS)
 
     result = {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "cohort_columns": cohort_columns,
         "feature_columns": feature_cols,
         "min_cohort_size": min_cohort_size,
@@ -719,7 +718,7 @@ def compute_cohort_fleet_comparison(
     # Summary statistics
     result["summary"] = {
         "total_cohorts": len(cohort_deviations),
-        "cohorts_with_issues": len(set(i["cohort_id"] for i in systemic_issues)),
+        "cohorts_with_issues": len({i["cohort_id"] for i in systemic_issues}),
         "total_issues": len(systemic_issues),
         "critical_issues": len([i for i in systemic_issues if i["severity"] == "critical"]),
         "high_issues": len([i for i in systemic_issues if i["severity"] == "high"]),
@@ -774,7 +773,7 @@ def get_cohort_systemic_issues(
 
 def build_cohort_name_from_id(
     cohort_id: str,
-    df: Optional[pd.DataFrame] = None,
+    df: pd.DataFrame | None = None,
 ) -> str:
     """
     Build human-readable cohort name from cohort ID.

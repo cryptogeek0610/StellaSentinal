@@ -5,8 +5,8 @@ including filtering by severity, status, time range, and device.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import and_, desc, func
 from sqlalchemy.orm import Session
@@ -35,15 +35,15 @@ class AnomalyRepository(BaseRepository[Anomaly]):
     def get_by_tenant(
         self,
         tenant_id: str,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
-        severity: Optional[str] = None,
-        status: Optional[str] = None,
-        device_id: Optional[str] = None,
-        detector_name: Optional[str] = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        severity: str | None = None,
+        status: str | None = None,
+        device_id: str | None = None,
+        detector_name: str | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> List[Anomaly]:
+    ) -> list[Anomaly]:
         """Get anomalies for a tenant with filters.
 
         Args:
@@ -89,10 +89,10 @@ class AnomalyRepository(BaseRepository[Anomaly]):
         self,
         device_id: str,
         tenant_id: str,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
         limit: int = 50,
-    ) -> List[Anomaly]:
+    ) -> list[Anomaly]:
         """Get anomalies for a specific device.
 
         Args:
@@ -118,7 +118,7 @@ class AnomalyRepository(BaseRepository[Anomaly]):
         tenant_id: str,
         severity: str,
         limit: int = 100,
-    ) -> List[Anomaly]:
+    ) -> list[Anomaly]:
         """Get anomalies by severity level.
 
         Args:
@@ -135,7 +135,7 @@ class AnomalyRepository(BaseRepository[Anomaly]):
         self,
         tenant_id: str,
         limit: int = 100,
-    ) -> List[Anomaly]:
+    ) -> list[Anomaly]:
         """Get unresolved anomalies (status = new or acknowledged).
 
         Args:
@@ -163,7 +163,7 @@ class AnomalyRepository(BaseRepository[Anomaly]):
         anomaly_id: str,
         tenant_id: str,
         status: str,
-    ) -> Optional[Anomaly]:
+    ) -> Anomaly | None:
         """Update anomaly status.
 
         Args:
@@ -177,7 +177,7 @@ class AnomalyRepository(BaseRepository[Anomaly]):
         anomaly = self.get_by_id(anomaly_id, tenant_id)
         if anomaly:
             anomaly.status = status
-            anomaly.updated_at = datetime.now(timezone.utc)
+            anomaly.updated_at = datetime.now(UTC)
             self.session.flush()
         return anomaly
 
@@ -186,7 +186,7 @@ class AnomalyRepository(BaseRepository[Anomaly]):
         anomaly_id: str,
         tenant_id: str,
         feedback: str,
-    ) -> Optional[Anomaly]:
+    ) -> Anomaly | None:
         """Record user feedback for an anomaly.
 
         Args:
@@ -200,7 +200,7 @@ class AnomalyRepository(BaseRepository[Anomaly]):
         anomaly = self.get_by_id(anomaly_id, tenant_id)
         if anomaly:
             anomaly.user_feedback = feedback
-            anomaly.updated_at = datetime.now(timezone.utc)
+            anomaly.updated_at = datetime.now(UTC)
             self.session.flush()
         return anomaly
 
@@ -209,8 +209,8 @@ class AnomalyRepository(BaseRepository[Anomaly]):
         anomaly_id: str,
         tenant_id: str,
         explanation: str,
-        cache_key: Optional[str] = None,
-    ) -> Optional[Anomaly]:
+        cache_key: str | None = None,
+    ) -> Anomaly | None:
         """Set the explanation for an anomaly.
 
         Args:
@@ -227,11 +227,11 @@ class AnomalyRepository(BaseRepository[Anomaly]):
             anomaly.explanation = explanation
             if cache_key:
                 anomaly.explanation_cache_key = cache_key
-            anomaly.updated_at = datetime.now(timezone.utc)
+            anomaly.updated_at = datetime.now(UTC)
             self.session.flush()
         return anomaly
 
-    def count_by_severity(self, tenant_id: str) -> Dict[str, int]:
+    def count_by_severity(self, tenant_id: str) -> dict[str, int]:
         """Count anomalies grouped by severity.
 
         Args:
@@ -246,9 +246,9 @@ class AnomalyRepository(BaseRepository[Anomaly]):
             .group_by(Anomaly.severity)
             .all()
         )
-        return {severity: count for severity, count in results}
+        return dict(results)
 
-    def count_by_status(self, tenant_id: str) -> Dict[str, int]:
+    def count_by_status(self, tenant_id: str) -> dict[str, int]:
         """Count anomalies grouped by status.
 
         Args:
@@ -263,14 +263,14 @@ class AnomalyRepository(BaseRepository[Anomaly]):
             .group_by(Anomaly.status)
             .all()
         )
-        return {status: count for status, count in results}
+        return dict(results)
 
     def count_by_date(
         self,
         tenant_id: str,
         start_date: datetime,
         end_date: datetime,
-    ) -> Dict[str, int]:
+    ) -> dict[str, int]:
         """Count anomalies per day in a date range.
 
         Args:
@@ -303,10 +303,10 @@ class AnomalyRepository(BaseRepository[Anomaly]):
     def get_top_devices(
         self,
         tenant_id: str,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
         limit: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get devices with most anomalies.
 
         Args:
@@ -340,8 +340,8 @@ class AnomalyRepository(BaseRepository[Anomaly]):
     def get_feedback_stats(
         self,
         tenant_id: str,
-        detector_name: Optional[str] = None,
-    ) -> Dict[str, int]:
+        detector_name: str | None = None,
+    ) -> dict[str, int]:
         """Get feedback statistics for tuning detectors.
 
         Args:
@@ -365,4 +365,4 @@ class AnomalyRepository(BaseRepository[Anomaly]):
             query = query.filter(Anomaly.detector_name == detector_name)
 
         results = query.group_by(Anomaly.user_feedback).all()
-        return {feedback: count for feedback, count in results}
+        return dict(results)

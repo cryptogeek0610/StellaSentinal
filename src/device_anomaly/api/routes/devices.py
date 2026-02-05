@@ -1,16 +1,15 @@
 """API routes for device endpoints."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import String, cast, func, or_
 from sqlalchemy.orm import Session
 
 from device_anomaly.api.dependencies import get_db, get_mock_mode, get_tenant_id
-from device_anomaly.api.models import AnomalyResponse, DeviceDetailResponse, DeviceResponse
 from device_anomaly.api.mock_mode import get_mock_devices
+from device_anomaly.api.models import AnomalyResponse, DeviceDetailResponse, DeviceResponse
 from device_anomaly.config.settings import get_settings
 from device_anomaly.database.schema import AnomalyResult, DeviceMetadata
 
@@ -27,9 +26,9 @@ router = APIRouter(prefix="/devices", tags=["devices"])
 def list_devices(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
-    search: Optional[str] = Query(None),
-    group_by: Optional[str] = Query(None),
-    group_value: Optional[str] = Query(None),
+    search: str | None = Query(None),
+    group_by: str | None = Query(None),
+    group_value: str | None = Query(None),
     mock_mode: bool = Depends(get_mock_mode),
     db: Session = Depends(get_db),
 ):
@@ -37,7 +36,7 @@ def list_devices(
     # Return mock data if Mock Mode is enabled
     if mock_mode:
         mock_devices = get_mock_devices()
-        
+
         # Apply search filter
         if search:
             search_lower = search.lower()
@@ -46,7 +45,7 @@ def list_devices(
                 if search_lower in d.get("device_name", "").lower()
                 or search_lower in str(d.get("device_id", "")).lower()
             ]
-        
+
         # Apply group filter
         if group_by and group_value:
             mock_devices = [
@@ -54,13 +53,13 @@ def list_devices(
                 if d.get("custom_attributes", {}).get(group_by) == group_value
                 or d.get("store_id") == group_value
             ]
-        
+
         # Apply pagination
         total = len(mock_devices)
         start = (page - 1) * page_size
         end = start + page_size
         paginated_devices = mock_devices[start:end]
-        
+
         return {
             "devices": paginated_devices,
             "total": total,
@@ -68,11 +67,11 @@ def list_devices(
             "page_size": page_size,
             "total_pages": (total + page_size - 1) // page_size,
         }
-    
+
     # Real implementation: Get devices from DeviceMetadata
     tenant_id = get_tenant_id()
     query = db.query(DeviceMetadata).filter(DeviceMetadata.tenant_id == tenant_id)
-    
+
     # Apply search filter (with LIKE pattern escaping to prevent injection)
     if search:
         search_escaped = escape_like_pattern(search)
@@ -82,10 +81,10 @@ def list_devices(
                 cast(DeviceMetadata.device_id, String).ilike(f"%{search_escaped}%", escape="\\")
             )
         )
-    
+
     # Get total count
     total = query.count()
-    
+
     # Apply pagination
     offset = (page - 1) * page_size
     devices = query.offset(offset).limit(page_size).all()
@@ -101,19 +100,19 @@ def list_devices(
             .group_by(AnomalyResult.device_id)
             .all()
         )
-        anomaly_counts = {device_id: count for device_id, count in counts}
-    
+        anomaly_counts = dict(counts)
+
     # Convert to response format
     device_list = []
     for device in devices:
         anomaly_count = anomaly_counts.get(device.device_id, 0)
-        
+
         device_dict = DeviceResponse.model_validate(device).model_dump()
         device_dict["anomaly_count"] = anomaly_count
         device_list.append(device_dict)
-    
+
     total_pages = (total + page_size - 1) // page_size
-    
+
     return {
         "devices": device_list,
         "total": total,
@@ -158,7 +157,7 @@ def get_device(device_id: int, db: Session = Depends(get_db)):
     ) or 0
 
     # Get recent anomalies (last 30 days)
-    thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+    thirty_days_ago = datetime.now(UTC) - timedelta(days=30)
     recent_anomalies = (
         db.query(AnomalyResult)
         .filter(AnomalyResult.device_id == device_id)

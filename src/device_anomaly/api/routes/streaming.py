@@ -9,11 +9,11 @@ Provides:
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
@@ -32,7 +32,7 @@ class TelemetryPayload(BaseModel):
     """Real-time telemetry data from a device."""
 
     device_id: int = Field(..., description="Device identifier")
-    timestamp: Optional[datetime] = Field(None, description="Event timestamp (defaults to now)")
+    timestamp: datetime | None = Field(None, description="Event timestamp (defaults to now)")
     metrics: dict[str, float] = Field(..., description="Metric name to value mapping")
 
     class Config:
@@ -94,7 +94,7 @@ class StreamingState:
     anomaly_processor = None
     websocket_manager = None
     initialized = False
-    restored_at: Optional[datetime] = None
+    restored_at: datetime | None = None
 
 
 _state = StreamingState()
@@ -107,13 +107,13 @@ async def get_streaming_state() -> StreamingState:
 
 async def initialize_streaming() -> None:
     """Initialize the streaming system. Call this on app startup."""
-    from device_anomaly.streaming.engine import StreamingEngine, StreamConfig
-    from device_anomaly.streaming.telemetry_stream import TelemetryStream, TelemetryBuffer
-    from device_anomaly.streaming.feature_computer import StreamingFeatureComputer
-    from device_anomaly.streaming.anomaly_processor import AnomalyStreamProcessor
-    from device_anomaly.streaming.websocket_manager import WebSocketManager
     from device_anomaly.features.cohort_stats import load_latest_cohort_stats
     from device_anomaly.features.device_features import load_feature_metadata, resolve_feature_norms
+    from device_anomaly.streaming.anomaly_processor import AnomalyStreamProcessor
+    from device_anomaly.streaming.engine import StreamConfig, StreamingEngine
+    from device_anomaly.streaming.feature_computer import StreamingFeatureComputer
+    from device_anomaly.streaming.telemetry_stream import TelemetryStream
+    from device_anomaly.streaming.websocket_manager import WebSocketManager
 
     try:
         # Initialize engine
@@ -182,7 +182,7 @@ async def shutdown_streaming() -> None:
         logger.error("Error during streaming shutdown: %s", e, exc_info=True)
 
 
-def _parse_max_bytes(value: Optional[str], default: int) -> int:
+def _parse_max_bytes(value: str | None, default: int) -> int:
     try:
         if value is None:
             return default
@@ -409,10 +409,8 @@ async def websocket_anomalies(
         logger.info("WebSocket client disconnected")
     except Exception as e:
         logger.error("WebSocket error: %s", e, exc_info=True)
-        try:
+        with contextlib.suppress(Exception):
             await websocket.close(code=1011, reason=str(e))
-        except Exception:
-            pass
 
 
 @router.get(

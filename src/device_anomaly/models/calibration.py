@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
 
 import joblib
 import numpy as np
@@ -25,12 +24,12 @@ class IsoScoreCalibrator:
     to probabilities using synthetic ground truth (is_injected_anomaly).
     """
 
-    def __init__(self, config: Optional[IsoScoreCalibratorConfig] = None):
+    def __init__(self, config: IsoScoreCalibratorConfig | None = None):
         self.config = config or IsoScoreCalibratorConfig()
-        self.model: Optional[GradientBoostingClassifier] = None
-        self.features: List[str] = []
+        self.model: GradientBoostingClassifier | None = None
+        self.features: list[str] = []
 
-    def fit(self, df_scored: pd.DataFrame) -> Optional[np.ndarray]:
+    def fit(self, df_scored: pd.DataFrame) -> np.ndarray | None:
         if "is_injected_anomaly" not in df_scored.columns:
             return None
 
@@ -68,7 +67,7 @@ class IsoScoreCalibrator:
         df_scored.loc[labels.index, "calibrated_probability"] = probs
         return probs
 
-    def predict(self, df_scored: pd.DataFrame) -> Optional[np.ndarray]:
+    def predict(self, df_scored: pd.DataFrame) -> np.ndarray | None:
         bundle = self._load_if_needed()
         if bundle is None:
             return None
@@ -83,7 +82,7 @@ class IsoScoreCalibrator:
         df_scored["calibrated_probability"] = probs
         return probs
 
-    def _load_if_needed(self) -> Optional[dict]:
+    def _load_if_needed(self) -> dict | None:
         if self.model is not None:
             return {"model": self.model, "features": self.features}
         if not self.config.model_path.exists():

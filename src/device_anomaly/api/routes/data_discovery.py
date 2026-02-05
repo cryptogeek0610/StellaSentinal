@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -30,11 +30,11 @@ class ColumnStatsResponse(BaseModel):
     null_count: int = 0
     null_percent: float = 0.0
     unique_count: int = 0
-    min_val: Optional[float] = None
-    max_val: Optional[float] = None
-    mean: Optional[float] = None
-    std: Optional[float] = None
-    percentiles: Dict[str, float] = Field(default_factory=dict)
+    min_val: float | None = None
+    max_val: float | None = None
+    mean: float | None = None
+    std: float | None = None
+    percentiles: dict[str, float] = Field(default_factory=dict)
 
 
 class TableProfileResponse(BaseModel):
@@ -42,27 +42,27 @@ class TableProfileResponse(BaseModel):
 
     table_name: str
     row_count: int
-    date_range: tuple[Optional[str], Optional[str]]
+    date_range: tuple[str | None, str | None]
     device_count: int
-    column_stats: Dict[str, ColumnStatsResponse] = Field(default_factory=dict)
-    profiled_at: Optional[str] = None
-    source_db: Optional[str] = None  # "xsight" or "mobicontrol"
+    column_stats: dict[str, ColumnStatsResponse] = Field(default_factory=dict)
+    profiled_at: str | None = None
+    source_db: str | None = None  # "xsight" or "mobicontrol"
 
 
 class TemporalPatternResponse(BaseModel):
     """Time-based pattern for a metric."""
 
     metric_name: str
-    hourly_stats: Dict[int, Dict[str, float]] = Field(default_factory=dict)
-    daily_stats: Dict[int, Dict[str, float]] = Field(default_factory=dict)
+    hourly_stats: dict[int, dict[str, float]] = Field(default_factory=dict)
+    daily_stats: dict[int, dict[str, float]] = Field(default_factory=dict)
 
 
 class MetricDistributionResponse(BaseModel):
     """Histogram distribution for a metric."""
 
-    bins: List[float]
-    counts: List[int]
-    stats: Dict[str, Any]
+    bins: list[float]
+    counts: list[int]
+    stats: dict[str, Any]
 
 
 class AvailableMetricResponse(BaseModel):
@@ -71,13 +71,13 @@ class AvailableMetricResponse(BaseModel):
     table: str
     column: str
     dtype: str
-    mean: Optional[float] = None
-    std: Optional[float] = None
-    min: Optional[float] = None
-    max: Optional[float] = None
-    category: Optional[str] = None  # 'raw', 'rolling', 'derived', 'temporal', 'cohort', 'volatility'
-    domain: Optional[str] = None  # 'battery', 'rf', 'throughput', 'usage', 'storage', etc.
-    description: Optional[str] = None  # Human-readable description
+    mean: float | None = None
+    std: float | None = None
+    min: float | None = None
+    max: float | None = None
+    category: str | None = None  # 'raw', 'rolling', 'derived', 'temporal', 'cohort', 'volatility'
+    domain: str | None = None  # 'battery', 'rf', 'throughput', 'usage', 'storage', etc.
+    description: str | None = None  # Human-readable description
 
 
 class DiscoverySummaryResponse(BaseModel):
@@ -88,8 +88,8 @@ class DiscoverySummaryResponse(BaseModel):
     total_devices: int
     metrics_discovered: int
     patterns_analyzed: int
-    date_range: Optional[Dict[str, str]] = None
-    discovery_completed: Optional[str] = None
+    date_range: dict[str, str] | None = None
+    discovery_completed: str | None = None
 
 
 class DataDiscoveryStatusResponse(BaseModel):
@@ -97,9 +97,9 @@ class DataDiscoveryStatusResponse(BaseModel):
 
     status: str  # 'idle', 'running', 'completed', 'failed'
     progress: float = 0.0  # 0-100
-    message: Optional[str] = None
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
+    message: str | None = None
+    started_at: str | None = None
+    completed_at: str | None = None
     results_available: bool = False
 
 
@@ -107,7 +107,7 @@ class DataDiscoveryStatusResponse(BaseModel):
 # In-memory storage for discovery results (in production, use Redis or DB)
 # ============================================================================
 
-_discovery_cache: Dict[str, Any] = {
+_discovery_cache: dict[str, Any] = {
     "status": "idle",
     "progress": 0.0,
     "message": None,
@@ -122,7 +122,7 @@ _discovery_cache: Dict[str, Any] = {
 # ============================================================================
 
 
-def get_mock_table_profiles() -> List[TableProfileResponse]:
+def get_mock_table_profiles() -> list[TableProfileResponse]:
     """Generate mock table profiles for development."""
     return [
         TableProfileResponse(
@@ -152,7 +152,7 @@ def get_mock_table_profiles() -> List[TableProfileResponse]:
                     percentiles={"p5": 3600, "p25": 18000, "p50": 28800, "p75": 39600, "p95": 57600, "p99": 72000},
                 ),
             },
-            profiled_at=datetime.now(timezone.utc).isoformat(),
+            profiled_at=datetime.now(UTC).isoformat(),
         ),
         TableProfileResponse(
             table_name="cs_AppUsage",
@@ -171,7 +171,7 @@ def get_mock_table_profiles() -> List[TableProfileResponse]:
                     percentiles={"p5": 2, "p25": 18, "p50": 38, "p75": 65, "p95": 120, "p99": 200},
                 ),
             },
-            profiled_at=datetime.now(timezone.utc).isoformat(),
+            profiled_at=datetime.now(UTC).isoformat(),
         ),
         TableProfileResponse(
             table_name="cs_DataUsage",
@@ -190,7 +190,7 @@ def get_mock_table_profiles() -> List[TableProfileResponse]:
                     percentiles={"p5": 1000, "p25": 10_000_000, "p50": 80_000_000, "p75": 200_000_000, "p95": 600_000_000, "p99": 1_500_000_000},
                 ),
             },
-            profiled_at=datetime.now(timezone.utc).isoformat(),
+            profiled_at=datetime.now(UTC).isoformat(),
         ),
         TableProfileResponse(
             table_name="cs_Heatmap",
@@ -209,12 +209,12 @@ def get_mock_table_profiles() -> List[TableProfileResponse]:
                     percentiles={"p5": -98, "p25": -82, "p50": -72, "p75": -62, "p95": -50, "p99": -44},
                 ),
             },
-            profiled_at=datetime.now(timezone.utc).isoformat(),
+            profiled_at=datetime.now(UTC).isoformat(),
         ),
     ]
 
 
-def get_mock_available_metrics() -> List[AvailableMetricResponse]:
+def get_mock_available_metrics() -> list[AvailableMetricResponse]:
     """Generate mock available metrics including raw and engineered features."""
     metrics = [
         # Raw database metrics
@@ -264,7 +264,7 @@ def get_mock_available_metrics() -> List[AvailableMetricResponse]:
             category="raw", domain="rf"
         ),
     ]
-    
+
     # Add some engineered features as examples
     metrics.extend([
         AvailableMetricResponse(
@@ -288,11 +288,11 @@ def get_mock_available_metrics() -> List[AvailableMetricResponse]:
             description="Temporal feature: hour of day"
         ),
     ])
-    
+
     return metrics
 
 
-def get_mock_temporal_patterns() -> List[TemporalPatternResponse]:
+def get_mock_temporal_patterns() -> list[TemporalPatternResponse]:
     """Generate mock temporal patterns."""
     import random
 
@@ -362,11 +362,11 @@ class AvailableTableResponse(BaseModel):
 
     table_name: str
     exists: bool = True
-    source_db: Optional[str] = None  # "xsight" or "mobicontrol"
-    row_count: Optional[int] = None  # Approximate row count if available
+    source_db: str | None = None  # "xsight" or "mobicontrol"
+    row_count: int | None = None  # Approximate row count if available
 
 
-@router.get("/available-tables", response_model=List[AvailableTableResponse])
+@router.get("/available-tables", response_model=list[AvailableTableResponse])
 def get_available_tables(
     pattern: str = Query(default="cs_%", description="SQL LIKE pattern to filter tables"),
     exclude_time_slices: bool = Query(default=True, description="Exclude time-sliced views like _Last7, _LastMonth"),
@@ -410,7 +410,6 @@ def get_available_tables(
         try:
             from device_anomaly.data_access.schema_discovery import (
                 discover_mobicontrol_schema,
-                SourceDatabase,
             )
 
             mc_schema = discover_mobicontrol_schema(use_cache=True)
@@ -429,7 +428,7 @@ def get_available_tables(
     return results
 
 
-@router.get("/tables", response_model=List[TableProfileResponse])
+@router.get("/tables", response_model=list[TableProfileResponse])
 def get_table_profiles(
     include_mc: bool = Query(default=True, description="Include MobiControl database tables"),
     mock_mode: bool = Depends(get_mock_mode),
@@ -508,7 +507,10 @@ def get_table_profiles(
     # Profile MobiControl tables
     if include_mc:
         try:
-            from device_anomaly.data_access.data_profiler import profile_mc_tables, get_curated_mc_tables
+            from device_anomaly.data_access.data_profiler import (
+                get_curated_mc_tables,
+                profile_mc_tables,
+            )
 
             mc_tables = get_curated_mc_tables(include_discovered=True)
             mc_profiles = profile_mc_tables(tables=mc_tables, sample_limit=50_000)
@@ -590,7 +592,7 @@ def get_table_stats(
         raise HTTPException(status_code=503, detail=f"Failed to profile table: {str(e)}")
 
 
-@router.get("/metrics", response_model=List[AvailableMetricResponse])
+@router.get("/metrics", response_model=list[AvailableMetricResponse])
 def get_available_metrics(
     mock_mode: bool = Depends(get_mock_mode),
     include_engineered: bool = Query(True, description="Include engineered features from FeatureConfig"),
@@ -681,7 +683,10 @@ def get_available_metrics(
     # 2. If no cached metrics, try profiling directly
     if not raw_metrics_found:
         try:
-            from device_anomaly.data_access.data_profiler import profile_dw_tables, get_available_metrics as _get_metrics
+            from device_anomaly.data_access.data_profiler import (
+                get_available_metrics as _get_metrics,
+            )
+            from device_anomaly.data_access.data_profiler import profile_dw_tables
 
             profiles = profile_dw_tables(sample_limit=50_000)
             raw_metrics = _get_metrics(profiles)
@@ -808,7 +813,7 @@ def get_available_metrics(
 @router.get("/metrics/{metric_name}/distribution", response_model=MetricDistributionResponse)
 def get_metric_distribution(
     metric_name: str,
-    table_name: Optional[str] = Query(None, description="Table containing the metric"),
+    table_name: str | None = Query(None, description="Table containing the metric"),
     bins: int = Query(50, ge=10, le=100, description="Number of histogram bins"),
     mock_mode: bool = Depends(get_mock_mode),
 ):
@@ -823,7 +828,10 @@ def get_metric_distribution(
     if not table_name:
         # Try to find the table containing this metric
         try:
-            from device_anomaly.data_access.data_profiler import profile_dw_tables, get_available_metrics as _get_metrics
+            from device_anomaly.data_access.data_profiler import (
+                get_available_metrics as _get_metrics,
+            )
+            from device_anomaly.data_access.data_profiler import profile_dw_tables
 
             profiles = profile_dw_tables(sample_limit=10_000)
             metrics = _get_metrics(profiles)
@@ -852,7 +860,7 @@ def get_metric_distribution(
         raise HTTPException(status_code=503, detail=f"Failed to compute distribution: {str(e)}")
 
 
-@router.get("/temporal-patterns", response_model=List[TemporalPatternResponse])
+@router.get("/temporal-patterns", response_model=list[TemporalPatternResponse])
 def get_temporal_patterns(
     mock_mode: bool = Depends(get_mock_mode),
 ):
@@ -897,7 +905,7 @@ def get_discovery_summary(
             metrics_discovered=45,
             patterns_analyzed=8,
             date_range={"start": "2024-01-01", "end": "2024-12-28"},
-            discovery_completed=datetime.now(timezone.utc).isoformat(),
+            discovery_completed=datetime.now(UTC).isoformat(),
         )
 
     # Check cache first
@@ -916,8 +924,8 @@ def get_discovery_summary(
     # No cache - compute summary on-the-fly using schema discovery (fast, no table scans)
     try:
         from device_anomaly.data_access.schema_discovery import (
-            discover_xsight_schema,
             discover_mobicontrol_schema,
+            discover_xsight_schema,
         )
 
         total_tables = 0
@@ -994,7 +1002,7 @@ def get_discovery_summary(
             metrics_discovered=metrics_count,
             patterns_analyzed=patterns_analyzed,
             date_range=date_range,
-            discovery_completed=datetime.now(timezone.utc).isoformat(),
+            discovery_completed=datetime.now(UTC).isoformat(),
         )
 
     except Exception as e:
@@ -1040,7 +1048,7 @@ def _run_discovery_job(start_date: str, end_date: str, include_mc: bool, analyze
         _discovery_cache["status"] = "completed"
         _discovery_cache["progress"] = 100.0
         _discovery_cache["message"] = "Discovery completed successfully"
-        _discovery_cache["completed_at"] = datetime.now(timezone.utc).isoformat()
+        _discovery_cache["completed_at"] = datetime.now(UTC).isoformat()
         _discovery_cache["results"] = results
 
     except Exception as e:
@@ -1052,8 +1060,8 @@ def _run_discovery_job(start_date: str, end_date: str, include_mc: bool, analyze
 @router.post("/run", response_model=DataDiscoveryStatusResponse)
 def run_data_discovery_job(
     background_tasks: BackgroundTasks,
-    start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
-    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    start_date: str | None = Query(None, description="Start date (YYYY-MM-DD)"),
+    end_date: str | None = Query(None, description="End date (YYYY-MM-DD)"),
     include_mc: bool = Query(True, description="Include MobiControl database"),
     analyze_patterns: bool = Query(True, description="Analyze temporal patterns"),
     _: None = Depends(require_role(["analyst", "admin"])),
@@ -1080,7 +1088,7 @@ def run_data_discovery_job(
         "status": "running",
         "progress": 0.0,
         "message": "Starting discovery...",
-        "started_at": datetime.now(timezone.utc).isoformat(),
+        "started_at": datetime.now(UTC).isoformat(),
         "completed_at": None,
         "results": None,
     }
@@ -1112,12 +1120,12 @@ class MCIntegrationStatusResponse(BaseModel):
 
     connected: bool = False
     credentials_configured: bool = False
-    host: Optional[str] = None
-    database: Optional[str] = None
+    host: str | None = None
+    database: str | None = None
     streaming_cache_size: int = 0
-    streaming_cache_loaded_at: Optional[str] = None
-    batch_last_load_rows: Optional[int] = None
-    error: Optional[str] = None
+    streaming_cache_loaded_at: str | None = None
+    batch_last_load_rows: int | None = None
+    error: str | None = None
 
 
 @router.get("/mc-status", response_model=MCIntegrationStatusResponse)
@@ -1128,7 +1136,6 @@ def get_mc_integration_status():
     Shows whether MC credentials are configured, if connection is working,
     and whether the streaming enrichment cache is populated.
     """
-    from device_anomaly.config.settings import get_settings
 
     settings = get_settings()
     mc_settings = settings.mc

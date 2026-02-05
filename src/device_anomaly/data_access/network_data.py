@@ -13,7 +13,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import List, Optional
 
 from sqlalchemy import text
 
@@ -56,12 +55,12 @@ class DeviceGroup:
     """Device group from hierarchy."""
     device_group_id: int
     name: str
-    parent_id: Optional[str]
+    parent_id: str | None
     group_path: str
     is_active: bool
 
 
-def get_device_ids_for_group(device_group_id: Optional[int]) -> Optional[List[int]]:
+def get_device_ids_for_group(device_group_id: int | None) -> list[int] | None:
     """Get all device IDs belonging to a device group (including descendants).
 
     Returns None if no group filter (all devices), or list of device IDs.
@@ -114,7 +113,7 @@ def get_device_ids_for_group(device_group_id: Optional[int]) -> Optional[List[in
         return []
 
 
-def get_wifi_summary(days: int = 7, device_group_id: Optional[int] = None) -> dict:
+def get_wifi_summary(days: int = 7, device_group_id: int | None = None) -> dict:
     """Get WiFi network summary metrics.
 
     Returns aggregated metrics from cs_WifiHour for the specified period.
@@ -184,8 +183,8 @@ def get_ap_quality_metrics(
     days: int = 7,
     limit: int = 50,
     min_device_count: int = 1,
-    device_group_id: Optional[int] = None
-) -> List[dict]:
+    device_group_id: int | None = None
+) -> list[dict]:
     """Get per-AP quality metrics.
 
     Returns list of APs with signal strength, device count, and drop rate.
@@ -260,8 +259,8 @@ def get_ap_quality_metrics(
 
 def get_app_usage_metrics(
     days: int = 7,
-    device_group_id: Optional[int] = None
-) -> List[dict]:
+    device_group_id: int | None = None
+) -> list[dict]:
     """Get per-application data usage metrics.
 
     Returns list of apps with download/upload totals.
@@ -318,7 +317,7 @@ def get_app_usage_metrics(
         return []
 
 
-def get_carrier_metrics(device_group_id: Optional[int] = None) -> List[dict]:
+def get_carrier_metrics(device_group_id: int | None = None) -> list[dict]:
     """Get cellular carrier performance metrics.
 
     Note: This requires cs_LastKnown or similar table with carrier data.
@@ -359,7 +358,7 @@ def get_carrier_metrics(device_group_id: Optional[int] = None) -> List[dict]:
         return []
 
 
-def get_device_groups() -> List[dict]:
+def get_device_groups() -> list[dict]:
     """Get device group hierarchy from conf_DeviceGroup."""
     try:
         engine = create_dw_engine()
@@ -393,7 +392,7 @@ def get_device_groups() -> List[dict]:
         return []
 
 
-def build_group_hierarchy(groups: List[dict]) -> List[dict]:
+def build_group_hierarchy(groups: list[dict]) -> list[dict]:
     """Build hierarchical tree structure from flat group list."""
     # Create lookup by ReferenceId (parent_id references ReferenceId, not DeviceGroupId)
     # For simplicity, we'll build based on GroupPath

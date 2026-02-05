@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import random
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 # Seed for reproducibility
 MOCK_SEED = 42
@@ -50,13 +50,13 @@ MOCK_ANOMALY_TYPES = [
 # Mock Device Generation
 # ============================================================================
 
-def _generate_mock_devices(count: int = 50) -> List[Dict[str, Any]]:
+def _generate_mock_devices(count: int = 50) -> list[dict[str, Any]]:
     """Generate a consistent set of mock devices."""
     devices = []
     for i in range(1, count + 1):
         store = MOCK_STORES[i % len(MOCK_STORES)]
         model = MOCK_DEVICE_MODELS[i % len(MOCK_DEVICE_MODELS)]
-        
+
         # Determine status with realistic distribution
         status_roll = _rng.random()
         if status_roll < 0.75:
@@ -67,7 +67,7 @@ def _generate_mock_devices(count: int = 50) -> List[Dict[str, Any]]:
             status = "Offline"
         else:
             status = "Charging"
-        
+
         devices.append({
             "device_id": i,
             "device_name": f"Device-{i:04d}",
@@ -82,7 +82,7 @@ def _generate_mock_devices(count: int = 50) -> List[Dict[str, Any]]:
             "os_version": f"Android {_rng.choice(['12', '13', '14'])}",
             "agent_version": f"15.{_rng.randint(1, 5)}.{_rng.randint(0, 9)}",
         })
-    
+
     return devices
 
 
@@ -90,7 +90,7 @@ def _generate_mock_devices(count: int = 50) -> List[Dict[str, Any]]:
 _MOCK_DEVICES = _generate_mock_devices(50)
 
 
-def get_mock_device(device_id: int) -> Optional[Dict[str, Any]]:
+def get_mock_device(device_id: int) -> dict[str, Any] | None:
     """Get a specific mock device by ID."""
     for device in _MOCK_DEVICES:
         if device["device_id"] == device_id:
@@ -98,7 +98,7 @@ def get_mock_device(device_id: int) -> Optional[Dict[str, Any]]:
     return None
 
 
-def get_mock_devices() -> List[Dict[str, Any]]:
+def get_mock_devices() -> list[dict[str, Any]]:
     """Get all mock devices."""
     return _MOCK_DEVICES.copy()
 
@@ -107,15 +107,15 @@ def get_mock_devices() -> List[Dict[str, Any]]:
 # Mock Anomaly Generation
 # ============================================================================
 
-def _generate_mock_anomalies(count: int = 100) -> List[Dict[str, Any]]:
+def _generate_mock_anomalies(count: int = 100) -> list[dict[str, Any]]:
     """Generate a consistent set of mock anomalies."""
     anomalies = []
     base_time = datetime.now()
-    
+
     for i in range(1, count + 1):
         device = _rng.choice(_MOCK_DEVICES)
         anomaly_type = _rng.choice(MOCK_ANOMALY_TYPES)
-        
+
         # Status distribution
         status_roll = _rng.random()
         if status_roll < 0.4:
@@ -126,10 +126,10 @@ def _generate_mock_anomalies(count: int = 100) -> List[Dict[str, Any]]:
             status = "resolved"
         else:
             status = "dismissed"
-        
+
         # Generate realistic score
         score = round(_rng.uniform(0.65, 0.99), 3)
-        
+
         # Time offset (spread over past 14 days)
         time_offset = timedelta(
             days=_rng.randint(0, 13),
@@ -137,7 +137,7 @@ def _generate_mock_anomalies(count: int = 100) -> List[Dict[str, Any]]:
             minutes=_rng.randint(0, 59)
         )
         timestamp = base_time - time_offset
-        
+
         anomaly = {
             "id": i,
             "device_id": device["device_id"],
@@ -159,7 +159,7 @@ def _generate_mock_anomalies(count: int = 100) -> List[Dict[str, Any]]:
             "updated_at": timestamp.isoformat(),
         }
         anomalies.append(anomaly)
-    
+
     # Sort by timestamp descending
     anomalies.sort(key=lambda x: x["timestamp"], reverse=True)
     return anomalies
@@ -172,7 +172,7 @@ _MOCK_ANOMALIES = _generate_mock_anomalies(100)
 # Public Mock Data Functions
 # ============================================================================
 
-def get_mock_dashboard_stats() -> Dict[str, Any]:
+def get_mock_dashboard_stats() -> dict[str, Any]:
     """Get mock dashboard KPI statistics."""
     today = datetime.now().date()
     today_anomalies = [
@@ -194,40 +194,40 @@ def get_mock_dashboard_stats() -> Dict[str, Any]:
 
 def get_mock_dashboard_trends(
     days: int = 7,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None
-) -> List[Dict[str, Any]]:
+    start_date: datetime | None = None,
+    end_date: datetime | None = None
+) -> list[dict[str, Any]]:
     """Get mock anomaly trend data."""
     if end_date is None:
         end_date = datetime.now()
     if start_date is None:
         start_date = end_date - timedelta(days=days)
-    
+
     trends = []
     current = start_date.date()
     end = end_date.date()
-    
+
     while current <= end:
         # Generate realistic daily counts with some pattern
         base_count = 8
         day_of_week = current.weekday()
-        
+
         # Higher on weekdays
         if day_of_week < 5:
             count = base_count + _rng.randint(2, 8)
         else:
             count = base_count + _rng.randint(-2, 3)
-        
+
         trends.append({
             "date": current.isoformat(),
             "anomaly_count": max(0, count),
         })
         current += timedelta(days=1)
-    
+
     return trends
 
 
-def get_mock_connection_status() -> Dict[str, Any]:
+def get_mock_connection_status() -> dict[str, Any]:
     """Get mock connection status (all connected)."""
     return {
         "backend_db": {
@@ -277,24 +277,24 @@ def get_mock_connection_status() -> Dict[str, Any]:
 
 
 def get_mock_anomalies(
-    device_id: Optional[int] = None,
-    status: Optional[str] = None,
+    device_id: int | None = None,
+    status: str | None = None,
     page: int = 1,
     page_size: int = 50,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Get paginated mock anomalies."""
     filtered = _MOCK_ANOMALIES.copy()
-    
+
     if device_id:
         filtered = [a for a in filtered if a["device_id"] == device_id]
-    
+
     if status:
         filtered = [a for a in filtered if a["status"] == status]
-    
+
     total = len(filtered)
     start = (page - 1) * page_size
     end = start + page_size
-    
+
     return {
         "anomalies": filtered[start:end],
         "total": total,
@@ -304,7 +304,7 @@ def get_mock_anomalies(
     }
 
 
-def get_mock_anomaly_detail(anomaly_id: int) -> Optional[Dict[str, Any]]:
+def get_mock_anomaly_detail(anomaly_id: int) -> dict[str, Any] | None:
     """Get mock anomaly detail with notes."""
     for anomaly in _MOCK_ANOMALIES:
         if anomaly["id"] == anomaly_id:
@@ -330,14 +330,14 @@ def get_mock_anomaly_detail(anomaly_id: int) -> Optional[Dict[str, Any]]:
     return None
 
 
-def get_mock_device_detail(device_id: int) -> Optional[Dict[str, Any]]:
+def get_mock_device_detail(device_id: int) -> dict[str, Any] | None:
     """Get mock device detail with recent anomalies."""
     device = get_mock_device(device_id)
     if not device:
         return None
-    
+
     device_anomalies = [a for a in _MOCK_ANOMALIES if a["device_id"] == device_id]
-    
+
     return {
         **device,
         "anomaly_count": len(device_anomalies),
@@ -345,17 +345,17 @@ def get_mock_device_detail(device_id: int) -> Optional[Dict[str, Any]]:
     }
 
 
-def get_mock_isolation_forest_stats(days: int = 30) -> Dict[str, Any]:
+def get_mock_isolation_forest_stats(days: int = 30) -> dict[str, Any]:
     """Get mock Isolation Forest model statistics."""
     # Generate score distribution bins
     bins = []
     total_normal = 0
     total_anomalies = 0
-    
+
     for i in range(10):
         bin_start = i * 0.1
         bin_end = (i + 1) * 0.1
-        
+
         if bin_end <= 0.5:
             count = _rng.randint(100, 300)
             is_anomaly = False
@@ -368,16 +368,16 @@ def get_mock_isolation_forest_stats(days: int = 30) -> Dict[str, Any]:
             count = _rng.randint(5, 30)
             is_anomaly = True
             total_anomalies += count
-        
+
         bins.append({
             "bin_start": round(bin_start, 1),
             "bin_end": round(bin_end, 1),
             "count": count,
             "is_anomaly": is_anomaly,
         })
-    
+
     total = total_normal + total_anomalies
-    
+
     return {
         "config": {
             "n_estimators": 100,
@@ -403,7 +403,7 @@ def get_mock_isolation_forest_stats(days: int = 30) -> Dict[str, Any]:
     }
 
 
-def get_mock_baseline_suggestions(source: Optional[str] = None) -> List[Dict[str, Any]]:
+def get_mock_baseline_suggestions(source: str | None = None) -> list[dict[str, Any]]:
     """Get mock baseline adjustment suggestions."""
     features = [
         ("TotalBatteryLevelDrop", "Global", "global", 15, 18, 17),
@@ -411,7 +411,7 @@ def get_mock_baseline_suggestions(source: Optional[str] = None) -> List[Dict[str
         ("Download", "Store: Downtown Flagship", "store-001", 150000, 220000, 180000),
         ("WiFiSignalStrength", "Region: Northeast", "northeast", 65, 58, 60),
     ]
-    
+
     suggestions = []
     for feature, level, group_key, baseline, observed, proposed in features:
         suggestions.append({
@@ -424,20 +424,20 @@ def get_mock_baseline_suggestions(source: Optional[str] = None) -> List[Dict[str
             "rationale": f"Observed {feature} has drifted from baseline. "
                         f"Recommend adjusting threshold to reduce false positives.",
         })
-    
+
     return suggestions
 
 
-def get_mock_location_heatmap(attribute_name: Optional[str] = None) -> Dict[str, Any]:
+def get_mock_location_heatmap(attribute_name: str | None = None) -> dict[str, Any]:
     """Get mock location heatmap data."""
     locations = []
-    
+
     for store in MOCK_STORES:
         device_count = _rng.randint(5, 15)
         active_count = int(device_count * _rng.uniform(0.6, 0.95))
         utilization = round(active_count / device_count * 100, 1)
         baseline = _rng.randint(70, 85)
-        
+
         locations.append({
             "id": store["id"],
             "name": store["name"],
@@ -448,7 +448,7 @@ def get_mock_location_heatmap(attribute_name: Optional[str] = None) -> Dict[str,
             "region": store["region"],
             "anomalyCount": _rng.randint(0, 5),
         })
-    
+
     return {
         "locations": locations,
         "attributeName": attribute_name or "Store",
@@ -457,7 +457,7 @@ def get_mock_location_heatmap(attribute_name: Optional[str] = None) -> Dict[str,
     }
 
 
-def get_mock_custom_attributes() -> Dict[str, Any]:
+def get_mock_custom_attributes() -> dict[str, Any]:
     """Get mock available custom attributes."""
     return {
         "custom_attributes": [

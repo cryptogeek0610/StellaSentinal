@@ -3,17 +3,16 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from enum import Enum
-from typing import Any, Dict, List, Optional
+from enum import StrEnum
+from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
-
+from pydantic import BaseModel, Field
 
 # =============================================================================
 # ENUMERATIONS
 # =============================================================================
 
-class CostCategory(str, Enum):
+class CostCategory(StrEnum):
     """Cost category classification."""
 
     LABOR = "labor"
@@ -24,7 +23,7 @@ class CostCategory(str, Enum):
     OTHER = "other"
 
 
-class CostType(str, Enum):
+class CostType(StrEnum):
     """Cost calculation type."""
 
     HOURLY = "hourly"
@@ -34,7 +33,7 @@ class CostType(str, Enum):
     PER_DEVICE = "per_device"
 
 
-class ScopeType(str, Enum):
+class ScopeType(StrEnum):
     """Scope type for operational costs."""
 
     TENANT = "tenant"
@@ -43,7 +42,7 @@ class ScopeType(str, Enum):
     DEVICE_MODEL = "device_model"
 
 
-class ImpactLevel(str, Enum):
+class ImpactLevel(StrEnum):
     """Financial impact severity level."""
 
     HIGH = "high"
@@ -51,7 +50,7 @@ class ImpactLevel(str, Enum):
     LOW = "low"
 
 
-class AuditAction(str, Enum):
+class AuditAction(StrEnum):
     """Audit log action types."""
 
     CREATE = "create"
@@ -59,7 +58,7 @@ class AuditAction(str, Enum):
     DELETE = "delete"
 
 
-class AlertThresholdType(str, Enum):
+class AlertThresholdType(StrEnum):
     """Threshold types for cost alerts."""
 
     ANOMALY_COST_DAILY = "anomaly_cost_daily"
@@ -87,13 +86,13 @@ class HardwareCostBase(CostBaseModel):
 
     device_model: str = Field(..., min_length=1, max_length=255, description="Device model identifier")
     purchase_cost: Decimal = Field(..., ge=0, description="Purchase cost in dollars")
-    replacement_cost: Optional[Decimal] = Field(None, ge=0, description="Replacement cost if different")
-    repair_cost_avg: Optional[Decimal] = Field(None, ge=0, description="Average repair cost")
-    depreciation_months: Optional[int] = Field(36, ge=1, le=120, description="Depreciation period in months")
-    residual_value_percent: Optional[int] = Field(0, ge=0, le=100, description="Residual value as percentage")
-    warranty_months: Optional[int] = Field(None, ge=0, le=120, description="Warranty period in months")
+    replacement_cost: Decimal | None = Field(None, ge=0, description="Replacement cost if different")
+    repair_cost_avg: Decimal | None = Field(None, ge=0, description="Average repair cost")
+    depreciation_months: int | None = Field(36, ge=1, le=120, description="Depreciation period in months")
+    residual_value_percent: int | None = Field(0, ge=0, le=100, description="Residual value as percentage")
+    warranty_months: int | None = Field(None, ge=0, le=120, description="Warranty period in months")
     currency_code: str = Field("USD", max_length=3, description="ISO 4217 currency code")
-    notes: Optional[str] = Field(None, max_length=2000, description="Additional notes")
+    notes: str | None = Field(None, max_length=2000, description="Additional notes")
 
 
 class HardwareCostCreate(HardwareCostBase):
@@ -105,14 +104,14 @@ class HardwareCostCreate(HardwareCostBase):
 class HardwareCostUpdate(CostBaseModel):
     """Request model for updating a hardware cost entry (partial update)."""
 
-    device_model: Optional[str] = Field(None, min_length=1, max_length=255)
-    purchase_cost: Optional[Decimal] = Field(None, ge=0)
-    replacement_cost: Optional[Decimal] = Field(None, ge=0)
-    repair_cost_avg: Optional[Decimal] = Field(None, ge=0)
-    depreciation_months: Optional[int] = Field(None, ge=1, le=120)
-    residual_value_percent: Optional[int] = Field(None, ge=0, le=100)
-    warranty_months: Optional[int] = Field(None, ge=0, le=120)
-    notes: Optional[str] = Field(None, max_length=2000)
+    device_model: str | None = Field(None, min_length=1, max_length=255)
+    purchase_cost: Decimal | None = Field(None, ge=0)
+    replacement_cost: Decimal | None = Field(None, ge=0)
+    repair_cost_avg: Decimal | None = Field(None, ge=0)
+    depreciation_months: int | None = Field(None, ge=1, le=120)
+    residual_value_percent: int | None = Field(None, ge=0, le=100)
+    warranty_months: int | None = Field(None, ge=0, le=120)
+    notes: str | None = Field(None, max_length=2000)
 
 
 class HardwareCostResponse(HardwareCostBase):
@@ -123,16 +122,16 @@ class HardwareCostResponse(HardwareCostBase):
     device_count: int = Field(0, description="Number of devices using this model")
     total_fleet_value: Decimal = Field(default=Decimal(0), description="Total value of devices with this model")
     valid_from: datetime
-    valid_to: Optional[datetime] = None
+    valid_to: datetime | None = None
     created_at: datetime
     updated_at: datetime
-    created_by: Optional[str] = None
+    created_by: str | None = None
 
 
 class HardwareCostListResponse(CostBaseModel):
     """Response model for paginated hardware cost list."""
 
-    costs: List[HardwareCostResponse]
+    costs: list[HardwareCostResponse]
     total: int
     page: int
     page_size: int
@@ -151,7 +150,7 @@ class DeviceModelInfo(CostBaseModel):
 class DeviceModelsResponse(CostBaseModel):
     """Response model for device models list."""
 
-    models: List[DeviceModelInfo]
+    models: list[DeviceModelInfo]
     total: int
 
 
@@ -166,13 +165,13 @@ class OperationalCostBase(CostBaseModel):
     category: CostCategory = Field(CostCategory.OTHER, description="Cost category")
     amount: Decimal = Field(..., ge=0, description="Cost amount in dollars")
     cost_type: CostType = Field(CostType.FIXED_MONTHLY, description="Cost calculation type")
-    unit: Optional[str] = Field(None, max_length=50, description="Unit of measurement")
+    unit: str | None = Field(None, max_length=50, description="Unit of measurement")
     scope_type: ScopeType = Field(ScopeType.TENANT, description="Scope type")
-    scope_id: Optional[str] = Field(None, max_length=100, description="Scope entity ID")
-    description: Optional[str] = Field(None, max_length=2000)
+    scope_id: str | None = Field(None, max_length=100, description="Scope entity ID")
+    description: str | None = Field(None, max_length=2000)
     currency_code: str = Field("USD", max_length=3, description="ISO 4217 currency code")
     is_active: bool = Field(True, description="Whether this cost is currently active")
-    notes: Optional[str] = Field(None, max_length=2000)
+    notes: str | None = Field(None, max_length=2000)
 
 
 class OperationalCostCreate(OperationalCostBase):
@@ -184,16 +183,16 @@ class OperationalCostCreate(OperationalCostBase):
 class OperationalCostUpdate(CostBaseModel):
     """Request model for updating an operational cost entry."""
 
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
-    category: Optional[CostCategory] = None
-    amount: Optional[Decimal] = Field(None, ge=0)
-    cost_type: Optional[CostType] = None
-    unit: Optional[str] = Field(None, max_length=50)
-    scope_type: Optional[ScopeType] = None
-    scope_id: Optional[str] = Field(None, max_length=100)
-    description: Optional[str] = Field(None, max_length=2000)
-    is_active: Optional[bool] = None
-    notes: Optional[str] = Field(None, max_length=2000)
+    name: str | None = Field(None, min_length=1, max_length=255)
+    category: CostCategory | None = None
+    amount: Decimal | None = Field(None, ge=0)
+    cost_type: CostType | None = None
+    unit: str | None = Field(None, max_length=50)
+    scope_type: ScopeType | None = None
+    scope_id: str | None = Field(None, max_length=100)
+    description: str | None = Field(None, max_length=2000)
+    is_active: bool | None = None
+    notes: str | None = Field(None, max_length=2000)
 
 
 class OperationalCostResponse(OperationalCostBase):
@@ -202,18 +201,18 @@ class OperationalCostResponse(OperationalCostBase):
     id: int
     tenant_id: str
     valid_from: datetime
-    valid_to: Optional[datetime] = None
+    valid_to: datetime | None = None
     monthly_equivalent: Decimal = Field(description="Normalized monthly cost")
     annual_equivalent: Decimal = Field(description="Normalized annual cost")
     created_at: datetime
     updated_at: datetime
-    created_by: Optional[str] = None
+    created_by: str | None = None
 
 
 class OperationalCostListResponse(CostBaseModel):
     """Response model for paginated operational cost list."""
 
-    costs: List[OperationalCostResponse]
+    costs: list[OperationalCostResponse]
     total: int
     page: int
     page_size: int
@@ -258,12 +257,12 @@ class CostSummaryResponse(CostBaseModel):
     total_anomaly_impact_ytd: Decimal = Field(description="Year-to-date anomaly financial impact")
 
     # Breakdowns
-    by_category: List[CategoryCostSummary]
-    by_device_model: List[DeviceModelCostSummary]
+    by_category: list[CategoryCostSummary]
+    by_device_model: list[DeviceModelCostSummary]
 
     # Trends
-    cost_trend_30d: Optional[float] = Field(None, description="Percentage change in costs over 30 days")
-    anomaly_cost_trend_30d: Optional[float] = Field(None, description="Percentage change in anomaly costs")
+    cost_trend_30d: float | None = Field(None, description="Percentage change in costs over 30 days")
+    anomaly_cost_trend_30d: float | None = Field(None, description="Percentage change in anomaly costs")
 
     # Metadata
     calculated_at: datetime
@@ -290,32 +289,32 @@ class AnomalyImpactResponse(CostBaseModel):
 
     anomaly_id: int
     device_id: int
-    device_model: Optional[str] = None
+    device_model: str | None = None
     anomaly_severity: str
 
     # Impact breakdown
     total_estimated_impact: Decimal
-    impact_components: List[ImpactComponent]
+    impact_components: list[ImpactComponent]
 
     # Hardware context
-    device_unit_cost: Optional[Decimal] = None
-    device_replacement_cost: Optional[Decimal] = None
-    device_age_months: Optional[int] = None
-    device_depreciated_value: Optional[Decimal] = None
+    device_unit_cost: Decimal | None = None
+    device_replacement_cost: Decimal | None = None
+    device_age_months: int | None = None
+    device_depreciated_value: Decimal | None = None
 
     # Productivity impact
-    estimated_downtime_hours: Optional[float] = None
-    productivity_cost_per_hour: Optional[Decimal] = None
-    productivity_impact: Optional[Decimal] = None
+    estimated_downtime_hours: float | None = None
+    productivity_cost_per_hour: Decimal | None = None
+    productivity_impact: Decimal | None = None
 
     # Resolution context
-    average_resolution_time_hours: Optional[float] = None
-    support_cost_per_hour: Optional[Decimal] = None
-    estimated_support_cost: Optional[Decimal] = None
+    average_resolution_time_hours: float | None = None
+    support_cost_per_hour: Decimal | None = None
+    estimated_support_cost: Decimal | None = None
 
     # Similar case context
     similar_cases_count: int = 0
-    similar_cases_avg_cost: Optional[Decimal] = None
+    similar_cases_avg_cost: Decimal | None = None
 
     # Confidence
     overall_confidence: float = Field(ge=0, le=1)
@@ -337,13 +336,13 @@ class DeviceImpactSummary(CostBaseModel):
     """Cost impact summary for a single device."""
 
     device_id: int
-    device_model: Optional[str] = None
-    device_name: Optional[str] = None
-    location: Optional[str] = None
+    device_model: str | None = None
+    device_name: str | None = None
+    location: str | None = None
 
     # Hardware value
-    unit_cost: Optional[Decimal] = None
-    current_value: Optional[Decimal] = None
+    unit_cost: Decimal | None = None
+    current_value: Decimal | None = None
 
     # Anomaly history
     total_anomalies: int
@@ -364,20 +363,20 @@ class DeviceImpactResponse(CostBaseModel):
     """Detailed device-level cost impact response."""
 
     device_id: int
-    device_model: Optional[str] = None
-    device_name: Optional[str] = None
+    device_model: str | None = None
+    device_name: str | None = None
 
     # Summary
     summary: DeviceImpactSummary
 
     # Recent anomalies with impact
-    recent_anomalies: List[AnomalyImpactResponse] = Field(default_factory=list)
+    recent_anomalies: list[AnomalyImpactResponse] = Field(default_factory=list)
 
     # Historical trend
-    monthly_impact_trend: Dict[str, Decimal] = Field(default_factory=dict, description="Last 12 months impact")
+    monthly_impact_trend: dict[str, Decimal] = Field(default_factory=dict, description="Last 12 months impact")
 
     # Recommendations
-    cost_saving_recommendations: List[str] = Field(default_factory=list)
+    cost_saving_recommendations: list[str] = Field(default_factory=list)
 
 
 # =============================================================================
@@ -393,22 +392,22 @@ class CostChangeEntry(CostBaseModel):
     entity_type: str = Field(description="'device_type_cost' or 'operational_cost'")
     entity_id: int
     entity_name: str
-    changed_by: Optional[str] = None
+    changed_by: str | None = None
 
     # Change details
-    field_changed: Optional[str] = None
-    old_value: Optional[str] = None
-    new_value: Optional[str] = None
+    field_changed: str | None = None
+    old_value: str | None = None
+    new_value: str | None = None
 
     # Full snapshots for audit
-    before_snapshot: Optional[Dict[str, Any]] = None
-    after_snapshot: Optional[Dict[str, Any]] = None
+    before_snapshot: dict[str, Any] | None = None
+    after_snapshot: dict[str, Any] | None = None
 
 
 class CostHistoryResponse(CostBaseModel):
     """Response model for cost change history."""
 
-    changes: List[CostChangeEntry]
+    changes: list[CostChangeEntry]
     total: int
     page: int
     page_size: int
@@ -443,16 +442,16 @@ class FinancialImpactSummary(CostBaseModel):
     monthly_recurring_usd: Decimal
     potential_savings_usd: Decimal
     impact_level: ImpactLevel
-    breakdown: List[CostBreakdownItem] = Field(default_factory=list)
-    recommendations: List[str] = Field(default_factory=list)
+    breakdown: list[CostBreakdownItem] = Field(default_factory=list)
+    recommendations: list[str] = Field(default_factory=list)
 
     # ROI if addressed
-    investment_required_usd: Optional[Decimal] = None
-    payback_months: Optional[float] = None
+    investment_required_usd: Decimal | None = None
+    payback_months: float | None = None
 
     # Metadata
     confidence_score: float = Field(0.7, ge=0, le=1)
-    calculated_at: Optional[datetime] = None
+    calculated_at: datetime | None = None
 
 
 # =============================================================================
@@ -472,15 +471,15 @@ class BatteryForecastEntry(CostBaseModel):
     estimated_cost_30_days: Decimal
     estimated_cost_90_days: Decimal
     avg_battery_age_months: float
-    oldest_battery_months: Optional[float] = None
-    avg_battery_health_percent: Optional[float] = None
+    oldest_battery_months: float | None = None
+    avg_battery_health_percent: float | None = None
     data_quality: str = "estimated"  # "real", "estimated", "mixed"
 
 
 class BatteryForecastResponse(CostBaseModel):
     """Response model for battery replacement forecast."""
 
-    forecasts: List[BatteryForecastEntry]
+    forecasts: list[BatteryForecastEntry]
     total_devices_with_battery_data: int
     total_estimated_cost_30_days: Decimal
     total_estimated_cost_90_days: Decimal
@@ -502,8 +501,8 @@ class CostAlertBase(CostBaseModel):
     threshold_type: AlertThresholdType
     threshold_value: Decimal = Field(..., ge=0)
     is_active: bool = True
-    notify_email: Optional[str] = Field(None, max_length=255)
-    notify_webhook: Optional[str] = Field(None, max_length=2000)
+    notify_email: str | None = Field(None, max_length=255)
+    notify_webhook: str | None = Field(None, max_length=2000)
 
 
 class CostAlertCreate(CostAlertBase):
@@ -515,12 +514,12 @@ class CostAlertCreate(CostAlertBase):
 class CostAlertUpdate(CostBaseModel):
     """Request model for updating a cost alert."""
 
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
-    threshold_type: Optional[AlertThresholdType] = None
-    threshold_value: Optional[Decimal] = Field(None, ge=0)
-    is_active: Optional[bool] = None
-    notify_email: Optional[str] = Field(None, max_length=255)
-    notify_webhook: Optional[str] = Field(None, max_length=2000)
+    name: str | None = Field(None, min_length=1, max_length=255)
+    threshold_type: AlertThresholdType | None = None
+    threshold_value: Decimal | None = Field(None, ge=0)
+    is_active: bool | None = None
+    notify_email: str | None = Field(None, max_length=255)
+    notify_webhook: str | None = Field(None, max_length=2000)
 
 
 class CostAlert(CostBaseModel):
@@ -531,9 +530,9 @@ class CostAlert(CostBaseModel):
     threshold_type: AlertThresholdType
     threshold_value: Decimal
     is_active: bool
-    notify_email: Optional[str] = None
-    notify_webhook: Optional[str] = None
-    last_triggered: Optional[datetime] = None
+    notify_email: str | None = None
+    notify_webhook: str | None = None
+    last_triggered: datetime | None = None
     trigger_count: int = 0
     created_at: datetime
     updated_at: datetime
@@ -542,7 +541,7 @@ class CostAlert(CostBaseModel):
 class CostAlertListResponse(CostBaseModel):
     """Response model for cost alert list."""
 
-    alerts: List[CostAlert]
+    alerts: list[CostAlert]
     total: int
 
 
@@ -573,6 +572,6 @@ class NFFSummaryResponse(CostBaseModel):
     total_nff_cost: Decimal
     avg_cost_per_nff: Decimal
     nff_rate_percent: float
-    by_device_model: List[NFFByDeviceModel]
-    by_resolution: List[NFFByResolution]
+    by_device_model: list[NFFByDeviceModel]
+    by_resolution: list[NFFByResolution]
     trend_30_days: float

@@ -6,8 +6,7 @@ Used when mock_mode is enabled or as fallback when real data is unavailable.
 from __future__ import annotations
 
 import random
-from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from datetime import UTC, datetime
 
 from device_anomaly.api.schemas.correlations import (
     CausalEdge,
@@ -29,7 +28,7 @@ from device_anomaly.api.schemas.correlations import (
 
 
 def get_mock_correlation_matrix(
-    domain: Optional[str] = None,
+    domain: str | None = None,
     method: str = "pearson",
 ) -> CorrelationMatrixResponse:
     """Generate mock correlation matrix with realistic correlations."""
@@ -143,7 +142,7 @@ def get_mock_correlation_matrix(
         p_values=p_values,
         strong_correlations=strong,
         method=method,
-        computed_at=datetime.now(timezone.utc).isoformat(),
+        computed_at=datetime.now(UTC).isoformat(),
         total_samples=4532,
         domain_filter=domain,
         date_range={"start": "2025-12-20", "end": "2026-01-19"},
@@ -285,8 +284,8 @@ def get_mock_causal_graph() -> CausalGraphResponse:
     }
 
     # Build nodes and edges
-    nodes_dict: Dict[str, CausalNode] = {}
-    edges: List[CausalEdge] = []
+    nodes_dict: dict[str, CausalNode] = {}
+    edges: list[CausalEdge] = []
 
     for cause, effects in causal_relationships.items():
         # Add cause node
@@ -328,7 +327,7 @@ def get_mock_causal_graph() -> CausalGraphResponse:
     return CausalGraphResponse(
         nodes=list(nodes_dict.values()),
         edges=edges,
-        generated_at=datetime.now(timezone.utc).isoformat(),
+        generated_at=datetime.now(UTC).isoformat(),
     )
 
 
@@ -436,7 +435,7 @@ def get_mock_correlation_insights() -> CorrelationInsightsResponse:
     return CorrelationInsightsResponse(
         insights=insights,
         total_correlations_analyzed=253,
-        generated_at=datetime.now(timezone.utc).isoformat(),
+        generated_at=datetime.now(UTC).isoformat(),
     )
 
 
@@ -494,7 +493,7 @@ def get_mock_cohort_patterns() -> CohortCorrelationPatternsResponse:
     return CohortCorrelationPatternsResponse(
         patterns=patterns,
         anomalous_cohorts=anomalous_count,
-        generated_at=datetime.now(timezone.utc).isoformat(),
+        generated_at=datetime.now(UTC).isoformat(),
     )
 
 
@@ -551,7 +550,7 @@ def get_mock_time_lagged_correlations() -> TimeLagCorrelationsResponse:
     return TimeLagCorrelationsResponse(
         correlations=correlations,
         max_lag_analyzed=7,
-        generated_at=datetime.now(timezone.utc).isoformat(),
+        generated_at=datetime.now(UTC).isoformat(),
     )
 
 

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -67,7 +67,7 @@ class WeakLabelGenerator:
     4. Cross-device correlation patterns
     """
 
-    def __init__(self, config: Optional[WeakLabelConfig] = None):
+    def __init__(self, config: WeakLabelConfig | None = None):
         self.config = config or WeakLabelConfig()
         self._heuristic_rules: list[dict] = []
         self._load_default_rules()
@@ -395,8 +395,8 @@ class WeakLabelGenerator:
     def combine_labels(
         self,
         df: pd.DataFrame,
-        label_cols: Optional[list[str]] = None,
-        confidence_cols: Optional[list[str]] = None,
+        label_cols: list[str] | None = None,
+        confidence_cols: list[str] | None = None,
     ) -> pd.DataFrame:
         """
         Combine multiple weak label sources into final pseudo-labels.
@@ -464,7 +464,7 @@ class WeakLabelGenerator:
     def generate_all_labels(
         self,
         df: pd.DataFrame,
-        scores: Optional[np.ndarray] = None,
+        scores: np.ndarray | None = None,
     ) -> pd.DataFrame:
         """
         Generate weak labels using all available strategies.

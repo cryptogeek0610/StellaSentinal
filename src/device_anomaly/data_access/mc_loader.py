@@ -16,7 +16,7 @@ Tables queried:
 - LabelDevice/LabelType: Custom device labels
 """
 import logging
-from typing import Iterable
+from collections.abc import Iterable
 
 import pandas as pd
 from sqlalchemy import bindparam, text

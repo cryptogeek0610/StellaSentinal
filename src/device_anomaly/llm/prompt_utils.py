@@ -7,14 +7,11 @@ to ensure consistent, human-readable output across all LLM prompts.
 
 from __future__ import annotations
 
-from typing import Dict, Optional, Tuple
-
-
 # =============================================================================
 # METRIC TRANSLATIONS
 # =============================================================================
 
-METRIC_TRANSLATIONS: Dict[str, Dict[str, str]] = {
+METRIC_TRANSLATIONS: dict[str, dict[str, str]] = {
     # Battery metrics
     "TotalBatteryLevelDrop": {
         "name": "Battery Drain",
@@ -329,7 +326,7 @@ METRIC_TRANSLATIONS: Dict[str, Dict[str, str]] = {
 # SERVICE DESCRIPTIONS (for troubleshooting)
 # =============================================================================
 
-SERVICE_DESCRIPTIONS: Dict[str, Dict[str, str]] = {
+SERVICE_DESCRIPTIONS: dict[str, dict[str, str]] = {
     "XSight Database SQL Server": {
         "purpose": "Data warehouse storing device telemetry (battery, connectivity, app usage)",
         "common_issues": "Connection timeout usually means network/firewall issues",
@@ -378,7 +375,7 @@ def translate_metric(technical_name: str) -> str:
     return info.get("name", technical_name)
 
 
-def get_metric_info(technical_name: str) -> Tuple[str, str, str]:
+def get_metric_info(technical_name: str) -> tuple[str, str, str]:
     """Get human name, unit, and description for a metric.
 
     Returns:
@@ -493,7 +490,7 @@ def get_z_score_severity(z: float) -> str:
     return "normal"
 
 
-def get_health_status(anomaly_rate: float) -> Tuple[str, str]:
+def get_health_status(anomaly_rate: float) -> tuple[str, str]:
     """Get health status and emoji based on anomaly rate.
 
     Returns:

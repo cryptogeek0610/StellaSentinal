@@ -5,7 +5,6 @@ import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Optional
 
 import pandas as pd
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -24,7 +23,7 @@ class PersistenceResult:
     total_processed: int = 0
     new_inserted: int = 0
     existing_updated: int = 0
-    errors: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
 
 _FEATURE_TOKENS = (
     "_roll_",
@@ -46,7 +45,7 @@ def _select_feature_columns(df: pd.DataFrame) -> list[str]:
     ]
 
 
-def _get_str_value(row: pd.Series, *col_names: str) -> Optional[str]:
+def _get_str_value(row: pd.Series, *col_names: str) -> str | None:
     """Get string value from row, trying multiple column names.
 
     Returns the first non-empty value found. Skips empty strings and
@@ -63,7 +62,7 @@ def _get_str_value(row: pd.Series, *col_names: str) -> Optional[str]:
     return None
 
 
-def _get_datetime_value(row: pd.Series, *col_names: str) -> Optional[datetime]:
+def _get_datetime_value(row: pd.Series, *col_names: str) -> datetime | None:
     """Get datetime value from row, trying multiple column names."""
     for col in col_names:
         if col in row.index:
@@ -340,7 +339,7 @@ def persist_anomaly_results(
         db.close()
 
 
-def get_feedback_stats() -> Dict[str, int]:
+def get_feedback_stats() -> dict[str, int]:
     """
     Get feedback statistics for auto-retrain decisions.
 

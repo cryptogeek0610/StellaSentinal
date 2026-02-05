@@ -5,34 +5,38 @@ from pathlib import Path
 import pandas as pd
 
 from device_anomaly import __version__
-from device_anomaly.config.logging_config import setup_logging
-from device_anomaly.config.experiment_config import SyntheticExperimentConfig
-from device_anomaly.config.model_config import make_model_version
 from device_anomaly.config.config_loader import load_synthetic_config
-
-from device_anomaly.data_access.synthetic_generator import generate_synthetic_device_telemetry
+from device_anomaly.config.experiment_config import SyntheticExperimentConfig
+from device_anomaly.config.logging_config import setup_logging
+from device_anomaly.config.model_config import make_model_version
 from device_anomaly.data_access.persistence import (
     build_anomaly_results_df,
-    save_anomaly_results,
     save_anomaly_events,
+    save_anomaly_results,
     save_device_patterns,
 )
+from device_anomaly.data_access.synthetic_generator import generate_synthetic_device_telemetry
 from device_anomaly.features.device_features import DeviceFeatureBuilder
 from device_anomaly.models.anomaly_detector import AnomalyDetectorConfig
-from device_anomaly.models.hybrid import HybridAnomalyDetector, HybridAnomalyDetectorConfig
-from device_anomaly.models.calibration import IsoScoreCalibrator, IsoScoreCalibratorConfig
-from device_anomaly.models.drift_monitor import compute_feature_stats, save_stats, load_stats, compare_stats
 from device_anomaly.models.baseline import (
     BaselineLevel,
-    compute_baselines,
     apply_baselines,
+    compute_baselines,
     save_baselines,
     suggest_baseline_adjustments,
+)
+from device_anomaly.models.calibration import IsoScoreCalibrator, IsoScoreCalibratorConfig
+from device_anomaly.models.drift_monitor import (
+    compare_stats,
+    compute_feature_stats,
+    load_stats,
+    save_stats,
 )
 from device_anomaly.models.events import (
     build_event_results,
     select_top_anomalous_devices,
 )
+from device_anomaly.models.hybrid import HybridAnomalyDetector, HybridAnomalyDetectorConfig
 from device_anomaly.models.patterns import build_device_pattern_results
 from device_anomaly.pipeline import (
     PipelineStage,
@@ -42,6 +46,7 @@ from device_anomaly.pipeline import (
     ensure_required_columns,
     save_model_metadata,
 )
+
 
 def run_synthetic_experiment(
     config: SyntheticExperimentConfig | None = None,
@@ -317,10 +322,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    if args.config:
-        cfg = load_synthetic_config(args.config)
-    else:
-        cfg = SyntheticExperimentConfig()
+    cfg = load_synthetic_config(args.config) if args.config else SyntheticExperimentConfig()
 
     run_synthetic_experiment(config=cfg)
 

@@ -18,9 +18,9 @@ StatType codes used:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -29,7 +29,6 @@ from sqlalchemy.engine import Engine
 
 from device_anomaly.data_access.db_connection import create_mc_engine
 from device_anomaly.data_access.db_utils import table_exists
-from device_anomaly.data_access.stat_type_mapper import KNOWN_STAT_TYPES
 
 logger = logging.getLogger(__name__)
 
@@ -78,8 +77,8 @@ class StorageForecast:
     device_name: str = ""
     current_storage_pct: float = 0.0
     storage_trend_gb_per_day: float = 0.0
-    projected_full_date: Optional[datetime] = None
-    days_until_full: Optional[int] = None
+    projected_full_date: datetime | None = None
+    days_until_full: int | None = None
     confidence: float = 0.0
 
 
@@ -106,8 +105,8 @@ class HealthTrendPoint:
 
 def load_system_health_metrics(
     period_days: int = 7,
-    device_ids: Optional[List[int]] = None,
-    engine: Optional[Engine] = None,
+    device_ids: list[int] | None = None,
+    engine: Engine | None = None,
 ) -> SystemHealthMetrics:
     """
     Load aggregated system health metrics from DeviceStatInt.
@@ -127,12 +126,12 @@ def load_system_health_metrics(
         logger.warning("DeviceStatInt table not found")
         return SystemHealthMetrics()
 
-    start_time = datetime.now(timezone.utc) - timedelta(days=period_days)
+    start_time = datetime.now(UTC) - timedelta(days=period_days)
     stat_types = list(HEALTH_STAT_TYPES.keys())
 
     # Build device filter
     device_filter = ""
-    params: Dict[str, Any] = {
+    params: dict[str, Any] = {
         "start_time": start_time,
         "stat_types": stat_types,
     }
@@ -213,9 +212,9 @@ def load_health_trends(
     metric: str,
     period_days: int = 7,
     granularity: str = "hourly",
-    device_ids: Optional[List[int]] = None,
-    engine: Optional[Engine] = None,
-) -> List[HealthTrendPoint]:
+    device_ids: list[int] | None = None,
+    engine: Engine | None = None,
+) -> list[HealthTrendPoint]:
     """
     Load time-series health trends for a specific metric.
 
@@ -249,7 +248,7 @@ def load_health_trends(
         logger.warning(f"Unknown metric: {metric}")
         return []
 
-    start_time = datetime.now(timezone.utc) - timedelta(days=period_days)
+    start_time = datetime.now(UTC) - timedelta(days=period_days)
 
     # Build time grouping
     if granularity == "daily":
@@ -258,7 +257,7 @@ def load_health_trends(
         time_group = "DATEADD(HOUR, DATEDIFF(HOUR, 0, ServerDateTime), 0)"
 
     device_filter = ""
-    params: Dict[str, Any] = {
+    params: dict[str, Any] = {
         "start_time": start_time,
         "stat_type": stat_type,
     }
@@ -299,7 +298,7 @@ def load_health_trends(
             ts = ts.to_pydatetime()
 
         if ts.tzinfo is None:
-            ts = ts.replace(tzinfo=timezone.utc)
+            ts = ts.replace(tzinfo=UTC)
 
         trends.append(HealthTrendPoint(
             timestamp=ts,
@@ -314,8 +313,8 @@ def calculate_storage_forecast(
     lookback_days: int = 30,
     forecast_days: int = 90,
     min_data_points: int = 5,
-    engine: Optional[Engine] = None,
-) -> List[StorageForecast]:
+    engine: Engine | None = None,
+) -> list[StorageForecast]:
     """
     Predict when devices will run out of storage using linear regression.
 
@@ -334,7 +333,7 @@ def calculate_storage_forecast(
     if not table_exists(engine, "DeviceStatInt"):
         return []
 
-    start_time = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+    start_time = datetime.now(UTC) - timedelta(days=lookback_days)
 
     # Get storage history for all devices
     query = text("""
@@ -397,7 +396,7 @@ def calculate_storage_forecast(
         if slope < 0:
             # Current storage
             current_storage = y[-1]
-            days_elapsed = x[-1]
+            x[-1]
 
             # Get total storage for this device
             total_storage = 0
@@ -414,7 +413,7 @@ def calculate_storage_forecast(
 
             # Only include if predicted to run out within forecast window
             if days_until_zero and days_until_zero <= forecast_days:
-                projected_date = datetime.now(timezone.utc) + timedelta(days=days_until_zero)
+                projected_date = datetime.now(UTC) + timedelta(days=days_until_zero)
 
                 # Calculate confidence based on R-squared
                 y_pred = slope * x + intercept
@@ -439,8 +438,8 @@ def calculate_storage_forecast(
 
 def load_cohort_health_breakdown(
     period_days: int = 7,
-    engine: Optional[Engine] = None,
-) -> List[CohortHealthBreakdown]:
+    engine: Engine | None = None,
+) -> list[CohortHealthBreakdown]:
     """
     Break down health metrics by device cohort (model/OS).
 
@@ -535,7 +534,7 @@ def _load_device_health_dataframe(
     if not table_exists(engine, "DeviceStatInt"):
         return pd.DataFrame()
 
-    start_time = datetime.now(timezone.utc) - timedelta(days=period_days)
+    start_time = datetime.now(UTC) - timedelta(days=period_days)
     stat_types = [1, 2, 3, 4, 5, 6, 7, 10, 11]
 
     query = text("""
@@ -636,8 +635,8 @@ def _calculate_health_score(df: pd.DataFrame) -> float:
 
 def calculate_fleet_health_score(
     period_days: int = 7,
-    engine: Optional[Engine] = None,
-) -> Tuple[float, str]:
+    engine: Engine | None = None,
+) -> tuple[float, str]:
     """
     Calculate overall fleet health score and trend.
 

@@ -16,7 +16,7 @@ import logging
 import math
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import pandas as pd
 from sqlalchemy.orm import Session
@@ -59,18 +59,18 @@ class LocationConfig:
 
     location_id: str
     location_name: str
-    parent_region: Optional[str]
+    parent_region: str | None
     timezone: str
     mapping_type: LocationMappingType
-    mapping_attribute: Optional[str]
-    mapping_value: Optional[str]
-    device_group_id: Optional[int]
-    geo_fence: Optional[Dict[str, float]]  # {lat, lon, radius_m}
-    shifts: List[ShiftSchedule] = field(default_factory=list)
-    baselines: Dict[str, float] = field(default_factory=dict)
+    mapping_attribute: str | None
+    mapping_value: str | None
+    device_group_id: int | None
+    geo_fence: dict[str, float] | None  # {lat, lon, radius_m}
+    shifts: list[ShiftSchedule] = field(default_factory=list)
+    baselines: dict[str, float] = field(default_factory=dict)
 
     @classmethod
-    def from_db_model(cls, model: LocationMetadata) -> "LocationConfig":
+    def from_db_model(cls, model: LocationMetadata) -> LocationConfig:
         """Create LocationConfig from database model."""
         # Parse shift schedules
         shifts = []
@@ -118,12 +118,12 @@ class DeviceLocationResult:
     """Result of device-to-location mapping."""
 
     device_id: int
-    location_id: Optional[str]
-    location_name: Optional[str]
+    location_id: str | None
+    location_name: str | None
     confidence: float  # 0.0 to 1.0
-    mapping_type: Optional[str]
-    current_shift: Optional[ShiftSchedule] = None
-    shift_remaining_hours: Optional[float] = None
+    mapping_type: str | None
+    current_shift: ShiftSchedule | None = None
+    shift_remaining_hours: float | None = None
 
 
 class LocationMapper:
@@ -152,7 +152,7 @@ class LocationMapper:
         """
         self.db = db_session
         self.tenant_id = tenant_id
-        self._location_cache: Dict[str, LocationConfig] = {}
+        self._location_cache: dict[str, LocationConfig] = {}
         self._cache_loaded = False
 
     def refresh_cache(self) -> None:
@@ -180,12 +180,12 @@ class LocationMapper:
         if not self._cache_loaded:
             self.refresh_cache()
 
-    def get_all_locations(self) -> List[LocationConfig]:
+    def get_all_locations(self) -> list[LocationConfig]:
         """Get all configured locations."""
         self._ensure_cache_loaded()
         return list(self._location_cache.values())
 
-    def get_location_config(self, location_id: str) -> Optional[LocationConfig]:
+    def get_location_config(self, location_id: str) -> LocationConfig | None:
         """Get configuration for a specific location."""
         self._ensure_cache_loaded()
         return self._location_cache.get(location_id)
@@ -193,8 +193,8 @@ class LocationMapper:
     def get_device_location(
         self,
         device_id: int,
-        device_data: Dict[str, Any],
-        timestamp: Optional[datetime] = None,
+        device_data: dict[str, Any],
+        timestamp: datetime | None = None,
     ) -> DeviceLocationResult:
         """Determine location_id for a device based on mapping rules.
 
@@ -246,8 +246,8 @@ class LocationMapper:
         )
 
     def _check_device_match(
-        self, device_data: Dict[str, Any], config: LocationConfig
-    ) -> Tuple[bool, float]:
+        self, device_data: dict[str, Any], config: LocationConfig
+    ) -> tuple[bool, float]:
         """Check if device matches a location's mapping rules.
 
         Returns:
@@ -266,8 +266,8 @@ class LocationMapper:
             return False, 0.0
 
     def _match_custom_attribute(
-        self, device_data: Dict[str, Any], config: LocationConfig
-    ) -> Tuple[bool, float]:
+        self, device_data: dict[str, Any], config: LocationConfig
+    ) -> tuple[bool, float]:
         """Match device by CustomAttributes."""
         custom_attrs = device_data.get("CustomAttributes", {})
         if not isinstance(custom_attrs, dict):
@@ -279,8 +279,8 @@ class LocationMapper:
         return False, 0.0
 
     def _match_label(
-        self, device_data: Dict[str, Any], config: LocationConfig
-    ) -> Tuple[bool, float]:
+        self, device_data: dict[str, Any], config: LocationConfig
+    ) -> tuple[bool, float]:
         """Match device by LabelDevice entries."""
         labels = device_data.get("LabelDevice", [])
         if not isinstance(labels, list):
@@ -293,8 +293,8 @@ class LocationMapper:
         return False, 0.0
 
     def _match_device_group(
-        self, device_data: Dict[str, Any], config: LocationConfig
-    ) -> Tuple[bool, float]:
+        self, device_data: dict[str, Any], config: LocationConfig
+    ) -> tuple[bool, float]:
         """Match device by DeviceGroupId."""
         device_group_id = device_data.get("DeviceGroupId")
         if device_group_id is not None and int(device_group_id) == config.device_group_id:
@@ -302,8 +302,8 @@ class LocationMapper:
         return False, 0.0
 
     def _match_geo_fence(
-        self, device_data: Dict[str, Any], config: LocationConfig
-    ) -> Tuple[bool, float]:
+        self, device_data: dict[str, Any], config: LocationConfig
+    ) -> tuple[bool, float]:
         """Match device by geographic location within radius."""
         if not config.geo_fence:
             return False, 0.0
@@ -373,7 +373,7 @@ class LocationMapper:
     def bulk_map_devices(
         self,
         devices_df: pd.DataFrame,
-        timestamp: Optional[datetime] = None,
+        timestamp: datetime | None = None,
     ) -> pd.DataFrame:
         """Add location_id column to devices DataFrame.
 
@@ -448,7 +448,7 @@ class LocationMapper:
 
         return devices_df[devices_df["location_id"] == location_id]
 
-    def get_location_device_counts(self, devices_df: pd.DataFrame) -> Dict[str, int]:
+    def get_location_device_counts(self, devices_df: pd.DataFrame) -> dict[str, int]:
         """Get count of devices per location.
 
         Args:
@@ -464,8 +464,8 @@ class LocationMapper:
         return {k: v for k, v in counts.items() if k is not None}
 
     def get_current_shift(
-        self, location_id: str, timestamp: Optional[datetime] = None
-    ) -> Optional[ShiftSchedule]:
+        self, location_id: str, timestamp: datetime | None = None
+    ) -> ShiftSchedule | None:
         """Get the current shift for a location.
 
         Args:
@@ -487,7 +487,7 @@ class LocationMapper:
 
     def get_shift_by_name(
         self, location_id: str, shift_name: str
-    ) -> Optional[ShiftSchedule]:
+    ) -> ShiftSchedule | None:
         """Get a specific shift by name for a location.
 
         Args:

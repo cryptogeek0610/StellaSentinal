@@ -11,12 +11,12 @@ from __future__ import annotations
 
 import json
 import logging
+import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
-import uuid
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -41,11 +41,11 @@ class ModelVersion:
     model_path: Path
     status: ModelStatus
     created_at: datetime
-    promoted_at: Optional[datetime] = None
-    deprecated_at: Optional[datetime] = None
+    promoted_at: datetime | None = None
+    deprecated_at: datetime | None = None
     metrics: dict[str, Any] = field(default_factory=dict)
     config: dict[str, Any] = field(default_factory=dict)
-    parent_version: Optional[str] = None
+    parent_version: str | None = None
     training_reason: str = ""
     notes: str = ""
 
@@ -66,7 +66,7 @@ class ModelVersion:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ModelVersion":
+    def from_dict(cls, data: dict[str, Any]) -> ModelVersion:
         """Create from dictionary."""
         return cls(
             version_id=data["version_id"],
@@ -119,7 +119,7 @@ class ModelGovernanceRegistry:
         self.registry_path.parent.mkdir(parents=True, exist_ok=True)
         data = {
             "versions": [v.to_dict() for v in self._versions.values()],
-            "last_updated": datetime.now(timezone.utc).isoformat(),
+            "last_updated": datetime.now(UTC).isoformat(),
         }
         with open(self.registry_path, "w") as f:
             json.dump(data, f, indent=2)
@@ -131,7 +131,7 @@ class ModelGovernanceRegistry:
         metrics: dict[str, Any],
         config: dict[str, Any],
         training_reason: str = "",
-        version_id: Optional[str] = None,
+        version_id: str | None = None,
     ) -> ModelVersion:
         """
         Register a new trained model.
@@ -147,13 +147,13 @@ class ModelGovernanceRegistry:
             The registered ModelVersion
         """
         if version_id is None:
-            version_id = f"v_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
+            version_id = f"v_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
 
         version = ModelVersion(
             version_id=version_id,
             model_path=model_path,
             status=ModelStatus.VALIDATION,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
             metrics=metrics,
             config=config,
             parent_version=self.get_production_version_id(),
@@ -166,23 +166,23 @@ class ModelGovernanceRegistry:
         logger.info(f"Registered model version {version_id}")
         return version
 
-    def get_version(self, version_id: str) -> Optional[ModelVersion]:
+    def get_version(self, version_id: str) -> ModelVersion | None:
         """Get a specific model version."""
         return self._versions.get(version_id)
 
-    def get_production_version(self) -> Optional[ModelVersion]:
+    def get_production_version(self) -> ModelVersion | None:
         """Get the current production model."""
         for v in self._versions.values():
             if v.status == ModelStatus.PRODUCTION:
                 return v
         return None
 
-    def get_production_version_id(self) -> Optional[str]:
+    def get_production_version_id(self) -> str | None:
         """Get the current production model version ID."""
         prod = self.get_production_version()
         return prod.version_id if prod else None
 
-    def get_shadow_version(self) -> Optional[ModelVersion]:
+    def get_shadow_version(self) -> ModelVersion | None:
         """Get the current shadow model (if any)."""
         for v in self._versions.values():
             if v.status == ModelStatus.SHADOW:
@@ -249,12 +249,12 @@ class ModelGovernanceRegistry:
         current_prod = self.get_production_version()
         if current_prod:
             current_prod.status = ModelStatus.DEPRECATED
-            current_prod.deprecated_at = datetime.now(timezone.utc)
+            current_prod.deprecated_at = datetime.now(UTC)
             logger.info(f"Deprecated previous production model {current_prod.version_id}")
 
         # Promote new version
         version.status = ModelStatus.PRODUCTION
-        version.promoted_at = datetime.now(timezone.utc)
+        version.promoted_at = datetime.now(UTC)
         version.notes = notes
         self._save_registry()
 
@@ -263,9 +263,9 @@ class ModelGovernanceRegistry:
 
     def rollback(
         self,
-        to_version_id: Optional[str] = None,
+        to_version_id: str | None = None,
         reason: str = "",
-    ) -> Optional[ModelVersion]:
+    ) -> ModelVersion | None:
         """
         Rollback to a previous model version.
 
@@ -284,7 +284,7 @@ class ModelGovernanceRegistry:
         # Mark current as rolled back
         current_prod.status = ModelStatus.ROLLED_BACK
         current_prod.notes = f"Rolled back: {reason}"
-        current_prod.deprecated_at = datetime.now(timezone.utc)
+        current_prod.deprecated_at = datetime.now(UTC)
 
         # Find version to restore
         if to_version_id:
@@ -304,7 +304,7 @@ class ModelGovernanceRegistry:
             return None
 
         target.status = ModelStatus.PRODUCTION
-        target.promoted_at = datetime.now(timezone.utc)
+        target.promoted_at = datetime.now(UTC)
         target.notes = f"Restored via rollback from {current_prod.version_id}: {reason}"
         self._save_registry()
 
@@ -315,7 +315,7 @@ class ModelGovernanceRegistry:
         self,
         version_id: str,
         reason: str = "",
-    ) -> Optional[ModelVersion]:
+    ) -> ModelVersion | None:
         """Mark a model version as failed."""
         version = self._versions.get(version_id)
         if not version:
@@ -373,7 +373,7 @@ class ModelGovernanceRegistry:
         Returns:
             Number of versions removed
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         cutoff = now - timedelta(days=keep_days)
 
         # Identify versions to remove
@@ -405,7 +405,7 @@ class ModelGovernanceRegistry:
 
 
 def create_model_registry(
-    registry_path: Optional[Path] = None,
+    registry_path: Path | None = None,
 ) -> ModelGovernanceRegistry:
     """
     Create a model governance registry.

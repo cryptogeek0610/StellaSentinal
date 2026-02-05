@@ -11,10 +11,10 @@ from __future__ import annotations
 import logging
 import time
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from enum import Enum
+from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import joblib
 import numpy as np
@@ -23,7 +23,7 @@ import onnxruntime as ort
 logger = logging.getLogger(__name__)
 
 
-class EngineType(str, Enum):
+class EngineType(StrEnum):
     """Available inference engine types"""
 
     SKLEARN = "sklearn"
@@ -31,7 +31,7 @@ class EngineType(str, Enum):
     PYTORCH = "pytorch"  # Deep Learning models (VAE, Autoencoder)
 
 
-class ExecutionProvider(str, Enum):
+class ExecutionProvider(StrEnum):
     """ONNX Runtime execution providers"""
 
     CPU = "CPUExecutionProvider"
@@ -50,7 +50,7 @@ class InferenceMetrics:
     postprocessing_time_ms: float = 0.0
     num_samples: int = 0
     engine_type: str = ""
-    provider: Optional[str] = None
+    provider: str | None = None
 
     @property
     def throughput_samples_per_sec(self) -> float:
@@ -97,7 +97,7 @@ class InferenceEngine(ABC):
 
     def __init__(self, config: EngineConfig):
         self.config = config
-        self.metrics: Optional[InferenceMetrics] = None
+        self.metrics: InferenceMetrics | None = None
 
     @abstractmethod
     def predict(self, X: np.ndarray) -> np.ndarray:
@@ -130,7 +130,7 @@ class InferenceEngine(ABC):
         """Return information about the engine"""
         pass
 
-    def get_metrics(self) -> Optional[InferenceMetrics]:
+    def get_metrics(self) -> InferenceMetrics | None:
         """Get the latest inference metrics"""
         return self.metrics
 
@@ -142,7 +142,7 @@ class ScikitLearnEngine(InferenceEngine):
     This is the traditional approach using Python-based sklearn inference.
     """
 
-    def __init__(self, model_path: str | Path, config: Optional[EngineConfig] = None):
+    def __init__(self, model_path: str | Path, config: EngineConfig | None = None):
         super().__init__(config or EngineConfig(engine_type=EngineType.SKLEARN))
         self.model_path = Path(model_path)
         self.model = None
@@ -216,11 +216,11 @@ class ONNXInferenceEngine(InferenceEngine):
     hardware accelerators. Typically 3-10x faster than sklearn.
     """
 
-    def __init__(self, model_path: str | Path, config: Optional[EngineConfig] = None):
+    def __init__(self, model_path: str | Path, config: EngineConfig | None = None):
         super().__init__(config or EngineConfig(engine_type=EngineType.ONNX))
         self.model_path = Path(model_path)
-        self.session: Optional[ort.InferenceSession] = None
-        self.input_name: Optional[str] = None
+        self.session: ort.InferenceSession | None = None
+        self.input_name: str | None = None
         self.output_names: list[str] = []
         self._load_model()
 
@@ -306,10 +306,7 @@ class ONNXInferenceEngine(InferenceEngine):
 
         # For IsolationForest, second output is typically the score
         # If only one output, use that
-        if len(outputs) > 1:
-            scores = outputs[1].flatten()
-        else:
-            scores = outputs[0].flatten()
+        scores = outputs[1].flatten() if len(outputs) > 1 else outputs[0].flatten()
 
         if self.config.collect_metrics:
             self.metrics = InferenceMetrics(
@@ -334,7 +331,7 @@ class ONNXInferenceEngine(InferenceEngine):
             "inter_op_threads": self.config.inter_op_num_threads,
         }
 
-    def get_profiling_data(self) -> Optional[str]:
+    def get_profiling_data(self) -> str | None:
         """Get profiling data if enabled"""
         if self.config.enable_profiling and self.session:
             return self.session.end_profiling()
@@ -344,7 +341,7 @@ class ONNXInferenceEngine(InferenceEngine):
 def create_inference_engine(
     model_path: str | Path,
     engine_type: EngineType = EngineType.SKLEARN,
-    config: Optional[EngineConfig] = None,
+    config: EngineConfig | None = None,
 ) -> InferenceEngine:
     """
     Factory function to create the appropriate inference engine.
@@ -386,7 +383,7 @@ def create_inference_engine(
 
 def create_pytorch_engine(
     model_path: str | Path,
-    config: Optional[EngineConfig] = None,
+    config: EngineConfig | None = None,
 ) -> InferenceEngine:
     """
     Create a PyTorch inference engine for Deep Learning models.
@@ -404,8 +401,8 @@ def create_pytorch_engine(
     """
     try:
         from device_anomaly.models.pytorch_inference import (
-            PyTorchInferenceEngine,
             PyTorchEngineConfig,
+            PyTorchInferenceEngine,
         )
     except ImportError as e:
         raise ImportError(
@@ -434,12 +431,12 @@ class FallbackInferenceEngine(InferenceEngine):
         self,
         onnx_path: str | Path,
         sklearn_path: str | Path,
-        config: Optional[EngineConfig] = None,
+        config: EngineConfig | None = None,
     ):
         super().__init__(config or EngineConfig())
         self.onnx_path = Path(onnx_path)
         self.sklearn_path = Path(sklearn_path)
-        self.active_engine: Optional[InferenceEngine] = None
+        self.active_engine: InferenceEngine | None = None
         self._initialize()
 
     def _initialize(self) -> None:

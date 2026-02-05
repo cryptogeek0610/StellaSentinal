@@ -22,6 +22,20 @@ Key components:
 - generator: InsightGenerator orchestrates all components
 """
 
+from device_anomaly.insights.app_power import (
+    AppBatteryCorrelation,
+    AppCrashReport,
+    AppPowerAnalyzer,
+    AppPowerReport,
+)
+from device_anomaly.insights.battery_shift import (
+    BatteryProjection,
+    BatteryShiftAnalyzer,
+    ChargingPatternReport,
+    DeviceShiftReadiness,
+    PeriodicDrainReport,
+    ShiftReadinessReport,
+)
 from device_anomaly.insights.categories import (
     CATEGORY_METADATA,
     EntityType,
@@ -38,7 +52,42 @@ from device_anomaly.insights.classifier import (
     ClassifierConfig,
     InsightClassifier,
 )
+from device_anomaly.insights.comparisons import (
+    CohortComparison,
+    ComparisonEngine,
+    ComparisonType,
+    FleetComparison,
+    HistoricalComparison,
+    LocationComparison,
+)
+from device_anomaly.insights.device_abuse import (
+    DeviceAbuseAnalyzer,
+    DropAnalysisReport,
+    ProblemCombinationReport,
+    RebootAnalysisReport,
+)
+from device_anomaly.insights.entities import (
+    CohortInsight,
+    EntityAggregator,
+    EntityMetrics,
+    LocationInsight,
+    UserInsight,
+)
+from device_anomaly.insights.generator import (
+    CustomerInsight,
+    DailyInsightDigest,
+    InsightGenerator,
+    LocationInsightReport,
+    TrendingInsight,
+)
 from device_anomaly.insights.location_mapper import LocationMapper
+from device_anomaly.insights.network_patterns import (
+    CellularPatternReport,
+    DisconnectPatternReport,
+    HiddenDeviceReport,
+    NetworkPatternAnalyzer,
+    WifiRoamingReport,
+)
 from device_anomaly.insights.templates import (
     INSIGHT_TEMPLATES,
     InsightTemplate,
@@ -48,55 +97,6 @@ from device_anomaly.insights.templates import (
     render_headline,
     render_impact,
     render_ticket_description,
-)
-from device_anomaly.insights.entities import (
-    CohortInsight,
-    EntityAggregator,
-    EntityMetrics,
-    LocationInsight,
-    UserInsight,
-)
-from device_anomaly.insights.comparisons import (
-    CohortComparison,
-    ComparisonEngine,
-    ComparisonType,
-    FleetComparison,
-    HistoricalComparison,
-    LocationComparison,
-)
-from device_anomaly.insights.battery_shift import (
-    BatteryProjection,
-    BatteryShiftAnalyzer,
-    ChargingPatternReport,
-    DeviceShiftReadiness,
-    PeriodicDrainReport,
-    ShiftReadinessReport,
-)
-from device_anomaly.insights.network_patterns import (
-    CellularPatternReport,
-    DisconnectPatternReport,
-    HiddenDeviceReport,
-    NetworkPatternAnalyzer,
-    WifiRoamingReport,
-)
-from device_anomaly.insights.device_abuse import (
-    DeviceAbuseAnalyzer,
-    DropAnalysisReport,
-    ProblemCombinationReport,
-    RebootAnalysisReport,
-)
-from device_anomaly.insights.app_power import (
-    AppBatteryCorrelation,
-    AppCrashReport,
-    AppPowerAnalyzer,
-    AppPowerReport,
-)
-from device_anomaly.insights.generator import (
-    CustomerInsight,
-    DailyInsightDigest,
-    InsightGenerator,
-    LocationInsightReport,
-    TrendingInsight,
 )
 
 __all__ = [

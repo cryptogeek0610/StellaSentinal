@@ -26,10 +26,11 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
-from typing import Any, Dict, Generator, List, Optional, Set, Union
+from collections.abc import Generator
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
 
 import pandas as pd
 
@@ -71,7 +72,7 @@ def compute_stable_event_id(
     event_time: datetime,
     metric_name: str,
     metric_value: Any,
-    dimensions: Dict[str, Any],
+    dimensions: dict[str, Any],
 ) -> str:
     """Compute a stable SHA256 event_id for idempotency.
 
@@ -87,7 +88,7 @@ def compute_stable_event_id(
     """
     # Ensure event_time has timezone
     if event_time.tzinfo is None:
-        event_time = event_time.replace(tzinfo=timezone.utc)
+        event_time = event_time.replace(tzinfo=UTC)
 
     # Build hash input with deterministic serialization
     hash_parts = [
@@ -105,7 +106,7 @@ def compute_stable_event_id(
     return hashlib.sha256(hash_input.encode("utf-8")).hexdigest()[:32]
 
 
-class MetricType(str, Enum):
+class MetricType(StrEnum):
     """Metric value types."""
     INT = "int"
     FLOAT = "float"
@@ -114,7 +115,7 @@ class MetricType(str, Enum):
     JSON = "json"
 
 
-class SourceDatabase(str, Enum):
+class SourceDatabase(StrEnum):
     """Source database identifiers."""
     XSIGHT = "xsight"
     MOBICONTROL = "mobicontrol"
@@ -142,14 +143,14 @@ class CanonicalEvent:
     metric_name: str
     metric_type: MetricType
     metric_value: Any
-    dimensions: Dict[str, Any] = field(default_factory=dict)
+    dimensions: dict[str, Any] = field(default_factory=dict)
     event_id: str = ""
 
     def __post_init__(self):
         """Generate event_id if not provided."""
         # Ensure event_time is timezone-aware first
         if self.event_time.tzinfo is None:
-            self.event_time = self.event_time.replace(tzinfo=timezone.utc)
+            self.event_time = self.event_time.replace(tzinfo=UTC)
 
         # Generate stable event_id if not provided
         if not self.event_id:
@@ -163,7 +164,7 @@ class CanonicalEvent:
                 dimensions=self.dimensions,
             )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "tenant_id": self.tenant_id,
@@ -178,7 +179,7 @@ class CanonicalEvent:
             "event_id": self.event_id,
         }
 
-    def to_feature_row(self) -> Dict[str, Any]:
+    def to_feature_row(self) -> dict[str, Any]:
         """Convert to feature row format for ML."""
         return {
             "device_id": self.device_id,
@@ -199,7 +200,7 @@ class CanonicalEvent:
 # ============================================================================
 
 # DeviceStatInt StatType codes -> human readable names
-MC_STAT_INT_TYPES: Dict[int, str] = {
+MC_STAT_INT_TYPES: dict[int, str] = {
     # Battery metrics
     1: "battery_level",
     2: "battery_temperature",
@@ -237,7 +238,7 @@ MC_STAT_INT_TYPES: Dict[int, str] = {
 }
 
 # DeviceStatString StatType codes -> human readable names
-MC_STAT_STRING_TYPES: Dict[int, str] = {
+MC_STAT_STRING_TYPES: dict[int, str] = {
     1: "current_ssid",
     2: "current_bssid",
     3: "cell_operator",
@@ -277,12 +278,12 @@ def _normalize_metric_name(name: str) -> str:
 
 
 def normalize_xsight_row(
-    row: Dict[str, Any],
+    row: dict[str, Any],
     source_table: str,
     tenant_id: str = "default",
     timestamp_col: str = "CollectedDate",
     device_id_col: str = "DeviceId",
-    exclude_cols: Optional[set] = None,
+    exclude_cols: set | None = None,
 ) -> Generator[CanonicalEvent, None, None]:
     """
     Convert a single XSight row to canonical events.
@@ -317,12 +318,12 @@ def normalize_xsight_row(
         try:
             timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
         except Exception:
-            timestamp = datetime.now(timezone.utc)
+            timestamp = datetime.now(UTC)
     elif not isinstance(timestamp, datetime):
-        timestamp = datetime.now(timezone.utc)
+        timestamp = datetime.now(UTC)
 
     if timestamp.tzinfo is None:
-        timestamp = timestamp.replace(tzinfo=timezone.utc)
+        timestamp = timestamp.replace(tzinfo=UTC)
 
     # Extract dimensions (lookup columns)
     dimensions = {}
@@ -360,7 +361,7 @@ def normalize_xsight_row(
 
 
 def normalize_mc_stat_int_row(
-    row: Dict[str, Any],
+    row: dict[str, Any],
     tenant_id: str = "default",
 ) -> CanonicalEvent:
     """
@@ -385,7 +386,7 @@ def normalize_mc_stat_int_row(
     if isinstance(timestamp, str):
         timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
     if timestamp.tzinfo is None:
-        timestamp = timestamp.replace(tzinfo=timezone.utc)
+        timestamp = timestamp.replace(tzinfo=UTC)
 
     return CanonicalEvent(
         tenant_id=tenant_id,
@@ -401,7 +402,7 @@ def normalize_mc_stat_int_row(
 
 
 def normalize_mc_stat_string_row(
-    row: Dict[str, Any],
+    row: dict[str, Any],
     tenant_id: str = "default",
 ) -> CanonicalEvent:
     """Convert a DeviceStatString row to canonical event."""
@@ -415,7 +416,7 @@ def normalize_mc_stat_string_row(
     if isinstance(timestamp, str):
         timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
     if timestamp.tzinfo is None:
-        timestamp = timestamp.replace(tzinfo=timezone.utc)
+        timestamp = timestamp.replace(tzinfo=UTC)
 
     return CanonicalEvent(
         tenant_id=tenant_id,
@@ -431,9 +432,9 @@ def normalize_mc_stat_string_row(
 
 
 def normalize_mc_location_row(
-    row: Dict[str, Any],
+    row: dict[str, Any],
     tenant_id: str = "default",
-) -> List[CanonicalEvent]:
+) -> list[CanonicalEvent]:
     """
     Convert a DeviceStatLocation row to canonical events.
 
@@ -445,7 +446,7 @@ def normalize_mc_location_row(
     if isinstance(timestamp, str):
         timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
     if timestamp.tzinfo is None:
-        timestamp = timestamp.replace(tzinfo=timezone.utc)
+        timestamp = timestamp.replace(tzinfo=UTC)
 
     events = []
     base_dims = {
@@ -480,9 +481,9 @@ def normalize_mc_location_row(
 
 
 def normalize_mc_net_traffic_row(
-    row: Dict[str, Any],
+    row: dict[str, Any],
     tenant_id: str = "default",
-) -> List[CanonicalEvent]:
+) -> list[CanonicalEvent]:
     """
     Convert a DeviceStatNetTraffic row to canonical events.
     """
@@ -492,7 +493,7 @@ def normalize_mc_net_traffic_row(
     if isinstance(timestamp, str):
         timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
     if timestamp.tzinfo is None:
-        timestamp = timestamp.replace(tzinfo=timezone.utc)
+        timestamp = timestamp.replace(tzinfo=UTC)
 
     dimensions = {
         "interface_type": row.get("InterfaceType"),
@@ -533,7 +534,7 @@ def normalize_mc_net_traffic_row(
 
 
 def normalize_mc_main_log_row(
-    row: Dict[str, Any],
+    row: dict[str, Any],
     tenant_id: str = "default",
 ) -> CanonicalEvent:
     """Convert a MainLog row to canonical event."""
@@ -543,7 +544,7 @@ def normalize_mc_main_log_row(
     if isinstance(timestamp, str):
         timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
     if timestamp.tzinfo is None:
-        timestamp = timestamp.replace(tzinfo=timezone.utc)
+        timestamp = timestamp.replace(tzinfo=UTC)
 
     return CanonicalEvent(
         tenant_id=tenant_id,
@@ -568,7 +569,7 @@ def normalize_mc_main_log_row(
 
 
 def normalize_mc_alert_row(
-    row: Dict[str, Any],
+    row: dict[str, Any],
     tenant_id: str = "default",
 ) -> CanonicalEvent:
     """Convert an Alert row to canonical event."""
@@ -577,7 +578,7 @@ def normalize_mc_alert_row(
     if isinstance(timestamp, str):
         timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
     if timestamp.tzinfo is None:
-        timestamp = timestamp.replace(tzinfo=timezone.utc)
+        timestamp = timestamp.replace(tzinfo=UTC)
 
     # Extract device ID from DevId string if present
     dev_id = row.get("DevId", "")
@@ -612,9 +613,9 @@ def dataframe_to_canonical_events(
     source_db: SourceDatabase,
     source_table: str,
     tenant_id: str = "default",
-    timestamp_col: Optional[str] = None,
+    timestamp_col: str | None = None,
     device_id_col: str = "DeviceId",
-) -> List[CanonicalEvent]:
+) -> list[CanonicalEvent]:
     """
     Convert a DataFrame to list of canonical events.
 
@@ -665,7 +666,7 @@ def dataframe_to_canonical_events(
     return events
 
 
-def canonical_events_to_dataframe(events: List[CanonicalEvent]) -> pd.DataFrame:
+def canonical_events_to_dataframe(events: list[CanonicalEvent]) -> pd.DataFrame:
     """
     Convert list of canonical events to a DataFrame.
 
@@ -685,7 +686,7 @@ def canonical_events_to_dataframe(events: List[CanonicalEvent]) -> pd.DataFrame:
 
 
 def pivot_events_to_features(
-    events: List[CanonicalEvent],
+    events: list[CanonicalEvent],
     time_bucket: str = "1h",
 ) -> pd.DataFrame:
     """
@@ -728,9 +729,9 @@ def pivot_events_to_features(
 
 
 def dedupe_events(
-    events: List[CanonicalEvent],
-    seen_ids: Optional[Set[str]] = None,
-) -> tuple[List[CanonicalEvent], Set[str]]:
+    events: list[CanonicalEvent],
+    seen_ids: set[str] | None = None,
+) -> tuple[list[CanonicalEvent], set[str]]:
     """
     Deduplicate events based on event_id.
 
@@ -786,9 +787,9 @@ def dedupe_events_df(df: pd.DataFrame, event_id_col: str = "event_id") -> pd.Dat
 
 
 def filter_seen_events(
-    events: List[CanonicalEvent],
-    seen_ids: Set[str],
-) -> List[CanonicalEvent]:
+    events: list[CanonicalEvent],
+    seen_ids: set[str],
+) -> list[CanonicalEvent]:
     """
     Filter out events that have already been seen.
 

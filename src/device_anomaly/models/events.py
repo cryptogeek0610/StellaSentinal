@@ -1,16 +1,10 @@
 from __future__ import annotations
 
 import json
-from typing import List
+
 import pandas as pd
 
-from device_anomaly.llm.explainer import (
-    ExplanationContext,
-    explain_anomaly_row,
-)
-from device_anomaly.config.feature_config import (
-    FeatureConfig
-)
+from device_anomaly.config.feature_config import FeatureConfig
 
 
 def group_anomalies_to_events(
@@ -39,8 +33,8 @@ def group_anomalies_to_events(
     # event_id is per-device cumulative count of "new_event"
     df["event_id"] = df.groupby("DeviceId")["new_event"].cumsum()
 
-    events: List[dict] = []
-    for (device_id, event_id), group in df.groupby(["DeviceId", "event_id"]):
+    events: list[dict] = []
+    for (device_id, _event_id), group in df.groupby(["DeviceId", "event_id"]):
         event_start = group["Timestamp"].min()
         event_end = group["Timestamp"].max()
         duration_minutes = max(
@@ -119,7 +113,7 @@ def select_top_anomalous_devices(
     top_n: int = 10,
     min_total_points: int = 50,
     min_anomalies: int = 3,
-) -> List[int]:
+) -> list[int]:
     """
     Rank devices by anomaly rate and return the top_n device IDs.
 

@@ -10,8 +10,8 @@ Provides endpoints for monitoring data quality between XSight and MobiControl:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
@@ -31,7 +31,7 @@ class DataFreshnessResponse(BaseModel):
     """Data freshness for a single source."""
 
     source_name: str
-    latest_timestamp: Optional[str] = None
+    latest_timestamp: str | None = None
     staleness_hours: float
     device_count: int
     record_count: int
@@ -41,7 +41,7 @@ class DataFreshnessResponse(BaseModel):
 class FreshnessResponse(BaseModel):
     """Response for data freshness endpoint."""
 
-    sources: Dict[str, DataFreshnessResponse]
+    sources: dict[str, DataFreshnessResponse]
     overall_status: str
     generated_at: str
 
@@ -72,8 +72,8 @@ class ReconciliationReportResponse(BaseModel):
     quality_grade: str = Field(description="A, B, C, D, or F")
 
     # Issues
-    issues: List[str]
-    recommendations: List[str]
+    issues: list[str]
+    recommendations: list[str]
 
 
 class MissingDeviceResponse(BaseModel):
@@ -82,9 +82,9 @@ class MissingDeviceResponse(BaseModel):
     device_id: int
     present_in: str
     missing_from: str
-    last_seen: Optional[str] = None
-    device_name: Optional[str] = None
-    device_model: Optional[str] = None
+    last_seen: str | None = None
+    device_name: str | None = None
+    device_model: str | None = None
 
 
 class MissingDevicesResponse(BaseModel):
@@ -92,7 +92,7 @@ class MissingDevicesResponse(BaseModel):
 
     source_checked: str
     missing_count: int
-    devices: List[MissingDeviceResponse]
+    devices: list[MissingDeviceResponse]
     generated_at: str
 
 
@@ -117,7 +117,7 @@ class QualitySummaryResponse(BaseModel):
 def get_mock_reconciliation_report() -> ReconciliationReportResponse:
     """Generate mock reconciliation report."""
     return ReconciliationReportResponse(
-        report_date=datetime.now(timezone.utc).isoformat(),
+        report_date=datetime.now(UTC).isoformat(),
         xsight_device_count=4523,
         mobicontrol_device_count=4678,
         matched_devices=4312,
@@ -147,7 +147,7 @@ def get_mock_freshness() -> FreshnessResponse:
         sources={
             "xsight": DataFreshnessResponse(
                 source_name="XSight DW",
-                latest_timestamp=datetime.now(timezone.utc).isoformat(),
+                latest_timestamp=datetime.now(UTC).isoformat(),
                 staleness_hours=2.3,
                 device_count=4523,
                 record_count=125678,
@@ -155,7 +155,7 @@ def get_mock_freshness() -> FreshnessResponse:
             ),
             "mobicontrol": DataFreshnessResponse(
                 source_name="MobiControl",
-                latest_timestamp=datetime.now(timezone.utc).isoformat(),
+                latest_timestamp=datetime.now(UTC).isoformat(),
                 staleness_hours=4.1,
                 device_count=4678,
                 record_count=4678,
@@ -163,7 +163,7 @@ def get_mock_freshness() -> FreshnessResponse:
             ),
         },
         overall_status="healthy",
-        generated_at=datetime.now(timezone.utc).isoformat(),
+        generated_at=datetime.now(UTC).isoformat(),
     )
 
 
@@ -174,7 +174,7 @@ def get_mock_missing_devices(source: str, limit: int) -> MissingDevicesResponse:
             device_id=12345,
             present_in="mobicontrol" if source == "xsight" else "xsight",
             missing_from=source,
-            last_seen=datetime.now(timezone.utc).isoformat(),
+            last_seen=datetime.now(UTC).isoformat(),
             device_name="TC52-WH-A101",
             device_model="TC52",
         ),
@@ -182,7 +182,7 @@ def get_mock_missing_devices(source: str, limit: int) -> MissingDevicesResponse:
             device_id=12346,
             present_in="mobicontrol" if source == "xsight" else "xsight",
             missing_from=source,
-            last_seen=datetime.now(timezone.utc).isoformat(),
+            last_seen=datetime.now(UTC).isoformat(),
             device_name="CT40-STORE-B23",
             device_model="CT40",
         ),
@@ -192,7 +192,7 @@ def get_mock_missing_devices(source: str, limit: int) -> MissingDevicesResponse:
         source_checked=source,
         missing_count=len(devices),
         devices=devices[:limit],
-        generated_at=datetime.now(timezone.utc).isoformat(),
+        generated_at=datetime.now(UTC).isoformat(),
     )
 
 
@@ -206,7 +206,7 @@ def get_mock_quality_summary() -> QualitySummaryResponse:
         mobicontrol_staleness_hours=4.1,
         issues_count=2,
         status="healthy",
-        generated_at=datetime.now(timezone.utc).isoformat(),
+        generated_at=datetime.now(UTC).isoformat(),
     )
 
 
@@ -235,7 +235,7 @@ async def get_reconciliation_report(
         report = service.generate_reconciliation_report()
 
         return ReconciliationReportResponse(
-            report_date=report.report_date.isoformat() if report.report_date else datetime.now(timezone.utc).isoformat(),
+            report_date=report.report_date.isoformat() if report.report_date else datetime.now(UTC).isoformat(),
             xsight_device_count=report.xsight_device_count,
             mobicontrol_device_count=report.mobicontrol_device_count,
             matched_devices=report.matched_devices,
@@ -301,7 +301,7 @@ async def get_data_freshness(
         return FreshnessResponse(
             sources=sources,
             overall_status=overall,
-            generated_at=datetime.now(timezone.utc).isoformat(),
+            generated_at=datetime.now(UTC).isoformat(),
         )
 
     except Exception as e:
@@ -349,7 +349,7 @@ async def get_missing_devices(
             source_checked=source,
             missing_count=len(devices),
             devices=devices,
-            generated_at=datetime.now(timezone.utc).isoformat(),
+            generated_at=datetime.now(UTC).isoformat(),
         )
 
     except Exception as e:
@@ -382,7 +382,7 @@ async def get_quality_summary(
             mobicontrol_staleness_hours=summary["mobicontrol_staleness_hours"],
             issues_count=summary["issues_count"],
             status=summary["status"],
-            generated_at=datetime.now(timezone.utc).isoformat(),
+            generated_at=datetime.now(UTC).isoformat(),
         )
 
     except Exception as e:
@@ -393,7 +393,7 @@ async def get_quality_summary(
 @router.get("/health")
 async def get_data_health(
     mock_mode: bool = Depends(get_mock_mode),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Get overall data health status.
 
@@ -416,5 +416,5 @@ async def get_data_health(
             "healthy": False,
             "status": "error",
             "error": str(e),
-            "checked_at": datetime.now(timezone.utc).isoformat(),
+            "checked_at": datetime.now(UTC).isoformat(),
         }

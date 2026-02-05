@@ -10,7 +10,6 @@ This module transforms GPS and WiFi location data into ML features including:
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 import numpy as np
 import pandas as pd

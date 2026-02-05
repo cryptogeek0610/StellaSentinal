@@ -1,7 +1,7 @@
 import logging
 
-from device_anomaly.config.logging_config import setup_logging
 from device_anomaly import __version__
+from device_anomaly.config.logging_config import setup_logging
 
 
 def main() -> None:

@@ -13,7 +13,7 @@ This module transforms raw telemetry data into rich ML features including:
 from __future__ import annotations
 
 import logging
-from typing import Any, List, Optional, Set
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -50,13 +50,13 @@ class DeviceFeatureBuilder:
     def __init__(
         self,
         window: int = 14,
-        rolling_windows: Optional[List[int]] = None,
-        hourly_windows: Optional[List[int]] = None,
+        rolling_windows: list[int] | None = None,
+        hourly_windows: list[int] | None = None,
         compute_derived: bool = True,
         compute_volatility: bool = True,
         compute_cohort: bool = True,
         min_periods: int = 3,
-        feature_norms: Optional[dict[str, float]] = None,
+        feature_norms: dict[str, float] | None = None,
     ):
         """
         Initialize the feature builder.
@@ -226,7 +226,7 @@ class DeviceFeatureBuilder:
 
         return df
 
-    def _add_hourly_rolling_stats(self, df: pd.DataFrame, numeric_cols: List[str]) -> pd.DataFrame:
+    def _add_hourly_rolling_stats(self, df: pd.DataFrame, numeric_cols: list[str]) -> pd.DataFrame:
         """
         Add hourly rolling statistics for fine-grained anomaly detection.
 
@@ -318,7 +318,7 @@ class DeviceFeatureBuilder:
 
         return df
 
-    def _get_numeric_feature_cols(self, df: pd.DataFrame) -> List[str]:
+    def _get_numeric_feature_cols(self, df: pd.DataFrame) -> list[str]:
         """Get list of numeric columns that should have rolling stats."""
         # Start with config features
         candidates = set(FeatureConfig.genericFeatures)
@@ -654,7 +654,7 @@ def get_feature_summary(df: pd.DataFrame) -> dict:
     return summary
 
 
-def resolve_feature_spec(metadata: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+def resolve_feature_spec(metadata: dict[str, Any] | None = None) -> dict[str, Any]:
     spec = dict(_DEFAULT_FEATURE_SPEC)
     payload = (metadata or {}).get("feature_spec") if metadata else None
     if isinstance(payload, dict):
@@ -671,7 +671,7 @@ def resolve_feature_spec(metadata: Optional[dict[str, Any]] = None) -> dict[str,
     return spec
 
 
-def resolve_feature_norms(metadata: Optional[dict[str, Any]] = None) -> dict[str, float]:
+def resolve_feature_norms(metadata: dict[str, Any] | None = None) -> dict[str, float]:
     norms = {}
     payload = (metadata or {}).get("feature_norms") if metadata else None
     if isinstance(payload, dict):
@@ -686,9 +686,9 @@ def resolve_feature_norms(metadata: Optional[dict[str, Any]] = None) -> dict[str
 
 
 def build_feature_builder(
-    feature_spec: Optional[dict[str, Any]] = None,
-    feature_norms: Optional[dict[str, float]] = None,
-    compute_cohort: Optional[bool] = None,
+    feature_spec: dict[str, Any] | None = None,
+    feature_norms: dict[str, float] | None = None,
+    compute_cohort: bool | None = None,
 ) -> DeviceFeatureBuilder:
     spec = resolve_feature_spec({"feature_spec": feature_spec} if feature_spec else None)
     return DeviceFeatureBuilder(
@@ -720,7 +720,7 @@ def compute_feature_norms(df: pd.DataFrame) -> dict[str, float]:
     return norms
 
 
-def load_feature_metadata(models_dir: Optional["Path"] = None) -> dict[str, Any]:
+def load_feature_metadata(models_dir: Path | None = None) -> dict[str, Any]:
     from device_anomaly.models.model_registry import load_latest_training_metadata
 
     metadata = load_latest_training_metadata(models_dir)
@@ -728,8 +728,8 @@ def load_feature_metadata(models_dir: Optional["Path"] = None) -> dict[str, Any]
 
 
 def build_feature_builder_from_metadata(
-    metadata: Optional[dict[str, Any]] = None,
-    compute_cohort: Optional[bool] = None,
+    metadata: dict[str, Any] | None = None,
+    compute_cohort: bool | None = None,
 ) -> DeviceFeatureBuilder:
     if not metadata:
         logger.warning("Feature metadata missing; falling back to default feature spec.")
@@ -963,7 +963,9 @@ def build_extended_features(
     # Step 6: Network traffic features (per-app usage, exfiltration detection)
     if include_network_traffic:
         try:
-            from device_anomaly.features.network_traffic_features import NetworkTrafficFeatureBuilder
+            from device_anomaly.features.network_traffic_features import (
+                NetworkTrafficFeatureBuilder,
+            )
             network_builder = NetworkTrafficFeatureBuilder()
             df_features = network_builder.transform(df_features)
             logger.info("Added network traffic features")
@@ -1079,7 +1081,6 @@ def get_extended_feature_summary(df: pd.DataFrame) -> dict:
 # FEATURE SELECTION FOR HIGH DIMENSIONALITY
 # =============================================================================
 
-from typing import Tuple
 
 
 def select_features_for_training(
@@ -1087,8 +1088,8 @@ def select_features_for_training(
     max_features: int = 200,
     variance_threshold: float = 0.01,
     correlation_threshold: float = 0.95,
-    exclude_columns: Optional[Set[str]] = None,
-) -> Tuple[pd.DataFrame, List[str]]:
+    exclude_columns: set[str] | None = None,
+) -> tuple[pd.DataFrame, list[str]]:
     """
     Select features for ML training to handle high dimensionality.
 
@@ -1175,7 +1176,7 @@ def select_features_for_training(
 
 def get_feature_importance_estimate(
     df: pd.DataFrame,
-    target_col: Optional[str] = None,
+    target_col: str | None = None,
     method: str = "variance",
 ) -> pd.Series:
     """

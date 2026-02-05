@@ -1,10 +1,8 @@
 """
 Pydantic models for Correlation Intelligence API endpoints.
 """
-from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
-
 
 # =============================================================================
 # Error Response Model
@@ -40,7 +38,7 @@ class CorrelationCell(BaseModel):
     metric_x: str
     metric_y: str
     correlation: float
-    p_value: Optional[float] = None
+    p_value: float | None = None
     sample_count: int
     method: str = "pearson"
     is_significant: bool = Field(False, description="Whether correlation is statistically significant (p < 0.05)")
@@ -49,16 +47,16 @@ class CorrelationCell(BaseModel):
 class CorrelationMatrixResponse(BaseModel):
     """Full correlation matrix response."""
 
-    metrics: List[str]
-    matrix: List[List[float]]
-    p_values: Optional[List[List[float]]] = Field(None, description="Matrix of p-values for each correlation")
-    strong_correlations: List[CorrelationCell]
+    metrics: list[str]
+    matrix: list[list[float]]
+    p_values: list[list[float]] | None = Field(None, description="Matrix of p-values for each correlation")
+    strong_correlations: list[CorrelationCell]
     method: str
     computed_at: str
     total_samples: int
-    domain_filter: Optional[str] = None
-    date_range: Optional[Dict[str, str]] = Field(None, description="Start and end dates used for computation")
-    filter_stats: Optional[FilterStats] = Field(None, description="Statistics about filtered metrics")
+    domain_filter: str | None = None
+    date_range: dict[str, str] | None = Field(None, description="Start and end dates used for computation")
+    filter_stats: FilterStats | None = Field(None, description="Statistics about filtered metrics")
 
 
 class ScatterDataPoint(BaseModel):
@@ -68,8 +66,8 @@ class ScatterDataPoint(BaseModel):
     x_value: float
     y_value: float
     is_anomaly: bool
-    cohort: Optional[str] = None
-    timestamp: Optional[str] = None
+    cohort: str | None = None
+    timestamp: str | None = None
 
 
 class ScatterPlotResponse(BaseModel):
@@ -77,11 +75,11 @@ class ScatterPlotResponse(BaseModel):
 
     metric_x: str
     metric_y: str
-    points: List[ScatterDataPoint]
+    points: list[ScatterDataPoint]
     correlation: float
-    regression_slope: Optional[float] = None
-    regression_intercept: Optional[float] = None
-    r_squared: Optional[float] = None
+    regression_slope: float | None = None
+    regression_intercept: float | None = None
+    r_squared: float | None = None
     total_points: int
     anomaly_count: int
 
@@ -103,14 +101,14 @@ class CausalEdge(BaseModel):
     target: str
     relationship: str
     strength: float
-    evidence: Optional[str] = None
+    evidence: str | None = None
 
 
 class CausalGraphResponse(BaseModel):
     """Causal relationship network."""
 
-    nodes: List[CausalNode]
-    edges: List[CausalEdge]
+    nodes: list[CausalNode]
+    edges: list[CausalEdge]
     generated_at: str
 
 
@@ -120,19 +118,19 @@ class CorrelationInsight(BaseModel):
     insight_id: str
     headline: str
     description: str
-    metrics_involved: List[str]
+    metrics_involved: list[str]
     correlation_value: float
     strength: str
     direction: str
     novelty_score: float
     confidence: float
-    recommendation: Optional[str] = None
+    recommendation: str | None = None
 
 
 class CorrelationInsightsResponse(BaseModel):
     """Auto-generated correlation insights."""
 
-    insights: List[CorrelationInsight]
+    insights: list[CorrelationInsight]
     total_correlations_analyzed: int
     generated_at: str
 
@@ -142,19 +140,19 @@ class CohortCorrelationPattern(BaseModel):
 
     cohort_id: str
     cohort_name: str
-    metric_pair: List[str]
+    metric_pair: list[str]
     cohort_correlation: float
     fleet_correlation: float
     deviation: float
     device_count: int
     is_anomalous: bool
-    insight: Optional[str] = None
+    insight: str | None = None
 
 
 class CohortCorrelationPatternsResponse(BaseModel):
     """Cohort-specific correlation patterns."""
 
-    patterns: List[CohortCorrelationPattern]
+    patterns: list[CohortCorrelationPattern]
     anomalous_cohorts: int
     generated_at: str
 
@@ -166,7 +164,7 @@ class TimeLagCorrelation(BaseModel):
     metric_b: str
     lag_days: int
     correlation: float
-    p_value: Optional[float] = None
+    p_value: float | None = None
     direction: str
     insight: str
 
@@ -174,7 +172,7 @@ class TimeLagCorrelation(BaseModel):
 class TimeLagCorrelationsResponse(BaseModel):
     """Time-lagged correlation analysis."""
 
-    correlations: List[TimeLagCorrelation]
+    correlations: list[TimeLagCorrelation]
     max_lag_analyzed: int
     generated_at: str
 
@@ -194,6 +192,6 @@ class ScatterAnomalyExplanation(BaseModel):
 
     explanation: str = Field(..., description="Full explanation text")
     what_happened: str = Field(..., description="Description of what occurred")
-    key_concerns: List[str] = Field(..., description="List of key concerns")
+    key_concerns: list[str] = Field(..., description="List of key concerns")
     likely_explanation: str = Field(..., description="Probable cause")
     suggested_action: str = Field(..., description="Recommended next step")

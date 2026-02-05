@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
 
 from device_anomaly.models.dl_base import DLDetectorConfig
 
@@ -26,7 +25,7 @@ class DLModelConfig:
     """
     model_type: str = "vae"
     latent_dim: int = 32
-    hidden_dims: List[int] = field(default_factory=lambda: [256, 128, 64])
+    hidden_dims: list[int] = field(default_factory=lambda: [256, 128, 64])
     dropout: float = 0.2
     use_batch_norm: bool = True
 
@@ -70,7 +69,7 @@ class DLInferenceConfig:
         warmup_iterations: Warmup iterations for benchmarking
     """
     device: str = "cpu"
-    batch_size: Optional[int] = None
+    batch_size: int | None = None
     use_onnx: bool = True
     warmup_iterations: int = 3
 
@@ -233,7 +232,7 @@ def create_default_autoencoder_config() -> DLConfig:
 
 
 # Preset configurations for common use cases
-DL_PRESETS: Dict[str, DLConfig] = {
+DL_PRESETS: dict[str, DLConfig] = {
     "vae_small": DLConfig(
         model=DLModelConfig(
             model_type="vae",

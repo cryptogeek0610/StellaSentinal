@@ -6,9 +6,8 @@ tenant isolation support.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Generic, List, Optional, Type, TypeVar
+from typing import Any, Generic, TypeVar
 
-from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from device_anomaly.db.models import Base
@@ -32,7 +31,7 @@ class BaseRepository(Generic[T]):
                 return self.session.query(self.model).filter_by(severity=severity).all()
     """
 
-    def __init__(self, session: Session, model: Type[T]):
+    def __init__(self, session: Session, model: type[T]):
         """Initialize the repository.
 
         Args:
@@ -42,7 +41,7 @@ class BaseRepository(Generic[T]):
         self.session = session
         self.model = model
 
-    def get(self, id: Any) -> Optional[T]:
+    def get(self, id: Any) -> T | None:
         """Get a single entity by primary key.
 
         Args:
@@ -53,7 +52,7 @@ class BaseRepository(Generic[T]):
         """
         return self.session.query(self.model).get(id)
 
-    def get_by_id(self, id: Any, tenant_id: Optional[str] = None) -> Optional[T]:
+    def get_by_id(self, id: Any, tenant_id: str | None = None) -> T | None:
         """Get a single entity by ID with optional tenant filtering.
 
         Args:
@@ -78,10 +77,10 @@ class BaseRepository(Generic[T]):
 
     def get_all(
         self,
-        tenant_id: Optional[str] = None,
-        limit: Optional[int] = None,
+        tenant_id: str | None = None,
+        limit: int | None = None,
         offset: int = 0,
-    ) -> List[T]:
+    ) -> list[T]:
         """Get all entities with optional pagination.
 
         Args:
@@ -116,7 +115,7 @@ class BaseRepository(Generic[T]):
         self.session.flush()  # Flush to get generated ID
         return entity
 
-    def create_many(self, entities: List[T]) -> List[T]:
+    def create_many(self, entities: list[T]) -> list[T]:
         """Create multiple entities.
 
         Args:
@@ -151,7 +150,7 @@ class BaseRepository(Generic[T]):
         self.session.delete(entity)
         self.session.flush()
 
-    def delete_by_id(self, id: Any, tenant_id: Optional[str] = None) -> bool:
+    def delete_by_id(self, id: Any, tenant_id: str | None = None) -> bool:
         """Delete an entity by ID.
 
         Args:
@@ -167,7 +166,7 @@ class BaseRepository(Generic[T]):
             return True
         return False
 
-    def count(self, tenant_id: Optional[str] = None) -> int:
+    def count(self, tenant_id: str | None = None) -> int:
         """Count all entities.
 
         Args:
@@ -183,7 +182,7 @@ class BaseRepository(Generic[T]):
 
         return query.count()
 
-    def exists(self, id: Any, tenant_id: Optional[str] = None) -> bool:
+    def exists(self, id: Any, tenant_id: str | None = None) -> bool:
         """Check if an entity exists.
 
         Args:
@@ -197,11 +196,11 @@ class BaseRepository(Generic[T]):
 
     def filter_by(
         self,
-        tenant_id: Optional[str] = None,
-        limit: Optional[int] = None,
+        tenant_id: str | None = None,
+        limit: int | None = None,
         offset: int = 0,
         **kwargs: Any,
-    ) -> List[T]:
+    ) -> list[T]:
         """Filter entities by column values.
 
         Args:

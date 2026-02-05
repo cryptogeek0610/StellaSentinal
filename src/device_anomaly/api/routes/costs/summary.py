@@ -3,7 +3,7 @@ Cost summary endpoints.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Query
@@ -48,7 +48,7 @@ def get_cost_summary(
         .filter(
             OperationalCost.tenant_id == tenant_id,
             OperationalCost.valid_to.is_(None),
-            OperationalCost.is_active == True,
+            OperationalCost.is_active,
         )
         .all()
     )
@@ -133,7 +133,7 @@ def get_cost_summary(
         by_device_model=by_device_model,
         cost_trend_30d=None,
         anomaly_cost_trend_30d=None,
-        calculated_at=datetime.now(timezone.utc),
+        calculated_at=datetime.now(UTC),
         device_count=device_count,
         anomaly_count_period=0,
     )

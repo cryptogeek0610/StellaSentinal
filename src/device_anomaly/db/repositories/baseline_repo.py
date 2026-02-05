@@ -6,8 +6,8 @@ supporting different scopes (tenant, site, device_group, device).
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
@@ -33,9 +33,9 @@ class BaselineRepository(BaseRepository[Baseline]):
     def get_active_baselines(
         self,
         tenant_id: str,
-        scope: Optional[str] = None,
-        metric_id: Optional[str] = None,
-    ) -> List[Baseline]:
+        scope: str | None = None,
+        metric_id: str | None = None,
+    ) -> list[Baseline]:
         """Get currently active baselines.
 
         Args:
@@ -65,8 +65,8 @@ class BaselineRepository(BaseRepository[Baseline]):
         tenant_id: str,
         device_id: str,
         metric_id: str,
-        as_of: Optional[datetime] = None,
-    ) -> Optional[Baseline]:
+        as_of: datetime | None = None,
+    ) -> Baseline | None:
         """Get the most specific applicable baseline for a device.
 
         Searches for baselines in order: device -> device_group -> site -> tenant.
@@ -82,7 +82,7 @@ class BaselineRepository(BaseRepository[Baseline]):
             Most specific applicable baseline, or None
         """
         if as_of is None:
-            as_of = datetime.now(timezone.utc)
+            as_of = datetime.now(UTC)
 
         # Try device-specific first
         baseline = (
@@ -124,7 +124,7 @@ class BaselineRepository(BaseRepository[Baseline]):
         tenant_id: str,
         metric_id: str,
         include_expired: bool = False,
-    ) -> List[Baseline]:
+    ) -> list[Baseline]:
         """Get all baselines for a metric.
 
         Args:
@@ -155,8 +155,8 @@ class BaselineRepository(BaseRepository[Baseline]):
         scope: str,
         scope_id: str,
         metric_id: str,
-        stats: Dict[str, Any],
-        window_config: Optional[Dict[str, Any]] = None,
+        stats: dict[str, Any],
+        window_config: dict[str, Any] | None = None,
         created_by: str = "system",
     ) -> Baseline:
         """Create a new baseline profile.
@@ -184,7 +184,7 @@ class BaselineRepository(BaseRepository[Baseline]):
             metric_id=metric_id,
             stats=json.dumps(stats),
             window_config=json.dumps(window_config) if window_config else None,
-            valid_from=datetime.now(timezone.utc),
+            valid_from=datetime.now(UTC),
             valid_to=None,
             created_by=created_by,
         )
@@ -194,7 +194,7 @@ class BaselineRepository(BaseRepository[Baseline]):
         self,
         baseline_id: str,
         tenant_id: str,
-    ) -> Optional[Baseline]:
+    ) -> Baseline | None:
         """Mark a baseline as expired.
 
         Sets valid_to to current time, making it no longer active.
@@ -208,7 +208,7 @@ class BaselineRepository(BaseRepository[Baseline]):
         """
         baseline = self.get_by_id(baseline_id, tenant_id)
         if baseline:
-            baseline.valid_to = datetime.now(timezone.utc)
+            baseline.valid_to = datetime.now(UTC)
             self.session.flush()
         return baseline
 
@@ -216,8 +216,8 @@ class BaselineRepository(BaseRepository[Baseline]):
         self,
         baseline_id: str,
         tenant_id: str,
-        stats: Dict[str, Any],
-    ) -> Optional[Baseline]:
+        stats: dict[str, Any],
+    ) -> Baseline | None:
         """Update baseline statistics.
 
         This creates a new version by expiring the current baseline
@@ -236,7 +236,7 @@ class BaselineRepository(BaseRepository[Baseline]):
             return None
 
         # Expire old baseline
-        old_baseline.valid_to = datetime.now(timezone.utc)
+        old_baseline.valid_to = datetime.now(UTC)
 
         # Create new baseline with same config but updated stats
         import uuid
@@ -254,7 +254,7 @@ class BaselineRepository(BaseRepository[Baseline]):
             created_by="system",
         )
 
-    def get_stats(self, baseline: Baseline) -> Dict[str, Any]:
+    def get_stats(self, baseline: Baseline) -> dict[str, Any]:
         """Parse and return baseline statistics.
 
         Args:
@@ -267,7 +267,7 @@ class BaselineRepository(BaseRepository[Baseline]):
             return json.loads(baseline.stats)
         return {}
 
-    def get_window_config(self, baseline: Baseline) -> Dict[str, Any]:
+    def get_window_config(self, baseline: Baseline) -> dict[str, Any]:
         """Parse and return baseline window configuration.
 
         Args:

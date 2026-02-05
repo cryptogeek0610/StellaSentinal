@@ -3,7 +3,7 @@ Anomaly financial impact calculation endpoints.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -73,7 +73,7 @@ def get_anomaly_impact(
             .filter(
                 OperationalCost.tenant_id == tenant_id,
                 OperationalCost.category.in_(["labor", "support"]),
-                OperationalCost.is_active == True,
+                OperationalCost.is_active,
                 OperationalCost.valid_to.is_(None),
             )
             .first()
@@ -170,5 +170,5 @@ def get_anomaly_impact(
         else "Estimate based on your configured cost data",
         impact_level=impact_level,
         using_defaults=using_defaults,
-        calculated_at=datetime.now(timezone.utc),
+        calculated_at=datetime.now(UTC),
     )

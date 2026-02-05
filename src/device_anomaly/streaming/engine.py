@@ -10,19 +10,21 @@ Uses Redis for message passing between components, enabling:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
-from typing import Any, Callable, Coroutine, Optional
+from enum import StrEnum
+from typing import Any
 
 import redis.asyncio as redis
 
 logger = logging.getLogger(__name__)
 
 
-class MessageType(str, Enum):
+class MessageType(StrEnum):
     """Types of messages in the streaming system."""
 
     TELEMETRY_RAW = "telemetry.raw"           # Raw telemetry from devices
@@ -75,9 +77,9 @@ class StreamMessage:
     message_type: MessageType
     payload: dict[str, Any]
     timestamp: datetime = field(default_factory=datetime.utcnow)
-    device_id: Optional[int] = None
-    tenant_id: Optional[str] = None
-    correlation_id: Optional[str] = None
+    device_id: int | None = None
+    tenant_id: str | None = None
+    correlation_id: str | None = None
 
     def to_json(self) -> str:
         """Serialize message to JSON."""
@@ -136,14 +138,14 @@ class StreamingEngine:
         ))
     """
 
-    def __init__(self, config: Optional[StreamConfig] = None):
+    def __init__(self, config: StreamConfig | None = None):
         self.config = config or StreamConfig.from_env()
-        self._redis: Optional[redis.Redis] = None
-        self._pubsub: Optional[redis.client.PubSub] = None
+        self._redis: redis.Redis | None = None
+        self._pubsub: redis.client.PubSub | None = None
         self._handlers: dict[MessageType, list[MessageHandler]] = {}
         self._running = False
-        self._listener_task: Optional[asyncio.Task] = None
-        self._semaphore: Optional[asyncio.Semaphore] = None
+        self._listener_task: asyncio.Task | None = None
+        self._semaphore: asyncio.Semaphore | None = None
 
     async def connect(self) -> None:
         """Connect to Redis and initialize pub/sub."""
@@ -168,10 +170,8 @@ class StreamingEngine:
 
         if self._listener_task:
             self._listener_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._listener_task
-            except asyncio.CancelledError:
-                pass
 
         if self._pubsub:
             await self._pubsub.close()
@@ -242,7 +242,7 @@ class StreamingEngine:
     async def unsubscribe(
         self,
         message_type: MessageType,
-        handler: Optional[MessageHandler] = None,
+        handler: MessageHandler | None = None,
     ) -> None:
         """
         Unsubscribe from a message type.
@@ -280,10 +280,8 @@ class StreamingEngine:
         self._running = False
         if self._listener_task:
             self._listener_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._listener_task
-            except asyncio.CancelledError:
-                pass
         logger.info("Stopped streaming engine listener")
 
     async def _listen_loop(self) -> None:
@@ -351,7 +349,7 @@ class StreamingEngine:
                     )
                     return
 
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     logger.warning(
                         "Handler timeout for %s (attempt %d/%d)",
                         message.message_type.value,
@@ -377,7 +375,7 @@ class StreamingEngine:
         self,
         device_id: int,
         telemetry: dict[str, Any],
-        tenant_id: Optional[str] = None,
+        tenant_id: str | None = None,
     ) -> int:
         """Publish raw telemetry data."""
         return await self.publish(StreamMessage(
@@ -392,7 +390,7 @@ class StreamingEngine:
         device_id: int,
         anomaly_score: float,
         details: dict[str, Any],
-        tenant_id: Optional[str] = None,
+        tenant_id: str | None = None,
     ) -> int:
         """Publish an anomaly detection."""
         return await self.publish(StreamMessage(
@@ -407,7 +405,7 @@ class StreamingEngine:
 
 
 # Singleton instance for convenience
-_engine: Optional[StreamingEngine] = None
+_engine: StreamingEngine | None = None
 
 
 async def get_streaming_engine() -> StreamingEngine:

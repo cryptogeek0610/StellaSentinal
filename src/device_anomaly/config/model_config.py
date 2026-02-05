@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from device_anomaly import __version__
 
-
 DEFAULT_MODEL_FAMILY = "iforest_v1"
 
 

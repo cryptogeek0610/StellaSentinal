@@ -9,7 +9,6 @@ This enables Carl's requirement: "Relate any anomalies to location"
 import logging
 import time
 from datetime import datetime
-from typing import Optional
 
 import pandas as pd
 from sqlalchemy import func, text
@@ -17,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from device_anomaly.data_access.db_connection import create_mc_engine
 from device_anomaly.database.connection import get_results_db_session
-from device_anomaly.database.schema import DeviceMetadata, LocationMetadata, LocationMappingType
+from device_anomaly.database.schema import DeviceMetadata, LocationMappingType, LocationMetadata
 
 logger = logging.getLogger(__name__)
 
@@ -540,7 +539,7 @@ def get_device_location(
     device_id: int,
     tenant_id: str,
     label_types: list[str] | None = None,
-) -> Optional[str]:
+) -> str | None:
     """
     Get the location name for a device by checking its labels.
 

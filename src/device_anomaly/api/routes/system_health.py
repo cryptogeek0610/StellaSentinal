@@ -2,8 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import List, Optional
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
@@ -43,9 +42,9 @@ class SystemHealthSummaryResponse(BaseModel):
     warning_count: int
     critical_count: int
     metrics: SystemHealthMetricsResponse
-    cohort_breakdown: List["CohortHealthResponse"] = []
-    recommendations: List[str] = []
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    cohort_breakdown: list[CohortHealthResponse] = []
+    recommendations: list[str] = []
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class CohortHealthResponse(BaseModel):
@@ -73,19 +72,19 @@ class StorageForecastDeviceResponse(BaseModel):
     device_name: str
     current_storage_pct: float
     storage_trend_gb_per_day: float
-    projected_full_date: Optional[datetime]
-    days_until_full: Optional[int]
+    projected_full_date: datetime | None
+    days_until_full: int | None
     confidence: float
 
 
 class StorageForecastResponse(BaseModel):
     """Storage exhaustion forecast summary."""
     tenant_id: str
-    devices_at_risk: List[StorageForecastDeviceResponse]
+    devices_at_risk: list[StorageForecastDeviceResponse]
     total_at_risk_count: int
-    avg_days_until_full: Optional[float]
-    recommendations: List[str]
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    avg_days_until_full: float | None
+    recommendations: list[str]
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 # ============================================================================
@@ -186,7 +185,7 @@ def get_mock_system_health_summary(period_days: int = 7) -> SystemHealthSummaryR
     )
 
 
-def get_mock_health_trends(metric: str, period_days: int, granularity: str) -> List[HealthTrendResponse]:
+def get_mock_health_trends(metric: str, period_days: int, granularity: str) -> list[HealthTrendResponse]:
     """Generate mock health trend data."""
     import random
     from datetime import timedelta
@@ -201,7 +200,7 @@ def get_mock_health_trends(metric: str, period_days: int, granularity: str) -> L
     }
 
     base = base_values.get(metric, 50.0)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     trends = []
 
     hours = period_days * 24 if granularity == "hourly" else period_days
@@ -227,7 +226,7 @@ def get_mock_storage_forecast() -> StorageForecastResponse:
     """Generate mock storage forecast data."""
     from datetime import timedelta
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     devices = [
         StorageForecastDeviceResponse(
             device_id=1042,
@@ -293,9 +292,9 @@ def get_system_health_summary(
 
     try:
         from device_anomaly.data_access.system_health_loader import (
-            load_system_health_metrics,
-            load_cohort_health_breakdown,
             calculate_fleet_health_score,
+            load_cohort_health_breakdown,
+            load_system_health_metrics,
         )
 
         # Load metrics
@@ -391,7 +390,7 @@ def get_system_health_summary(
         )
 
 
-@router.get("/trends", response_model=List[HealthTrendResponse])
+@router.get("/trends", response_model=list[HealthTrendResponse])
 def get_health_trends(
     metric: str = Query(..., description="Metric: cpu_usage, memory_usage, storage_available_pct, device_temperature, battery_temperature"),
     period_days: int = Query(7, ge=1, le=30, description="Period in days"),
@@ -504,7 +503,7 @@ def get_storage_forecast(
         )
 
 
-@router.get("/cohort-breakdown", response_model=List[CohortHealthResponse])
+@router.get("/cohort-breakdown", response_model=list[CohortHealthResponse])
 def get_cohort_breakdown(
     period_days: int = Query(7, ge=1, le=90, description="Analysis period in days"),
     mock_mode: bool = Depends(get_mock_mode),

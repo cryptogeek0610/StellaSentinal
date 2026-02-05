@@ -10,9 +10,9 @@ Enables detection of patterns like:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -33,10 +33,10 @@ class CohortIssue(BaseModel):
 
     cohort_id: str = Field(description="Unique cohort identifier")
     cohort_name: str = Field(description="Human-readable cohort name")
-    manufacturer: Optional[str] = None
-    model: Optional[str] = None
-    os_version: Optional[str] = None
-    firmware: Optional[str] = None
+    manufacturer: str | None = None
+    model: str | None = None
+    os_version: str | None = None
+    firmware: str | None = None
     device_count: int = Field(description="Number of devices in cohort")
     fleet_percentage: float = Field(description="Percentage of total fleet")
     issue_type: str = Field(description="Type of issue: model_issue, os_issue, firmware_issue, etc.")
@@ -59,7 +59,7 @@ class SystemicIssuesResponse(BaseModel):
     cohorts_with_issues: int
     critical_issues: int
     high_issues: int
-    issues: List[CohortIssue]
+    issues: list[CohortIssue]
     generated_at: str
 
 
@@ -68,15 +68,15 @@ class ModelReliability(BaseModel):
 
     model_id: str
     model_name: str
-    manufacturer: Optional[str] = None
+    manufacturer: str | None = None
     device_count: int
     fleet_percentage: float
     reliability_score: float = Field(description="Composite reliability score (higher = better)")
-    avg_crash_count: Optional[float] = None
-    avg_drop_count: Optional[float] = None
-    avg_reboot_count: Optional[float] = None
-    crash_z: Optional[float] = Field(None, description="Z-score vs fleet for crashes")
-    drop_z: Optional[float] = Field(None, description="Z-score vs fleet for drops")
+    avg_crash_count: float | None = None
+    avg_drop_count: float | None = None
+    avg_reboot_count: float | None = None
+    crash_z: float | None = Field(None, description="Z-score vs fleet for crashes")
+    drop_z: float | None = Field(None, description="Z-score vs fleet for drops")
     status: str = Field(description="Status: healthy, warning, critical")
 
 
@@ -85,7 +85,7 @@ class ModelReliabilityResponse(BaseModel):
 
     period_days: int
     total_models: int
-    models: List[ModelReliability]
+    models: list[ModelReliability]
     generated_at: str
 
 
@@ -96,11 +96,11 @@ class OsStability(BaseModel):
     os_version: str
     device_count: int
     fleet_percentage: float
-    avg_crash_count: Optional[float] = None
-    avg_anr_count: Optional[float] = None
-    avg_reboot_count: Optional[float] = None
-    crash_z: Optional[float] = None
-    issues: List[str] = Field(default_factory=list)
+    avg_crash_count: float | None = None
+    avg_anr_count: float | None = None
+    avg_reboot_count: float | None = None
+    crash_z: float | None = None
+    issues: list[str] = Field(default_factory=list)
     status: str = Field(description="Status: healthy, warning, critical")
 
 
@@ -108,7 +108,7 @@ class OsStabilityResponse(BaseModel):
     """Response for OS stability endpoint."""
 
     total_os_versions: int
-    os_versions: List[OsStability]
+    os_versions: list[OsStability]
     generated_at: str
 
 
@@ -116,24 +116,24 @@ class FirmwareImpact(BaseModel):
     """Impact analysis for a firmware version."""
 
     firmware_version: str
-    manufacturer: Optional[str] = None
-    model: Optional[str] = None
+    manufacturer: str | None = None
+    model: str | None = None
     device_count: int
     health_score: float = Field(description="Composite health score (higher = better)")
-    avg_battery_drain: Optional[float] = None
-    avg_crash_count: Optional[float] = None
-    avg_drop_count: Optional[float] = None
+    avg_battery_drain: float | None = None
+    avg_crash_count: float | None = None
+    avg_drop_count: float | None = None
     status: str = Field(description="Status: healthy, warning, critical")
 
 
 class FirmwareImpactResponse(BaseModel):
     """Response for firmware impact endpoint."""
 
-    manufacturer_filter: Optional[str] = None
-    model_filter: Optional[str] = None
+    manufacturer_filter: str | None = None
+    model_filter: str | None = None
     period_days: int
     total_firmware_versions: int
-    firmware_versions: List[FirmwareImpact]
+    firmware_versions: list[FirmwareImpact]
     generated_at: str
 
 
@@ -156,7 +156,7 @@ class CohortDetail(BaseModel):
     cohort_name: str
     device_count: int
     fleet_percentage: float
-    metrics: List[CohortComparisonMetric]
+    metrics: list[CohortComparisonMetric]
     issues_count: int
 
 
@@ -175,7 +175,7 @@ class CohortDetailResponse(BaseModel):
 def get_mock_systemic_issues(
     min_devices: int = 10,
     min_z: float = 2.0,
-    severity_filter: Optional[List[str]] = None,
+    severity_filter: list[str] | None = None,
 ) -> SystemicIssuesResponse:
     """Generate mock systemic issues for development."""
     issues = [
@@ -268,7 +268,7 @@ def get_mock_systemic_issues(
         critical_issues=1,
         high_issues=2,
         issues=issues,
-        generated_at=datetime.now(timezone.utc).isoformat(),
+        generated_at=datetime.now(UTC).isoformat(),
     )
 
 
@@ -340,7 +340,7 @@ def get_mock_model_reliability(
         period_days=period_days,
         total_models=len(models),
         models=models[:top_n],
-        generated_at=datetime.now(timezone.utc).isoformat(),
+        generated_at=datetime.now(UTC).isoformat(),
     )
 
 
@@ -400,13 +400,13 @@ def get_mock_os_stability() -> OsStabilityResponse:
     return OsStabilityResponse(
         total_os_versions=len(os_versions),
         os_versions=os_versions,
-        generated_at=datetime.now(timezone.utc).isoformat(),
+        generated_at=datetime.now(UTC).isoformat(),
     )
 
 
 def get_mock_firmware_impact(
-    manufacturer: Optional[str] = None,
-    model: Optional[str] = None,
+    manufacturer: str | None = None,
+    model: str | None = None,
     period_days: int = 90,
 ) -> FirmwareImpactResponse:
     """Generate mock firmware impact data."""
@@ -475,7 +475,7 @@ def get_mock_firmware_impact(
         period_days=period_days,
         total_firmware_versions=len(firmware_versions),
         firmware_versions=firmware_versions,
-        generated_at=datetime.now(timezone.utc).isoformat(),
+        generated_at=datetime.now(UTC).isoformat(),
     )
 
 
@@ -484,13 +484,14 @@ def get_mock_firmware_impact(
 # =============================================================================
 
 
-def _load_cross_device_data() -> Optional[Any]:
+def _load_cross_device_data() -> Any | None:
     """Load data for cross-device pattern analysis."""
     try:
-        from device_anomaly.data_access.unified_loader import load_unified_device_dataset
         from datetime import timedelta
 
-        end_date = datetime.now(timezone.utc).date()
+        from device_anomaly.data_access.unified_loader import load_unified_device_dataset
+
+        end_date = datetime.now(UTC).date()
         start_date = end_date - timedelta(days=30)
 
         df = load_unified_device_dataset(
@@ -529,8 +530,8 @@ def _get_cohort_detector():
 async def get_systemic_issues(
     min_devices: int = Query(10, description="Minimum devices in cohort to flag"),
     min_z: float = Query(2.0, description="Minimum Z-score for flagging"),
-    severity: Optional[List[str]] = Query(None, description="Filter by severity: critical, high, medium, low"),
-    issue_type: Optional[List[str]] = Query(None, description="Filter by issue type: model_issue, os_issue, etc."),
+    severity: list[str] | None = Query(None, description="Filter by severity: critical, high, medium, low"),
+    issue_type: list[str] | None = Query(None, description="Filter by issue type: model_issue, os_issue, etc."),
     mock_mode: bool = Depends(get_mock_mode),
 ) -> SystemicIssuesResponse:
     """
@@ -550,8 +551,6 @@ async def get_systemic_issues(
 
     # Real implementation
     try:
-        from device_anomaly.models.cohort_detector import CrossDevicePatternDetector
-        from device_anomaly.features.cohort_stats import build_cohort_name_from_id
 
         df = _load_cross_device_data()
         if df is None or df.empty:
@@ -609,11 +608,11 @@ async def get_systemic_issues(
         return SystemicIssuesResponse(
             total_devices_analyzed=len(df),
             total_cohorts_analyzed=len(set(df.get("cohort_id", []))) if "cohort_id" in df.columns else 0,
-            cohorts_with_issues=len(set(i.cohort_id for i in issues)),
+            cohorts_with_issues=len({i.cohort_id for i in issues}),
             critical_issues=len([i for i in issues if i.severity == "critical"]),
             high_issues=len([i for i in issues if i.severity == "high"]),
             issues=issues,
-            generated_at=datetime.now(timezone.utc).isoformat(),
+            generated_at=datetime.now(UTC).isoformat(),
         )
 
     except Exception as e:
@@ -679,7 +678,7 @@ async def get_model_reliability(
             period_days=period_days,
             total_models=len(models),
             models=models,
-            generated_at=datetime.now(timezone.utc).isoformat(),
+            generated_at=datetime.now(UTC).isoformat(),
         )
 
     except Exception as e:
@@ -732,7 +731,7 @@ async def get_os_stability(
         return OsStabilityResponse(
             total_os_versions=len(os_versions),
             os_versions=os_versions,
-            generated_at=datetime.now(timezone.utc).isoformat(),
+            generated_at=datetime.now(UTC).isoformat(),
         )
 
     except Exception as e:
@@ -742,8 +741,8 @@ async def get_os_stability(
 
 @router.get("/firmware-impact", response_model=FirmwareImpactResponse)
 async def get_firmware_impact(
-    manufacturer: Optional[str] = Query(None, description="Filter by manufacturer"),
-    model: Optional[str] = Query(None, description="Filter by model"),
+    manufacturer: str | None = Query(None, description="Filter by manufacturer"),
+    model: str | None = Query(None, description="Filter by model"),
     period_days: int = Query(90, description="Analysis period in days"),
     mock_mode: bool = Depends(get_mock_mode),
 ) -> FirmwareImpactResponse:
@@ -798,7 +797,7 @@ async def get_firmware_impact(
             period_days=period_days,
             total_firmware_versions=len(firmware_versions),
             firmware_versions=firmware_versions,
-            generated_at=datetime.now(timezone.utc).isoformat(),
+            generated_at=datetime.now(UTC).isoformat(),
         )
 
     except Exception as e:
@@ -857,7 +856,7 @@ async def get_cohort_detail(
                 metrics=metrics,
                 issues_count=1,
             ),
-            generated_at=datetime.now(timezone.utc).isoformat(),
+            generated_at=datetime.now(UTC).isoformat(),
         )
 
     # Real implementation would query the cohort from the database
@@ -867,7 +866,7 @@ async def get_cohort_detail(
 @router.get("/summary")
 async def get_cross_device_summary(
     mock_mode: bool = Depends(get_mock_mode),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Get high-level summary of cross-device pattern analysis.
 
@@ -883,7 +882,7 @@ async def get_cross_device_summary(
     )
 
     # Aggregate by type
-    by_type: Dict[str, int] = {}
+    by_type: dict[str, int] = {}
     for issue in issues_response.issues:
         by_type[issue.issue_type] = by_type.get(issue.issue_type, 0) + 1
 

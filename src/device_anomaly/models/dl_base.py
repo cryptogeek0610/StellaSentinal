@@ -9,9 +9,9 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -53,7 +53,7 @@ class DLDetectorConfig:
     """
     name: str = "dl_detector"
     latent_dim: int = 32
-    hidden_dims: List[int] = field(default_factory=lambda: [256, 128, 64])
+    hidden_dims: list[int] = field(default_factory=lambda: [256, 128, 64])
     dropout: float = 0.2
     learning_rate: float = 1e-3
     weight_decay: float = 1e-5
@@ -66,18 +66,18 @@ class DLDetectorConfig:
     random_state: int = 42
     reconstruction_loss: str = "mse"
     kl_weight: float = 1e-3
-    gradient_clip_val: Optional[float] = 1.0
+    gradient_clip_val: float | None = 1.0
     validation_split: float = 0.1
     scale_features: bool = True
 
     # Severity thresholds (reconstruction error based)
-    severity_thresholds: Dict[str, float] = field(default_factory=lambda: {
+    severity_thresholds: dict[str, float] = field(default_factory=lambda: {
         "critical": 3.0,  # >3 std above mean error
         "high": 2.0,
         "medium": 1.5,
         "low": 1.0,
     })
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -96,8 +96,8 @@ class DLTrainingMetrics:
         reconstruction_error_std: Std of reconstruction error
         reconstruction_error_percentiles: Percentile values for thresholding
     """
-    train_loss_history: List[float] = field(default_factory=list)
-    val_loss_history: List[float] = field(default_factory=list)
+    train_loss_history: list[float] = field(default_factory=list)
+    val_loss_history: list[float] = field(default_factory=list)
     best_epoch: int = 0
     best_val_loss: float = float('inf')
     final_train_loss: float = 0.0
@@ -105,7 +105,7 @@ class DLTrainingMetrics:
     early_stopped: bool = False
     reconstruction_error_mean: float = 0.0
     reconstruction_error_std: float = 0.0
-    reconstruction_error_percentiles: Dict[str, float] = field(default_factory=dict)
+    reconstruction_error_percentiles: dict[str, float] = field(default_factory=dict)
 
 
 class BaseDLDetector(ABC):
@@ -127,7 +127,7 @@ class BaseDLDetector(ABC):
                 return ((x - recon.numpy()) ** 2).mean(axis=1)
     """
 
-    def __init__(self, config: Optional[DLDetectorConfig] = None):
+    def __init__(self, config: DLDetectorConfig | None = None):
         """Initialize the DL detector with configuration.
 
         Args:
@@ -141,15 +141,15 @@ class BaseDLDetector(ABC):
 
         self.config = config or DLDetectorConfig()
         self._is_fitted = False
-        self._feature_cols: List[str] = []
-        self._fit_timestamp: Optional[datetime] = None
-        self._training_metrics: Optional[DLTrainingMetrics] = None
+        self._feature_cols: list[str] = []
+        self._fit_timestamp: datetime | None = None
+        self._training_metrics: DLTrainingMetrics | None = None
 
         # Model and preprocessing state
-        self.model: Optional[nn.Module] = None
+        self.model: nn.Module | None = None
         self.device: torch.device = self._select_device()
-        self.scaler: Optional[Any] = None  # StandardScaler
-        self.impute_values: Optional[pd.Series] = None
+        self.scaler: Any | None = None  # StandardScaler
+        self.impute_values: pd.Series | None = None
 
         # Anomaly detection thresholds (learned from training data)
         self._threshold: float = 0.0
@@ -178,7 +178,7 @@ class BaseDLDetector(ABC):
         return self._is_fitted
 
     @property
-    def feature_cols(self) -> List[str]:
+    def feature_cols(self) -> list[str]:
         """Get the feature columns used for detection."""
         return self._feature_cols
 
@@ -188,7 +188,7 @@ class BaseDLDetector(ABC):
         return self.config.name
 
     @property
-    def training_metrics(self) -> Optional[DLTrainingMetrics]:
+    def training_metrics(self) -> DLTrainingMetrics | None:
         """Get training metrics if available."""
         return self._training_metrics
 
@@ -236,7 +236,7 @@ class BaseDLDetector(ABC):
         """
         pass
 
-    def _select_feature_columns(self, df: pd.DataFrame) -> List[str]:
+    def _select_feature_columns(self, df: pd.DataFrame) -> list[str]:
         """Select numeric feature columns for training.
 
         Strategy mirrors AnomalyDetectorIsolationForest:
@@ -272,7 +272,7 @@ class BaseDLDetector(ABC):
     def _prepare_training_data(
         self,
         df: pd.DataFrame
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Prepare training data with train/validation split.
 
         Args:
@@ -281,8 +281,8 @@ class BaseDLDetector(ABC):
         Returns:
             Tuple of (train_array, val_array)
         """
-        from sklearn.preprocessing import StandardScaler
         from sklearn.model_selection import train_test_split
+        from sklearn.preprocessing import StandardScaler
 
         self._feature_cols = self._select_feature_columns(df)
 
@@ -366,8 +366,8 @@ class BaseDLDetector(ABC):
         Returns:
             DLTrainingMetrics with training statistics
         """
-        import time
         import logging
+        import time
 
         logger = logging.getLogger(__name__)
         start_time = time.time()
@@ -449,7 +449,7 @@ class BaseDLDetector(ABC):
         self._compute_threshold_statistics(train_data, metrics)
 
         self._is_fitted = True
-        self._fit_timestamp = datetime.now(timezone.utc)
+        self._fit_timestamp = datetime.now(UTC)
         self._training_metrics = metrics
 
         logger.info(
@@ -632,7 +632,7 @@ class BaseDLDetector(ABC):
         self,
         output_path: str | Path,
         export_onnx: bool = False
-    ) -> Dict[str, Path]:
+    ) -> dict[str, Path]:
         """Save trained model to disk.
 
         Args:
@@ -690,7 +690,7 @@ class BaseDLDetector(ABC):
         return saved_paths
 
     @classmethod
-    def load_model(cls, model_path: str | Path) -> "BaseDLDetector":
+    def load_model(cls, model_path: str | Path) -> BaseDLDetector:
         """Load a trained model from disk.
 
         Args:
@@ -742,7 +742,7 @@ class BaseDLDetector(ABC):
 
         return instance
 
-    def get_metadata(self) -> Dict[str, Any]:
+    def get_metadata(self) -> dict[str, Any]:
         """Get detector metadata for observability."""
         metadata = {
             "name": self.config.name,

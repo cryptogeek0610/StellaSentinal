@@ -17,11 +17,10 @@ Categories are organized by business domain:
 
 from __future__ import annotations
 
-from enum import Enum
-from typing import List, Optional
+from enum import StrEnum
 
 
-class InsightCategory(str, Enum):
+class InsightCategory(StrEnum):
     """Customer-facing insight categories.
 
     Each category maps to specific anomaly patterns and has associated
@@ -163,7 +162,7 @@ class InsightCategory(str, Enum):
     """Location has infrastructure problems (charging, network, etc.)."""
 
 
-class InsightSeverity(str, Enum):
+class InsightSeverity(StrEnum):
     """Severity level for insights."""
 
     CRITICAL = "critical"
@@ -182,7 +181,7 @@ class InsightSeverity(str, Enum):
     """Informational. No action required."""
 
 
-class EntityType(str, Enum):
+class EntityType(StrEnum):
     """Entity types for insight aggregation."""
 
     DEVICE = "device"
@@ -446,7 +445,7 @@ CATEGORY_METADATA = {
 }
 
 
-def get_categories_by_domain(domain: str) -> List[InsightCategory]:
+def get_categories_by_domain(domain: str) -> list[InsightCategory]:
     """Get all insight categories for a given domain."""
     return [
         cat for cat, meta in CATEGORY_METADATA.items()
@@ -460,7 +459,7 @@ def get_category_severity(category: InsightCategory) -> InsightSeverity:
     return meta.get("default_severity", InsightSeverity.MEDIUM)
 
 
-def get_category_metrics(category: InsightCategory) -> List[str]:
+def get_category_metrics(category: InsightCategory) -> list[str]:
     """Get the primary metrics for an insight category."""
     meta = CATEGORY_METADATA.get(category, {})
     return meta.get("primary_metrics", [])

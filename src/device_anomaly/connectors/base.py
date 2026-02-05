@@ -8,10 +8,9 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import pandas as pd
-
 
 # Canonical column names expected in all telemetry DataFrames
 CANONICAL_COLUMNS = [
@@ -31,16 +30,16 @@ class ConnectorConfig:
     enabled: bool = True
 
     # Connection settings (populated from environment/config)
-    host: Optional[str] = None
-    port: Optional[int] = None
-    database: Optional[str] = None
-    username: Optional[str] = None
-    password: Optional[str] = None
+    host: str | None = None
+    port: int | None = None
+    database: str | None = None
+    username: str | None = None
+    password: str | None = None
 
     # API settings (for REST connectors)
-    base_url: Optional[str] = None
-    client_id: Optional[str] = None
-    client_secret: Optional[str] = None
+    base_url: str | None = None
+    client_id: str | None = None
+    client_secret: str | None = None
 
     # Rate limiting and retry settings
     rate_limit_requests_per_second: float = 10.0
@@ -48,7 +47,7 @@ class ConnectorConfig:
     retry_backoff_seconds: float = 1.0
 
     # Additional connector-specific settings
-    extra: Dict[str, Any] = field(default_factory=dict)
+    extra: dict[str, Any] = field(default_factory=dict)
 
 
 class BaseConnector(ABC):
@@ -77,7 +76,7 @@ class BaseConnector(ABC):
         """
         self.config = config
         self._connected = False
-        self._last_error: Optional[str] = None
+        self._last_error: str | None = None
 
     @property
     def is_connected(self) -> bool:
@@ -117,10 +116,10 @@ class BaseConnector(ABC):
         self,
         start_date: datetime,
         end_date: datetime,
-        device_ids: Optional[List[str]] = None,
-        tenant_id: Optional[str] = None,
-        metrics: Optional[List[str]] = None,
-        limit: Optional[int] = None,
+        device_ids: list[str] | None = None,
+        tenant_id: str | None = None,
+        metrics: list[str] | None = None,
+        limit: int | None = None,
     ) -> pd.DataFrame:
         """Load telemetry data from the source.
 
@@ -144,8 +143,8 @@ class BaseConnector(ABC):
     @abstractmethod
     def list_devices(
         self,
-        tenant_id: Optional[str] = None,
-        limit: Optional[int] = None,
+        tenant_id: str | None = None,
+        limit: int | None = None,
     ) -> pd.DataFrame:
         """List available devices from the source.
 
@@ -159,7 +158,7 @@ class BaseConnector(ABC):
         pass
 
     @abstractmethod
-    def list_metrics(self) -> List[Dict[str, Any]]:
+    def list_metrics(self) -> list[dict[str, Any]]:
         """List available metrics from this source.
 
         Returns:
@@ -231,7 +230,7 @@ class BaseConnector(ABC):
 
         return df
 
-    def get_metadata(self) -> Dict[str, Any]:
+    def get_metadata(self) -> dict[str, Any]:
         """Return connector metadata for observability.
 
         Returns:

@@ -29,28 +29,21 @@ Usage:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone, timedelta
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
-from dataclasses import dataclass, asdict
+from typing import Any
 
 import numpy as np
 import pandas as pd
 
 from device_anomaly.models.ml_baseline_engine import (
-    MLBaselineEngine,
     MLBaselineConfig,
-    BayesianMetricStats,
-)
-from device_anomaly.models.baseline import (
-    compute_data_driven_baselines,
-    save_data_driven_baselines,
-    load_data_driven_baselines,
-    DataDrivenBaseline,
+    MLBaselineEngine,
 )
 from device_anomaly.services.correlation_service import (
-    CorrelationService,
     METRIC_DOMAINS,
+    CorrelationService,
 )
 
 logger = logging.getLogger(__name__)
@@ -71,7 +64,7 @@ class MLBaselineServiceConfig:
     enable_custom_telemetry: bool = True
 
     # ML engine settings
-    ensemble_weights: Dict[str, float] = None
+    ensemble_weights: dict[str, float] = None
     contamination: float = 0.05
     min_training_samples: int = 100
 
@@ -117,8 +110,8 @@ class MLBaselineService:
 
     def __init__(
         self,
-        config: Optional[MLBaselineServiceConfig] = None,
-        ml_config: Optional[MLBaselineConfig] = None,
+        config: MLBaselineServiceConfig | None = None,
+        ml_config: MLBaselineConfig | None = None,
     ):
         self.config = config or MLBaselineServiceConfig()
         self.ml_config = ml_config or MLBaselineConfig(
@@ -132,12 +125,12 @@ class MLBaselineService:
         self.correlation_service = CorrelationService()
 
         self._is_initialized = False
-        self._last_train_time: Optional[datetime] = None
-        self._last_drift_check: Optional[datetime] = None
+        self._last_train_time: datetime | None = None
+        self._last_drift_check: datetime | None = None
 
         # Performance tracking
-        self._training_history: List[Dict[str, Any]] = []
-        self._drift_history: List[Dict[str, Any]] = []
+        self._training_history: list[dict[str, Any]] = []
+        self._drift_history: list[dict[str, Any]] = []
 
     # =========================================================================
     # DATA LOADING
@@ -145,9 +138,9 @@ class MLBaselineService:
 
     async def load_training_data(
         self,
-        tenant_id: Optional[str] = None,
+        tenant_id: str | None = None,
         lookback_days: int = 90,
-        sources: Optional[List[str]] = None,
+        sources: list[str] | None = None,
     ) -> pd.DataFrame:
         """
         Load training data from all configured sources.
@@ -211,20 +204,20 @@ class MLBaselineService:
 
     async def _load_xsight_data(
         self,
-        tenant_id: Optional[str],
+        tenant_id: str | None,
         lookback_days: int,
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         """Load data from XSight data warehouse."""
         try:
             from device_anomaly.data_access.unified_loader import UnifiedTelemetryLoader
 
             loader = UnifiedTelemetryLoader()
-            cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+            cutoff = datetime.now(UTC) - timedelta(days=lookback_days)
 
             df = await loader.load_telemetry(
                 tenant_id=tenant_id,
                 start_date=cutoff,
-                end_date=datetime.now(timezone.utc),
+                end_date=datetime.now(UTC),
             )
 
             return df
@@ -238,15 +231,15 @@ class MLBaselineService:
 
     async def _load_mobicontrol_data(
         self,
-        tenant_id: Optional[str],
+        tenant_id: str | None,
         lookback_days: int,
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         """Load data from MobiControl database."""
         try:
             from device_anomaly.data_access.mc_timeseries_loader import MCTimeseriesLoader
 
             loader = MCTimeseriesLoader()
-            cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+            cutoff = datetime.now(UTC) - timedelta(days=lookback_days)
 
             df = await loader.load_timeseries(
                 tenant_id=tenant_id,
@@ -264,9 +257,9 @@ class MLBaselineService:
 
     async def _load_custom_telemetry(
         self,
-        tenant_id: Optional[str],
+        tenant_id: str | None,
         lookback_days: int,
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         """Load custom telemetry data."""
         # Placeholder for custom data sources
         return None
@@ -277,12 +270,12 @@ class MLBaselineService:
 
     async def train(
         self,
-        df: Optional[pd.DataFrame] = None,
-        tenant_id: Optional[str] = None,
+        df: pd.DataFrame | None = None,
+        tenant_id: str | None = None,
         lookback_days: int = 90,
-        feature_cols: Optional[List[str]] = None,
-        metric_cols: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
+        feature_cols: list[str] | None = None,
+        metric_cols: list[str] | None = None,
+    ) -> dict[str, Any]:
         """
         Train the ML baseline engine.
 
@@ -296,7 +289,7 @@ class MLBaselineService:
         Returns:
             Training results dictionary
         """
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
 
         # Load data if not provided
         if df is None or df.empty:
@@ -320,10 +313,10 @@ class MLBaselineService:
             self.engine.export_state(checkpoint_path)
 
             # Update tracking
-            self._last_train_time = datetime.now(timezone.utc)
+            self._last_train_time = datetime.now(UTC)
             self._is_initialized = True
 
-            duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+            duration = (datetime.now(UTC) - start_time).total_seconds()
 
             result = {
                 "success": True,
@@ -349,9 +342,9 @@ class MLBaselineService:
 
     async def train_from_all_sources(
         self,
-        tenant_id: Optional[str] = None,
+        tenant_id: str | None = None,
         lookback_days: int = 90,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Convenience method to train from all available data sources.
 
@@ -409,8 +402,8 @@ class MLBaselineService:
 
     def score_single_device(
         self,
-        device_data: Dict[str, float],
-    ) -> Dict[str, Any]:
+        device_data: dict[str, float],
+    ) -> dict[str, Any]:
         """
         Score a single device's metrics.
 
@@ -421,7 +414,7 @@ class MLBaselineService:
 
         result = {
             "device_id": device_data.get("DeviceId"),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "metrics": {},
             "overall_anomaly_score": 0.0,
             "is_anomaly": False,
@@ -464,7 +457,7 @@ class MLBaselineService:
 
         return result
 
-    def _classify_anomaly(self, metrics: Dict[str, Dict]) -> str:
+    def _classify_anomaly(self, metrics: dict[str, dict]) -> str:
         """Classify the type of anomaly based on affected metrics."""
         anomalous_metrics = [
             m for m, data in metrics.items()
@@ -501,7 +494,7 @@ class MLBaselineService:
         self,
         df: pd.DataFrame,
         timestamp_col: str = "Timestamp",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Update baselines with new streaming data.
 
@@ -522,10 +515,10 @@ class MLBaselineService:
 
     async def check_drift(
         self,
-        df: Optional[pd.DataFrame] = None,
-        tenant_id: Optional[str] = None,
+        df: pd.DataFrame | None = None,
+        tenant_id: str | None = None,
         lookback_days: int = 7,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Check for distribution drift in the data.
 
@@ -547,12 +540,12 @@ class MLBaselineService:
 
         # Track drift
         self._drift_history.append({
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "drift_rate": drift_report.get("drift_rate", 0),
             "metrics_drifted": drift_report.get("metrics_drifted", 0),
         })
 
-        self._last_drift_check = datetime.now(timezone.utc)
+        self._last_drift_check = datetime.now(UTC)
 
         # Auto-retrain if significant drift
         if (self.config.auto_retrain_on_drift and
@@ -567,7 +560,7 @@ class MLBaselineService:
     # INSIGHTS & CORRELATIONS
     # =========================================================================
 
-    def get_correlation_insights(self) -> List[Dict[str, Any]]:
+    def get_correlation_insights(self) -> list[dict[str, Any]]:
         """Get discovered causal relationships and correlation insights."""
         if not self._is_initialized:
             return []
@@ -578,7 +571,7 @@ class MLBaselineService:
         self,
         df: pd.DataFrame,
         z_threshold: float = 3.0,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get baseline adjustment suggestions based on recent anomalies.
 
@@ -640,7 +633,7 @@ class MLBaselineService:
     # PERSISTENCE
     # =========================================================================
 
-    def _get_checkpoint_path(self, tenant_id: Optional[str] = None) -> Path:
+    def _get_checkpoint_path(self, tenant_id: str | None = None) -> Path:
         """Get path for checkpoint file."""
         base_dir = Path(self.config.checkpoint_dir)
         if tenant_id:
@@ -649,7 +642,7 @@ class MLBaselineService:
 
     async def load_checkpoint(
         self,
-        tenant_id: Optional[str] = None,
+        tenant_id: str | None = None,
     ) -> bool:
         """Load engine state from checkpoint."""
         path = self._get_checkpoint_path(tenant_id)
@@ -670,7 +663,7 @@ class MLBaselineService:
 
     async def save_checkpoint(
         self,
-        tenant_id: Optional[str] = None,
+        tenant_id: str | None = None,
     ) -> bool:
         """Save engine state to checkpoint."""
         if not self._is_initialized:
@@ -690,7 +683,7 @@ class MLBaselineService:
     # STATUS & METRICS
     # =========================================================================
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Get current service status."""
         return {
             "initialized": self._is_initialized,
@@ -703,11 +696,11 @@ class MLBaselineService:
             "config": asdict(self.config),
         }
 
-    def get_training_history(self) -> List[Dict[str, Any]]:
+    def get_training_history(self) -> list[dict[str, Any]]:
         """Get training history."""
         return self._training_history
 
-    def get_drift_history(self) -> List[Dict[str, Any]]:
+    def get_drift_history(self) -> list[dict[str, Any]]:
         """Get drift detection history."""
         return self._drift_history
 
@@ -718,7 +711,7 @@ class MLBaselineService:
 
 
 async def create_ml_baseline_service(
-    tenant_id: Optional[str] = None,
+    tenant_id: str | None = None,
     auto_train: bool = True,
     lookback_days: int = 90,
 ) -> MLBaselineService:
@@ -747,7 +740,7 @@ async def create_ml_baseline_service(
 
 async def score_device_telemetry(
     df: pd.DataFrame,
-    tenant_id: Optional[str] = None,
+    tenant_id: str | None = None,
 ) -> pd.DataFrame:
     """
     Convenience function to score device telemetry.

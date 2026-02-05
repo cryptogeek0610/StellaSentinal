@@ -15,8 +15,7 @@ Data Sources:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Tuple
+from datetime import UTC, datetime
 
 import numpy as np
 import pandas as pd
@@ -25,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 # Security indicator weights for composite scoring
-SECURITY_INDICATORS: Dict[str, Tuple[float, bool]] = {
+SECURITY_INDICATORS: dict[str, tuple[float, bool]] = {
     # (weight, is_positive)
     # Positive indicators (having these is good)
     "HasPasscode": (1.0, True),
@@ -213,21 +212,21 @@ class SecurityFeatureBuilder:
             return df
 
         # Parse patch date and calculate age
-        reference_time = datetime.now(timezone.utc)
+        reference_time = datetime.now(UTC)
 
-        def parse_patch_date(val) -> Optional[datetime]:
+        def parse_patch_date(val) -> datetime | None:
             if pd.isna(val):
                 return None
             try:
                 # Try common formats
                 if isinstance(val, (datetime, pd.Timestamp)):
-                    return val.replace(tzinfo=timezone.utc) if val.tzinfo is None else val
+                    return val.replace(tzinfo=UTC) if val.tzinfo is None else val
                 val_str = str(val)
                 # Format: "2024-01-15" or "January 2024" or "2024-01"
                 for fmt in ["%Y-%m-%d", "%Y-%m", "%B %Y", "%Y%m%d"]:
                     try:
                         dt = datetime.strptime(val_str[:10], fmt)
-                        return dt.replace(tzinfo=timezone.utc)
+                        return dt.replace(tzinfo=UTC)
                     except ValueError:
                         continue
                 return None
@@ -334,7 +333,7 @@ def build_security_features(df: pd.DataFrame) -> pd.DataFrame:
     return builder.transform(df)
 
 
-def get_security_feature_names() -> List[str]:
+def get_security_feature_names() -> list[str]:
     """Get list of security feature names that this module generates."""
     return [
         # Composite score
@@ -359,7 +358,7 @@ def get_security_feature_names() -> List[str]:
     ]
 
 
-def compute_fleet_security_summary(df: pd.DataFrame) -> Dict:
+def compute_fleet_security_summary(df: pd.DataFrame) -> dict:
     """
     Compute fleet-wide security summary statistics.
 

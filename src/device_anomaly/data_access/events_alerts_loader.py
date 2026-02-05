@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pandas as pd
 from sqlalchemy import text
@@ -34,8 +34,8 @@ class EventEntry:
     severity: str
     event_class: str
     message: str
-    device_id: Optional[int] = None
-    login_id: Optional[str] = None
+    device_id: int | None = None
+    login_id: str | None = None
 
 
 @dataclass
@@ -45,21 +45,21 @@ class AlertEntry:
     alert_key: str
     alert_name: str
     severity: str
-    device_id: Optional[str] = None
+    device_id: str | None = None
     status: str = "Unknown"
-    set_datetime: Optional[datetime] = None
-    ack_datetime: Optional[datetime] = None
+    set_datetime: datetime | None = None
+    ack_datetime: datetime | None = None
 
 
 @dataclass
 class EventTimelineData:
     """Event timeline response data."""
-    events: List[EventEntry] = field(default_factory=list)
+    events: list[EventEntry] = field(default_factory=list)
     total: int = 0
     page: int = 1
     page_size: int = 50
-    severity_distribution: Dict[str, int] = field(default_factory=dict)
-    event_class_distribution: Dict[str, int] = field(default_factory=dict)
+    severity_distribution: dict[str, int] = field(default_factory=dict)
+    event_class_distribution: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -68,9 +68,9 @@ class AlertSummaryData:
     total_active: int = 0
     total_acknowledged: int = 0
     total_resolved: int = 0
-    by_severity: Dict[str, int] = field(default_factory=dict)
-    by_alert_name: List[Dict[str, Any]] = field(default_factory=list)
-    recent_alerts: List[AlertEntry] = field(default_factory=list)
+    by_severity: dict[str, int] = field(default_factory=dict)
+    by_alert_name: list[dict[str, Any]] = field(default_factory=list)
+    recent_alerts: list[AlertEntry] = field(default_factory=list)
     avg_acknowledge_time_minutes: float = 0.0
     avg_resolution_time_minutes: float = 0.0
 
@@ -109,14 +109,14 @@ def _parse_severity(severity_val: Any) -> str:
 
 
 def load_event_timeline(
-    device_id: Optional[int] = None,
-    severity: Optional[str] = None,
-    event_class: Optional[str] = None,
-    start_time: Optional[datetime] = None,
-    end_time: Optional[datetime] = None,
+    device_id: int | None = None,
+    severity: str | None = None,
+    event_class: str | None = None,
+    start_time: datetime | None = None,
+    end_time: datetime | None = None,
     page: int = 1,
     page_size: int = 50,
-    engine: Optional[Engine] = None,
+    engine: Engine | None = None,
 ) -> EventTimelineData:
     """
     Load paginated event timeline from MainLog.
@@ -143,13 +143,13 @@ def load_event_timeline(
 
     # Default time window
     if end_time is None:
-        end_time = datetime.now(timezone.utc)
+        end_time = datetime.now(UTC)
     if start_time is None:
         start_time = end_time - timedelta(days=7)
 
     # Build filters
     filters = ["DateTime >= :start_time", "DateTime <= :end_time"]
-    params: Dict[str, Any] = {
+    params: dict[str, Any] = {
         "start_time": start_time,
         "end_time": end_time,
     }
@@ -235,7 +235,7 @@ def load_event_timeline(
         elif hasattr(ts, 'to_pydatetime'):
             ts = ts.to_pydatetime()
         if ts.tzinfo is None:
-            ts = ts.replace(tzinfo=timezone.utc)
+            ts = ts.replace(tzinfo=UTC)
 
         events.append(EventEntry(
             log_id=int(row["ILogId"]),
@@ -270,10 +270,10 @@ def load_event_timeline(
 
 
 def load_alert_summary(
-    start_time: Optional[datetime] = None,
-    status_filter: Optional[str] = None,
-    severity_filter: Optional[str] = None,
-    engine: Optional[Engine] = None,
+    start_time: datetime | None = None,
+    status_filter: str | None = None,
+    severity_filter: str | None = None,
+    engine: Engine | None = None,
 ) -> AlertSummaryData:
     """
     Load alert summary statistics.
@@ -295,11 +295,11 @@ def load_alert_summary(
         return AlertSummaryData()
 
     if start_time is None:
-        start_time = datetime.now(timezone.utc) - timedelta(days=30)
+        start_time = datetime.now(UTC) - timedelta(days=30)
 
     # Build filters
     filters = ["SetDateTime >= :start_time"]
-    params: Dict[str, Any] = {"start_time": start_time}
+    params: dict[str, Any] = {"start_time": start_time}
 
     if status_filter:
         filters.append("Status = :status")
@@ -416,7 +416,7 @@ def load_alert_summary(
         elif hasattr(set_dt, 'to_pydatetime'):
             set_dt = set_dt.to_pydatetime()
         if set_dt and set_dt.tzinfo is None:
-            set_dt = set_dt.replace(tzinfo=timezone.utc)
+            set_dt = set_dt.replace(tzinfo=UTC)
 
         ack_dt = row["AckDateTime"]
         if isinstance(ack_dt, str):
@@ -424,7 +424,7 @@ def load_alert_summary(
         elif hasattr(ack_dt, 'to_pydatetime'):
             ack_dt = ack_dt.to_pydatetime()
         if ack_dt and ack_dt.tzinfo is None:
-            ack_dt = ack_dt.replace(tzinfo=timezone.utc)
+            ack_dt = ack_dt.replace(tzinfo=UTC)
 
         recent_alerts.append(AlertEntry(
             alert_id=int(row["AlertId"]),
@@ -451,8 +451,8 @@ def load_alert_summary(
 def load_alert_trends(
     period_days: int = 7,
     granularity: str = "hourly",
-    engine: Optional[Engine] = None,
-) -> List[AlertTrendPoint]:
+    engine: Engine | None = None,
+) -> list[AlertTrendPoint]:
     """
     Load alert count trends over time.
 
@@ -470,7 +470,7 @@ def load_alert_trends(
     if not table_exists(engine, "Alert"):
         return []
 
-    start_time = datetime.now(timezone.utc) - timedelta(days=period_days)
+    start_time = datetime.now(UTC) - timedelta(days=period_days)
 
     if granularity == "daily":
         time_group = "CAST(SetDateTime AS DATE)"
@@ -503,7 +503,7 @@ def load_alert_trends(
         elif hasattr(ts, 'to_pydatetime'):
             ts = ts.to_pydatetime()
         if ts.tzinfo is None:
-            ts = ts.replace(tzinfo=timezone.utc)
+            ts = ts.replace(tzinfo=UTC)
 
         trends.append(AlertTrendPoint(
             timestamp=ts,
@@ -518,8 +518,8 @@ def find_correlated_events(
     anomaly_timestamp: datetime,
     device_id: int,
     window_minutes: int = 60,
-    engine: Optional[Engine] = None,
-) -> List[CorrelatedEvent]:
+    engine: Engine | None = None,
+) -> list[CorrelatedEvent]:
     """
     Find events that occurred before an anomaly.
 
@@ -579,7 +579,7 @@ def find_correlated_events(
         elif hasattr(ts, 'to_pydatetime'):
             ts = ts.to_pydatetime()
         if ts.tzinfo is None:
-            ts = ts.replace(tzinfo=timezone.utc)
+            ts = ts.replace(tzinfo=UTC)
 
         time_before = (anomaly_timestamp - ts).total_seconds() / 60
 
@@ -608,8 +608,8 @@ def find_correlated_events(
 
 def get_event_statistics(
     period_days: int = 7,
-    engine: Optional[Engine] = None,
-) -> Dict[str, Any]:
+    engine: Engine | None = None,
+) -> dict[str, Any]:
     """
     Get overall event statistics.
 
@@ -627,7 +627,7 @@ def get_event_statistics(
             "top_event_classes": [],
         }
 
-    start_time = datetime.now(timezone.utc) - timedelta(days=period_days)
+    start_time = datetime.now(UTC) - timedelta(days=period_days)
 
     query = text("""
         SELECT

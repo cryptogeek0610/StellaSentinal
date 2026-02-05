@@ -12,7 +12,6 @@ import logging
 import re
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import List, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -24,9 +23,9 @@ class ValidationResult:
     is_valid: bool
     original_text: str
     sanitized_text: str
-    hallucinated_amounts: List[Decimal] = field(default_factory=list)
-    valid_amounts: List[Decimal] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
+    hallucinated_amounts: list[Decimal] = field(default_factory=list)
+    valid_amounts: list[Decimal] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
     replacements_made: int = 0
 
     def to_dict(self) -> dict:
@@ -76,7 +75,7 @@ class CostValidator:
         self.tolerance = tolerance
         self.replacement_text = replacement_text
 
-    def extract_amounts(self, text: str) -> List[Tuple[str, Decimal]]:
+    def extract_amounts(self, text: str) -> list[tuple[str, Decimal]]:
         """Extract all monetary amounts from text.
 
         Args:
@@ -104,7 +103,7 @@ class CostValidator:
     def is_amount_allowed(
         self,
         amount: Decimal,
-        allowed_amounts: List[Decimal],
+        allowed_amounts: list[Decimal],
     ) -> bool:
         """Check if an amount matches any allowed amount within tolerance.
 
@@ -128,7 +127,7 @@ class CostValidator:
     def validate(
         self,
         llm_output: str,
-        allowed_amounts: List[Decimal],
+        allowed_amounts: list[Decimal],
     ) -> ValidationResult:
         """Validate LLM output against allowed amounts.
 
@@ -170,7 +169,7 @@ class CostValidator:
     def sanitize(
         self,
         llm_output: str,
-        allowed_amounts: List[Decimal],
+        allowed_amounts: list[Decimal],
     ) -> ValidationResult:
         """Sanitize LLM output by replacing hallucinated amounts.
 
@@ -212,8 +211,8 @@ class CostValidator:
     def validate_and_log(
         self,
         llm_output: str,
-        allowed_amounts: List[Decimal],
-        context: Optional[str] = None,
+        allowed_amounts: list[Decimal],
+        context: str | None = None,
     ) -> ValidationResult:
         """Validate and log any issues found.
 
@@ -241,9 +240,9 @@ class CostValidator:
 
 def validate_financial_output(
     llm_output: str,
-    allowed_amounts: List[Decimal],
+    allowed_amounts: list[Decimal],
     auto_sanitize: bool = True,
-) -> Tuple[str, ValidationResult]:
+) -> tuple[str, ValidationResult]:
     """Convenience function to validate and optionally sanitize LLM output.
 
     Args:
@@ -264,7 +263,7 @@ def validate_financial_output(
         return llm_output, result
 
 
-def extract_all_amounts(text: str) -> List[Decimal]:
+def extract_all_amounts(text: str) -> list[Decimal]:
     """Extract all monetary amounts from text.
 
     Convenience function for simple amount extraction.
@@ -293,7 +292,7 @@ class StrictCostValidator(CostValidator):
     def validate(
         self,
         llm_output: str,
-        allowed_amounts: List[Decimal],
+        allowed_amounts: list[Decimal],
     ) -> ValidationResult:
         """Validate with zero tolerance.
 
@@ -319,7 +318,7 @@ class WarningCostValidator(CostValidator):
     def sanitize(
         self,
         llm_output: str,
-        allowed_amounts: List[Decimal],
+        allowed_amounts: list[Decimal],
     ) -> ValidationResult:
         """Validate but don't replace - just warn."""
         result = self.validate(llm_output, allowed_amounts)

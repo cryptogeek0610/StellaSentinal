@@ -11,9 +11,9 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -60,10 +60,10 @@ class AutoRetrainingOrchestrator:
     Maintains state about last retraining and baseline metrics.
     """
 
-    def __init__(self, config: Optional[RetrainingConfig] = None):
+    def __init__(self, config: RetrainingConfig | None = None):
         self.config = config or RetrainingConfig()
-        self.last_retrain_date: Optional[datetime] = None
-        self.baseline_anomaly_rate: Optional[float] = None
+        self.last_retrain_date: datetime | None = None
+        self.baseline_anomaly_rate: float | None = None
         self.baseline_feature_distributions: dict[str, dict] = {}
         self._pending_retrain: bool = False
 
@@ -71,7 +71,7 @@ class AutoRetrainingOrchestrator:
         self,
         drift_metrics: dict[str, Any],
         current_anomaly_rate: float,
-        current_date: Optional[datetime] = None,
+        current_date: datetime | None = None,
     ) -> RetrainingTrigger:
         """
         Evaluate if retraining is needed.
@@ -84,7 +84,7 @@ class AutoRetrainingOrchestrator:
         Returns:
             RetrainingTrigger with decision and reason
         """
-        current_date = current_date or datetime.now(timezone.utc)
+        current_date = current_date or datetime.now(UTC)
 
         # Check time-based triggers first
         time_trigger = self._check_time_triggers(current_date)
@@ -111,7 +111,7 @@ class AutoRetrainingOrchestrator:
             }
         )
 
-    def _days_since_retrain(self, current_date: datetime) -> Optional[int]:
+    def _days_since_retrain(self, current_date: datetime) -> int | None:
         """Calculate days since last retraining."""
         if self.last_retrain_date is None:
             return None
@@ -241,7 +241,7 @@ class AutoRetrainingOrchestrator:
         self,
         reason: str,
         priority: str = "normal",
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Initiate the retraining pipeline.
 
@@ -261,7 +261,7 @@ class AutoRetrainingOrchestrator:
             worker = MLWorker()
 
             # Calculate date range
-            end_date = datetime.now(timezone.utc)
+            end_date = datetime.now(UTC)
             start_date = end_date - timedelta(days=self.config.training_lookback_days)
 
             job_id = await worker.queue_training_job(
@@ -282,7 +282,7 @@ class AutoRetrainingOrchestrator:
     def on_training_complete(
         self,
         success: bool,
-        metrics: Optional[dict] = None,
+        metrics: dict | None = None,
     ) -> None:
         """
         Callback when training completes.
@@ -294,7 +294,7 @@ class AutoRetrainingOrchestrator:
         self._pending_retrain = False
 
         if success:
-            self.last_retrain_date = datetime.now(timezone.utc)
+            self.last_retrain_date = datetime.now(UTC)
             if metrics and "anomaly_rate" in metrics:
                 self.baseline_anomaly_rate = metrics["anomaly_rate"]
             logger.info(f"Retraining completed successfully at {self.last_retrain_date}")
@@ -316,8 +316,8 @@ class AutoRetrainingOrchestrator:
 
     def update_baseline(
         self,
-        anomaly_rate: Optional[float] = None,
-        feature_distributions: Optional[dict[str, dict]] = None,
+        anomaly_rate: float | None = None,
+        feature_distributions: dict[str, dict] | None = None,
     ) -> None:
         """
         Update baseline metrics.

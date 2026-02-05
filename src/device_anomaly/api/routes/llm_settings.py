@@ -1,18 +1,17 @@
 """LLM Settings API routes for configuring and managing LLM services."""
 from __future__ import annotations
 
-import os
-import logging
 import ipaddress
+import logging
+import os
 from urllib.parse import urlparse
-from typing import Optional
 
 import requests
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from device_anomaly.api.dependencies import require_role
-from device_anomaly.llm.client import get_llm_config_snapshot, _normalize_openai_base_url
+from device_anomaly.llm.client import _normalize_openai_base_url, get_llm_config_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -28,42 +27,42 @@ _llm_base_url_allowlist = [
 class LLMConfig(BaseModel):
     """Current LLM configuration."""
     base_url: str
-    model_name: Optional[str]
+    model_name: str | None
     api_key_set: bool
-    api_version: Optional[str]
+    api_version: str | None
     is_connected: bool
     available_models: list[str]
-    active_model: Optional[str]
+    active_model: str | None
     provider: str  # 'ollama', 'lmstudio', 'azure', 'openai', 'unknown'
 
 
 class LLMConfigUpdate(BaseModel):
     """Request to update LLM configuration."""
-    base_url: Optional[str] = None
-    model_name: Optional[str] = None
-    api_key: Optional[str] = None
+    base_url: str | None = None
+    model_name: str | None = None
+    api_key: str | None = None
 
 
 class LLMModel(BaseModel):
     """LLM model information."""
     id: str
     name: str
-    size: Optional[str] = None
-    modified_at: Optional[str] = None
+    size: str | None = None
+    modified_at: str | None = None
 
 
 class LLMModelsResponse(BaseModel):
     """Response with available models."""
     models: list[LLMModel]
-    active_model: Optional[str]
+    active_model: str | None
 
 
 class LLMTestResult(BaseModel):
     """Result of testing LLM connection."""
     success: bool
     message: str
-    response_time_ms: Optional[float] = None
-    model_used: Optional[str] = None
+    response_time_ms: float | None = None
+    model_used: str | None = None
 
 
 class OllamaPullRequest(BaseModel):
@@ -137,16 +136,16 @@ def _validate_llm_base_url(base_url: str) -> None:
             pass
 
 
-def _fetch_available_models(base_url: str) -> tuple[list[str], Optional[str]]:
+def _fetch_available_models(base_url: str) -> tuple[list[str], str | None]:
     """Fetch available models from the LLM service."""
     models = []
     active_model = None
-    
+
     if not base_url:
         return models, active_model
-    
+
     provider = _detect_provider(base_url)
-    
+
     try:
         if provider == "ollama":
             # Ollama uses /api/tags endpoint
@@ -167,10 +166,10 @@ def _fetch_available_models(base_url: str) -> tuple[list[str], Optional[str]]:
                     models.append(model.get("id", ""))
     except Exception as e:
         logger.warning("Failed to fetch models from %s: %s", base_url, e)
-    
+
     # Get active model from env
     active_model = os.getenv("LLM_MODEL_NAME")
-    
+
     return models, active_model
 
 
@@ -178,9 +177,9 @@ def _test_llm_connection(base_url: str) -> bool:
     """Test if LLM service is reachable."""
     if not base_url:
         return False
-    
+
     provider = _detect_provider(base_url)
-    
+
     try:
         if provider == "ollama":
             # Ollama health check
@@ -199,12 +198,12 @@ def _test_llm_connection(base_url: str) -> bool:
 async def get_llm_config():
     """Get current LLM configuration and status."""
     config_snapshot = get_llm_config_snapshot()
-    
+
     base_url = str(config_snapshot.get("resolved_base_url", ""))
     models, active_model = _fetch_available_models(base_url)
     is_connected = _test_llm_connection(base_url)
     provider = _detect_provider(base_url)
-    
+
     return LLMConfig(
         base_url=base_url,
         model_name=str(config_snapshot.get("resolved_model", "") or ""),
@@ -224,7 +223,7 @@ async def update_llm_config(
 ):
     """
     Update LLM configuration.
-    
+
     Note: This updates environment variables at runtime. For persistent changes,
     update the .env file or docker-compose environment.
     """
@@ -232,15 +231,15 @@ async def update_llm_config(
         _validate_llm_base_url(update.base_url)
         os.environ["LLM_BASE_URL"] = update.base_url
         logger.info("Updated LLM_BASE_URL to %s", update.base_url)
-    
+
     if update.model_name is not None:
         os.environ["LLM_MODEL_NAME"] = update.model_name
         logger.info("Updated LLM_MODEL_NAME to %s", update.model_name)
-    
+
     if update.api_key is not None:
         os.environ["LLM_API_KEY"] = update.api_key
         logger.info("Updated LLM_API_KEY (value hidden)")
-    
+
     # Return updated config
     return await get_llm_config()
 
@@ -252,7 +251,7 @@ async def list_models():
     provider = _detect_provider(base_url)
     models_list = []
     active_model = os.getenv("LLM_MODEL_NAME")
-    
+
     try:
         if provider == "ollama":
             # Ollama provides more detailed model info
@@ -266,7 +265,7 @@ async def list_models():
                     if size_bytes:
                         size_gb = size_bytes / (1024 ** 3)
                         size_str = f"{size_gb:.1f} GB"
-                    
+
                     models_list.append(LLMModel(
                         id=model.get("name", ""),
                         name=model.get("name", "").split(":")[0],
@@ -292,7 +291,7 @@ async def list_models():
     except Exception as e:
         logger.exception("Failed to list models")
         raise HTTPException(status_code=500, detail=str(e))
-    
+
     return LLMModelsResponse(
         models=models_list,
         active_model=active_model,
@@ -303,22 +302,22 @@ async def list_models():
 async def test_llm_connection():
     """Test the LLM connection with a simple prompt."""
     import time
-    
+
     base_url = os.getenv("LLM_BASE_URL", "http://ollama:11434")
     model_name = os.getenv("LLM_MODEL_NAME", "llama3.2")
     provider = _detect_provider(base_url)
-    
+
     # First check if service is reachable
     if not _test_llm_connection(base_url):
         return LLMTestResult(
             success=False,
             message=f"Cannot connect to LLM service at {base_url}. Is it running?",
         )
-    
+
     # Try a simple completion
     try:
         start_time = time.time()
-        
+
         if provider == "ollama":
             # Use Ollama's native API for testing
             generate_url = f"{base_url.rstrip('/')}/api/generate"
@@ -343,9 +342,9 @@ async def test_llm_connection():
                 },
                 timeout=30,
             )
-        
+
         elapsed_ms = (time.time() - start_time) * 1000
-        
+
         if resp.status_code == 200:
             return LLMTestResult(
                 success=True,
@@ -377,18 +376,18 @@ async def pull_ollama_model(
 ):
     """
     Pull/download a model in Ollama.
-    
+
     This initiates the download - for large models it may take several minutes.
     """
     base_url = os.getenv("LLM_BASE_URL", "http://ollama:11434")
     provider = _detect_provider(base_url)
-    
+
     if provider != "ollama":
         raise HTTPException(
             status_code=400,
             detail="Model pulling is only supported for Ollama. Current provider: " + provider
         )
-    
+
     try:
         pull_url = f"{base_url.rstrip('/')}/api/pull"
         # Note: This is a streaming endpoint in Ollama, but we just initiate it
@@ -397,7 +396,7 @@ async def pull_ollama_model(
             json={"name": request.model_name, "stream": False},
             timeout=300,  # 5 minutes for model download
         )
-        
+
         if resp.status_code == 200:
             return OllamaPullResponse(
                 success=True,

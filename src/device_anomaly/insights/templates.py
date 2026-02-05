@@ -16,9 +16,9 @@ Design principles:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from device_anomaly.insights.categories import InsightCategory, InsightSeverity
+from device_anomaly.insights.categories import InsightCategory
 
 
 @dataclass
@@ -31,21 +31,21 @@ class InsightTemplate:
     comparison: str
 
     # Optional fields (with defaults) - must come after required fields
-    headline_device: Optional[str] = None  # For single-device context
-    headline_location: Optional[str] = None  # For location-level aggregation
-    impact_short: Optional[str] = None  # Brief version for cards
-    comparison_fleet: Optional[str] = None  # Compare to entire fleet
-    comparison_location: Optional[str] = None  # Compare to other locations
-    comparison_historical: Optional[str] = None  # Compare to past
-    root_cause_hints: List[str] = field(default_factory=list)
-    actions: List[str] = field(default_factory=list)
-    ticket_description: Optional[str] = None  # For ServiceNow integration
+    headline_device: str | None = None  # For single-device context
+    headline_location: str | None = None  # For location-level aggregation
+    impact_short: str | None = None  # Brief version for cards
+    comparison_fleet: str | None = None  # Compare to entire fleet
+    comparison_location: str | None = None  # Compare to other locations
+    comparison_historical: str | None = None  # Compare to past
+    root_cause_hints: list[str] = field(default_factory=list)
+    actions: list[str] = field(default_factory=list)
+    ticket_description: str | None = None  # For ServiceNow integration
 
     # Financial impact templates (for cost-aware insights)
-    financial_impact_template: Optional[str] = None  # Template for financial summary
-    financial_breakdown_template: Optional[str] = None  # Template for cost breakdown
-    roi_template: Optional[str] = None  # Template for ROI messaging
-    cost_category: Optional[str] = None  # hardware, labor, downtime, opportunity
+    financial_impact_template: str | None = None  # Template for financial summary
+    financial_breakdown_template: str | None = None  # Template for cost breakdown
+    roi_template: str | None = None  # Template for ROI messaging
+    cost_category: str | None = None  # hardware, labor, downtime, opportunity
 
 
 # ============================================================================
@@ -616,7 +616,7 @@ LOCATION_BASELINE_DEVIATION_TEMPLATE = InsightTemplate(
 # TEMPLATE REGISTRY
 # ============================================================================
 
-INSIGHT_TEMPLATES: Dict[InsightCategory, InsightTemplate] = {
+INSIGHT_TEMPLATES: dict[InsightCategory, InsightTemplate] = {
     # Battery
     InsightCategory.BATTERY_SHIFT_FAILURE: BATTERY_SHIFT_FAILURE_TEMPLATE,
     InsightCategory.BATTERY_RAPID_DRAIN: BATTERY_RAPID_DRAIN_TEMPLATE,
@@ -653,12 +653,12 @@ INSIGHT_TEMPLATES: Dict[InsightCategory, InsightTemplate] = {
 }
 
 
-def get_template(category: InsightCategory) -> Optional[InsightTemplate]:
+def get_template(category: InsightCategory) -> InsightTemplate | None:
     """Get the template for an insight category."""
     return INSIGHT_TEMPLATES.get(category)
 
 
-def render_headline(category: InsightCategory, data: Dict[str, Any], context: str = "default") -> str:
+def render_headline(category: InsightCategory, data: dict[str, Any], context: str = "default") -> str:
     """Render the headline for an insight.
 
     Args:
@@ -685,7 +685,7 @@ def render_headline(category: InsightCategory, data: Dict[str, Any], context: st
         return f"Issue detected: {category.value} (missing data: {e})"
 
 
-def render_impact(category: InsightCategory, data: Dict[str, Any], short: bool = False) -> str:
+def render_impact(category: InsightCategory, data: dict[str, Any], short: bool = False) -> str:
     """Render the impact statement for an insight."""
     template = get_template(category)
     if not template:
@@ -701,7 +701,7 @@ def render_impact(category: InsightCategory, data: Dict[str, Any], short: bool =
 
 def render_comparison(
     category: InsightCategory,
-    data: Dict[str, Any],
+    data: dict[str, Any],
     comparison_type: str = "default"
 ) -> str:
     """Render the comparison context for an insight.
@@ -729,7 +729,7 @@ def render_comparison(
         return ""
 
 
-def render_actions(category: InsightCategory, data: Dict[str, Any]) -> List[str]:
+def render_actions(category: InsightCategory, data: dict[str, Any]) -> list[str]:
     """Render the recommended actions for an insight."""
     template = get_template(category)
     if not template:
@@ -745,7 +745,7 @@ def render_actions(category: InsightCategory, data: Dict[str, Any]) -> List[str]
     return actions
 
 
-def render_ticket_description(category: InsightCategory, data: Dict[str, Any]) -> Optional[str]:
+def render_ticket_description(category: InsightCategory, data: dict[str, Any]) -> str | None:
     """Render the ServiceNow ticket description for an insight."""
     template = get_template(category)
     if not template or not template.ticket_description:
@@ -759,10 +759,10 @@ def render_ticket_description(category: InsightCategory, data: Dict[str, Any]) -
 
 def render_financial_impact(
     category: InsightCategory,
-    data: Dict[str, Any],
+    data: dict[str, Any],
     include_breakdown: bool = True,
     include_roi: bool = False,
-) -> Optional[str]:
+) -> str | None:
     """Render the financial impact statement for an insight.
 
     Args:
@@ -803,7 +803,7 @@ def render_financial_impact(
     return " ".join(parts) if parts else None
 
 
-def get_cost_category(category: InsightCategory) -> Optional[str]:
+def get_cost_category(category: InsightCategory) -> str | None:
     """Get the cost category for an insight type.
 
     Returns the primary cost category (hardware, labor, downtime, opportunity)

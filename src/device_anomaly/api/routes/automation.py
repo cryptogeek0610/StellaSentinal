@@ -12,12 +12,12 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timedelta
-from enum import Enum
-from typing import Any, Dict, List, Optional
+from enum import Enum, StrEnum
+from typing import Any
 
+import redis
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
-import redis
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/automation", tags=["Automation"])
@@ -27,7 +27,7 @@ router = APIRouter(prefix="/automation", tags=["Automation"])
 # PYDANTIC MODELS
 # =============================================================================
 
-class ScheduleInterval(str, Enum):
+class ScheduleInterval(StrEnum):
     """Supported scheduling intervals."""
     HOURLY = "hourly"
     EVERY_6_HOURS = "every_6_hours"
@@ -67,46 +67,46 @@ class SchedulerConfigResponse(BaseModel):
     daily_digest_hour: int = Field(5, ge=0, le=23, description="Hour for daily digest (0-23)")
     shift_readiness_enabled: bool = True
     shift_readiness_lead_minutes: int = Field(60, ge=15, le=180, description="Minutes before shift to generate readiness report")
-    shift_schedules: List[str] = Field(default_factory=lambda: ["morning", "afternoon", "day"])
+    shift_schedules: list[str] = Field(default_factory=lambda: ["morning", "afternoon", "day"])
     location_baseline_enabled: bool = True
     location_baseline_day_of_week: int = Field(0, ge=0, le=6, description="Day of week for baseline computation (0=Mon)")
     location_baseline_hour: int = Field(3, ge=0, le=23, description="Hour for baseline computation (0-23)")
 
     # Timestamps
-    last_training_time: Optional[str] = None
-    last_scoring_time: Optional[str] = None
-    last_auto_retrain_time: Optional[str] = None
-    last_daily_digest_time: Optional[str] = None
-    last_shift_readiness_time: Optional[str] = None
-    last_location_baseline_time: Optional[str] = None
+    last_training_time: str | None = None
+    last_scoring_time: str | None = None
+    last_auto_retrain_time: str | None = None
+    last_daily_digest_time: str | None = None
+    last_shift_readiness_time: str | None = None
+    last_location_baseline_time: str | None = None
 
 
 class SchedulerConfigUpdate(BaseModel):
     """Scheduler configuration update request."""
-    training_enabled: Optional[bool] = None
-    training_interval: Optional[ScheduleInterval] = None
-    training_hour: Optional[int] = Field(None, ge=0, le=23)
-    training_day_of_week: Optional[int] = Field(None, ge=0, le=6)
-    training_lookback_days: Optional[int] = Field(None, ge=7, le=365)
-    training_validation_days: Optional[int] = Field(None, ge=1, le=30)
-    scoring_enabled: Optional[bool] = None
-    scoring_interval_minutes: Optional[int] = Field(None, ge=5, le=1440)
-    auto_retrain_enabled: Optional[bool] = None
-    auto_retrain_fp_threshold: Optional[float] = Field(None, ge=0.01, le=0.50)
-    auto_retrain_min_feedback: Optional[int] = Field(None, ge=10, le=1000)
-    auto_retrain_cooldown_hours: Optional[int] = Field(None, ge=1, le=168)
-    alerting_enabled: Optional[bool] = None
-    alert_on_high_anomaly_rate: Optional[bool] = None
-    high_anomaly_rate_threshold: Optional[float] = Field(None, ge=0.01, le=0.50)
+    training_enabled: bool | None = None
+    training_interval: ScheduleInterval | None = None
+    training_hour: int | None = Field(None, ge=0, le=23)
+    training_day_of_week: int | None = Field(None, ge=0, le=6)
+    training_lookback_days: int | None = Field(None, ge=7, le=365)
+    training_validation_days: int | None = Field(None, ge=1, le=30)
+    scoring_enabled: bool | None = None
+    scoring_interval_minutes: int | None = Field(None, ge=5, le=1440)
+    auto_retrain_enabled: bool | None = None
+    auto_retrain_fp_threshold: float | None = Field(None, ge=0.01, le=0.50)
+    auto_retrain_min_feedback: int | None = Field(None, ge=10, le=1000)
+    auto_retrain_cooldown_hours: int | None = Field(None, ge=1, le=168)
+    alerting_enabled: bool | None = None
+    alert_on_high_anomaly_rate: bool | None = None
+    high_anomaly_rate_threshold: float | None = Field(None, ge=0.01, le=0.50)
     # Insight generation settings
-    insights_enabled: Optional[bool] = None
-    daily_digest_hour: Optional[int] = Field(None, ge=0, le=23)
-    shift_readiness_enabled: Optional[bool] = None
-    shift_readiness_lead_minutes: Optional[int] = Field(None, ge=15, le=180)
-    shift_schedules: Optional[List[str]] = None
-    location_baseline_enabled: Optional[bool] = None
-    location_baseline_day_of_week: Optional[int] = Field(None, ge=0, le=6)
-    location_baseline_hour: Optional[int] = Field(None, ge=0, le=23)
+    insights_enabled: bool | None = None
+    daily_digest_hour: int | None = Field(None, ge=0, le=23)
+    shift_readiness_enabled: bool | None = None
+    shift_readiness_lead_minutes: int | None = Field(None, ge=15, le=180)
+    shift_schedules: list[str] | None = None
+    location_baseline_enabled: bool | None = None
+    location_baseline_day_of_week: int | None = Field(None, ge=0, le=6)
+    location_baseline_hour: int | None = Field(None, ge=0, le=23)
 
 
 class SchedulerStatusResponse(BaseModel):
@@ -115,17 +115,17 @@ class SchedulerStatusResponse(BaseModel):
     training_status: str = "idle"
     scoring_status: str = "idle"
     insights_status: str = "idle"
-    last_training_result: Optional[Dict[str, Any]] = None
-    last_scoring_result: Optional[Dict[str, Any]] = None
-    last_insight_result: Optional[Dict[str, Any]] = None
-    next_training_time: Optional[str] = None
-    next_scoring_time: Optional[str] = None
-    next_insight_time: Optional[str] = None
+    last_training_result: dict[str, Any] | None = None
+    last_scoring_result: dict[str, Any] | None = None
+    last_insight_result: dict[str, Any] | None = None
+    next_training_time: str | None = None
+    next_scoring_time: str | None = None
+    next_insight_time: str | None = None
     total_anomalies_detected: int = 0
     total_insights_generated: int = 0
     false_positive_rate: float = 0.0
     uptime_seconds: int = 0
-    errors: List[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
 
 
 class AlertResponse(BaseModel):
@@ -140,23 +140,23 @@ class ManualJobRequest(BaseModel):
     """Request to trigger a manual job."""
     job_type: str = Field(..., description="Job type: 'training', 'scoring', 'daily_digest', 'shift_readiness', 'location_baseline', or 'device_metadata_sync'")
     # Training-specific
-    start_date: Optional[str] = None
-    end_date: Optional[str] = None
-    validation_days: Optional[int] = 7
+    start_date: str | None = None
+    end_date: str | None = None
+    validation_days: int | None = 7
     # Shift readiness-specific
-    shift_name: Optional[str] = Field(None, description="Shift name for shift_readiness job: 'morning', 'afternoon', 'night', or 'day'")
+    shift_name: str | None = Field(None, description="Shift name for shift_readiness job: 'morning', 'afternoon', 'night', or 'day'")
 
 
 class ManualJobResponse(BaseModel):
     """Response from manual job trigger."""
     success: bool
-    job_id: Optional[str] = None
+    job_id: str | None = None
     message: str
 
 
 class ScoreRequest(BaseModel):
     """Request to score specific devices."""
-    device_ids: Optional[List[int]] = None
+    device_ids: list[int] | None = None
     start_date: str
     end_date: str
 
@@ -167,7 +167,7 @@ class ScoreResponse(BaseModel):
     total_scored: int = 0
     anomalies_detected: int = 0
     anomaly_rate: float = 0.0
-    results: Optional[List[Dict[str, Any]]] = None
+    results: list[dict[str, Any]] | None = None
 
 
 class JobHistoryEntry(BaseModel):
@@ -176,8 +176,8 @@ class JobHistoryEntry(BaseModel):
     timestamp: str
     triggered_by: str = "schedule"
     success: bool = True
-    error: Optional[str] = None
-    details: Optional[Dict[str, Any]] = None
+    error: str | None = None
+    details: dict[str, Any] | None = None
 
 
 # =============================================================================
@@ -197,7 +197,7 @@ def get_redis_client() -> redis.Redis:
     return redis.from_url(redis_url, decode_responses=True)
 
 
-def get_scheduler_config() -> Dict[str, Any]:
+def get_scheduler_config() -> dict[str, Any]:
     """Get current scheduler configuration from Redis."""
     try:
         client = get_redis_client()
@@ -209,7 +209,7 @@ def get_scheduler_config() -> Dict[str, Any]:
     return {}
 
 
-def save_scheduler_config(config: Dict[str, Any]) -> None:
+def save_scheduler_config(config: dict[str, Any]) -> None:
     """Save scheduler configuration to Redis."""
     try:
         client = get_redis_client()
@@ -219,7 +219,7 @@ def save_scheduler_config(config: Dict[str, Any]) -> None:
         raise HTTPException(status_code=500, detail="Failed to save configuration")
 
 
-def get_scheduler_status() -> Dict[str, Any]:
+def get_scheduler_status() -> dict[str, Any]:
     """Get current scheduler status from Redis with validation."""
     default_status = {
         "is_running": False,
@@ -319,7 +319,7 @@ async def get_status():
     return SchedulerStatusResponse(**status)
 
 
-@router.post("/start", response_model=Dict[str, Any])
+@router.post("/start", response_model=dict[str, Any])
 async def start_scheduler():
     """
     Start the automation scheduler.
@@ -335,7 +335,7 @@ async def start_scheduler():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/stop", response_model=Dict[str, Any])
+@router.post("/stop", response_model=dict[str, Any])
 async def stop_scheduler():
     """
     Stop the automation scheduler.
@@ -519,11 +519,11 @@ async def score_data(request: ScoreRequest):
     Results are returned directly and also persisted to the database.
     """
     from device_anomaly.data_access.unified_loader import load_unified_device_dataset
+    from device_anomaly.features.cohort_stats import apply_cohort_stats, load_latest_cohort_stats
     from device_anomaly.features.device_features import (
         build_feature_builder_from_metadata,
         load_feature_metadata,
     )
-    from device_anomaly.features.cohort_stats import apply_cohort_stats, load_latest_cohort_stats
     from device_anomaly.models.anomaly_detector import AnomalyDetector
 
     try:
@@ -590,7 +590,7 @@ class DeviceMetadataSyncResponse(BaseModel):
     synced_count: int = 0
     duration_seconds: float = 0.0
     message: str = ""
-    errors: List[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
 
 
 @router.post("/sync-device-metadata", response_model=DeviceMetadataSyncResponse)
@@ -637,10 +637,10 @@ async def sync_device_metadata_now():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/alerts", response_model=List[AlertResponse])
+@router.get("/alerts", response_model=list[AlertResponse])
 async def get_alerts(
     limit: int = Query(20, ge=1, le=100),
-    acknowledged: Optional[bool] = None,
+    acknowledged: bool | None = None,
 ):
     """
     Get recent alerts from the scheduler.
@@ -707,9 +707,9 @@ async def acknowledge_alert(alert_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/history", response_model=List[JobHistoryEntry])
+@router.get("/history", response_model=list[JobHistoryEntry])
 async def get_job_history(
-    job_type: Optional[str] = Query(None, description="Filter by job type"),
+    job_type: str | None = Query(None, description="Filter by job type"),
     limit: int = Query(20, ge=1, le=100),
 ):
     """
@@ -731,7 +731,7 @@ async def get_job_history(
             history_data = client.lrange("ml:training:history", 0, limit // 2)
             scoring_data = client.lrange("scheduler:scoring:history", 0, limit // 2)
 
-        history: List[JobHistoryEntry] = []
+        history: list[JobHistoryEntry] = []
 
         # Process training history (from ml_worker format)
         for data in history_data:
@@ -861,7 +861,6 @@ async def get_diagnostics():
 
     Use this endpoint to debug why scheduled training might not be running.
     """
-    from device_anomaly.workers.scheduler import ScheduleInterval
 
     try:
         client = get_redis_client()
@@ -1025,7 +1024,7 @@ def _sanitize_for_json(obj):
     return obj
 
 
-def _get_debug_hints(status: dict, config: dict, training_queue_length: int) -> List[str]:
+def _get_debug_hints(status: dict, config: dict, training_queue_length: int) -> list[str]:
     """Generate debug hints based on current state."""
     hints = []
 

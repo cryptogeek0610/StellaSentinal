@@ -15,7 +15,6 @@ Known StatType codes (MobiControl standard):
 from __future__ import annotations
 
 import logging
-from typing import Dict, Optional
 
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
@@ -24,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 # Known StatType mappings from MobiControl documentation
 # These are common across deployments but may vary
-KNOWN_STAT_TYPES: Dict[int, str] = {
+KNOWN_STAT_TYPES: dict[int, str] = {
     1: "battery_level",
     2: "total_storage",
     3: "available_storage",
@@ -43,7 +42,7 @@ KNOWN_STAT_TYPES: Dict[int, str] = {
 }
 
 # Cache for discovered stat types from database
-_discovered_stat_types: Dict[int, str] = {}
+_discovered_stat_types: dict[int, str] = {}
 
 
 def get_stat_type_name(stat_type: int) -> str:
@@ -69,7 +68,7 @@ def get_stat_type_name(stat_type: int) -> str:
     return f"stat_type_{stat_type}"
 
 
-def discover_stat_types(engine: Engine) -> Dict[int, str]:
+def discover_stat_types(engine: Engine) -> dict[int, str]:
     """
     Discover StatType mappings from MobiControl database.
 
@@ -171,7 +170,7 @@ def _normalize_stat_type_name(name: str) -> str:
     return name.strip("_")
 
 
-def get_all_stat_types() -> Dict[int, str]:
+def get_all_stat_types() -> dict[int, str]:
     """
     Get all known StatType mappings.
 

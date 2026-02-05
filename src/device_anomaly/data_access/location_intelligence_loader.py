@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -48,7 +48,7 @@ class HeatmapCell:
     signal_strength: float
     reading_count: int
     is_dead_zone: bool = False
-    access_point_id: Optional[str] = None
+    access_point_id: str | None = None
 
 
 @dataclass
@@ -63,8 +63,8 @@ class GeoBounds:
 @dataclass
 class WiFiHeatmapData:
     """Complete WiFi heatmap data."""
-    grid_cells: List[HeatmapCell] = field(default_factory=list)
-    bounds: Optional[GeoBounds] = None
+    grid_cells: list[HeatmapCell] = field(default_factory=list)
+    bounds: GeoBounds | None = None
     total_readings: int = 0
     avg_signal_strength: float = 0.0
     dead_zone_count: int = 0
@@ -79,8 +79,8 @@ class DeadZone:
     avg_signal: float
     affected_devices: int
     total_readings: int
-    first_detected: Optional[datetime] = None
-    last_detected: Optional[datetime] = None
+    first_detected: datetime | None = None
+    last_detected: datetime | None = None
 
 
 @dataclass
@@ -97,11 +97,11 @@ class MovementPoint:
 class DeviceMovementData:
     """Device movement summary."""
     device_id: int
-    movements: List[MovementPoint] = field(default_factory=list)
+    movements: list[MovementPoint] = field(default_factory=list)
     total_distance_km: float = 0.0
     avg_speed_kmh: float = 0.0
     stationary_time_pct: float = 0.0
-    active_hours: List[int] = field(default_factory=list)
+    active_hours: list[int] = field(default_factory=list)
 
 
 @dataclass
@@ -113,14 +113,14 @@ class DwellZone:
     avg_dwell_minutes: float
     device_count: int
     visit_count: int
-    peak_hours: List[int] = field(default_factory=list)
+    peak_hours: list[int] = field(default_factory=list)
 
 
 def load_wifi_heatmap(
     period_days: int = 7,
     grid_size: float = DEFAULT_GRID_SIZE,
     min_signal: int = -100,
-    engine: Optional[Engine] = None,
+    engine: Engine | None = None,
 ) -> WiFiHeatmapData:
     """
     Load WiFi location data and aggregate into a heatmap grid.
@@ -141,7 +141,7 @@ def load_wifi_heatmap(
         logger.warning("cs_WiFiLocation table not found in XSight DW")
         return WiFiHeatmapData()
 
-    start_time = datetime.now(timezone.utc) - timedelta(days=period_days)
+    start_time = datetime.now(UTC) - timedelta(days=period_days)
 
     # Query WiFi location data with signal strength
     query = text("""
@@ -224,8 +224,8 @@ def detect_dead_zones(
     period_days: int = 7,
     signal_threshold: int = -75,
     min_readings: int = 5,
-    engine: Optional[Engine] = None,
-) -> List[DeadZone]:
+    engine: Engine | None = None,
+) -> list[DeadZone]:
     """
     Identify areas with consistently poor WiFi signal.
 
@@ -244,7 +244,7 @@ def detect_dead_zones(
     if not table_exists(engine, "cs_WiFiLocation"):
         return []
 
-    start_time = datetime.now(timezone.utc) - timedelta(days=period_days)
+    start_time = datetime.now(UTC) - timedelta(days=period_days)
     grid_size = DEFAULT_GRID_SIZE * 2  # Larger grid for dead zones
 
     query = text("""
@@ -308,7 +308,7 @@ def detect_dead_zones(
 def load_device_movements(
     device_id: int,
     period_days: int = 7,
-    engine: Optional[Engine] = None,
+    engine: Engine | None = None,
 ) -> DeviceMovementData:
     """
     Load GPS movement history for a specific device.
@@ -327,7 +327,7 @@ def load_device_movements(
     if not table_exists(engine, "DeviceStatLocation"):
         return DeviceMovementData(device_id=device_id)
 
-    start_time = datetime.now(timezone.utc) - timedelta(days=period_days)
+    start_time = datetime.now(UTC) - timedelta(days=period_days)
 
     query = text("""
         SELECT
@@ -367,7 +367,7 @@ def load_device_movements(
             ts = ts.to_pydatetime()
 
         if ts.tzinfo is None:
-            ts = ts.replace(tzinfo=timezone.utc)
+            ts = ts.replace(tzinfo=UTC)
 
         movements.append(MovementPoint(
             timestamp=ts,
@@ -414,8 +414,8 @@ def load_device_movements(
 def load_dwell_time_analysis(
     period_days: int = 7,
     min_dwell_minutes: int = 5,
-    engine: Optional[Engine] = None,
-) -> List[DwellZone]:
+    engine: Engine | None = None,
+) -> list[DwellZone]:
     """
     Analyze where devices spend significant time.
 
@@ -433,7 +433,7 @@ def load_dwell_time_analysis(
     if not table_exists(engine, "DeviceStatLocation"):
         return []
 
-    start_time = datetime.now(timezone.utc) - timedelta(days=period_days)
+    start_time = datetime.now(UTC) - timedelta(days=period_days)
     grid_size = DEFAULT_GRID_SIZE * 2  # Larger grid for dwell zones
 
     # Query location data with time spent calculation
@@ -495,8 +495,8 @@ def load_dwell_time_analysis(
 
 def get_coverage_summary(
     period_days: int = 7,
-    engine: Optional[Engine] = None,
-) -> Dict[str, Any]:
+    engine: Engine | None = None,
+) -> dict[str, Any]:
     """
     Get summary statistics about WiFi coverage.
 
@@ -514,7 +514,7 @@ def get_coverage_summary(
             "coverage_distribution": {},
         }
 
-    start_time = datetime.now(timezone.utc) - timedelta(days=period_days)
+    start_time = datetime.now(UTC) - timedelta(days=period_days)
 
     query = text("""
         SELECT

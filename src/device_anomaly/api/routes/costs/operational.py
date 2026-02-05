@@ -4,9 +4,8 @@ Operational costs endpoints.
 from __future__ import annotations
 
 import math
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -28,7 +27,12 @@ from device_anomaly.api.models_cost import (
 )
 from device_anomaly.db.models_cost import OperationalCost
 
-from .utils import calculate_monthly_equivalent, cents_to_dollars, create_audit_log, dollars_to_cents
+from .utils import (
+    calculate_monthly_equivalent,
+    cents_to_dollars,
+    create_audit_log,
+    dollars_to_cents,
+)
 
 router = APIRouter()
 
@@ -37,9 +41,9 @@ router = APIRouter()
 def list_operational_costs(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
-    category: Optional[CostCategory] = Query(None),
-    is_active: Optional[bool] = Query(None),
-    search: Optional[str] = Query(None, max_length=255),
+    category: CostCategory | None = Query(None),
+    is_active: bool | None = Query(None),
+    search: str | None = Query(None, max_length=255),
     db: Session = Depends(get_backend_db),
 ):
     """
@@ -235,7 +239,7 @@ def update_operational_cost(
                 setattr(cost, field, value)
                 new_values[field] = value
 
-    cost.updated_at = datetime.now(timezone.utc)
+    cost.updated_at = datetime.now(UTC)
 
     # Create audit log
     create_audit_log(
@@ -304,7 +308,7 @@ def delete_operational_cost(
         raise HTTPException(status_code=404, detail="Operational cost entry not found")
 
     old_values = {"name": cost.name, "amount": float(cents_to_dollars(cost.amount))}
-    cost.valid_to = datetime.now(timezone.utc)
+    cost.valid_to = datetime.now(UTC)
     cost.is_active = False
 
     # Create audit log

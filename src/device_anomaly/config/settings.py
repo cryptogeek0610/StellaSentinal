@@ -1,7 +1,6 @@
 import json
 import os
 from pathlib import Path
-from typing import List, Optional
 from urllib.parse import quote_plus
 
 from pydantic import BaseModel, Field, model_validator
@@ -34,10 +33,10 @@ class TrainingDataSource(BaseModel):
     xsight_db: str  # XSight database name
     mc_db: str  # MobiControl database name
     # Optional overrides for host/credentials (defaults to main SQL Server)
-    host: Optional[str] = None
-    port: Optional[int] = None
-    user: Optional[str] = None
-    password: Optional[str] = None
+    host: str | None = None
+    port: int | None = None
+    user: str | None = None
+    password: str | None = None
 
 
 class DBSettings(BaseModel):
@@ -175,8 +174,8 @@ class AppSettings(BaseModel):
 
     # Table allowlists - if set, only these tables are ingested even when broader flags enabled
     # Comma-separated list of table names
-    xsight_table_allowlist: List[str] = Field(default_factory=list)
-    mc_table_allowlist: List[str] = Field(default_factory=list)
+    xsight_table_allowlist: list[str] = Field(default_factory=list)
+    mc_table_allowlist: list[str] = Field(default_factory=list)
 
     # Ingestion configuration
     ingest_lookback_hours: int = 24  # Default lookback for new tables
@@ -201,7 +200,7 @@ class AppSettings(BaseModel):
     api_port: int = 8000
 
     # Multi-source training configuration
-    training_data_sources: List[TrainingDataSource] = Field(default_factory=list)
+    training_data_sources: list[TrainingDataSource] = Field(default_factory=list)
 
     # Vector database (Qdrant)
     qdrant_host: str = "localhost"
@@ -217,18 +216,18 @@ class AppSettings(BaseModel):
 
     # MobiControl label types that represent physical locations
     # Devices with these labels will be mapped to location_metadata for location-based analysis
-    location_label_types: List[str] = Field(
+    location_label_types: list[str] = Field(
         default_factory=lambda: ["Store", "Warehouse", "Site", "Building", "Location", "Branch", "Facility"]
     )
 
     # MobiControl label types that represent user assignments
     # Devices with these labels will enable by-user analysis (drops, reboots)
-    user_assignment_label_types: List[str] = Field(
+    user_assignment_label_types: list[str] = Field(
         default_factory=lambda: ["Owner", "User", "AssignedUser", "Operator", "Employee", "Worker"]
     )
 
     # Reboot detection patterns for MainLog EventClass search
-    reboot_event_patterns: List[str] = Field(
+    reboot_event_patterns: list[str] = Field(
         default_factory=lambda: ["reboot", "restart", "boot", "power cycle", "device started"]
     )
 

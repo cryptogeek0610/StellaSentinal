@@ -25,11 +25,11 @@ import logging
 import re
 import time
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta
-from enum import Enum
+from datetime import datetime
+from enum import StrEnum
 from pathlib import Path
 from threading import Lock
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
-class SourceDatabase(str, Enum):
+class SourceDatabase(StrEnum):
     """Source database identifiers."""
     XSIGHT = "xsight"
     MOBICONTROL = "mobicontrol"
@@ -51,7 +51,7 @@ class ColumnInfo:
     """Column metadata from INFORMATION_SCHEMA."""
     name: str
     data_type: str
-    max_length: Optional[int] = None
+    max_length: int | None = None
     is_nullable: bool = True
     ordinal_position: int = 0
 
@@ -83,11 +83,11 @@ class TableInfo:
     schema_name: str = "dbo"
     table_type: str = "BASE TABLE"  # or "VIEW"
     row_count: int = 0
-    columns: List[ColumnInfo] = field(default_factory=list)
+    columns: list[ColumnInfo] = field(default_factory=list)
     has_device_id: bool = False
     has_timestamp: bool = False
-    timestamp_column: Optional[str] = None
-    device_id_column: Optional[str] = None
+    timestamp_column: str | None = None
+    device_id_column: str | None = None
     priority_score: float = 0.0
     is_high_value: bool = False
     source_db: SourceDatabase = SourceDatabase.XSIGHT
@@ -108,14 +108,14 @@ class TableInfo:
         """Check if table appears to be time-series data."""
         return self.has_device_id and self.has_timestamp
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         result = asdict(self)
         result["source_db"] = self.source_db.value
         return result
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "TableInfo":
+    def from_dict(cls, data: dict[str, Any]) -> TableInfo:
         """Create from dictionary."""
         if "source_db" in data and isinstance(data["source_db"], str):
             data["source_db"] = SourceDatabase(data["source_db"])
@@ -132,27 +132,27 @@ class DatabaseSchema:
     """Complete schema for a database."""
     database_name: str
     source_db: SourceDatabase
-    tables: Dict[str, TableInfo] = field(default_factory=dict)
-    views: Dict[str, TableInfo] = field(default_factory=dict)
+    tables: dict[str, TableInfo] = field(default_factory=dict)
+    views: dict[str, TableInfo] = field(default_factory=dict)
     discovered_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
     discovery_duration_ms: int = 0
 
     @property
-    def all_objects(self) -> Dict[str, TableInfo]:
+    def all_objects(self) -> dict[str, TableInfo]:
         """Get all tables and views."""
         return {**self.tables, **self.views}
 
     @property
-    def high_value_tables(self) -> List[TableInfo]:
+    def high_value_tables(self) -> list[TableInfo]:
         """Get tables marked as high value."""
         return [t for t in self.all_objects.values() if t.is_high_value]
 
     @property
-    def time_series_tables(self) -> List[TableInfo]:
+    def time_series_tables(self) -> list[TableInfo]:
         """Get tables that appear to be time-series."""
         return [t for t in self.all_objects.values() if t.is_time_series]
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "database_name": self.database_name,
@@ -251,8 +251,8 @@ class SchemaDiscoveryCache:
     This ensures cache is invalidated when schema changes (DDL operations).
     """
 
-    def __init__(self, ttl_seconds: int = 3600, cache_dir: Optional[Path] = None):
-        self._cache: Dict[str, Tuple[DatabaseSchema, float]] = {}
+    def __init__(self, ttl_seconds: int = 3600, cache_dir: Path | None = None):
+        self._cache: dict[str, tuple[DatabaseSchema, float]] = {}
         self._lock = Lock()
         self._ttl = ttl_seconds
         self._cache_dir = cache_dir or Path("data/schema_cache")
@@ -270,7 +270,7 @@ class SchemaDiscoveryCache:
         sig_hash = hashlib.sha256(schema_signature.encode()).hexdigest()[:12]
         return f"{normalized_host}_{database_name}_{sig_hash}"
 
-    def get(self, key: str) -> Optional[DatabaseSchema]:
+    def get(self, key: str) -> DatabaseSchema | None:
         """Get cached schema if not expired."""
         with self._lock:
             if key in self._cache:
@@ -312,7 +312,7 @@ class SchemaDiscoveryCache:
             except Exception as e:
                 logger.warning(f"Failed to persist schema cache to {cache_file}: {e}")
 
-    def invalidate(self, key: Optional[str] = None) -> None:
+    def invalidate(self, key: str | None = None) -> None:
         """Invalidate cached schema(s)."""
         with self._lock:
             if key:
@@ -326,7 +326,7 @@ class SchemaDiscoveryCache:
                 for f in self._cache_dir.glob("*.json"):
                     f.unlink()
 
-    def _deserialize_schema(self, data: Dict[str, Any]) -> DatabaseSchema:
+    def _deserialize_schema(self, data: dict[str, Any]) -> DatabaseSchema:
         """Deserialize schema from dictionary."""
         tables = {k: TableInfo.from_dict(v) for k, v in data.get("tables", {}).items()}
         views = {k: TableInfo.from_dict(v) for k, v in data.get("views", {}).items()}
@@ -376,7 +376,7 @@ def _get_schema_signature(engine: Engine) -> str:
         return datetime.utcnow().strftime("%Y%m%d%H")
 
 
-def _get_table_row_counts(engine: Engine, limit: int = 1000) -> Dict[str, int]:
+def _get_table_row_counts(engine: Engine, limit: int = 1000) -> dict[str, int]:
     """
     Get approximate row counts for all tables using sys.partitions.
     This is fast and doesn't require table scans.
@@ -406,7 +406,7 @@ def _get_table_row_counts(engine: Engine, limit: int = 1000) -> Dict[str, int]:
         return {}
 
 
-def _get_table_columns(engine: Engine, table_name: str, schema_name: str = "dbo") -> List[ColumnInfo]:
+def _get_table_columns(engine: Engine, table_name: str, schema_name: str = "dbo") -> list[ColumnInfo]:
     """Get column metadata for a specific table."""
     if not _validate_identifier(table_name) or not _validate_identifier(schema_name):
         logger.warning(f"Invalid identifier: {schema_name}.{table_name}")
@@ -447,9 +447,9 @@ def _get_table_columns(engine: Engine, table_name: str, schema_name: str = "dbo"
 
 
 def _identify_time_columns(
-    columns: List[ColumnInfo],
+    columns: list[ColumnInfo],
     source_db: SourceDatabase
-) -> Tuple[bool, Optional[str]]:
+) -> tuple[bool, str | None]:
     """Identify if table has timestamp column and which one."""
     known_ts_cols = TIMESTAMP_COLUMNS.get(source_db, [])
 
@@ -466,7 +466,7 @@ def _identify_time_columns(
     return False, None
 
 
-def _identify_device_columns(columns: List[ColumnInfo]) -> Tuple[bool, Optional[str]]:
+def _identify_device_columns(columns: list[ColumnInfo]) -> tuple[bool, str | None]:
     """Identify if table has device ID column and which one."""
     for col in columns:
         if col.name in DEVICE_ID_COLUMNS:
@@ -533,7 +533,7 @@ def discover_database_schema(
     engine: Engine,
     source_db: SourceDatabase,
     database_name: str,
-    host: Optional[str] = None,
+    host: str | None = None,
     include_columns: bool = True,
     use_cache: bool = True,
     force_refresh: bool = False,
@@ -584,8 +584,8 @@ def discover_database_schema(
         ORDER BY TABLE_TYPE, TABLE_NAME
     """)
 
-    tables: Dict[str, TableInfo] = {}
-    views: Dict[str, TableInfo] = {}
+    tables: dict[str, TableInfo] = {}
+    views: dict[str, TableInfo] = {}
 
     try:
         # Get row counts first (fast)
@@ -670,7 +670,7 @@ def discover_database_schema(
 
 
 def discover_xsight_schema(
-    engine: Optional[Engine] = None,
+    engine: Engine | None = None,
     use_cache: bool = True,
     force_refresh: bool = False,
 ) -> DatabaseSchema:
@@ -702,7 +702,7 @@ def discover_xsight_schema(
 
 
 def discover_mobicontrol_schema(
-    engine: Optional[Engine] = None,
+    engine: Engine | None = None,
     use_cache: bool = True,
     force_refresh: bool = False,
 ) -> DatabaseSchema:
@@ -737,8 +737,8 @@ def get_high_value_tables(
     source_db: SourceDatabase,
     min_rows: int = 1000,
     require_time_series: bool = False,
-    engine: Optional[Engine] = None,
-) -> List[TableInfo]:
+    engine: Engine | None = None,
+) -> list[TableInfo]:
     """
     Get list of high-value tables for a database.
 
@@ -776,7 +776,7 @@ def get_curated_table_list(
     include_discovered: bool = True,
     min_rows: int = 10000,
     apply_allowlist: bool = True,
-) -> List[str]:
+) -> list[str]:
     """
     Get curated list of table names for ingestion.
 
@@ -805,7 +805,7 @@ def get_curated_table_list(
             logger.info(f"Using MobiControl allowlist: {settings.mc_table_allowlist}")
             return sorted(settings.mc_table_allowlist)
 
-    tables: Set[str] = set()
+    tables: set[str] = set()
 
     # Add explicit tables
     if include_explicit:
@@ -827,7 +827,7 @@ def get_curated_table_list(
     return sorted(tables)
 
 
-def invalidate_schema_cache(source_db: Optional[SourceDatabase] = None) -> None:
+def invalidate_schema_cache(source_db: SourceDatabase | None = None) -> None:
     """Invalidate cached schemas."""
     if source_db:
         from device_anomaly.config.settings import get_settings
@@ -845,7 +845,7 @@ def discover_training_tables(
     require_time_series: bool = True,
     include_xsight: bool = True,
     include_mc: bool = True,
-) -> Dict[str, List[TableInfo]]:
+) -> dict[str, list[TableInfo]]:
     """
     Discover all tables suitable for ML training.
 
@@ -873,7 +873,7 @@ def discover_training_tables(
         print(f"XSight tables: {[t.name for t in tables['xsight']]}")
         print(f"MC tables: {[t.name for t in tables['mobicontrol']]}")
     """
-    result: Dict[str, List[TableInfo]] = {
+    result: dict[str, list[TableInfo]] = {
         "xsight": [],
         "mobicontrol": [],
     }
@@ -929,7 +929,7 @@ def discover_training_tables(
     return result
 
 
-def get_training_table_summary(tables: Dict[str, List[TableInfo]]) -> Dict[str, Any]:
+def get_training_table_summary(tables: dict[str, list[TableInfo]]) -> dict[str, Any]:
     """
     Get a summary of discovered training tables.
 
@@ -978,7 +978,7 @@ def get_training_table_summary(tables: Dict[str, List[TableInfo]]) -> Dict[str, 
 def log_startup_schema_summary(
     discover_xsight: bool = True,
     discover_mc: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Log schema discovery summary at application startup.
 
@@ -998,7 +998,7 @@ def log_startup_schema_summary(
     from device_anomaly.config.settings import get_settings
     settings = get_settings()
 
-    summary: Dict[str, Any] = {
+    summary: dict[str, Any] = {
         "xsight": None,
         "mobicontrol": None,
         "feature_flags": {

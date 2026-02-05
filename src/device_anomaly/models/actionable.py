@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from typing import List
-
 import pandas as pd
 
 from device_anomaly.config.feature_config import FeatureConfig
 
 
-def _top_factors(row: pd.Series, top_k: int = 3) -> List[dict]:
+def _top_factors(row: pd.Series, top_k: int = 3) -> list[dict]:
     z_cols = [c for c in row.index if "_z_" in c]
     if not z_cols:
         return []

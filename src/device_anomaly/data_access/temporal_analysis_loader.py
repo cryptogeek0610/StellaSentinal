@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -43,9 +43,9 @@ class HourlyDataPoint:
 class HourlyBreakdownData:
     """Hourly breakdown analysis."""
     metric: str
-    hourly_data: List[HourlyDataPoint] = field(default_factory=list)
-    peak_hours: List[int] = field(default_factory=list)
-    low_hours: List[int] = field(default_factory=list)
+    hourly_data: list[HourlyDataPoint] = field(default_factory=list)
+    peak_hours: list[int] = field(default_factory=list)
+    low_hours: list[int] = field(default_factory=list)
     day_night_ratio: float = 1.0
 
 
@@ -83,8 +83,8 @@ class TemporalComparisonData:
 def load_hourly_breakdown(
     metric: str,
     period_days: int = 7,
-    device_ids: Optional[List[int]] = None,
-    engine: Optional[Engine] = None,
+    device_ids: list[int] | None = None,
+    engine: Engine | None = None,
 ) -> HourlyBreakdownData:
     """
     Load hour-of-day aggregated metrics.
@@ -130,13 +130,13 @@ def load_hourly_breakdown(
         logger.warning(f"Table {table_name} not found")
         return HourlyBreakdownData(metric=metric)
 
-    start_time = datetime.now(timezone.utc) - timedelta(days=period_days)
+    start_time = datetime.now(UTC) - timedelta(days=period_days)
     value_col = config["value_col"]
     hour_col = config["hour_col"]
 
     # Build device filter
     device_filter = ""
-    params: Dict[str, Any] = {"start_time": start_time}
+    params: dict[str, Any] = {"start_time": start_time}
     if device_ids:
         device_filter = "AND DeviceId IN :device_ids"
         params["device_ids"] = device_ids
@@ -212,8 +212,8 @@ def detect_peaks(
     metric: str,
     period_days: int = 7,
     std_threshold: float = 2.0,
-    engine: Optional[Engine] = None,
-) -> List[PeakDetection]:
+    engine: Engine | None = None,
+) -> list[PeakDetection]:
     """
     Detect statistically significant peaks in usage.
 
@@ -251,7 +251,7 @@ def detect_peaks(
     if not table_exists(engine, table_name):
         return []
 
-    start_time = datetime.now(timezone.utc) - timedelta(days=period_days)
+    start_time = datetime.now(UTC) - timedelta(days=period_days)
 
     # Get hourly aggregates
     query = text(f"""
@@ -291,7 +291,7 @@ def detect_peaks(
             elif hasattr(ts, 'to_pydatetime'):
                 ts = ts.to_pydatetime()
             if ts.tzinfo is None:
-                ts = ts.replace(tzinfo=timezone.utc)
+                ts = ts.replace(tzinfo=UTC)
 
             peaks.append(PeakDetection(
                 timestamp=ts,
@@ -312,7 +312,7 @@ def compare_periods(
     period_a_end: datetime,
     period_b_start: datetime,
     period_b_end: datetime,
-    engine: Optional[Engine] = None,
+    engine: Engine | None = None,
 ) -> TemporalComparisonData:
     """
     Compare metrics between two time periods.
@@ -430,8 +430,8 @@ def compare_periods(
 def get_day_over_day_comparison(
     metric: str,
     lookback_days: int = 7,
-    engine: Optional[Engine] = None,
-) -> List[Dict[str, Any]]:
+    engine: Engine | None = None,
+) -> list[dict[str, Any]]:
     """
     Compare each day with the previous day.
 
@@ -462,7 +462,7 @@ def get_day_over_day_comparison(
     if not table_exists(engine, table_name):
         return []
 
-    start_time = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+    start_time = datetime.now(UTC) - timedelta(days=lookback_days)
 
     # Get daily aggregates
     query = text(f"""
@@ -512,8 +512,8 @@ def get_day_over_day_comparison(
 def get_week_over_week_comparison(
     metric: str,
     lookback_weeks: int = 4,
-    engine: Optional[Engine] = None,
-) -> List[Dict[str, Any]]:
+    engine: Engine | None = None,
+) -> list[dict[str, Any]]:
     """
     Compare each week with the previous week.
 
@@ -544,7 +544,7 @@ def get_week_over_week_comparison(
     if not table_exists(engine, table_name):
         return []
 
-    start_time = datetime.now(timezone.utc) - timedelta(weeks=lookback_weeks)
+    start_time = datetime.now(UTC) - timedelta(weeks=lookback_weeks)
 
     # Get weekly aggregates
     query = text(f"""

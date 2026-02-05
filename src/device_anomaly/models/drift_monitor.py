@@ -1,19 +1,16 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
 
-import numpy as np
 import pandas as pd
 
 
 def compute_feature_stats(
     df: pd.DataFrame,
-    feature_cols: List[str],
-    anomaly_scores: Optional[pd.Series] = None,
-) -> Dict:
+    feature_cols: list[str],
+    anomaly_scores: pd.Series | None = None,
+) -> dict:
     stats = {
         "row_count": len(df),
         "features": {},
@@ -36,19 +33,19 @@ def compute_feature_stats(
     return stats
 
 
-def save_stats(stats: Dict, path: Path) -> None:
+def save_stats(stats: dict, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(stats, indent=2, default=float))
 
 
-def load_stats(path: Path) -> Optional[Dict]:
+def load_stats(path: Path) -> dict | None:
     if not path.exists():
         return None
     return json.loads(path.read_text())
 
 
-def compare_stats(current: Dict, baseline: Dict, z_threshold: float = 3.0) -> List[str]:
-    warnings: List[str] = []
+def compare_stats(current: dict, baseline: dict, z_threshold: float = 3.0) -> list[str]:
+    warnings: list[str] = []
     for feature, cur_stats in current.get("features", {}).items():
         base_stats = (baseline.get("features") or {}).get(feature)
         if not base_stats:
