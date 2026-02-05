@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -43,6 +44,17 @@ from device_anomaly.data_access.db_utils import table_exists
 from device_anomaly.data_access.watermark_store import get_watermark_store
 
 logger = logging.getLogger(__name__)
+
+# SQL identifier safety regex — only alphanumeric and underscore allowed
+_SAFE_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _validate_sql_identifier(name: str, label: str = "identifier") -> str:
+    """Validate that a string is a safe SQL identifier (no injection risk)."""
+    if not name or not _SAFE_IDENTIFIER_RE.match(name):
+        raise ValueError(f"Unsafe SQL {label}: {name!r}")
+    return name
+
 
 # Default batch size
 DEFAULT_BATCH_SIZE = int(os.getenv("INGEST_BATCH_SIZE", "100000"))
@@ -320,6 +332,9 @@ def load_xsight_table_incremental(
     """
     if engine is None:
         engine = create_dw_engine()
+
+    # Validate table name is a safe SQL identifier
+    _validate_sql_identifier(table_name, "table name")
 
     # Validate table exists
     if not table_exists(engine, table_name, base_table_only=True):
@@ -649,12 +664,13 @@ def get_xsight_table_stats(
             with engine.connect() as conn:
                 # Approximate row count using sys.partitions (fast)
                 result = conn.execute(
-                    text(f"""
+                    text("""
                     SELECT SUM(p.rows)
                     FROM sys.tables t
                     INNER JOIN sys.partitions p ON t.object_id = p.object_id
-                    WHERE t.name = '{table_name}' AND p.index_id IN (0, 1)
-                """)
+                    WHERE t.name = :table_name AND p.index_id IN (0, 1)
+                """),
+                    {"table_name": table_name},
                 ).fetchone()
                 table_stats["row_count"] = int(result[0]) if result and result[0] else 0
 

@@ -34,8 +34,8 @@ def load_device_groups_with_path(limit: int = 10_000) -> list[dict[str, Any]]:
     """
     engine = create_mc_engine()
 
-    sql = text(f"""
-        SELECT TOP ({int(limit)})
+    sql = text("""
+        SELECT TOP (:limit)
             dg.DeviceGroupId,
             dg.Name AS GroupName,
             dg.ParentDeviceGroupId,
@@ -48,7 +48,7 @@ def load_device_groups_with_path(limit: int = 10_000) -> list[dict[str, Any]]:
 
     try:
         with engine.connect() as conn:
-            df = pd.read_sql(sql, conn)
+            df = pd.read_sql(sql, conn, params={"limit": int(limit)})
             logger.info(f"Loaded {len(df)} device groups from MobiControl")
     except Exception as e:
         logger.warning(f"Could not load device groups from MC: {e}")

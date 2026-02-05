@@ -55,17 +55,19 @@ def load_location_labels_from_mc(
 
     engine = create_mc_engine()
 
-    # Build IN clause with proper escaping
-    label_types_escaped = ", ".join(f"'{lt}'" for lt in label_types)
+    # Build parameterized IN clause — one named param per label type
+    param_names = [f":lt_{i}" for i in range(len(label_types))]
+    params = {f"lt_{i}": lt for i, lt in enumerate(label_types)}
+    params["limit"] = int(limit)
 
     sql = text(f"""
-        SELECT TOP ({int(limit)})
+        SELECT TOP (:limit)
             lt.Name AS LabelTypeName,
             CONVERT(nvarchar(4000), ld.Value) AS LabelValue,
             COUNT(DISTINCT ld.DeviceId) AS DeviceCount
         FROM dbo.LabelDevice ld
         JOIN dbo.LabelType lt ON lt.Id = ld.LabelTypeId
-        WHERE lt.Name IN ({label_types_escaped})
+        WHERE lt.Name IN ({", ".join(param_names)})
           AND ld.Value IS NOT NULL
           AND CONVERT(nvarchar(4000), ld.Value) != ''
         GROUP BY lt.Name, CONVERT(nvarchar(4000), ld.Value)
@@ -74,7 +76,7 @@ def load_location_labels_from_mc(
 
     try:
         with engine.connect() as conn:
-            df = pd.read_sql(sql, conn)
+            df = pd.read_sql(sql, conn, params=params)
             logger.info(f"Loaded {len(df)} distinct location labels from MC")
             return df
     except Exception as e:
@@ -93,8 +95,8 @@ def load_device_group_hierarchy_from_mc(limit: int = 1_000) -> pd.DataFrame:
     """
     engine = create_mc_engine()
 
-    sql = text(f"""
-        SELECT TOP ({int(limit)})
+    sql = text("""
+        SELECT TOP (:limit)
             dg.DeviceGroupId,
             dg.Name AS GroupName,
             dg.ParentDeviceGroupId,
@@ -107,7 +109,7 @@ def load_device_group_hierarchy_from_mc(limit: int = 1_000) -> pd.DataFrame:
 
     try:
         with engine.connect() as conn:
-            df = pd.read_sql(sql, conn)
+            df = pd.read_sql(sql, conn, params={"limit": int(limit)})
             logger.info(f"Loaded {len(df)} device groups from MC")
             return df
     except Exception as e:
@@ -133,7 +135,10 @@ def load_device_to_location_mapping(
         label_types = DEFAULT_LOCATION_LABEL_TYPES
 
     engine = create_mc_engine()
-    label_types_escaped = ", ".join(f"'{lt}'" for lt in label_types)
+
+    # Build parameterized IN clause — one named param per label type
+    param_names = [f":lt_{i}" for i in range(len(label_types))]
+    params = {f"lt_{i}": lt for i, lt in enumerate(label_types)}
 
     sql = text(f"""
         SELECT
@@ -142,14 +147,14 @@ def load_device_to_location_mapping(
             CONVERT(nvarchar(4000), ld.Value) AS LocationValue
         FROM dbo.LabelDevice ld
         JOIN dbo.LabelType lt ON lt.Id = ld.LabelTypeId
-        WHERE lt.Name IN ({label_types_escaped})
+        WHERE lt.Name IN ({", ".join(param_names)})
           AND ld.Value IS NOT NULL
           AND CONVERT(nvarchar(4000), ld.Value) != ''
     """)
 
     try:
         with engine.connect() as conn:
-            df = pd.read_sql(sql, conn)
+            df = pd.read_sql(sql, conn, params=params)
             logger.info(f"Loaded {len(df)} device-to-location mappings")
             return df
     except Exception as e:
