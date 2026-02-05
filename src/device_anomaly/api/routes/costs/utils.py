@@ -85,6 +85,28 @@ def get_device_count_for_model(db: Session, tenant_id: str, device_model: str) -
     ) or 0
 
 
+def get_device_counts_by_model(
+    db: Session, tenant_id: str, device_models: list[str]
+) -> dict[str, int]:
+    """Batch-fetch device counts for multiple models in a single query.
+
+    Returns a dict mapping device_model -> count.
+    """
+    if not device_models:
+        return {}
+
+    rows = (
+        db.query(DeviceMetadata.device_model, func.count(DeviceMetadata.device_id))
+        .filter(
+            DeviceMetadata.tenant_id == tenant_id,
+            DeviceMetadata.device_model.in_(device_models),
+        )
+        .group_by(DeviceMetadata.device_model)
+        .all()
+    )
+    return dict(rows)
+
+
 def get_severity(score: float) -> str:
     """Convert anomaly score to severity level."""
     if score <= -0.7:

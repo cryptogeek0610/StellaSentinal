@@ -18,7 +18,7 @@ from device_anomaly.api.models_cost import (
 )
 from device_anomaly.db.models_cost import DeviceTypeCost, OperationalCost
 
-from .utils import calculate_monthly_equivalent, cents_to_dollars, get_device_count_for_model
+from .utils import calculate_monthly_equivalent, cents_to_dollars, get_device_counts_by_model
 
 router = APIRouter()
 
@@ -57,12 +57,16 @@ def get_cost_summary(
     # Calculate totals
     results_db = next(get_db())
     try:
+        # Batch-fetch all device counts in one query instead of N+1
+        model_names = [cost.device_model for cost in hardware_costs]
+        device_counts = get_device_counts_by_model(results_db, tenant_id, model_names)
+
         total_hardware_value = Decimal(0)
         device_count = 0
         by_device_model = []
 
         for cost in hardware_costs:
-            count = get_device_count_for_model(results_db, tenant_id, cost.device_model)
+            count = device_counts.get(cost.device_model, 0)
             unit_cost = cents_to_dollars(cost.purchase_cost)
             total_value = unit_cost * count
 

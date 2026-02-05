@@ -166,8 +166,11 @@ def _filter_benign_evidence(text: str) -> str:
 
 
 def _calculate_baseline_stats(db: Session, tenant_id: str, device_id: int, days: int = 30) -> dict:
-    """Calculate baseline statistics for a device over the past N days."""
-    import statistics as stats_module
+    """Calculate baseline statistics for a device over the past N days.
+
+    Uses SQL aggregation instead of loading all rows into Python memory.
+    """
+    from sqlalchemy import func
 
     # Default baseline values (industry-typical for mobile devices)
     default_baselines = {
@@ -194,25 +197,9 @@ def _calculate_baseline_stats(db: Session, tenant_id: str, device_id: int, days:
     }
 
     cutoff = datetime.now(UTC) - timedelta(days=days)
-
-    # Get historical normal readings for this device
-    results = (
-        db.query(AnomalyResult)
-        .filter(AnomalyResult.tenant_id == tenant_id)
-        .filter(AnomalyResult.device_id == device_id)
-        .filter(AnomalyResult.timestamp >= cutoff)
-        .filter(AnomalyResult.anomaly_label == 1)  # Normal readings only
-        .all()
-    )
-
-    # Start with defaults
     baseline_stats = dict(default_baselines)
 
-    if not results:
-        logger.info(f"No historical data for device {device_id}, using default baselines")
-        return baseline_stats
-
-    # Calculate stats for each feature, overwriting defaults where we have data
+    # Compute all feature stats in a single SQL query using aggregation
     features = [
         "total_battery_level_drop",
         "total_free_storage_kb",
@@ -224,17 +211,53 @@ def _calculate_baseline_stats(db: Session, tenant_id: str, device_id: int, days:
         "connection_time",
     ]
 
+    # Build aggregation columns for each feature
+    agg_columns = []
     for feature in features:
-        values = [getattr(r, feature) for r in results if getattr(r, feature) is not None]
-        if values:
-            mean = stats_module.mean(values)
-            std = stats_module.stdev(values) if len(values) > 1 else mean * 0.1
+        col = getattr(AnomalyResult, feature)
+        agg_columns.extend(
+            [
+                func.avg(col).label(f"{feature}_avg"),
+                func.count(col).label(f"{feature}_cnt"),
+                func.min(col).label(f"{feature}_min"),
+                func.max(col).label(f"{feature}_max"),
+            ]
+        )
+
+    row = (
+        db.query(*agg_columns)
+        .filter(AnomalyResult.tenant_id == tenant_id)
+        .filter(AnomalyResult.device_id == device_id)
+        .filter(AnomalyResult.timestamp >= cutoff)
+        .filter(AnomalyResult.anomaly_label == 1)  # Normal readings only
+        .first()
+    )
+
+    if row is None:
+        logger.info("No historical data for device %s, using default baselines", device_id)
+        return baseline_stats
+
+    for feature in features:
+        avg_val = getattr(row, f"{feature}_avg")
+        cnt_val = getattr(row, f"{feature}_cnt")
+        min_val = getattr(row, f"{feature}_min")
+        max_val = getattr(row, f"{feature}_max")
+
+        if cnt_val and cnt_val > 0 and avg_val is not None:
+            mean = float(avg_val)
+            # Estimate std from range when we can't compute it in SQL easily;
+            # for cnt > 1, approximate as (max - min) / 4 (IQR heuristic)
+            if cnt_val > 1 and max_val != min_val:
+                std = float(max_val - min_val) / 4.0
+            else:
+                std = abs(mean) * 0.1
+
             baseline_stats[feature] = {
                 "mean": mean,
-                "std": std if std > 0 else mean * 0.1,  # Avoid zero std
-                "min": min(values),
-                "max": max(values),
-                "count": len(values),
+                "std": std if std > 0 else abs(mean) * 0.1,
+                "min": float(min_val),
+                "max": float(max_val),
+                "count": int(cnt_val),
             }
 
     return baseline_stats

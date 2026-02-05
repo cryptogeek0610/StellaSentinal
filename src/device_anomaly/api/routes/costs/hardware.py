@@ -30,7 +30,13 @@ from device_anomaly.api.models_cost import (
 from device_anomaly.database.schema import DeviceMetadata
 from device_anomaly.db.models_cost import DeviceTypeCost
 
-from .utils import cents_to_dollars, create_audit_log, dollars_to_cents, get_device_count_for_model
+from .utils import (
+    cents_to_dollars,
+    create_audit_log,
+    dollars_to_cents,
+    get_device_count_for_model,
+    get_device_counts_by_model,
+)
 
 router = APIRouter()
 
@@ -71,12 +77,14 @@ def list_hardware_costs(
     response_costs = []
     total_fleet_value = Decimal(0)
 
-    # Get results db for device counts
+    # Batch-fetch all device counts in one query instead of N+1
     results_db = next(get_db())
     try:
+        model_names = [cost.device_model for cost in costs]
+        device_counts = get_device_counts_by_model(results_db, tenant_id, model_names)
+
         for cost in costs:
-            # Get device count for this model
-            device_count = get_device_count_for_model(results_db, tenant_id, cost.device_model)
+            device_count = device_counts.get(cost.device_model, 0)
             fleet_value = cents_to_dollars(cost.purchase_cost) * device_count
 
             response_costs.append(
