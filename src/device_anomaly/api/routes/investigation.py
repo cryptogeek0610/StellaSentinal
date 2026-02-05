@@ -8,6 +8,7 @@ import logging
 import re
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import TypedDict
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -23,10 +24,13 @@ from device_anomaly.api.models import (
     EvidenceEvent,
     EvidenceHypothesis,
     FeatureContribution,
+    FeedbackResponse,
     HistoricalTimelineResponse,
     InvestigationPanelResponse,
     LearnFromFixRequest,
+    LearnRemediationResponse,
     RemediationOutcomeRequest,
+    RemediationOutcomeResponse,
     RemediationSuggestion,
     RootCauseHypothesis,
     SimilarCase,
@@ -165,7 +169,17 @@ def _filter_benign_evidence(text: str) -> str:
     return "\n".join(filtered_lines)
 
 
-def _calculate_baseline_stats(db: Session, tenant_id: str, device_id: int, days: int = 30) -> dict:
+class _FeatureStats(TypedDict):
+    mean: float
+    std: float
+    min: float
+    max: float
+    count: int
+
+
+def _calculate_baseline_stats(
+    db: Session, tenant_id: str, device_id: int, days: int = 30
+) -> dict[str, _FeatureStats]:
     """Calculate baseline statistics for a device over the past N days.
 
     Uses SQL aggregation instead of loading all rows into Python memory.
@@ -1240,13 +1254,13 @@ Top Contributing Factors (metrics most different from normal):
     return analysis
 
 
-@router.post("/{anomaly_id}/ai-analysis/feedback")
+@router.post("/{anomaly_id}/ai-analysis/feedback", response_model=FeedbackResponse)
 def submit_ai_feedback(
     anomaly_id: int,
     request: AIAnalysisFeedbackRequest,
     _: None = Depends(require_role(["analyst", "admin"])),
     db: Session = Depends(get_db),
-):
+) -> FeedbackResponse:
     """Submit feedback on AI analysis."""
     tenant_id = get_tenant_id()
 
@@ -1268,7 +1282,7 @@ def submit_ai_feedback(
 
     db.commit()
 
-    return {"success": True, "message": "Feedback recorded"}
+    return FeedbackResponse(message="Feedback recorded")
 
 
 @router.get("/{anomaly_id}/similar-cases", response_model=list[SimilarCase])
@@ -1317,14 +1331,17 @@ def get_remediations(
     return _generate_remediation_suggestions(anomaly, contributions)
 
 
-@router.post("/{anomaly_id}/remediations/{remediation_id}/outcome")
+@router.post(
+    "/{anomaly_id}/remediations/{remediation_id}/outcome",
+    response_model=RemediationOutcomeResponse,
+)
 def record_remediation_outcome(
     anomaly_id: int,
     remediation_id: str,
     request: RemediationOutcomeRequest,
     _: None = Depends(require_role(["analyst", "admin"])),
     db: Session = Depends(get_db),
-):
+) -> RemediationOutcomeResponse:
     """Record the outcome of a remediation action."""
     tenant_id = get_tenant_id()
     user = get_current_user()
@@ -1359,16 +1376,16 @@ def record_remediation_outcome(
     db.add(outcome)
     db.commit()
 
-    return {"success": True, "message": "Outcome recorded", "outcome_id": outcome.id}
+    return RemediationOutcomeResponse(message="Outcome recorded", outcome_id=outcome.id)
 
 
-@router.post("/{anomaly_id}/learn")
+@router.post("/{anomaly_id}/learn", response_model=LearnRemediationResponse)
 def learn_from_fix(
     anomaly_id: int,
     request: LearnFromFixRequest,
     _: None = Depends(require_role(["analyst", "admin"])),
     db: Session = Depends(get_db),
-):
+) -> LearnRemediationResponse:
     """Learn from a successful fix to improve future suggestions."""
     tenant_id = get_tenant_id()
 
@@ -1415,12 +1432,11 @@ def learn_from_fix(
         existing.updated_at = datetime.now(UTC)
         db.commit()
 
-        return {
-            "success": True,
-            "message": "Existing pattern updated",
-            "learned_remediation_id": existing.id,
-            "current_confidence": existing.current_confidence,
-        }
+        return LearnRemediationResponse(
+            message="Existing pattern updated",
+            learned_remediation_id=existing.id,
+            current_confidence=existing.current_confidence,
+        )
 
     # Create new learned remediation
     learned = LearnedRemediation(
@@ -1442,9 +1458,8 @@ def learn_from_fix(
     db.add(learned)
     db.commit()
 
-    return {
-        "success": True,
-        "message": "New remediation pattern learned",
-        "learned_remediation_id": learned.id,
-        "initial_confidence": learned.initial_confidence,
-    }
+    return LearnRemediationResponse(
+        message="New remediation pattern learned",
+        learned_remediation_id=learned.id,
+        initial_confidence=learned.initial_confidence,
+    )

@@ -475,6 +475,31 @@ class LearnFromFixRequest(BaseModel):
     tags: list[str] = Field(default_factory=list)
 
 
+class SuccessResponse(BaseModel):
+    """Generic success response with message."""
+
+    success: bool = True
+    message: str
+
+
+class FeedbackResponse(SuccessResponse):
+    """Response after submitting AI feedback."""
+
+
+class RemediationOutcomeResponse(SuccessResponse):
+    """Response after recording a remediation outcome."""
+
+    outcome_id: int
+
+
+class LearnRemediationResponse(SuccessResponse):
+    """Response after learning from a fix."""
+
+    learned_remediation_id: int
+    current_confidence: float | None = None
+    initial_confidence: float | None = None
+
+
 # ============================================
 # Smart Anomaly Grouping Types
 # ============================================
