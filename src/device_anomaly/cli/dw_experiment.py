@@ -112,7 +112,9 @@ def run_dw_experiment(
     # always include hardware cohort baseline
     if {"ManufacturerId", "ModelId", "OsVersionId"} <= set(df_feat.columns):
         baseline_levels.append(
-            BaselineLevel(name="hardware", group_columns=["ManufacturerId", "ModelId", "OsVersionId"])
+            BaselineLevel(
+                name="hardware", group_columns=["ManufacturerId", "ModelId", "OsVersionId"]
+            )
         )
     # optional device-level baseline (only when enough rows)
     if {"DeviceId"}.issubset(df_feat.columns):
@@ -130,7 +132,8 @@ def run_dw_experiment(
         "anomaly_label",
     }
     baseline_features = [
-        col for col in df_feat.columns
+        col
+        for col in df_feat.columns
         if pd.api.types.is_numeric_dtype(df_feat[col]) and col not in exclude_baseline_cols
     ]
     baselines_path = Path("artifacts/dw_baselines.json")
@@ -153,7 +156,10 @@ def run_dw_experiment(
     # 2c) Optional heuristics (threshold-based flags that feed into ML)
     heuristic_rules_cfg = []
     if "TotalBatteryLevelDrop_roll_mean" in df_feat.columns:
-        threshold = df_feat["TotalBatteryLevelDrop_roll_mean"].median() + 2 * df_feat["TotalBatteryLevelDrop_roll_mean"].mad()
+        threshold = (
+            df_feat["TotalBatteryLevelDrop_roll_mean"].median()
+            + 2 * df_feat["TotalBatteryLevelDrop_roll_mean"].mad()
+        )
         heuristic_rules_cfg.append(
             {
                 "name": "battery_drain_consistent",
@@ -274,7 +280,9 @@ def run_dw_experiment(
     tracker.advance(PipelineStage.PERSISTENCE)
 
     actionable_path = Path("artifacts/dw_actionable.json")
-    actionable_df = build_actionable_outputs(df_scored=anomalies_for_rows, model_version=model_version, top_k_factors=3)
+    actionable_df = build_actionable_outputs(
+        df_scored=anomalies_for_rows, model_version=model_version, top_k_factors=3
+    )
     if not actionable_df.empty:
         actionable_path.parent.mkdir(parents=True, exist_ok=True)
         actionable_path.write_text(actionable_df.to_json(orient="records", date_format="iso"))
@@ -290,7 +298,11 @@ def run_dw_experiment(
             suggestion_path = Path("artifacts/dw_baseline_suggestions.json")
             suggestion_path.parent.mkdir(parents=True, exist_ok=True)
             suggestion_path.write_text(json.dumps(baseline_suggestions, indent=2, default=float))
-            logger.info("Captured %d baseline adjustment suggestions at %s", len(baseline_suggestions), suggestion_path)
+            logger.info(
+                "Captured %d baseline adjustment suggestions at %s",
+                len(baseline_suggestions),
+                suggestion_path,
+            )
     else:
         logger.info("Baseline suggestions skipped (baselines unavailable).")
 
@@ -333,9 +345,7 @@ def run_dw_experiment(
 
     logger.info(
         "Sample anomaly events:\n%s",
-        event_results_df[
-            ["DeviceId", "EventStart", "EventEnd", "RowCount", "AnomalyScoreMin"]
-        ]
+        event_results_df[["DeviceId", "EventStart", "EventEnd", "RowCount", "AnomalyScoreMin"]]
         .head(5)
         .to_string(index=False),
     )
@@ -372,9 +382,7 @@ def run_dw_experiment(
 def main() -> None:
     setup_logging()
 
-    parser = argparse.ArgumentParser(
-        description="Run DW anomaly detection experiment."
-    )
+    parser = argparse.ArgumentParser(description="Run DW anomaly detection experiment.")
     parser.add_argument(
         "-c",
         "--config",

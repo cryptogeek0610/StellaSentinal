@@ -12,7 +12,9 @@ from pydantic import BaseModel, Field
 class CorrelationErrorDetail(BaseModel):
     """Structured error detail for correlation endpoints."""
 
-    error_type: str  # "data_unavailable", "service_offline", "computation_error", "insufficient_data"
+    error_type: (
+        str  # "data_unavailable", "service_offline", "computation_error", "insufficient_data"
+    )
     message: str
     recommendations: list[str] = []
 
@@ -41,7 +43,9 @@ class CorrelationCell(BaseModel):
     p_value: float | None = None
     sample_count: int
     method: str = "pearson"
-    is_significant: bool = Field(False, description="Whether correlation is statistically significant (p < 0.05)")
+    is_significant: bool = Field(
+        False, description="Whether correlation is statistically significant (p < 0.05)"
+    )
 
 
 class CorrelationMatrixResponse(BaseModel):
@@ -49,13 +53,17 @@ class CorrelationMatrixResponse(BaseModel):
 
     metrics: list[str]
     matrix: list[list[float]]
-    p_values: list[list[float]] | None = Field(None, description="Matrix of p-values for each correlation")
+    p_values: list[list[float]] | None = Field(
+        None, description="Matrix of p-values for each correlation"
+    )
     strong_correlations: list[CorrelationCell]
     method: str
     computed_at: str
     total_samples: int
     domain_filter: str | None = None
-    date_range: dict[str, str] | None = Field(None, description="Start and end dates used for computation")
+    date_range: dict[str, str] | None = Field(
+        None, description="Start and end dates used for computation"
+    )
     filter_stats: FilterStats | None = Field(None, description="Statistics about filtered metrics")
 
 

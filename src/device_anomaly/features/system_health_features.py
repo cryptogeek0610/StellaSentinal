@@ -7,6 +7,7 @@ This module transforms CPU, RAM, storage, and temperature data into ML features:
 - Storage utilization and exhaustion forecasting
 - Thermal events and throttling risk
 """
+
 from __future__ import annotations
 
 import logging
@@ -103,21 +104,37 @@ class SystemHealthFeatureBuilder:
 
     def _has_ram_data(self, df: pd.DataFrame) -> bool:
         """Check if RAM data is available."""
-        return any(col in df.columns for col in [
-            "AvailableRAM", "TotalRAM", "RAM", "MemoryUsage", "available_ram", "FreeMemory"
-        ])
+        return any(
+            col in df.columns
+            for col in [
+                "AvailableRAM",
+                "TotalRAM",
+                "RAM",
+                "MemoryUsage",
+                "available_ram",
+                "FreeMemory",
+            ]
+        )
 
     def _has_storage_data(self, df: pd.DataFrame) -> bool:
         """Check if storage data is available."""
-        return any(col in df.columns for col in [
-            "AvailableStorage", "TotalStorage", "StorageUsage", "FreeStorage", "available_storage"
-        ])
+        return any(
+            col in df.columns
+            for col in [
+                "AvailableStorage",
+                "TotalStorage",
+                "StorageUsage",
+                "FreeStorage",
+                "available_storage",
+            ]
+        )
 
     def _has_temp_data(self, df: pd.DataFrame) -> bool:
         """Check if temperature data is available."""
-        return any(col in df.columns for col in [
-            "Temperature", "DeviceTemp", "BatteryTemp", "CPUTemp", "temperature"
-        ])
+        return any(
+            col in df.columns
+            for col in ["Temperature", "DeviceTemp", "BatteryTemp", "CPUTemp", "temperature"]
+        )
 
     def _find_column(self, df: pd.DataFrame, candidates: list[str]) -> str | None:
         """Find first matching column from candidates."""
@@ -139,14 +156,18 @@ class SystemHealthFeatureBuilder:
         df["is_cpu_spike"] = (df["cpu_value"] >= self.cpu_spike_threshold).astype(int)
 
         # Per-device CPU statistics
-        cpu_stats = df.groupby("DeviceId").agg(
-            cpu_usage_avg=("cpu_value", "mean"),
-            cpu_usage_max=("cpu_value", "max"),
-            cpu_usage_p50=("cpu_value", "median"),
-            cpu_usage_p95=("cpu_value", lambda x: x.quantile(0.95) if len(x) > 0 else np.nan),
-            cpu_spike_count=("is_cpu_spike", "sum"),
-            cpu_spike_rate=("is_cpu_spike", "mean"),
-        ).reset_index()
+        cpu_stats = (
+            df.groupby("DeviceId")
+            .agg(
+                cpu_usage_avg=("cpu_value", "mean"),
+                cpu_usage_max=("cpu_value", "max"),
+                cpu_usage_p50=("cpu_value", "median"),
+                cpu_usage_p95=("cpu_value", lambda x: x.quantile(0.95) if len(x) > 0 else np.nan),
+                cpu_spike_count=("is_cpu_spike", "sum"),
+                cpu_spike_rate=("is_cpu_spike", "mean"),
+            )
+            .reset_index()
+        )
 
         df = df.merge(cpu_stats, on="DeviceId", how="left")
 
@@ -154,7 +175,9 @@ class SystemHealthFeatureBuilder:
         if "Timestamp" in df.columns:
             df = df.sort_values(["DeviceId", "Timestamp"])
             df["cpu_roll_mean"] = df.groupby("DeviceId")["cpu_value"].transform(
-                lambda x: x.rolling(window=self.window_days * 24, min_periods=3).mean()  # Assuming hourly data
+                lambda x: x.rolling(
+                    window=self.window_days * 24, min_periods=3
+                ).mean()  # Assuming hourly data
             )
             df["cpu_roll_std"] = df.groupby("DeviceId")["cpu_value"].transform(
                 lambda x: x.rolling(window=self.window_days * 24, min_periods=3).std()
@@ -188,7 +211,9 @@ class SystemHealthFeatureBuilder:
 
         # RAM pressure detection
         if "ram_utilization" in df.columns:
-            df["is_ram_pressure"] = (df["ram_utilization"] >= self.ram_pressure_threshold).astype(int)
+            df["is_ram_pressure"] = (df["ram_utilization"] >= self.ram_pressure_threshold).astype(
+                int
+            )
         else:
             # Low available RAM threshold (e.g., < 500MB)
             df["is_ram_pressure"] = (df["ram_available"] < 500e6).astype(int)
@@ -228,7 +253,9 @@ class SystemHealthFeatureBuilder:
 
         # Critical storage detection
         if "storage_utilization" in df.columns:
-            df["is_storage_critical"] = (df["storage_utilization"] >= self.storage_critical_threshold).astype(int)
+            df["is_storage_critical"] = (
+                df["storage_utilization"] >= self.storage_critical_threshold
+            ).astype(int)
         else:
             # Less than 1GB free
             df["is_storage_critical"] = (df["storage_available"] < 1e9).astype(int)
@@ -256,6 +283,7 @@ class SystemHealthFeatureBuilder:
 
     def _add_storage_forecast(self, df: pd.DataFrame) -> pd.DataFrame:
         """Forecast days until storage exhaustion."""
+
         def forecast_days(grp: pd.DataFrame) -> float:
             if len(grp) < 5:
                 return np.nan
@@ -297,7 +325,9 @@ class SystemHealthFeatureBuilder:
 
     def _add_thermal_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Add thermal/temperature features."""
-        temp_col = self._find_column(df, ["Temperature", "DeviceTemp", "BatteryTemp", "CPUTemp", "temperature"])
+        temp_col = self._find_column(
+            df, ["Temperature", "DeviceTemp", "BatteryTemp", "CPUTemp", "temperature"]
+        )
         if temp_col is None:
             return df
 
@@ -307,21 +337,25 @@ class SystemHealthFeatureBuilder:
         df["is_thermal_warning"] = (df["temp_value"] >= self.temp_warning_threshold).astype(int)
 
         # Per-device thermal statistics
-        thermal_stats = df.groupby("DeviceId").agg(
-            temp_avg=("temp_value", "mean"),
-            temp_max=("temp_value", "max"),
-            temp_p95=("temp_value", lambda x: x.quantile(0.95) if len(x) > 0 else np.nan),
-            thermal_warning_count=("is_thermal_warning", "sum"),
-            thermal_warning_rate=("is_thermal_warning", "mean"),
-        ).reset_index()
+        thermal_stats = (
+            df.groupby("DeviceId")
+            .agg(
+                temp_avg=("temp_value", "mean"),
+                temp_max=("temp_value", "max"),
+                temp_p95=("temp_value", lambda x: x.quantile(0.95) if len(x) > 0 else np.nan),
+                thermal_warning_count=("is_thermal_warning", "sum"),
+                thermal_warning_rate=("is_thermal_warning", "mean"),
+            )
+            .reset_index()
+        )
 
         df = df.merge(thermal_stats, on="DeviceId", how="left")
 
         # Thermal throttle risk (high temp + high CPU)
         if "is_cpu_spike" in df.columns:
             df["thermal_throttle_risk"] = (
-                df["is_thermal_warning"].astype(float) * 0.6 +
-                df["is_cpu_spike"].astype(float) * 0.4
+                df["is_thermal_warning"].astype(float) * 0.6
+                + df["is_cpu_spike"].astype(float) * 0.4
             )
         else:
             df["thermal_throttle_risk"] = df["is_thermal_warning"].astype(float)
@@ -363,9 +397,9 @@ class SystemHealthFeatureBuilder:
         if health_components:
             # Weighted average
             total_weight = sum(weights)
-            df["system_health_score"] = sum(
-                c * w for c, w in zip(health_components, weights, strict=False)
-            ) / total_weight
+            df["system_health_score"] = (
+                sum(c * w for c, w in zip(health_components, weights, strict=False)) / total_weight
+            )
 
             # Health risk score (inverse of health)
             df["system_health_risk"] = 1 - df["system_health_score"]

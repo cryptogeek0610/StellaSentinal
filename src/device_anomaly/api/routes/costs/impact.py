@@ -1,6 +1,7 @@
 """
 Anomaly financial impact calculation endpoints.
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -98,7 +99,7 @@ def get_anomaly_impact(
                     type="direct",
                     description="Potential hardware damage based on anomaly severity",
                     amount=hardware_risk,
-                    calculation_method=f"{severity_multipliers.get(severity, 0.02)*100:.0f}% of device cost based on {severity} severity",
+                    calculation_method=f"{severity_multipliers.get(severity, 0.02) * 100:.0f}% of device cost based on {severity} severity",
                     confidence=0.6,
                 )
             )

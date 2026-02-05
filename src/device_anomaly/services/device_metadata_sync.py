@@ -10,6 +10,7 @@ Data Sources:
 - XSight Device table: DeviceName, ModelId (matches telemetry DeviceId)
 - MobiControlDB DevInfo: Firmware, OS, Manufacturer, Security indicators
 """
+
 import logging
 import time
 from datetime import datetime, timedelta
@@ -79,7 +80,11 @@ def _derive_device_name(row: pd.Series) -> str:
     """
     # Priority 1: DevName (user-configured name in MobiControl)
     devname = row.get("DevName")
-    if devname and str(devname).strip() and str(devname).strip().lower() not in ("null", "none", ""):
+    if (
+        devname
+        and str(devname).strip()
+        and str(devname).strip().lower() not in ("null", "none", "")
+    ):
         return str(devname).strip()
 
     # Priority 2: SerialNumber
@@ -256,7 +261,9 @@ def get_sync_stats() -> dict:
 
         total = db.query(DeviceMetadata).count()
         with_name = db.query(DeviceMetadata).filter(DeviceMetadata.device_name.isnot(None)).count()
-        with_model = db.query(DeviceMetadata).filter(DeviceMetadata.device_model.isnot(None)).count()
+        with_model = (
+            db.query(DeviceMetadata).filter(DeviceMetadata.device_model.isnot(None)).count()
+        )
 
         return {
             "total_devices": total,
@@ -326,7 +333,9 @@ def load_mc_device_metadata_cache(since_days: int = 30, limit: int = 200_000) ->
             df = pd.read_sql(sql, conn, params={"since_date": since_date})
 
         if df.empty:
-            logger.warning("MobiControl returned 0 devices for cache - streaming enrichment disabled")
+            logger.warning(
+                "MobiControl returned 0 devices for cache - streaming enrichment disabled"
+            )
             _MC_DEVICE_CACHE = {}
             _MC_CACHE_LOADED_AT = datetime.utcnow()
             return 0

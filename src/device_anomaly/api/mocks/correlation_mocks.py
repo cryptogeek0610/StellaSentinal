@@ -3,6 +3,7 @@ Mock data generators for Correlation Intelligence endpoints.
 
 Used when mock_mode is enabled or as fallback when real data is unavailable.
 """
+
 from __future__ import annotations
 
 import random
@@ -34,7 +35,12 @@ def get_mock_correlation_matrix(
     """Generate mock correlation matrix with realistic correlations."""
     # Define metrics by domain
     all_metrics = {
-        "battery": ["TotalBatteryLevelDrop", "TotalDischargeTime_Sec", "ScreenOnTime_Sec", "BatteryDrainPerHour"],
+        "battery": [
+            "TotalBatteryLevelDrop",
+            "TotalDischargeTime_Sec",
+            "ScreenOnTime_Sec",
+            "BatteryDrainPerHour",
+        ],
         "rf": ["AvgSignalStrength", "TotalDropCnt", "WifiDisconnectCount", "CellSignalStrength"],
         "throughput": ["Download", "Upload", "TotalDataUsage"],
         "usage": ["AppForegroundTime", "CrashCount", "AppVisitCount"],
@@ -170,7 +176,11 @@ def get_mock_scatter_data(
         corr, slope = known_correlations[pair]
     elif reverse_pair in known_correlations:
         corr, _ = known_correlations[reverse_pair]
-        slope = 1.0 / known_correlations[reverse_pair][1] if known_correlations[reverse_pair][1] != 0 else 0.5
+        slope = (
+            1.0 / known_correlations[reverse_pair][1]
+            if known_correlations[reverse_pair][1] != 0
+            else 0.5
+        )
     else:
         corr = round(random.uniform(-0.5, 0.5), 2)
         slope = corr * 0.5

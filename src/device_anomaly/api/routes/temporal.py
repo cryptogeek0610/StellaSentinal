@@ -1,4 +1,5 @@
 """API routes for temporal analysis."""
+
 from __future__ import annotations
 
 import logging
@@ -18,8 +19,10 @@ router = APIRouter(prefix="/insights/temporal", tags=["temporal-analysis"])
 # Response Models
 # ============================================================================
 
+
 class HourlyDataPointResponse(BaseModel):
     """Single hour's aggregated data."""
+
     hour: int
     avg_value: float
     min_value: float
@@ -30,6 +33,7 @@ class HourlyDataPointResponse(BaseModel):
 
 class HourlyBreakdownResponse(BaseModel):
     """Hourly breakdown analysis."""
+
     tenant_id: str
     metric: str
     hourly_data: list[HourlyDataPointResponse]
@@ -41,6 +45,7 @@ class HourlyBreakdownResponse(BaseModel):
 
 class PeakDetectionResponse(BaseModel):
     """Detected usage peak."""
+
     timestamp: datetime
     value: float
     z_score: float
@@ -49,6 +54,7 @@ class PeakDetectionResponse(BaseModel):
 
 class PeakDetectionListResponse(BaseModel):
     """List of detected peaks."""
+
     tenant_id: str
     metric: str
     peaks: list[PeakDetectionResponse]
@@ -58,6 +64,7 @@ class PeakDetectionListResponse(BaseModel):
 
 class PeriodStatsResponse(BaseModel):
     """Statistics for a time period."""
+
     start: datetime
     end: datetime
     avg: float
@@ -68,6 +75,7 @@ class PeriodStatsResponse(BaseModel):
 
 class TemporalComparisonResponse(BaseModel):
     """Comparison between two time periods."""
+
     tenant_id: str
     metric: str
     period_a: PeriodStatsResponse
@@ -80,6 +88,7 @@ class TemporalComparisonResponse(BaseModel):
 
 class DailyComparisonPoint(BaseModel):
     """Single day in day-over-day comparison."""
+
     date: str
     value: float
     sample_count: int
@@ -88,6 +97,7 @@ class DailyComparisonPoint(BaseModel):
 
 class DayOverDayResponse(BaseModel):
     """Day over day comparison."""
+
     tenant_id: str
     metric: str
     comparisons: list[DailyComparisonPoint]
@@ -96,6 +106,7 @@ class DayOverDayResponse(BaseModel):
 
 class WeeklyComparisonPoint(BaseModel):
     """Single week in week-over-week comparison."""
+
     year: int
     week: int
     value: float
@@ -105,6 +116,7 @@ class WeeklyComparisonPoint(BaseModel):
 
 class WeekOverWeekResponse(BaseModel):
     """Week over week comparison."""
+
     tenant_id: str
     metric: str
     comparisons: list[WeeklyComparisonPoint]
@@ -115,9 +127,11 @@ class WeekOverWeekResponse(BaseModel):
 # Mock Data Functions
 # ============================================================================
 
+
 def get_mock_hourly_breakdown(metric: str) -> HourlyBreakdownResponse:
     """Generate mock hourly breakdown."""
     import random
+
     random.seed(hash(metric) % 100)
 
     base_values = {
@@ -136,14 +150,16 @@ def get_mock_hourly_breakdown(metric: str) -> HourlyBreakdownResponse:
         avg = base * multiplier + random.uniform(-5, 5)
         std = avg * 0.2
 
-        hourly_data.append(HourlyDataPointResponse(
-            hour=hour,
-            avg_value=avg,
-            min_value=avg - std * 2,
-            max_value=avg + std * 2,
-            std_value=std,
-            sample_count=random.randint(500, 2000),
-        ))
+        hourly_data.append(
+            HourlyDataPointResponse(
+                hour=hour,
+                avg_value=avg,
+                min_value=avg - std * 2,
+                max_value=avg + std * 2,
+                std_value=std,
+                sample_count=random.randint(500, 2000),
+            )
+        )
 
     return HourlyBreakdownResponse(
         tenant_id="default",
@@ -158,6 +174,7 @@ def get_mock_hourly_breakdown(metric: str) -> HourlyBreakdownResponse:
 def get_mock_peak_detection(metric: str, period_days: int) -> PeakDetectionListResponse:
     """Generate mock peak detection."""
     import random
+
     random.seed(42)
 
     now = datetime.now(UTC)
@@ -167,12 +184,14 @@ def get_mock_peak_detection(metric: str, period_days: int) -> PeakDetectionListR
         ts = now - timedelta(days=random.uniform(0, period_days), hours=random.randint(0, 23))
         z_score = random.uniform(2.0, 4.5)
 
-        peaks.append(PeakDetectionResponse(
-            timestamp=ts,
-            value=random.uniform(100, 500),
-            z_score=z_score,
-            is_significant=True,
-        ))
+        peaks.append(
+            PeakDetectionResponse(
+                timestamp=ts,
+                value=random.uniform(100, 500),
+                z_score=z_score,
+                is_significant=True,
+            )
+        )
 
     peaks.sort(key=lambda p: p.z_score, reverse=True)
 
@@ -193,6 +212,7 @@ def get_mock_comparison(
 ) -> TemporalComparisonResponse:
     """Generate mock period comparison."""
     import random
+
     random.seed(42)
 
     avg_a = random.uniform(40, 60)
@@ -226,6 +246,7 @@ def get_mock_comparison(
 def get_mock_day_over_day(metric: str, lookback_days: int) -> DayOverDayResponse:
     """Generate mock day-over-day comparison."""
     import random
+
     random.seed(42)
 
     now = datetime.now(UTC)
@@ -238,12 +259,14 @@ def get_mock_day_over_day(metric: str, lookback_days: int) -> DayOverDayResponse
 
         change = (value - prev_value) / prev_value * 100 if prev_value else 0
 
-        comparisons.append(DailyComparisonPoint(
-            date=date,
-            value=value,
-            sample_count=random.randint(1000, 3000),
-            change_percent=change,
-        ))
+        comparisons.append(
+            DailyComparisonPoint(
+                date=date,
+                value=value,
+                sample_count=random.randint(1000, 3000),
+                change_percent=change,
+            )
+        )
         prev_value = value
 
     return DayOverDayResponse(
@@ -256,6 +279,7 @@ def get_mock_day_over_day(metric: str, lookback_days: int) -> DayOverDayResponse
 def get_mock_week_over_week(metric: str, lookback_weeks: int) -> WeekOverWeekResponse:
     """Generate mock week-over-week comparison."""
     import random
+
     random.seed(42)
 
     now = datetime.now(UTC)
@@ -270,13 +294,15 @@ def get_mock_week_over_week(metric: str, lookback_weeks: int) -> WeekOverWeekRes
 
         change = (value - prev_value) / prev_value * 100 if prev_value else 0
 
-        comparisons.append(WeeklyComparisonPoint(
-            year=year,
-            week=week,
-            value=value,
-            sample_count=random.randint(7000, 21000),
-            change_percent=change,
-        ))
+        comparisons.append(
+            WeeklyComparisonPoint(
+                year=year,
+                week=week,
+                value=value,
+                sample_count=random.randint(7000, 21000),
+                change_percent=change,
+            )
+        )
         prev_value = value
 
     return WeekOverWeekResponse(
@@ -289,6 +315,7 @@ def get_mock_week_over_week(metric: str, lookback_weeks: int) -> WeekOverWeekRes
 # ============================================================================
 # API Endpoints
 # ============================================================================
+
 
 @router.get("/hourly-breakdown", response_model=HourlyBreakdownResponse)
 def get_hourly_breakdown(
@@ -413,7 +440,9 @@ def get_temporal_comparison(
     Performs statistical comparison (t-test) to determine if change is significant.
     """
     if mock_mode:
-        return get_mock_comparison(metric, period_a_start, period_a_end, period_b_start, period_b_end)
+        return get_mock_comparison(
+            metric, period_a_start, period_a_end, period_b_start, period_b_end
+        )
 
     tenant_id = get_tenant_id()
 

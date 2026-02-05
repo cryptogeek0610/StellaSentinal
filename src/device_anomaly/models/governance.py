@@ -7,6 +7,7 @@ This module manages the model lifecycle including:
 - One-click rollback capability
 - Metrics tracking per version
 """
+
 from __future__ import annotations
 
 import json
@@ -26,7 +27,7 @@ class ModelStatus(Enum):
 
     TRAINING = "training"
     VALIDATION = "validation"
-    SHADOW = "shadow"        # Running alongside production for A/B testing
+    SHADOW = "shadow"  # Running alongside production for A/B testing
     PRODUCTION = "production"
     DEPRECATED = "deprecated"
     ROLLED_BACK = "rolled_back"
@@ -73,8 +74,12 @@ class ModelVersion:
             model_path=Path(data["model_path"]),
             status=ModelStatus(data["status"]),
             created_at=datetime.fromisoformat(data["created_at"]),
-            promoted_at=datetime.fromisoformat(data["promoted_at"]) if data.get("promoted_at") else None,
-            deprecated_at=datetime.fromisoformat(data["deprecated_at"]) if data.get("deprecated_at") else None,
+            promoted_at=datetime.fromisoformat(data["promoted_at"])
+            if data.get("promoted_at")
+            else None,
+            deprecated_at=datetime.fromisoformat(data["deprecated_at"])
+            if data.get("deprecated_at")
+            else None,
             metrics=data.get("metrics", {}),
             config=data.get("config", {}),
             parent_version=data.get("parent_version"),
@@ -291,7 +296,11 @@ class ModelGovernanceRegistry:
             target = self._versions.get(to_version_id)
         else:
             # Rollback to parent version
-            target = self._versions.get(current_prod.parent_version) if current_prod.parent_version else None
+            target = (
+                self._versions.get(current_prod.parent_version)
+                if current_prod.parent_version
+                else None
+            )
 
         if not target:
             logger.error("No rollback target available")
@@ -333,11 +342,7 @@ class ModelGovernanceRegistry:
         limit: int = 20,
     ) -> list[ModelVersion]:
         """Get model version history, most recent first."""
-        versions = sorted(
-            self._versions.values(),
-            key=lambda v: v.created_at,
-            reverse=True
-        )
+        versions = sorted(self._versions.values(), key=lambda v: v.created_at, reverse=True)
         return versions[:limit]
 
     def get_metrics_comparison(
@@ -379,7 +384,8 @@ class ModelGovernanceRegistry:
         # Identify versions to remove
         removable_statuses = {ModelStatus.DEPRECATED, ModelStatus.FAILED, ModelStatus.ROLLED_BACK}
         candidates = [
-            v for v in self._versions.values()
+            v
+            for v in self._versions.values()
             if v.status in removable_statuses and v.created_at < cutoff
         ]
 
@@ -392,7 +398,7 @@ class ModelGovernanceRegistry:
 
         if total_versions > keep_count:
             excess = total_versions - keep_count
-            to_remove = candidates[:min(excess, len(candidates))]
+            to_remove = candidates[: min(excess, len(candidates))]
 
         for version in to_remove:
             del self._versions[version.version_id]

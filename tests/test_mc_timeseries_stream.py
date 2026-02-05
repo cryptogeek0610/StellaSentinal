@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pandas as pd
 
@@ -8,7 +8,7 @@ from device_anomaly.data_access import mc_timeseries_loader
 
 
 def test_stream_mc_timeseries_stops_on_non_advancing_watermark(monkeypatch):
-    start_time = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    start_time = datetime(2024, 1, 1, tzinfo=UTC)
     df = pd.DataFrame([{"DeviceId": 1, "ServerDateTime": start_time}])
 
     def fake_load(*args, **kwargs):

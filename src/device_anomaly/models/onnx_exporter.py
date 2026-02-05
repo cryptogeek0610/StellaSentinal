@@ -154,7 +154,11 @@ class ONNXModelExporter:
             with open(output_path, "wb") as f:
                 f.write(onnx_model.SerializeToString())
 
-            logger.info("ONNX model saved to %s (size: %.2f MB)", output_path, output_path.stat().st_size / 1e6)
+            logger.info(
+                "ONNX model saved to %s (size: %.2f MB)",
+                output_path,
+                output_path.stat().st_size / 1e6,
+            )
 
             # Validate export
             if validate:

@@ -7,6 +7,7 @@ This module predicts future anomalies using time-series forecasting:
 - Network degradation trends
 - Performance degradation trajectory
 """
+
 from __future__ import annotations
 
 import logging
@@ -116,9 +117,11 @@ class PredictiveAnomalyDetector:
 
             # Hours until critical
             if avg_drain_per_hour > 0:
-                hours_until_critical = (current_level - self.config.battery_critical_level) / avg_drain_per_hour
+                hours_until_critical = (
+                    current_level - self.config.battery_critical_level
+                ) / avg_drain_per_hour
             else:
-                hours_until_critical = float('inf')
+                hours_until_critical = float("inf")
 
             # Calculate confidence based on history length and variance
             history_factor = min(1.0, len(drain_history) / 14)  # More history = more confidence
@@ -141,7 +144,7 @@ class PredictiveAnomalyDetector:
                 device_id=device_id,
                 will_occur=will_fail,
                 predicted_value=max(0, predicted_end),
-                time_until=hours_until_critical if hours_until_critical < float('inf') else None,
+                time_until=hours_until_critical if hours_until_critical < float("inf") else None,
                 confidence=confidence,
                 details={
                     "current_level": current_level,
@@ -218,10 +221,12 @@ class PredictiveAnomalyDetector:
                 )
 
             # Days until zero
-            days_until_zero = -current / slope if slope < 0 else float('inf')
+            days_until_zero = -current / slope if slope < 0 else float("inf")
 
             # Calculate confidence
-            r_squared = 1 - (np.var(storage_history - (slope * x + intercept)) / np.var(storage_history))
+            r_squared = 1 - (
+                np.var(storage_history - (slope * x + intercept)) / np.var(storage_history)
+            )
             history_factor = min(1.0, len(storage_history) / 30)
             confidence = min(0.9, r_squared * history_factor)
 
@@ -299,11 +304,11 @@ class PredictiveAnomalyDetector:
             # Analyze drop rate trend
             drop_slope = 0.0
             if len(drop_rate_history) >= self.config.min_history_points:
-                drop_slope, _ = np.polyfit(x[:len(drop_rate_history)], drop_rate_history, 1)
+                drop_slope, _ = np.polyfit(x[: len(drop_rate_history)], drop_rate_history, 1)
 
             # Degradation indicators
             signal_degrading = signal_slope < -0.5  # Losing 0.5 dBm per period
-            drops_increasing = drop_slope > 0.01   # Drop rate increasing
+            drops_increasing = drop_slope > 0.01  # Drop rate increasing
 
             # Current quality
             current_signal = signal_history[-1]
@@ -316,7 +321,10 @@ class PredictiveAnomalyDetector:
             will_degrade = signal_degrading or drops_increasing
 
             # Confidence based on trend clarity
-            signal_r2 = 1 - (np.var(signal_history - (signal_slope * x + signal_history[0])) / (np.var(signal_history) + 1e-6))
+            signal_r2 = 1 - (
+                np.var(signal_history - (signal_slope * x + signal_history[0]))
+                / (np.var(signal_history) + 1e-6)
+            )
             confidence = min(0.85, abs(signal_r2) * 0.8 + 0.2)
 
             recommendation = ""
@@ -400,7 +408,9 @@ class PredictiveAnomalyDetector:
             # Battery prediction
             if battery_drain_col in grp.columns and battery_col in grp.columns:
                 drain_history = grp[battery_drain_col].dropna().values
-                current_level = grp[battery_col].iloc[-1] if not grp[battery_col].isna().all() else 100
+                current_level = (
+                    grp[battery_col].iloc[-1] if not grp[battery_col].isna().all() else 100
+                )
 
                 battery_pred = self.predict_battery_failure(
                     drain_history=drain_history,
@@ -415,7 +425,11 @@ class PredictiveAnomalyDetector:
             # Storage prediction
             if storage_col in grp.columns and total_storage_col in grp.columns:
                 storage_history = grp[storage_col].dropna().values
-                total = grp[total_storage_col].iloc[-1] if not grp[total_storage_col].isna().all() else 1
+                total = (
+                    grp[total_storage_col].iloc[-1]
+                    if not grp[total_storage_col].isna().all()
+                    else 1
+                )
 
                 storage_pred = self.predict_storage_exhaustion(
                     storage_history=storage_history,
@@ -430,7 +444,11 @@ class PredictiveAnomalyDetector:
             # Network prediction
             if signal_col in grp.columns:
                 signal_history = grp[signal_col].dropna().values
-                drop_history = grp[drop_rate_col].dropna().values if drop_rate_col in grp.columns else np.array([])
+                drop_history = (
+                    grp[drop_rate_col].dropna().values
+                    if drop_rate_col in grp.columns
+                    else np.array([])
+                )
 
                 network_pred = self.predict_network_degradation(
                     signal_history=signal_history,

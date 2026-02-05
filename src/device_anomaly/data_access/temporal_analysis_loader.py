@@ -9,6 +9,7 @@ Data Sources:
 - cs_BatteryLevelDrop (XSight_DW): ~14.8M rows of hourly battery drain
 - cs_AppUsageListed (XSight_DW): ~8.5M rows of hourly app usage
 """
+
 from __future__ import annotations
 
 import logging
@@ -31,6 +32,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class HourlyDataPoint:
     """Single hour's aggregated data."""
+
     hour: int
     avg_value: float
     min_value: float
@@ -42,6 +44,7 @@ class HourlyDataPoint:
 @dataclass
 class HourlyBreakdownData:
     """Hourly breakdown analysis."""
+
     metric: str
     hourly_data: list[HourlyDataPoint] = field(default_factory=list)
     peak_hours: list[int] = field(default_factory=list)
@@ -52,6 +55,7 @@ class HourlyBreakdownData:
 @dataclass
 class PeakDetection:
     """Detected usage peak."""
+
     timestamp: datetime
     value: float
     z_score: float
@@ -61,6 +65,7 @@ class PeakDetection:
 @dataclass
 class PeriodStats:
     """Statistics for a time period."""
+
     start: datetime
     end: datetime
     avg: float
@@ -72,6 +77,7 @@ class PeriodStats:
 @dataclass
 class TemporalComparisonData:
     """Comparison between two time periods."""
+
     metric: str
     period_a: PeriodStats
     period_b: PeriodStats
@@ -169,14 +175,16 @@ def load_hourly_breakdown(
     # Build hourly data points
     hourly_data = []
     for _, row in df.iterrows():
-        hourly_data.append(HourlyDataPoint(
-            hour=int(row["hour"]),
-            avg_value=float(row["avg_value"]) if pd.notna(row["avg_value"]) else 0,
-            min_value=float(row["min_value"]) if pd.notna(row["min_value"]) else 0,
-            max_value=float(row["max_value"]) if pd.notna(row["max_value"]) else 0,
-            std_value=float(row["std_value"]) if pd.notna(row["std_value"]) else 0,
-            sample_count=int(row["sample_count"]),
-        ))
+        hourly_data.append(
+            HourlyDataPoint(
+                hour=int(row["hour"]),
+                avg_value=float(row["avg_value"]) if pd.notna(row["avg_value"]) else 0,
+                min_value=float(row["min_value"]) if pd.notna(row["min_value"]) else 0,
+                max_value=float(row["max_value"]) if pd.notna(row["max_value"]) else 0,
+                std_value=float(row["std_value"]) if pd.notna(row["std_value"]) else 0,
+                sample_count=int(row["sample_count"]),
+            )
+        )
 
     # Find peak and low hours
     avg_values = [h.avg_value for h in hourly_data]
@@ -256,11 +264,11 @@ def detect_peaks(
     # Get hourly aggregates
     query = text(f"""
         SELECT
-            DATEADD(HOUR, DATEDIFF(HOUR, 0, {config['time_col']}), 0) as time_bucket,
-            SUM(CAST({config['value_col']} AS FLOAT)) as total_value
+            DATEADD(HOUR, DATEDIFF(HOUR, 0, {config["time_col"]}), 0) as time_bucket,
+            SUM(CAST({config["value_col"]} AS FLOAT)) as total_value
         FROM dbo.{table_name}
-        WHERE {config['time_col']} > :start_time
-        GROUP BY DATEADD(HOUR, DATEDIFF(HOUR, 0, {config['time_col']}), 0)
+        WHERE {config["time_col"]} > :start_time
+        GROUP BY DATEADD(HOUR, DATEDIFF(HOUR, 0, {config["time_col"]}), 0)
         ORDER BY time_bucket
     """)
 
@@ -288,17 +296,19 @@ def detect_peaks(
             ts = row["time_bucket"]
             if isinstance(ts, str):
                 ts = datetime.fromisoformat(ts)
-            elif hasattr(ts, 'to_pydatetime'):
+            elif hasattr(ts, "to_pydatetime"):
                 ts = ts.to_pydatetime()
             if ts.tzinfo is None:
                 ts = ts.replace(tzinfo=UTC)
 
-            peaks.append(PeakDetection(
-                timestamp=ts,
-                value=value,
-                z_score=z_score,
-                is_significant=True,
-            ))
+            peaks.append(
+                PeakDetection(
+                    timestamp=ts,
+                    value=value,
+                    z_score=z_score,
+                    is_significant=True,
+                )
+            )
 
     # Sort by z-score magnitude
     peaks.sort(key=lambda p: abs(p.z_score), reverse=True)
@@ -363,10 +373,10 @@ def compare_periods(
 
     def get_period_data(start: datetime, end: datetime) -> pd.DataFrame:
         query = text(f"""
-            SELECT CAST({config['value_col']} AS FLOAT) as value
+            SELECT CAST({config["value_col"]} AS FLOAT) as value
             FROM dbo.{table_name}
-            WHERE {config['time_col']} >= :start_time
-                AND {config['time_col']} < :end_time
+            WHERE {config["time_col"]} >= :start_time
+                AND {config["time_col"]} < :end_time
         """)
         try:
             with engine.connect() as conn:
@@ -467,12 +477,12 @@ def get_day_over_day_comparison(
     # Get daily aggregates
     query = text(f"""
         SELECT
-            CAST({config['time_col']} AS DATE) as date,
-            AVG(CAST({config['value_col']} AS FLOAT)) as avg_value,
+            CAST({config["time_col"]} AS DATE) as date,
+            AVG(CAST({config["value_col"]} AS FLOAT)) as avg_value,
             COUNT(*) as sample_count
         FROM dbo.{table_name}
-        WHERE {config['time_col']} > :start_time
-        GROUP BY CAST({config['time_col']} AS DATE)
+        WHERE {config["time_col"]} > :start_time
+        GROUP BY CAST({config["time_col"]} AS DATE)
         ORDER BY date
     """)
 
@@ -497,12 +507,14 @@ def get_day_over_day_comparison(
         else:
             change = 0
 
-        comparisons.append({
-            "date": str(row["date"]),
-            "value": current_value,
-            "sample_count": int(row["sample_count"]),
-            "change_percent": change,
-        })
+        comparisons.append(
+            {
+                "date": str(row["date"]),
+                "value": current_value,
+                "sample_count": int(row["sample_count"]),
+                "change_percent": change,
+            }
+        )
 
         prev_value = current_value
 
@@ -549,13 +561,13 @@ def get_week_over_week_comparison(
     # Get weekly aggregates
     query = text(f"""
         SELECT
-            DATEPART(YEAR, {config['time_col']}) as year,
-            DATEPART(WEEK, {config['time_col']}) as week,
-            AVG(CAST({config['value_col']} AS FLOAT)) as avg_value,
+            DATEPART(YEAR, {config["time_col"]}) as year,
+            DATEPART(WEEK, {config["time_col"]}) as week,
+            AVG(CAST({config["value_col"]} AS FLOAT)) as avg_value,
             COUNT(*) as sample_count
         FROM dbo.{table_name}
-        WHERE {config['time_col']} > :start_time
-        GROUP BY DATEPART(YEAR, {config['time_col']}), DATEPART(WEEK, {config['time_col']})
+        WHERE {config["time_col"]} > :start_time
+        GROUP BY DATEPART(YEAR, {config["time_col"]}), DATEPART(WEEK, {config["time_col"]})
         ORDER BY year, week
     """)
 
@@ -580,13 +592,15 @@ def get_week_over_week_comparison(
         else:
             change = 0
 
-        comparisons.append({
-            "year": int(row["year"]),
-            "week": int(row["week"]),
-            "value": current_value,
-            "sample_count": int(row["sample_count"]),
-            "change_percent": change,
-        })
+        comparisons.append(
+            {
+                "year": int(row["year"]),
+                "week": int(row["week"]),
+                "value": current_value,
+                "sample_count": int(row["sample_count"]),
+                "change_percent": change,
+            }
+        )
 
         prev_value = current_value
 

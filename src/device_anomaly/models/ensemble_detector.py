@@ -9,6 +9,7 @@ This module provides a multi-algorithm ensemble for robust anomaly detection:
 The ensemble combines scores using weighted averaging for improved
 detection accuracy and reduced false positives.
 """
+
 from __future__ import annotations
 
 import logging
@@ -43,11 +44,13 @@ class EnsembleConfig:
     ocsvm_nu: float = 0.05
 
     # Ensemble weights
-    weights: dict[str, float] = field(default_factory=lambda: {
-        "isolation_forest": 0.5,
-        "lof": 0.3,
-        "ocsvm": 0.2,
-    })
+    weights: dict[str, float] = field(
+        default_factory=lambda: {
+            "isolation_forest": 0.5,
+            "lof": 0.3,
+            "ocsvm": 0.2,
+        }
+    )
 
     # Enabled algorithms
     enable_isolation_forest: bool = True
@@ -132,9 +135,15 @@ class EnsembleAnomalyDetector:
         numeric_cols = [c for c in df.columns if ptypes.is_numeric_dtype(df[c])]
 
         exclude = {
-            "DeviceId", "ModelId", "ManufacturerId", "OsVersionId",
-            "is_injected_anomaly", "anomaly_score", "anomaly_label",
-            "ensemble_score", "ensemble_label",
+            "DeviceId",
+            "ModelId",
+            "ManufacturerId",
+            "OsVersionId",
+            "is_injected_anomaly",
+            "anomaly_score",
+            "anomaly_label",
+            "ensemble_score",
+            "ensemble_label",
         }
 
         candidates = [c for c in numeric_cols if c not in exclude]
@@ -215,6 +224,7 @@ class EnsembleAnomalyDetector:
         """Resolve feature weights by domain."""
         try:
             from device_anomaly.config.feature_config import FeatureConfig
+
             domains = FeatureConfig.feature_domains
             weights = FeatureConfig.domain_weights
         except ImportError:
@@ -234,7 +244,7 @@ class EnsembleAnomalyDetector:
         suffixes = ["_roll_mean", "_roll_std", "_delta", "_cohort_z", "_trend", "_residual"]
         for suf in suffixes:
             if col.endswith(suf):
-                return col[:-len(suf)]
+                return col[: -len(suf)]
         if "_z_" in col:
             return col.split("_z_")[0]
         return col
@@ -390,13 +400,15 @@ class EnsembleAnomalyDetector:
         anomaly_votes = (pred_matrix == -1).sum(axis=0)
         normal_votes = n_models - anomaly_votes
 
-        agreement = pd.DataFrame({
-            "anomaly_votes": anomaly_votes,
-            "normal_votes": normal_votes,
-            "agreement_ratio": np.maximum(anomaly_votes, normal_votes) / n_models,
-            "unanimous_anomaly": anomaly_votes == n_models,
-            "unanimous_normal": normal_votes == n_models,
-        })
+        agreement = pd.DataFrame(
+            {
+                "anomaly_votes": anomaly_votes,
+                "normal_votes": normal_votes,
+                "agreement_ratio": np.maximum(anomaly_votes, normal_votes) / n_models,
+                "unanimous_anomaly": anomaly_votes == n_models,
+                "unanimous_normal": normal_votes == n_models,
+            }
+        )
 
         return agreement
 
@@ -410,7 +422,9 @@ class EnsembleAnomalyDetector:
         state = {
             "models": self.models,
             "feature_cols": self.feature_cols,
-            "impute_values": self.impute_values.to_dict() if self.impute_values is not None else None,
+            "impute_values": self.impute_values.to_dict()
+            if self.impute_values is not None
+            else None,
             "scaler": self.scaler,
             "config": self.config,
             "feature_weights": self.feature_weights,

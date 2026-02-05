@@ -15,6 +15,7 @@ StatType codes used:
 - 10: device_temperature
 - 11: battery_temperature
 """
+
 from __future__ import annotations
 
 import logging
@@ -58,6 +59,7 @@ HEALTH_THRESHOLDS = {
 @dataclass
 class SystemHealthMetrics:
     """Aggregated system health metrics for the fleet."""
+
     avg_cpu_usage: float = 0.0
     avg_memory_usage: float = 0.0
     avg_storage_available_pct: float = 0.0
@@ -73,6 +75,7 @@ class SystemHealthMetrics:
 @dataclass
 class StorageForecast:
     """Storage exhaustion forecast for a device."""
+
     device_id: int
     device_name: str = ""
     current_storage_pct: float = 0.0
@@ -85,6 +88,7 @@ class StorageForecast:
 @dataclass
 class CohortHealthBreakdown:
     """Health breakdown by device cohort (model/OS)."""
+
     cohort_id: str
     cohort_name: str
     device_count: int = 0
@@ -98,6 +102,7 @@ class CohortHealthBreakdown:
 @dataclass
 class HealthTrendPoint:
     """Single point in a health trend time-series."""
+
     timestamp: datetime
     value: float
     device_count: int = 0
@@ -178,13 +183,17 @@ def load_system_health_metrics(
     if 6 in pivot_df.columns:
         cpu_values = pivot_df[6].dropna()
         metrics.avg_cpu_usage = float(cpu_values.mean()) if len(cpu_values) > 0 else 0
-        metrics.devices_high_cpu = int((cpu_values > HEALTH_THRESHOLDS["cpu_usage"]["warning"]).sum())
+        metrics.devices_high_cpu = int(
+            (cpu_values > HEALTH_THRESHOLDS["cpu_usage"]["warning"]).sum()
+        )
 
     # Calculate memory usage stats
     if 7 in pivot_df.columns:
         mem_values = pivot_df[7].dropna()
         metrics.avg_memory_usage = float(mem_values.mean()) if len(mem_values) > 0 else 0
-        metrics.devices_high_memory = int((mem_values > HEALTH_THRESHOLDS["memory_usage"]["warning"]).sum())
+        metrics.devices_high_memory = int(
+            (mem_values > HEALTH_THRESHOLDS["memory_usage"]["warning"]).sum()
+        )
 
     # Calculate storage stats (available_storage / total_storage * 100)
     if 2 in pivot_df.columns and 3 in pivot_df.columns:
@@ -193,13 +202,17 @@ def load_system_health_metrics(
         # Avoid division by zero
         storage_pct = np.where(total_storage > 0, (avail_storage / total_storage) * 100, 0)
         metrics.avg_storage_available_pct = float(np.mean(storage_pct))
-        metrics.devices_low_storage = int((storage_pct < HEALTH_THRESHOLDS["storage_available_pct"]["warning"]).sum())
+        metrics.devices_low_storage = int(
+            (storage_pct < HEALTH_THRESHOLDS["storage_available_pct"]["warning"]).sum()
+        )
 
     # Calculate temperature stats
     if 10 in pivot_df.columns:
         temp_values = pivot_df[10].dropna()
         metrics.avg_device_temp = float(temp_values.mean()) if len(temp_values) > 0 else 0
-        metrics.devices_high_temp = int((temp_values > HEALTH_THRESHOLDS["device_temperature"]["warning"]).sum())
+        metrics.devices_high_temp = int(
+            (temp_values > HEALTH_THRESHOLDS["device_temperature"]["warning"]).sum()
+        )
 
     if 11 in pivot_df.columns:
         batt_temp = pivot_df[11].dropna()
@@ -294,17 +307,19 @@ def load_health_trends(
         ts = row["time_bucket"]
         if isinstance(ts, str):
             ts = datetime.fromisoformat(ts)
-        elif hasattr(ts, 'to_pydatetime'):
+        elif hasattr(ts, "to_pydatetime"):
             ts = ts.to_pydatetime()
 
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=UTC)
 
-        trends.append(HealthTrendPoint(
-            timestamp=ts,
-            value=float(row["avg_value"]),
-            device_count=int(row["device_count"]),
-        ))
+        trends.append(
+            HealthTrendPoint(
+                timestamp=ts,
+                value=float(row["avg_value"]),
+                device_count=int(row["device_count"]),
+            )
+        )
 
     return trends
 
@@ -421,17 +436,19 @@ def calculate_storage_forecast(
                 ss_tot = np.sum((y - np.mean(y)) ** 2)
                 r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0
 
-                forecasts.append(StorageForecast(
-                    device_id=int(device_id),
-                    current_storage_pct=current_pct,
-                    storage_trend_gb_per_day=slope / (1024 * 1024 * 1024),  # Convert to GB
-                    projected_full_date=projected_date,
-                    days_until_full=int(days_until_zero),
-                    confidence=max(0, min(1, r_squared)),
-                ))
+                forecasts.append(
+                    StorageForecast(
+                        device_id=int(device_id),
+                        current_storage_pct=current_pct,
+                        storage_trend_gb_per_day=slope / (1024 * 1024 * 1024),  # Convert to GB
+                        projected_full_date=projected_date,
+                        days_until_full=int(days_until_zero),
+                        confidence=max(0, min(1, r_squared)),
+                    )
+                )
 
     # Sort by days until full (most urgent first)
-    forecasts.sort(key=lambda f: f.days_until_full or float('inf'))
+    forecasts.sort(key=lambda f: f.days_until_full or float("inf"))
 
     return forecasts
 
@@ -479,21 +496,29 @@ def load_cohort_health_breakdown(
         merged = metrics_df.merge(devices_df, on="DeviceId", how="left")
 
         # Create cohort identifier
-        merged["cohort_id"] = merged["Model"].fillna("Unknown") + "_" + merged["OSType"].fillna("Unknown")
+        merged["cohort_id"] = (
+            merged["Model"].fillna("Unknown") + "_" + merged["OSType"].fillna("Unknown")
+        )
         merged["cohort_name"] = merged["Model"].fillna("Unknown Model")
 
     except Exception as e:
         logger.debug(f"Could not load device info for cohort breakdown: {e}")
         # Fallback: no cohort grouping, just return overall
-        return [CohortHealthBreakdown(
-            cohort_id="all_devices",
-            cohort_name="All Devices",
-            device_count=len(metrics_df),
-            health_score=_calculate_health_score(metrics_df),
-            avg_cpu=float(metrics_df["cpu_usage"].mean()) if "cpu_usage" in metrics_df else 0,
-            avg_memory=float(metrics_df["memory_usage"].mean()) if "memory_usage" in metrics_df else 0,
-            avg_storage_pct=float(metrics_df["storage_pct"].mean()) if "storage_pct" in metrics_df else 0,
-        )]
+        return [
+            CohortHealthBreakdown(
+                cohort_id="all_devices",
+                cohort_name="All Devices",
+                device_count=len(metrics_df),
+                health_score=_calculate_health_score(metrics_df),
+                avg_cpu=float(metrics_df["cpu_usage"].mean()) if "cpu_usage" in metrics_df else 0,
+                avg_memory=float(metrics_df["memory_usage"].mean())
+                if "memory_usage" in metrics_df
+                else 0,
+                avg_storage_pct=float(metrics_df["storage_pct"].mean())
+                if "storage_pct" in metrics_df
+                else 0,
+            )
+        ]
 
     # Group by cohort and calculate stats
     breakdowns = []
@@ -515,7 +540,9 @@ def load_cohort_health_breakdown(
         if "cpu_usage" in group.columns:
             at_risk += (group["cpu_usage"] > HEALTH_THRESHOLDS["cpu_usage"]["warning"]).sum()
         if "storage_pct" in group.columns:
-            at_risk += (group["storage_pct"] < HEALTH_THRESHOLDS["storage_available_pct"]["warning"]).sum()
+            at_risk += (
+                group["storage_pct"] < HEALTH_THRESHOLDS["storage_available_pct"]["warning"]
+            ).sum()
         breakdown.devices_at_risk = int(at_risk)
 
         breakdowns.append(breakdown)
@@ -555,10 +582,14 @@ def _load_device_health_dataframe(
 
     try:
         with engine.connect() as conn:
-            df = pd.read_sql(query, conn, params={
-                "start_time": start_time,
-                "stat_types": stat_types,
-            })
+            df = pd.read_sql(
+                query,
+                conn,
+                params={
+                    "start_time": start_time,
+                    "stat_types": stat_types,
+                },
+            )
     except Exception as e:
         logger.error(f"Failed to load device health dataframe: {e}")
         return pd.DataFrame()

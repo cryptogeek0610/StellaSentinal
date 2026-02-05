@@ -4,6 +4,7 @@ SHAP-Based Explainability for Anomaly Detection.
 This module provides feature-level explanations for why devices were
 flagged as anomalies using SHAP (SHapley Additive exPlanations) values.
 """
+
 from __future__ import annotations
 
 import logging
@@ -87,11 +88,7 @@ class AnomalyExplainer:
 
         # Sample background data if needed
         if len(X_background) > self.config.background_samples:
-            idx = np.random.choice(
-                len(X_background),
-                self.config.background_samples,
-                replace=False
-            )
+            idx = np.random.choice(len(X_background), self.config.background_samples, replace=False)
             X_background = X_background[idx]
 
         logger.info(f"Fitting SHAP explainer with {len(X_background)} background samples")
@@ -263,14 +260,16 @@ class AnomalyExplainer:
                 for name, value in contributions[:top_k]
             ]
 
-            explanations.append(AnomalyExplanation(
-                device_id=device_ids[i],
-                anomaly_score=float(scores[i]),
-                is_anomaly=(labels[i] == -1),
-                top_contributors=top_contributors,
-                shap_sum=0.0,
-                confidence=0.5,
-            ))
+            explanations.append(
+                AnomalyExplanation(
+                    device_id=device_ids[i],
+                    anomaly_score=float(scores[i]),
+                    is_anomaly=(labels[i] == -1),
+                    top_contributors=top_contributors,
+                    shap_sum=0.0,
+                    confidence=0.5,
+                )
+            )
 
         return explanations
 
@@ -305,16 +304,13 @@ class AnomalyExplainer:
         # Add explanation columns to dataframe
         df_out = df.copy()
         df_out["explanation_top_features"] = [
-            ", ".join(e["feature"] for e in exp.top_contributors)
-            for exp in explanations
+            ", ".join(e["feature"] for e in exp.top_contributors) for exp in explanations
         ]
         df_out["explanation_confidence"] = [exp.confidence for exp in explanations]
         df_out["shap_sum"] = [exp.shap_sum for exp in explanations]
 
         # Add detailed explanations as JSON
-        df_out["explanation_details"] = [
-            exp.top_contributors for exp in explanations
-        ]
+        df_out["explanation_details"] = [exp.top_contributors for exp in explanations]
 
         return df_out
 

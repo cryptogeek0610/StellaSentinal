@@ -4,11 +4,16 @@ from pathlib import Path
 import pandas as pd
 from fastapi.testclient import TestClient
 
-from device_anomaly.data_access.anomaly_persistence import _select_feature_columns, persist_anomaly_results
+from device_anomaly.data_access.anomaly_persistence import (
+    _select_feature_columns,
+    persist_anomaly_results,
+)
 from device_anomaly.features.device_features import DeviceFeatureBuilder
-from device_anomaly.models.anomaly_detector import AnomalyDetectorConfig, AnomalyDetectorIsolationForest
+from device_anomaly.models.anomaly_detector import (
+    AnomalyDetectorConfig,
+    AnomalyDetectorIsolationForest,
+)
 from device_anomaly.models.baseline import compute_data_driven_baselines
-
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "tiny_telemetry.csv"
 

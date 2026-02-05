@@ -10,19 +10,21 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
-from sklearn.ensemble import IsolationForest
 
-from device_anomaly.models.anomaly_detector import AnomalyDetectorIsolationForest, AnomalyDetectorConfig
-from device_anomaly.models.inference_engine import (
-    create_inference_engine,
-    EngineType,
-    EngineConfig,
-    ExecutionProvider,
-    ScikitLearnEngine,
-    ONNXInferenceEngine,
-    FallbackInferenceEngine,
+from device_anomaly.models.anomaly_detector import (
+    AnomalyDetectorConfig,
+    AnomalyDetectorIsolationForest,
 )
-from device_anomaly.models.onnx_exporter import ONNXModelExporter, ONNXExportConfig, ONNXQuantizer
+from device_anomaly.models.inference_engine import (
+    EngineConfig,
+    EngineType,
+    ExecutionProvider,
+    FallbackInferenceEngine,
+    ONNXInferenceEngine,
+    ScikitLearnEngine,
+    create_inference_engine,
+)
+from device_anomaly.models.onnx_exporter import ONNXExportConfig, ONNXModelExporter, ONNXQuantizer
 
 
 @pytest.fixture
@@ -302,9 +304,7 @@ class TestAnomalyDetectorIntegration:
 
     def test_save_with_onnx_export(self, sample_data):
         """Test save_model with ONNX export"""
-        detector = AnomalyDetectorIsolationForest(
-            config=AnomalyDetectorConfig(n_estimators=50)
-        )
+        detector = AnomalyDetectorIsolationForest(config=AnomalyDetectorConfig(n_estimators=50))
         detector.fit(sample_data)
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -323,9 +323,7 @@ class TestAnomalyDetectorIntegration:
 
     def test_save_without_onnx(self, sample_data):
         """Test save_model without ONNX export"""
-        detector = AnomalyDetectorIsolationForest(
-            config=AnomalyDetectorConfig(n_estimators=50)
-        )
+        detector = AnomalyDetectorIsolationForest(config=AnomalyDetectorConfig(n_estimators=50))
         detector.fit(sample_data)
 
         with tempfile.TemporaryDirectory() as tmpdir:

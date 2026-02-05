@@ -7,6 +7,7 @@ This worker processes training jobs from a Redis queue, allowing for:
 - Separate resource allocation from the API
 - Reliable long-running ML training jobs
 """
+
 from __future__ import annotations
 
 import json
@@ -114,13 +115,15 @@ class TrainingJobProcessor:
         # Update status to show pending job
         self.redis.set(
             STATUS_KEY,
-            json.dumps({
-                "run_id": job_id,
-                "status": "pending",
-                "progress": 0,
-                "message": "Job queued, waiting for worker...",
-                "submitted_at": job["submitted_at"],
-            }),
+            json.dumps(
+                {
+                    "run_id": job_id,
+                    "status": "pending",
+                    "progress": 0,
+                    "message": "Job queued, waiting for worker...",
+                    "submitted_at": job["submitted_at"],
+                }
+            ),
         )
 
         logger.info(f"Job {job_id} submitted to queue")
@@ -161,13 +164,16 @@ class TrainingJobProcessor:
             # Stage 3: Feature engineering (20-40%)
             self.update_progress(run_id, 25, "Applying feature engineering...", "features")
             df_features = pipeline.prepare_features(df)
-            self.update_progress(run_id, 40, f"Created {len(df_features.columns)} features", "features")
+            self.update_progress(
+                run_id, 40, f"Created {len(df_features.columns)} features", "features"
+            )
 
             # Stage 4: Train/validation split (40-50%)
             self.update_progress(run_id, 45, "Splitting data for validation...", "split")
             df_train, df_val = pipeline.train_validation_split(df_features)
             self.update_progress(
-                run_id, 50,
+                run_id,
+                50,
                 f"Train: {len(df_train):,} rows, Val: {len(df_val):,} rows",
                 "split",
             )
@@ -193,7 +199,8 @@ class TrainingJobProcessor:
             self.update_progress(run_id, 65, "Training IsolationForest model...", "training")
             detector = pipeline.train_model(df_train)
             self.update_progress(
-                run_id, 80,
+                run_id,
+                80,
                 f"Model trained with {len(detector.feature_cols)} features",
                 "training",
             )
@@ -202,7 +209,8 @@ class TrainingJobProcessor:
             self.update_progress(run_id, 85, "Evaluating model on validation set...", "validation")
             metrics = pipeline.evaluate_model(detector, df_val)
             self.update_progress(
-                run_id, 90,
+                run_id,
+                90,
                 f"Validation complete - AUC: {metrics.validation_auc or 'N/A'}",
                 "validation",
             )
@@ -210,7 +218,7 @@ class TrainingJobProcessor:
             # Stage 8: Export artifacts (90-100%)
             self.update_progress(run_id, 95, "Exporting model artifacts...", "export")
             # Sanitize run_id to prevent path traversal attacks
-            safe_run_id = re.sub(r'[^a-zA-Z0-9_-]', '', run_id)
+            safe_run_id = re.sub(r"[^a-zA-Z0-9_-]", "", run_id)
             output_dir = f"models/production/{safe_run_id}"
             model_version = pipeline.get_model_version()
             artifacts = pipeline.export_artifacts(

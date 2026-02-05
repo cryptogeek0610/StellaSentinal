@@ -10,6 +10,7 @@ This module transforms raw telemetry data into rich ML features including:
 - Cross-domain interaction features
 - Volatility and stability metrics
 """
+
 from __future__ import annotations
 
 import logging
@@ -114,9 +115,7 @@ class DeviceFeatureBuilder:
 
         # Step 1: Per-device rolling features
         logger.info("Computing per-device rolling features...")
-        df_feat = df.groupby("DeviceId", group_keys=False).apply(
-            self._per_device_features
-        )
+        df_feat = df.groupby("DeviceId", group_keys=False).apply(self._per_device_features)
         df_feat = df_feat.reset_index(drop=True)
 
         # Step 2: Derived efficiency features
@@ -237,7 +236,9 @@ class DeviceFeatureBuilder:
         logger.info(f"Computing hourly rolling features with windows: {self.hourly_windows}")
 
         # Limit to subset of columns to avoid explosion
-        hourly_cols = [c for c in numeric_cols if c in FeatureConfig.rolling_feature_candidates][:15]
+        hourly_cols = [c for c in numeric_cols if c in FeatureConfig.rolling_feature_candidates][
+            :15
+        ]
 
         for col in hourly_cols:
             if col not in df.columns:
@@ -280,9 +281,7 @@ class DeviceFeatureBuilder:
 
         # Business hours flag (9 AM - 5 PM on weekdays)
         df["is_business_hours"] = (
-            (df["hour_of_day"] >= 9) &
-            (df["hour_of_day"] < 17) &
-            (df["day_of_week"] < 5)
+            (df["hour_of_day"] >= 9) & (df["hour_of_day"] < 17) & (df["day_of_week"] < 5)
         ).astype(int)
 
         # Additional temporal
@@ -313,9 +312,9 @@ class DeviceFeatureBuilder:
                 df[f"{col}_pct_change"] = df[col].sub(prev_val).div(prev_val.abs() + 1e-6)
 
                 # 7-day trend (slope proxy)
-                df[f"{col}_trend_7d"] = (
-                    df[col] - df[col].rolling(7, min_periods=3).mean()
-                ) / (df[col].rolling(7, min_periods=3).std() + 1e-6)
+                df[f"{col}_trend_7d"] = (df[col] - df[col].rolling(7, min_periods=3).mean()) / (
+                    df[col].rolling(7, min_periods=3).std() + 1e-6
+                )
 
         return df
 
@@ -398,7 +397,9 @@ class DeviceFeatureBuilder:
         if all(c in df.columns for c in ["DisconnectCount", "OfflineMinutes"]):
             df["DisconnectSeverity"] = df["DisconnectCount"] * df["OfflineMinutes"]
 
-        if all(c in df.columns for c in ["MinSignalStrength", "MaxSignalStrength", "AvgSignalStrength"]):
+        if all(
+            c in df.columns for c in ["MinSignalStrength", "MaxSignalStrength", "AvgSignalStrength"]
+        ):
             signal_range = df["MaxSignalStrength"] - df["MinSignalStrength"]
             df["SignalVariability"] = signal_range / (df["AvgSignalStrength"].abs() + 1)
 
@@ -436,7 +437,9 @@ class DeviceFeatureBuilder:
             df["WebErrorsPerVisit"] = df["WebErrorCount"] / (df["WebVisitCount"] + 1)
 
         if all(c in df.columns for c in ["NotificationClickCount", "NotificationCount"]):
-            df["NotificationEngagement"] = df["NotificationClickCount"] / (df["NotificationCount"] + 1)
+            df["NotificationEngagement"] = df["NotificationClickCount"] / (
+                df["NotificationCount"] + 1
+            )
 
         if all(c in df.columns for c in ["BackgroundTime", "AppForegroundTime"]):
             df["BackgroundVsForeground"] = df["BackgroundTime"] / (df["AppForegroundTime"] + 1)
@@ -445,12 +448,18 @@ class DeviceFeatureBuilder:
         if all(c in df.columns for c in ["Upload", "Download"]):
             df["UploadToDownloadRatio"] = df["Upload"] / (df["Download"] + 1)
 
-        if all(c in df.columns for c in ["MobileDownload", "MobileUpload", "WifiDownload", "WifiUpload"]):
+        if all(
+            c in df.columns
+            for c in ["MobileDownload", "MobileUpload", "WifiDownload", "WifiUpload"]
+        ):
             mobile = df["MobileDownload"] + df["MobileUpload"]
             wifi = df["WifiDownload"] + df["WifiUpload"] + 1
             df["MobileToWifiDataRatio"] = mobile / wifi
 
-        if all(c in df.columns for c in ["BackgroundDownload", "BackgroundUpload", "Download", "Upload"]):
+        if all(
+            c in df.columns
+            for c in ["BackgroundDownload", "BackgroundUpload", "Download", "Upload"]
+        ):
             bg = df["BackgroundDownload"] + df["BackgroundUpload"]
             total = df["Download"] + df["Upload"] + 1
             df["BackgroundDataRatio"] = bg / total
@@ -590,6 +599,7 @@ class DeviceFeatureBuilder:
 # CONVENIENCE FUNCTIONS
 # =============================================================================
 
+
 def build_features(
     df: pd.DataFrame,
     window: int = 14,
@@ -619,6 +629,7 @@ def build_features(
     if include_cross_correlation:
         try:
             from device_anomaly.features.cross_correlation import build_cross_correlation_features
+
             df_features = build_cross_correlation_features(df_features)
         except Exception as e:
             logger.warning("Cross-correlation features failed: %s", e)
@@ -642,7 +653,9 @@ def get_feature_summary(df: pd.DataFrame) -> dict:
         "cohort_features": len([c for c in cols if "_cohort_z" in c]),
         "volatility_features": len([c for c in cols if "_cv" in c]),
         "temporal_features": len([c for c in cols if c in FeatureConfig.temporal_features]),
-        "derived_features": len([c for c in cols if c in FeatureConfig.get_derived_feature_names()]),
+        "derived_features": len(
+            [c for c in cols if c in FeatureConfig.get_derived_feature_names()]
+        ),
     }
 
     # Count by domain
@@ -737,8 +750,12 @@ def build_feature_builder_from_metadata(
     spec = resolve_feature_spec(metadata)
     norms = resolve_feature_norms(metadata)
     if not norms:
-        logger.warning("Feature norms missing; cross-domain normalization will use dataset quantiles.")
-    return build_feature_builder(feature_spec=spec, feature_norms=norms, compute_cohort=compute_cohort)
+        logger.warning(
+            "Feature norms missing; cross-domain normalization will use dataset quantiles."
+        )
+    return build_feature_builder(
+        feature_spec=spec, feature_norms=norms, compute_cohort=compute_cohort
+    )
 
 
 # =============================================================================
@@ -803,13 +820,18 @@ def add_reboot_features(
 
         # Calculate period length for rate calculation
         from datetime import datetime
-        start = datetime.fromisoformat(start_dt.replace("Z", "+00:00") if "Z" in start_dt else start_dt)
+
+        start = datetime.fromisoformat(
+            start_dt.replace("Z", "+00:00") if "Z" in start_dt else start_dt
+        )
         end = datetime.fromisoformat(end_dt.replace("Z", "+00:00") if "Z" in end_dt else end_dt)
         period_days = max(1, (end - start).days)
 
         # Add derived features to reboot_df
         reboot_df["reboot_rate_per_day"] = reboot_df["reboot_count"] / period_days
-        reboot_df["has_excessive_reboots"] = reboot_df["reboot_count"] > (period_days / 7 * 3)  # >3/week
+        reboot_df["has_excessive_reboots"] = reboot_df["reboot_count"] > (
+            period_days / 7 * 3
+        )  # >3/week
         reboot_df["has_boot_loop_pattern"] = reboot_df["consecutive_reboot_count"] > 1
 
         # Select columns to merge
@@ -864,6 +886,7 @@ def add_reboot_features(
 # EXTENDED FEATURE INTEGRATION
 # =============================================================================
 
+
 def build_extended_features(
     df: pd.DataFrame,
     include_location: bool = True,
@@ -917,6 +940,7 @@ def build_extended_features(
     if include_location:
         try:
             from device_anomaly.features.location_features import LocationFeatureBuilder
+
             location_builder = LocationFeatureBuilder()
             df_features = location_builder.transform(df_features)
             logger.info("Added location features")
@@ -929,6 +953,7 @@ def build_extended_features(
     if include_events:
         try:
             from device_anomaly.features.event_features import EventFeatureBuilder
+
             event_builder = EventFeatureBuilder(window_days=window)
             df_features = event_builder.transform(df_features)
             logger.info("Added event features")
@@ -941,6 +966,7 @@ def build_extended_features(
     if include_system_health:
         try:
             from device_anomaly.features.system_health_features import SystemHealthFeatureBuilder
+
             health_builder = SystemHealthFeatureBuilder(window_days=window)
             df_features = health_builder.transform(df_features)
             logger.info("Added system health features")
@@ -953,6 +979,7 @@ def build_extended_features(
     if include_temporal:
         try:
             from device_anomaly.features.temporal_features import TemporalFeatureBuilder
+
             temporal_builder = TemporalFeatureBuilder()
             df_features = temporal_builder.transform(df_features)
             logger.info("Added temporal features")
@@ -967,6 +994,7 @@ def build_extended_features(
             from device_anomaly.features.network_traffic_features import (
                 NetworkTrafficFeatureBuilder,
             )
+
             network_builder = NetworkTrafficFeatureBuilder()
             df_features = network_builder.transform(df_features)
             logger.info("Added network traffic features")
@@ -979,6 +1007,7 @@ def build_extended_features(
     if include_security:
         try:
             from device_anomaly.features.security_features import SecurityFeatureBuilder
+
             security_builder = SecurityFeatureBuilder()
             df_features = security_builder.transform(df_features)
             logger.info("Added security posture features")
@@ -991,6 +1020,7 @@ def build_extended_features(
     if include_hourly:
         try:
             from device_anomaly.features.hourly_features import HourlyFeatureBuilder
+
             hourly_builder = HourlyFeatureBuilder()
             df_features = hourly_builder.transform(df_features)
             logger.info("Added hourly granularity features")
@@ -1002,6 +1032,7 @@ def build_extended_features(
     # Step 9: Cross-correlation features
     try:
         from device_anomaly.features.cross_correlation import build_cross_correlation_features
+
         df_features = build_cross_correlation_features(df_features)
         logger.info("Added cross-correlation features")
     except ImportError:
@@ -1024,56 +1055,122 @@ def get_extended_feature_summary(df: pd.DataFrame) -> dict:
     summary = get_feature_summary(df)
 
     # Add extended feature counts
-    summary["location_features"] = len([
-        c for c in cols if any(x in c.lower() for x in [
-            "location", "distance", "cluster", "dead_zone", "ap_", "wifi",
-            "mobility", "entropy"
-        ])
-    ])
+    summary["location_features"] = len(
+        [
+            c
+            for c in cols
+            if any(
+                x in c.lower()
+                for x in [
+                    "location",
+                    "distance",
+                    "cluster",
+                    "dead_zone",
+                    "ap_",
+                    "wifi",
+                    "mobility",
+                    "entropy",
+                ]
+            )
+        ]
+    )
 
-    summary["event_features"] = len([
-        c for c in cols if any(x in c.lower() for x in [
-            "event", "crash", "alert", "error_", "warning_", "log"
-        ])
-    ])
+    summary["event_features"] = len(
+        [
+            c
+            for c in cols
+            if any(x in c.lower() for x in ["event", "crash", "alert", "error_", "warning_", "log"])
+        ]
+    )
 
-    summary["system_health_features"] = len([
-        c for c in cols if any(x in c.lower() for x in [
-            "cpu", "ram", "temp", "thermal", "health_score", "pressure"
-        ])
-    ])
+    summary["system_health_features"] = len(
+        [
+            c
+            for c in cols
+            if any(
+                x in c.lower()
+                for x in ["cpu", "ram", "temp", "thermal", "health_score", "pressure"]
+            )
+        ]
+    )
 
-    summary["temporal_decomposition_features"] = len([
-        c for c in cols if any(x in c for x in [
-            "_trend", "_seasonal", "_residual", "_change_point"
-        ])
-    ])
+    summary["temporal_decomposition_features"] = len(
+        [
+            c
+            for c in cols
+            if any(x in c for x in ["_trend", "_seasonal", "_residual", "_change_point"])
+        ]
+    )
 
     # Network traffic features
-    summary["network_traffic_features"] = len([
-        c for c in cols if any(x in c.lower() for x in [
-            "exfiltration", "upload_ratio", "download_ratio", "traffic_concentration",
-            "interface_diversity", "interface_switching", "wifi_data_ratio",
-            "cellular_data", "night_data_pct", "business_hour_data", "hourly_entropy"
-        ])
-    ])
+    summary["network_traffic_features"] = len(
+        [
+            c
+            for c in cols
+            if any(
+                x in c.lower()
+                for x in [
+                    "exfiltration",
+                    "upload_ratio",
+                    "download_ratio",
+                    "traffic_concentration",
+                    "interface_diversity",
+                    "interface_switching",
+                    "wifi_data_ratio",
+                    "cellular_data",
+                    "night_data_pct",
+                    "business_hour_data",
+                    "hourly_entropy",
+                ]
+            )
+        ]
+    )
 
     # Security posture features
-    summary["security_features"] = len([
-        c for c in cols if any(x in c.lower() for x in [
-            "security_score", "is_rooted", "is_encrypted", "has_passcode",
-            "risk_score", "risk_level", "patch_age", "attestation",
-            "developer_risk", "is_compliant", "is_managed"
-        ])
-    ])
+    summary["security_features"] = len(
+        [
+            c
+            for c in cols
+            if any(
+                x in c.lower()
+                for x in [
+                    "security_score",
+                    "is_rooted",
+                    "is_encrypted",
+                    "has_passcode",
+                    "risk_score",
+                    "risk_level",
+                    "patch_age",
+                    "attestation",
+                    "developer_risk",
+                    "is_compliant",
+                    "is_managed",
+                ]
+            )
+        ]
+    )
 
     # Hourly granularity features
-    summary["hourly_features"] = len([
-        c for c in cols if any(x in c for x in [
-            "_peak_hour", "_business_ratio", "_night_ratio", "_weekend_ratio",
-            "_consistency", "_roll_6h", "_roll_12h", "_roll_24h", "_roll_48h"
-        ])
-    ])
+    summary["hourly_features"] = len(
+        [
+            c
+            for c in cols
+            if any(
+                x in c
+                for x in [
+                    "_peak_hour",
+                    "_business_ratio",
+                    "_night_ratio",
+                    "_weekend_ratio",
+                    "_consistency",
+                    "_roll_6h",
+                    "_roll_12h",
+                    "_roll_24h",
+                    "_roll_48h",
+                ]
+            )
+        ]
+    )
 
     return summary
 
@@ -1081,7 +1178,6 @@ def get_extended_feature_summary(df: pd.DataFrame) -> dict:
 # =============================================================================
 # FEATURE SELECTION FOR HIGH DIMENSIONALITY
 # =============================================================================
-
 
 
 def select_features_for_training(
@@ -1123,9 +1219,7 @@ def select_features_for_training(
 
     # Identify numeric feature columns
     feature_cols = [
-        c for c in df.columns
-        if c not in exclude_columns
-        and np.issubdtype(df[c].dtype, np.number)
+        c for c in df.columns if c not in exclude_columns and np.issubdtype(df[c].dtype, np.number)
     ]
 
     if len(feature_cols) == 0:
@@ -1147,11 +1241,10 @@ def select_features_for_training(
     # Step 2: Remove highly correlated features
     if len(df_features.columns) > 1:
         corr_matrix = df_features.corr().abs()
-        upper_triangle = corr_matrix.where(
-            np.triu(np.ones(corr_matrix.shape, dtype=bool), k=1)
-        )
+        upper_triangle = corr_matrix.where(np.triu(np.ones(corr_matrix.shape, dtype=bool), k=1))
         to_drop = [
-            col for col in upper_triangle.columns
+            col
+            for col in upper_triangle.columns
             if any(upper_triangle[col] > correlation_threshold)
         ]
         if to_drop:
@@ -1195,9 +1288,7 @@ def get_feature_importance_estimate(
     """
     exclude_cols = {"DeviceId", "Timestamp", "CollectedDate"}
     numeric_cols = [
-        c for c in df.columns
-        if c not in exclude_cols
-        and np.issubdtype(df[c].dtype, np.number)
+        c for c in df.columns if c not in exclude_cols and np.issubdtype(df[c].dtype, np.number)
     ]
 
     if method == "variance":

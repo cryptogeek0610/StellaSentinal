@@ -3,6 +3,7 @@
 This module provides cost configuration management for calculating
 financial impacts of device anomalies. All monetary values are in USD.
 """
+
 from __future__ import annotations
 
 import os
@@ -254,9 +255,7 @@ def get_cost_config() -> CostConfig:
         )
 
     if os.getenv("COST_WORKER_HOURLY_RATE_USD"):
-        env_overrides["worker_hourly_rate_usd"] = Decimal(
-            os.getenv("COST_WORKER_HOURLY_RATE_USD")
-        )
+        env_overrides["worker_hourly_rate_usd"] = Decimal(os.getenv("COST_WORKER_HOURLY_RATE_USD"))
 
     if os.getenv("COST_IT_SUPPORT_HOURLY_RATE_USD"):
         env_overrides["it_support_hourly_rate_usd"] = Decimal(

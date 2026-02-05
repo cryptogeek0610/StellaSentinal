@@ -10,6 +10,7 @@ This module provides autonomous scheduling for:
 The scheduler runs as a background service and can be configured
 via API or environment variables.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -52,6 +53,7 @@ def get_historical_end_date() -> datetime | None:
 
 class ScheduleInterval(StrEnum):
     """Supported scheduling intervals."""
+
     HOURLY = "hourly"
     EVERY_6_HOURS = "every_6_hours"
     EVERY_12_HOURS = "every_12_hours"
@@ -62,6 +64,7 @@ class ScheduleInterval(StrEnum):
 
 class ShiftSchedule(StrEnum):
     """Pre-defined shift schedules for shift readiness analysis."""
+
     MORNING = "morning"  # 06:00 - 14:00
     AFTERNOON = "afternoon"  # 14:00 - 22:00
     NIGHT = "night"  # 22:00 - 06:00
@@ -137,6 +140,7 @@ class SchedulerConfig:
 @dataclass
 class SchedulerStatus:
     """Current status of the scheduler."""
+
     is_running: bool = False
     training_status: str = "idle"  # idle, running, completed, failed
     scoring_status: str = "idle"
@@ -204,13 +208,16 @@ class AutomationScheduler:
                 )
                 if attempt < self._redis_max_retries - 1:
                     import time
+
                     time.sleep(delay)
                     delay *= 2  # Exponential backoff
             except Exception as e:
                 logger.error(f"Unexpected Redis error: {e}")
                 break
 
-        logger.error("Redis unavailable after all retries. Scheduler will run with limited functionality.")
+        logger.error(
+            "Redis unavailable after all retries. Scheduler will run with limited functionality."
+        )
         self._redis_available = False
         return None
 
@@ -255,23 +262,37 @@ class AutomationScheduler:
             training_lookback_days=int(os.getenv("SCHEDULER_TRAINING_LOOKBACK_DAYS", "90")),
             scoring_enabled=os.getenv("SCHEDULER_SCORING_ENABLED", "true").lower() == "true",
             scoring_interval_minutes=int(os.getenv("SCHEDULER_SCORING_INTERVAL_MINUTES", "15")),
-            auto_retrain_enabled=os.getenv("SCHEDULER_AUTO_RETRAIN_ENABLED", "true").lower() == "true",
-            auto_retrain_fp_threshold=float(os.getenv("SCHEDULER_AUTO_RETRAIN_FP_THRESHOLD", "0.15")),
+            auto_retrain_enabled=os.getenv("SCHEDULER_AUTO_RETRAIN_ENABLED", "true").lower()
+            == "true",
+            auto_retrain_fp_threshold=float(
+                os.getenv("SCHEDULER_AUTO_RETRAIN_FP_THRESHOLD", "0.15")
+            ),
             auto_retrain_min_feedback=int(os.getenv("SCHEDULER_AUTO_RETRAIN_MIN_FEEDBACK", "50")),
             alerting_enabled=os.getenv("SCHEDULER_ALERTING_ENABLED", "true").lower() == "true",
-            high_anomaly_rate_threshold=float(os.getenv("SCHEDULER_HIGH_ANOMALY_THRESHOLD", "0.10")),
+            high_anomaly_rate_threshold=float(
+                os.getenv("SCHEDULER_HIGH_ANOMALY_THRESHOLD", "0.10")
+            ),
             # Insight generation settings
             insights_enabled=os.getenv("SCHEDULER_INSIGHTS_ENABLED", "true").lower() == "true",
             daily_digest_hour=int(os.getenv("SCHEDULER_DAILY_DIGEST_HOUR", "5")),
-            shift_readiness_enabled=os.getenv("SCHEDULER_SHIFT_READINESS_ENABLED", "true").lower() == "true",
-            shift_readiness_lead_minutes=int(os.getenv("SCHEDULER_SHIFT_READINESS_LEAD_MINUTES", "60")),
+            shift_readiness_enabled=os.getenv("SCHEDULER_SHIFT_READINESS_ENABLED", "true").lower()
+            == "true",
+            shift_readiness_lead_minutes=int(
+                os.getenv("SCHEDULER_SHIFT_READINESS_LEAD_MINUTES", "60")
+            ),
             shift_schedules=shift_schedules,
-            location_baseline_enabled=os.getenv("SCHEDULER_LOCATION_BASELINE_ENABLED", "true").lower() == "true",
+            location_baseline_enabled=os.getenv(
+                "SCHEDULER_LOCATION_BASELINE_ENABLED", "true"
+            ).lower()
+            == "true",
             location_baseline_day_of_week=int(os.getenv("SCHEDULER_LOCATION_BASELINE_DAY", "0")),
             location_baseline_hour=int(os.getenv("SCHEDULER_LOCATION_BASELINE_HOUR", "3")),
             # Device metadata sync settings
-            device_metadata_sync_enabled=os.getenv("DEVICE_METADATA_SYNC_ENABLED", "true").lower() == "true",
-            device_metadata_sync_interval_minutes=int(os.getenv("DEVICE_METADATA_SYNC_INTERVAL_MINUTES", "30")),
+            device_metadata_sync_enabled=os.getenv("DEVICE_METADATA_SYNC_ENABLED", "true").lower()
+            == "true",
+            device_metadata_sync_interval_minutes=int(
+                os.getenv("DEVICE_METADATA_SYNC_INTERVAL_MINUTES", "30")
+            ),
             device_metadata_sync_since_days=int(os.getenv("DEVICE_METADATA_SYNC_SINCE_DAYS", "30")),
         )
 
@@ -352,10 +373,13 @@ class AutomationScheduler:
             if data:
                 status_data = json.loads(data)
                 # Reconstruct SchedulerStatus
-                self._status = SchedulerStatus(**{
-                    k: v for k, v in status_data.items()
-                    if k in SchedulerStatus.__dataclass_fields__
-                })
+                self._status = SchedulerStatus(
+                    **{
+                        k: v
+                        for k, v in status_data.items()
+                        if k in SchedulerStatus.__dataclass_fields__
+                    }
+                )
         except Exception as e:
             logger.warning(f"Failed to get status from Redis: {e}")
 
@@ -378,14 +402,18 @@ class AutomationScheduler:
         elif interval == ScheduleInterval.EVERY_6_HOURS:
             hour = (now.hour // 6 + 1) * 6
             if hour >= 24:
-                next_time = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+                next_time = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(
+                    days=1
+                )
             else:
                 next_time = now.replace(hour=hour, minute=0, second=0, microsecond=0)
 
         elif interval == ScheduleInterval.EVERY_12_HOURS:
             hour = (now.hour // 12 + 1) * 12
             if hour >= 24:
-                next_time = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+                next_time = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(
+                    days=1
+                )
             else:
                 next_time = now.replace(hour=hour, minute=0, second=0, microsecond=0)
 
@@ -441,7 +469,9 @@ class AutomationScheduler:
             historical_end = get_historical_end_date()
             if historical_end:
                 reference_time = historical_end
-                logger.info(f"Using historical data end date for training: {historical_end.strftime('%Y-%m-%d')}")
+                logger.info(
+                    f"Using historical data end date for training: {historical_end.strftime('%Y-%m-%d')}"
+                )
             else:
                 reference_time = datetime.utcnow()
 
@@ -506,6 +536,7 @@ class AutomationScheduler:
         if is_mock_mode():
             logger.info("Mock mode enabled - skipping real scoring, returning mock results")
             import random
+
             mock_scored = random.randint(20, 100)
             mock_anomalies = random.randint(0, min(5, mock_scored))
             mock_rate = mock_anomalies / mock_scored if mock_scored > 0 else 0
@@ -526,7 +557,12 @@ class AutomationScheduler:
                 total_anomalies_detected=self._status.total_anomalies_detected + mock_anomalies,
             )
             logger.info(f"Mock scoring completed: {mock_anomalies}/{mock_scored} anomalies")
-            return {"success": True, "scored": mock_scored, "anomalies": mock_anomalies, "mock_mode": True}
+            return {
+                "success": True,
+                "scored": mock_scored,
+                "anomalies": mock_anomalies,
+                "mock_mode": True,
+            }
 
         from device_anomaly.data_access.anomaly_persistence import persist_anomaly_results
         from device_anomaly.data_access.unified_loader import load_unified_device_dataset
@@ -545,7 +581,9 @@ class AutomationScheduler:
             # Check if there's new source data to score
             # This prevents anomaly count inflation on static/backup databases
             watermark_store = get_watermark_store()
-            has_new_data, source_timestamp, freshness_reason = watermark_store.check_source_data_freshness()
+            has_new_data, source_timestamp, freshness_reason = (
+                watermark_store.check_source_data_freshness()
+            )
 
             if not has_new_data:
                 logger.info(f"Skipping scoring: {freshness_reason}")
@@ -569,7 +607,9 @@ class AutomationScheduler:
             historical_end = get_historical_end_date()
             if historical_end:
                 reference_time = historical_end
-                logger.info(f"Using historical data end date: {historical_end.strftime('%Y-%m-%d')}")
+                logger.info(
+                    f"Using historical data end date: {historical_end.strftime('%Y-%m-%d')}"
+                )
             else:
                 reference_time = datetime.utcnow()
 
@@ -835,9 +875,7 @@ class AutomationScheduler:
             try:
                 analyzer = BatteryShiftAnalyzer(session, tenant_id)
 
-                locations = session.query(LocationMetadata).filter(
-                    LocationMetadata.is_active
-                ).all()
+                locations = session.query(LocationMetadata).filter(LocationMetadata.is_active).all()
 
                 total_at_risk = 0
                 reports_generated = 0
@@ -854,7 +892,9 @@ class AutomationScheduler:
                             total_at_risk += report.devices_at_risk
                             reports_generated += 1
                     except Exception as loc_error:
-                        logger.warning(f"Shift readiness failed for location {location.location_id}: {loc_error}")
+                        logger.warning(
+                            f"Shift readiness failed for location {location.location_id}: {loc_error}"
+                        )
             finally:
                 session.close()
 
@@ -879,8 +919,14 @@ class AutomationScheduler:
                     f"Shift readiness warning: {total_at_risk} devices may not last {shift_name} shift"
                 )
 
-            logger.info(f"Shift readiness completed: {reports_generated} locations, {total_at_risk} devices at risk")
-            return {"success": True, "locations_analyzed": reports_generated, "devices_at_risk": total_at_risk}
+            logger.info(
+                f"Shift readiness completed: {reports_generated} locations, {total_at_risk} devices at risk"
+            )
+            return {
+                "success": True,
+                "locations_analyzed": reports_generated,
+                "devices_at_risk": total_at_risk,
+            }
 
         except Exception as e:
             logger.error(f"Shift readiness analysis failed: {e}")
@@ -935,9 +981,7 @@ class AutomationScheduler:
             try:
                 aggregator = EntityAggregator(session, tenant_id)
 
-                locations = session.query(LocationMetadata).filter(
-                    LocationMetadata.is_active
-                ).all()
+                locations = session.query(LocationMetadata).filter(LocationMetadata.is_active).all()
 
                 updated_count = 0
 
@@ -953,7 +997,9 @@ class AutomationScheduler:
                             agg = location_data[location.location_id]
 
                             # Update location baselines
-                            location.baseline_battery_drain_per_hour = agg.get("avg_battery_drain_per_hour")
+                            location.baseline_battery_drain_per_hour = agg.get(
+                                "avg_battery_drain_per_hour"
+                            )
                             location.baseline_disconnect_rate = agg.get("avg_disconnect_rate")
                             location.baseline_drop_rate = agg.get("avg_drop_rate")
                             location.baseline_computed_at = datetime.utcnow()
@@ -961,7 +1007,9 @@ class AutomationScheduler:
                             updated_count += 1
 
                     except Exception as loc_error:
-                        logger.warning(f"Baseline computation failed for location {location.location_id}: {loc_error}")
+                        logger.warning(
+                            f"Baseline computation failed for location {location.location_id}: {loc_error}"
+                        )
 
                 session.commit()
             finally:
@@ -980,7 +1028,9 @@ class AutomationScheduler:
                 },
             )
 
-            logger.info(f"Location baseline computation completed: {updated_count} locations updated")
+            logger.info(
+                f"Location baseline computation completed: {updated_count} locations updated"
+            )
             return {"success": True, "locations_updated": updated_count}
 
         except Exception as e:
@@ -1072,12 +1122,17 @@ class AutomationScheduler:
             timestamp = datetime.utcnow().isoformat()
             # Generate a unique alert ID based on timestamp
             alert_id = f"alert_{timestamp[:19].replace(':', '').replace('-', '').replace('T', '_')}"
-            self.redis.lpush("scheduler:alerts", json.dumps({
-                "id": alert_id,
-                "timestamp": timestamp,
-                "message": message,
-                "acknowledged": False,
-            }))
+            self.redis.lpush(
+                "scheduler:alerts",
+                json.dumps(
+                    {
+                        "id": alert_id,
+                        "timestamp": timestamp,
+                        "message": message,
+                        "acknowledged": False,
+                    }
+                ),
+            )
             self.redis.ltrim("scheduler:alerts", 0, 99)  # Keep last 100 alerts
         except Exception as e:
             logger.error(f"Failed to store alert: {e}")
@@ -1108,7 +1163,9 @@ class AutomationScheduler:
                         if manual_job:
                             try:
                                 job_data = json.loads(manual_job)
-                                logger.info(f"Processing manual training job: {job_data.get('job_id', 'unknown')}")
+                                logger.info(
+                                    f"Processing manual training job: {job_data.get('job_id', 'unknown')}"
+                                )
                                 await self.run_training_job()
                                 continue  # Check for more queued jobs immediately
                             except json.JSONDecodeError:
@@ -1141,7 +1198,9 @@ class AutomationScheduler:
                         # Sleep in shorter intervals to allow config reload and quick response
                         # Use smaller sleep to ensure we don't miss the training window
                         sleep_duration = min(wait_seconds, 30)
-                        logger.debug(f"Training scheduled in {wait_seconds:.0f}s, sleeping for {sleep_duration:.0f}s")
+                        logger.debug(
+                            f"Training scheduled in {wait_seconds:.0f}s, sleeping for {sleep_duration:.0f}s"
+                        )
                         await asyncio.sleep(sleep_duration)
                         # Don't continue - fall through to check again if it's time
                         # This ensures we eventually reach the training job when wait_seconds <= 0
@@ -1149,14 +1208,18 @@ class AutomationScheduler:
                             continue
 
                     # Time to train!
-                    logger.info("[Training Loop] Training time reached! Starting scheduled training job...")
+                    logger.info(
+                        "[Training Loop] Training time reached! Starting scheduled training job..."
+                    )
                     await self.run_training_job()
 
                     # After training, sleep briefly to avoid immediate re-trigger
                     await asyncio.sleep(5)
 
                 else:
-                    logger.info(f"[Training Loop] No next training time (interval={self._config.training_interval.value})")
+                    logger.info(
+                        f"[Training Loop] No next training time (interval={self._config.training_interval.value})"
+                    )
                     self.update_status(next_training_time=None)
                     await asyncio.sleep(60)
 
@@ -1212,7 +1275,10 @@ class AutomationScheduler:
                     # Check for config changes every 30 seconds
                     if elapsed % 30 < 5:
                         new_config = self.load_config()
-                        if new_config.scoring_interval_minutes != self._config.scoring_interval_minutes:
+                        if (
+                            new_config.scoring_interval_minutes
+                            != self._config.scoring_interval_minutes
+                        ):
                             self._config = new_config
                             break  # Restart loop with new interval
 
@@ -1448,7 +1514,9 @@ class AutomationScheduler:
         next_training = self.calculate_next_training_time()
         if next_training:
             wait_hours = (next_training - datetime.utcnow()).total_seconds() / 3600
-            logger.info(f"  NEXT TRAINING: {next_training.isoformat()} ({wait_hours:.1f}h from now)")
+            logger.info(
+                f"  NEXT TRAINING: {next_training.isoformat()} ({wait_hours:.1f}h from now)"
+            )
         else:
             logger.info("  NEXT TRAINING: None (disabled or manual)")
 
@@ -1482,7 +1550,9 @@ class AutomationScheduler:
             asyncio.create_task(self._device_metadata_sync_loop()),
         ]
 
-        logger.info("Scheduler started successfully with insight generation and device metadata sync enabled")
+        logger.info(
+            "Scheduler started successfully with insight generation and device metadata sync enabled"
+        )
 
     async def stop(self) -> None:
         """Stop the scheduler service."""

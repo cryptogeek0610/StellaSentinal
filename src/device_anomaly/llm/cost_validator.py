@@ -6,6 +6,7 @@ hallucinated amounts are flagged or replaced.
 
 Design principle: Trust but verify - validate all LLM financial claims.
 """
+
 from __future__ import annotations
 
 import logging
@@ -50,13 +51,13 @@ class CostValidator:
     # Regex pattern for currency amounts
     # Matches: $1,234 | $1,234.56 | $1234 | 1,234 dollars
     CURRENCY_PATTERN = re.compile(
-        r'\$[\d,]+(?:\.\d{1,2})?'  # $1,234 or $1,234.56
-        r'|[\d,]+(?:\.\d{1,2})?\s*(?:dollars?|USD)',  # 1,234 dollars
-        re.IGNORECASE
+        r"\$[\d,]+(?:\.\d{1,2})?"  # $1,234 or $1,234.56
+        r"|[\d,]+(?:\.\d{1,2})?\s*(?:dollars?|USD)",  # 1,234 dollars
+        re.IGNORECASE,
     )
 
     # Pattern for extracting numeric value from currency string
-    NUMERIC_PATTERN = re.compile(r'[\d,]+(?:\.\d{1,2})?')
+    NUMERIC_PATTERN = re.compile(r"[\d,]+(?:\.\d{1,2})?")
 
     # Default tolerance for matching amounts (5%)
     DEFAULT_TOLERANCE = 0.05
@@ -301,9 +302,7 @@ class StrictCostValidator(CostValidator):
         result = super().validate(llm_output, allowed_amounts)
 
         if not result.is_valid:
-            result.warnings.append(
-                "STRICT MODE: All amounts must exactly match provided figures"
-            )
+            result.warnings.append("STRICT MODE: All amounts must exactly match provided figures")
 
         return result
 

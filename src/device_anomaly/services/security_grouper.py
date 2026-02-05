@@ -6,6 +6,7 @@ Provides intelligent grouping of devices for security analysis:
 - Path-based comparison
 - Temporal correlation (devices with issues appearing at similar times)
 """
+
 from __future__ import annotations
 
 import logging
@@ -191,9 +192,7 @@ class SecurityGrouper:
             paths.sort()
 
             # Calculate average score
-            avg_score = (
-                sum(d.security_score for d in affected) / len(affected) if affected else 0
-            )
+            avg_score = sum(d.security_score for d in affected) / len(affected) if affected else 0
 
             # Find earliest detection
             dates = [d.security_issue_detected_at for d in affected if d.security_issue_detected_at]
@@ -307,9 +306,7 @@ class SecurityGrouper:
         # Calculate fleet average
         total_devices = len(devices)
         fleet_avg = (
-            sum(d.security_score for d in devices) / total_devices
-            if total_devices > 0
-            else 0
+            sum(d.security_score for d in devices) / total_devices if total_devices > 0 else 0
         )
 
         comparisons = []
@@ -377,9 +374,7 @@ class SecurityGrouper:
         if high_rooted:
             paths_with_rooted = ", ".join(c.path_name for c in high_rooted[:3])
             total_rooted = sum(c.rooted_count for c in high_rooted)
-            insights.append(
-                f"{total_rooted} rooted devices detected across: {paths_with_rooted}"
-            )
+            insights.append(f"{total_rooted} rooted devices detected across: {paths_with_rooted}")
 
         high_unencrypted = [c for c in comparisons if c.unencrypted_count > 2]
         if high_unencrypted:
@@ -414,10 +409,7 @@ class SecurityGrouper:
             devices = self._devices
 
         # Filter to devices with known issue detection times
-        with_times = [
-            d for d in devices
-            if d.security_issue_detected_at and d.violations
-        ]
+        with_times = [d for d in devices if d.security_issue_detected_at and d.violations]
 
         if len(with_times) < min_cluster_size:
             return []
@@ -437,7 +429,7 @@ class SecurityGrouper:
             cluster_devices = [device]
             base_time = device.security_issue_detected_at
 
-            for other in with_times[i + 1:]:
+            for other in with_times[i + 1 :]:
                 if other.device_id in used:
                     continue
                 time_diff = other.security_issue_detected_at - base_time

@@ -10,6 +10,7 @@ Tables:
 - ingestion_metrics: Per-table per-run metrics
 - telemetry_coverage_report: Daily aggregated coverage report
 """
+
 from __future__ import annotations
 
 import json
@@ -30,6 +31,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class TableIngestionMetric:
     """Metrics for a single table ingestion run."""
+
     source_db: str
     table_name: str
     started_at: datetime
@@ -110,6 +112,7 @@ class TableIngestionMetric:
 @dataclass
 class DailyCoverageReport:
     """Daily aggregated coverage report."""
+
     report_date: datetime
     generated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -202,7 +205,8 @@ class IngestionMetricsStore:
             if self._auto_create_tables:
                 with self._engine.connect() as conn:
                     # Per-table metrics table
-                    conn.execute(text("""
+                    conn.execute(
+                        text("""
                         CREATE TABLE IF NOT EXISTS ingestion_metrics (
                             id SERIAL PRIMARY KEY,
                             source_db VARCHAR(50) NOT NULL,
@@ -223,21 +227,27 @@ class IngestionMetricsStore:
                             metadata_json TEXT,
                             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
                         )
-                    """))
+                    """)
+                    )
 
                     # Index for querying by date and table
-                    conn.execute(text("""
+                    conn.execute(
+                        text("""
                         CREATE INDEX IF NOT EXISTS idx_ingestion_metrics_source_table
                         ON ingestion_metrics (source_db, table_name, started_at DESC)
-                    """))
+                    """)
+                    )
 
-                    conn.execute(text("""
+                    conn.execute(
+                        text("""
                         CREATE INDEX IF NOT EXISTS idx_ingestion_metrics_date
                         ON ingestion_metrics (DATE(started_at))
-                    """))
+                    """)
+                    )
 
                     # Daily coverage report table
-                    conn.execute(text("""
+                    conn.execute(
+                        text("""
                         CREATE TABLE IF NOT EXISTS telemetry_coverage_report (
                             id SERIAL PRIMARY KEY,
                             report_date DATE NOT NULL UNIQUE,
@@ -258,7 +268,8 @@ class IngestionMetricsStore:
                             report_json TEXT,
                             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
                         )
-                    """))
+                    """)
+                    )
 
                     conn.commit()
                     logger.info("Ingestion metrics tables created")
@@ -389,14 +400,16 @@ class IngestionMetricsStore:
                             "success": metric.success,
                             "error": metric.error,
                             "batch_id": metric.batch_id,
-                            "metadata_json": json.dumps({
-                                "query_time_ms": metric.query_time_ms,
-                                "transform_time_ms": metric.transform_time_ms,
-                                "write_time_ms": metric.write_time_ms,
-                                "weight": metric.weight,
-                                "warning": metric.warning,
-                            }),
-                        }
+                            "metadata_json": json.dumps(
+                                {
+                                    "query_time_ms": metric.query_time_ms,
+                                    "transform_time_ms": metric.transform_time_ms,
+                                    "write_time_ms": metric.write_time_ms,
+                                    "weight": metric.weight,
+                                    "warning": metric.warning,
+                                }
+                            ),
+                        },
                     )
                 conn.commit()
             logger.debug(f"Flushed {len(metrics_to_flush)} metrics to PostgreSQL")
@@ -458,7 +471,7 @@ class IngestionMetricsStore:
                         WHERE DATE(started_at) = :report_date
                         GROUP BY source_db
                     """),
-                    {"report_date": report_date_str}
+                    {"report_date": report_date_str},
                 ).fetchall()
 
                 report = DailyCoverageReport(report_date=report_date)
@@ -496,7 +509,7 @@ class IngestionMetricsStore:
                         GROUP BY source_db, table_name
                         ORDER BY source_db, table_name
                     """),
-                    {"report_date": report_date_str}
+                    {"report_date": report_date_str},
                 ).fetchall()
 
                 for row in table_stats:
@@ -528,10 +541,14 @@ class IngestionMetricsStore:
                             report.tables_with_high_dedupe.append(table_key)
 
                 # Calculate overall lag
-                all_lags = [s["avg_lag_seconds"] for s in report.table_stats if s["avg_lag_seconds"]]
+                all_lags = [
+                    s["avg_lag_seconds"] for s in report.table_stats if s["avg_lag_seconds"]
+                ]
                 if all_lags:
                     report.avg_lag_seconds = sum(all_lags) / len(all_lags)
-                    report.max_lag_seconds = max(s["max_lag_seconds"] or 0 for s in report.table_stats)
+                    report.max_lag_seconds = max(
+                        s["max_lag_seconds"] or 0 for s in report.table_stats
+                    )
 
                 # Save report to database
                 self._save_daily_report(report)
@@ -604,7 +621,7 @@ class IngestionMetricsStore:
                         "avg_lag_seconds": report.avg_lag_seconds,
                         "max_lag_seconds": report.max_lag_seconds,
                         "report_json": json.dumps(report.to_dict()),
-                    }
+                    },
                 )
                 conn.commit()
             return True
@@ -624,7 +641,7 @@ class IngestionMetricsStore:
                         SELECT report_json FROM telemetry_coverage_report
                         WHERE report_date = :report_date
                     """),
-                    {"report_date": report_date.date()}
+                    {"report_date": report_date.date()},
                 ).fetchone()
 
                 if result and result[0]:
@@ -668,7 +685,8 @@ class IngestionMetricsStore:
         try:
             with self._engine.connect() as conn:
                 result = conn.execute(
-                    text("""
+                    text(
+                        """
                         SELECT
                             started_at, completed_at, duration_ms,
                             rows_fetched, rows_inserted, rows_deduped,
@@ -680,8 +698,9 @@ class IngestionMetricsStore:
                           AND started_at > NOW() - INTERVAL ':days days'
                         ORDER BY started_at DESC
                         LIMIT 100
-                    """.replace(":days", str(days))),
-                    {"source_db": source_db, "table_name": table_name}
+                    """.replace(":days", str(days))
+                    ),
+                    {"source_db": source_db, "table_name": table_name},
                 ).fetchall()
 
                 return [

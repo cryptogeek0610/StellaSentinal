@@ -21,6 +21,7 @@ PRODUCTION-HARDENED:
 - Includes dimensions in hash for true uniqueness
 - Supports deduplication via event_id
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -55,10 +56,11 @@ def _deterministic_json(obj: Any) -> str:
         return json.dumps(obj.isoformat())
     if isinstance(obj, dict):
         sorted_items = sorted(obj.items(), key=lambda x: str(x[0]))
-        return "{" + ",".join(
-            f"{json.dumps(str(k))}:{_deterministic_json(v)}"
-            for k, v in sorted_items
-        ) + "}"
+        return (
+            "{"
+            + ",".join(f"{json.dumps(str(k))}:{_deterministic_json(v)}" for k, v in sorted_items)
+            + "}"
+        )
     if isinstance(obj, (list, tuple)):
         return "[" + ",".join(_deterministic_json(item) for item in obj) + "]"
     # Fallback: convert to string
@@ -108,6 +110,7 @@ def compute_stable_event_id(
 
 class MetricType(StrEnum):
     """Metric value types."""
+
     INT = "int"
     FLOAT = "float"
     STRING = "string"
@@ -117,6 +120,7 @@ class MetricType(StrEnum):
 
 class SourceDatabase(StrEnum):
     """Source database identifiers."""
+
     XSIGHT = "xsight"
     MOBICONTROL = "mobicontrol"
 
@@ -135,6 +139,7 @@ class CanonicalEvent:
     - Idempotent writes to storage
     - Tracking which events have been processed
     """
+
     tenant_id: str
     source_db: SourceDatabase
     source_table: str
@@ -208,7 +213,6 @@ MC_STAT_INT_TYPES: dict[int, str] = {
     4: "battery_health",
     5: "battery_status",
     6: "charging_source",
-
     # Memory metrics
     10: "available_ram",
     11: "total_ram",
@@ -216,22 +220,18 @@ MC_STAT_INT_TYPES: dict[int, str] = {
     13: "total_storage",
     14: "available_external_storage",
     15: "total_external_storage",
-
     # Network metrics
     20: "wifi_signal_strength",
     21: "cell_signal_strength",
     22: "network_type",
     23: "data_connection_state",
-
     # Device state
     30: "screen_state",
     31: "device_idle_state",
     32: "power_save_mode",
-
     # App metrics
     40: "running_app_count",
     41: "installed_app_count",
-
     # Security
     50: "security_patch_level",
     51: "encryption_status",
@@ -268,13 +268,14 @@ def _infer_metric_type(value: Any) -> MetricType:
 def _normalize_metric_name(name: str) -> str:
     """Normalize metric name to snake_case."""
     import re
+
     # Convert CamelCase to snake_case
-    name = re.sub(r'(?<!^)(?=[A-Z])', '_', name).lower()
+    name = re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
     # Remove special characters
-    name = re.sub(r'[^a-z0-9_]', '_', name)
+    name = re.sub(r"[^a-z0-9_]", "_", name)
     # Remove duplicate underscores
-    name = re.sub(r'_+', '_', name)
-    return name.strip('_')
+    name = re.sub(r"_+", "_", name)
+    return name.strip("_")
 
 
 def normalize_xsight_row(
@@ -302,8 +303,14 @@ def normalize_xsight_row(
         CanonicalEvent for each metric in the row
     """
     exclude_cols = exclude_cols or {
-        timestamp_col, device_id_col, "Hour", "AppId", "ConnectionTypeId",
-        "AccessPointId", "NetworkTypeId", "PresetAppId",
+        timestamp_col,
+        device_id_col,
+        "Hour",
+        "AppId",
+        "ConnectionTypeId",
+        "AccessPointId",
+        "NetworkTypeId",
+        "PresetAppId",
     }
 
     device_id = row.get(device_id_col)
@@ -327,8 +334,14 @@ def normalize_xsight_row(
 
     # Extract dimensions (lookup columns)
     dimensions = {}
-    dimension_cols = {"AppId", "ConnectionTypeId", "AccessPointId",
-                      "NetworkTypeId", "PresetAppId", "Hour"}
+    dimension_cols = {
+        "AppId",
+        "ConnectionTypeId",
+        "AccessPointId",
+        "NetworkTypeId",
+        "PresetAppId",
+        "Hour",
+    }
     for col in dimension_cols:
         if col in row and row[col] is not None:
             dimensions[_normalize_metric_name(col)] = row[col]
@@ -465,17 +478,19 @@ def normalize_mc_location_row(
 
     for metric_name, value, metric_type in metrics:
         if value is not None:
-            events.append(CanonicalEvent(
-                tenant_id=tenant_id,
-                source_db=SourceDatabase.MOBICONTROL,
-                source_table="DeviceStatLocation",
-                device_id=int(device_id),
-                event_time=timestamp,
-                metric_name=f"location_{metric_name}",
-                metric_type=metric_type,
-                metric_value=value,
-                dimensions=base_dims,
-            ))
+            events.append(
+                CanonicalEvent(
+                    tenant_id=tenant_id,
+                    source_db=SourceDatabase.MOBICONTROL,
+                    source_table="DeviceStatLocation",
+                    device_id=int(device_id),
+                    event_time=timestamp,
+                    metric_name=f"location_{metric_name}",
+                    metric_type=metric_type,
+                    metric_value=value,
+                    dimensions=base_dims,
+                )
+            )
 
     return events
 
@@ -505,30 +520,34 @@ def normalize_mc_net_traffic_row(
 
     # Upload/Download metrics
     if row.get("Upload") is not None:
-        events.append(CanonicalEvent(
-            tenant_id=tenant_id,
-            source_db=SourceDatabase.MOBICONTROL,
-            source_table="DeviceStatNetTraffic",
-            device_id=int(device_id),
-            event_time=timestamp,
-            metric_name="network_upload_bytes",
-            metric_type=MetricType.INT,
-            metric_value=row["Upload"],
-            dimensions=dimensions,
-        ))
+        events.append(
+            CanonicalEvent(
+                tenant_id=tenant_id,
+                source_db=SourceDatabase.MOBICONTROL,
+                source_table="DeviceStatNetTraffic",
+                device_id=int(device_id),
+                event_time=timestamp,
+                metric_name="network_upload_bytes",
+                metric_type=MetricType.INT,
+                metric_value=row["Upload"],
+                dimensions=dimensions,
+            )
+        )
 
     if row.get("Download") is not None:
-        events.append(CanonicalEvent(
-            tenant_id=tenant_id,
-            source_db=SourceDatabase.MOBICONTROL,
-            source_table="DeviceStatNetTraffic",
-            device_id=int(device_id),
-            event_time=timestamp,
-            metric_name="network_download_bytes",
-            metric_type=MetricType.INT,
-            metric_value=row["Download"],
-            dimensions=dimensions,
-        ))
+        events.append(
+            CanonicalEvent(
+                tenant_id=tenant_id,
+                source_db=SourceDatabase.MOBICONTROL,
+                source_table="DeviceStatNetTraffic",
+                device_id=int(device_id),
+                event_time=timestamp,
+                metric_name="network_download_bytes",
+                metric_type=MetricType.INT,
+                metric_value=row["Download"],
+                dimensions=dimensions,
+            )
+        )
 
     return events
 
@@ -625,8 +644,14 @@ def dataframe_to_canonical_events(
 
     # Auto-detect timestamp column
     if timestamp_col is None:
-        ts_candidates = ["ServerDateTime", "TimeStamp", "DateTime",
-                        "CollectedDate", "CollectedTime", "SetDateTime"]
+        ts_candidates = [
+            "ServerDateTime",
+            "TimeStamp",
+            "DateTime",
+            "CollectedDate",
+            "CollectedTime",
+            "SetDateTime",
+        ]
         for col in ts_candidates:
             if col in df.columns:
                 timestamp_col = col
@@ -652,14 +677,18 @@ def dataframe_to_canonical_events(
             elif source_table == "Alert":
                 events.append(normalize_mc_alert_row(row_dict, tenant_id))
             elif source_db == SourceDatabase.XSIGHT:
-                events.extend(normalize_xsight_row(
-                    row_dict, source_table, tenant_id, timestamp_col, device_id_col
-                ))
+                events.extend(
+                    normalize_xsight_row(
+                        row_dict, source_table, tenant_id, timestamp_col, device_id_col
+                    )
+                )
             else:
                 # Generic normalization for unknown tables
-                events.extend(normalize_xsight_row(
-                    row_dict, source_table, tenant_id, timestamp_col, device_id_col
-                ))
+                events.extend(
+                    normalize_xsight_row(
+                        row_dict, source_table, tenant_id, timestamp_col, device_id_col
+                    )
+                )
         except Exception as e:
             logger.warning(f"Failed to normalize row from {source_table}: {e}")
 
@@ -753,8 +782,7 @@ def dedupe_events(
 
     if len(deduped) < len(events):
         logger.debug(
-            f"Deduped {len(events) - len(deduped)} events "
-            f"({len(deduped)}/{len(events)} unique)"
+            f"Deduped {len(events) - len(deduped)} events ({len(deduped)}/{len(events)} unique)"
         )
 
     return deduped, seen_ids

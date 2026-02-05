@@ -67,7 +67,6 @@ METRIC_TRANSLATIONS: dict[str, dict[str, str]] = {
         "description": "Battery temperature",
         "domain": "battery",
     },
-
     # App usage metrics
     "AppForegroundTime": {
         "name": "App Screen Time",
@@ -117,7 +116,6 @@ METRIC_TRANSLATIONS: dict[str, dict[str, str]] = {
         "description": "Number of device usage sessions",
         "domain": "usage",
     },
-
     # Data usage metrics
     "Download": {
         "name": "Data Downloaded",
@@ -155,7 +153,6 @@ METRIC_TRANSLATIONS: dict[str, dict[str, str]] = {
         "description": "Data downloaded over cellular",
         "domain": "throughput",
     },
-
     # RF/Signal metrics
     "AvgSignalStrength": {
         "name": "Signal Strength",
@@ -205,7 +202,6 @@ METRIC_TRANSLATIONS: dict[str, dict[str, str]] = {
         "description": "Cellular signal strength",
         "domain": "rf",
     },
-
     # Connectivity metrics
     "DisconnectCount": {
         "name": "Connection Drops",
@@ -261,7 +257,6 @@ METRIC_TRANSLATIONS: dict[str, dict[str, str]] = {
         "description": "Time without network connectivity",
         "domain": "connectivity",
     },
-
     # Storage metrics
     "TotalFreeStorageKb": {
         "name": "Free Storage",
@@ -293,7 +288,6 @@ METRIC_TRANSLATIONS: dict[str, dict[str, str]] = {
         "description": "Total RAM",
         "domain": "storage",
     },
-
     # Derived/composite metrics
     "StorageUtilization": {
         "name": "Storage Used",
@@ -368,6 +362,7 @@ SERVICE_DESCRIPTIONS: dict[str, dict[str, str]] = {
 # =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================
+
 
 def translate_metric(technical_name: str) -> str:
     """Convert technical metric name to human-readable name."""
@@ -516,11 +511,7 @@ def get_duration_interpretation(days: int) -> str:
     return "Prolonged event (7+ days) - definite problem requiring intervention"
 
 
-def build_metric_summary(
-    metrics: list,
-    top_n: int = 5,
-    include_description: bool = True
-) -> str:
+def build_metric_summary(metrics: list, top_n: int = 5, include_description: bool = True) -> str:
     """Build a human-readable summary of metrics sorted by z-score.
 
     Args:
@@ -532,11 +523,7 @@ def build_metric_summary(
         Formatted string summarizing the most unusual metrics
     """
     # Sort by absolute z-score
-    sorted_metrics = sorted(
-        metrics,
-        key=lambda x: abs(x.get("z_score", 0)),
-        reverse=True
-    )[:top_n]
+    sorted_metrics = sorted(metrics, key=lambda x: abs(x.get("z_score", 0)), reverse=True)[:top_n]
 
     lines = []
     for m in sorted_metrics:

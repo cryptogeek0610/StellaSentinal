@@ -4,6 +4,7 @@ This module tests the VAE and Autoencoder based anomaly detectors,
 including training, inference, ONNX export, and integration with
 the existing pipeline.
 """
+
 import tempfile
 from pathlib import Path
 
@@ -168,7 +169,7 @@ class TestVAEDetector:
 
         assert detector.is_fitted
         assert len(metrics.train_loss_history) > 0
-        assert metrics.best_val_loss < float('inf')
+        assert metrics.best_val_loss < float("inf")
 
     def test_vae_detector_score(self, sample_tabular_data):
         """Test VAE detector scoring."""
@@ -257,8 +258,9 @@ class TestVAEDetector:
         mean_normal_score = np.mean(scores[normal_mask])
         mean_anomaly_score = np.mean(scores[anomaly_mask])
 
-        assert mean_anomaly_score > mean_normal_score, \
+        assert mean_anomaly_score > mean_normal_score, (
             f"Anomaly score ({mean_anomaly_score:.4f}) should be higher than normal ({mean_normal_score:.4f})"
+        )
 
     def test_vae_get_latent_representation(self, sample_tabular_data):
         """Test getting latent representations."""
@@ -315,11 +317,13 @@ class TestDLPreprocessor:
         from device_anomaly.features.dl_preprocessor import DLFeaturePreprocessor
 
         # Create data with missing values
-        df = pd.DataFrame({
-            "a": [1, 2, np.nan, 4, 5],
-            "b": [1, np.nan, 3, 4, 5],
-            "c": [1, 2, 3, 4, 5],
-        })
+        df = pd.DataFrame(
+            {
+                "a": [1, 2, np.nan, 4, 5],
+                "b": [1, np.nan, 3, 4, 5],
+                "c": [1, 2, 3, 4, 5],
+            }
+        )
 
         preprocessor = DLFeaturePreprocessor()
         X = preprocessor.fit_transform(df)
@@ -346,7 +350,9 @@ class TestDLPreprocessor:
 class TestPyTorchONNXExport:
     """Tests for PyTorch to ONNX export."""
 
-    @pytest.mark.skipif(not pytest.importorskip("onnx", reason="ONNX not available"), reason="ONNX not available")
+    @pytest.mark.skipif(
+        not pytest.importorskip("onnx", reason="ONNX not available"), reason="ONNX not available"
+    )
     def test_vae_onnx_export(self, sample_tabular_data):
         """Test VAE export to ONNX."""
         from device_anomaly.models.vae_detector import VAEDetector, VAEDetectorConfig
@@ -362,11 +368,14 @@ class TestPyTorchONNXExport:
             assert "onnx" in paths
             assert paths["onnx"].exists()
 
-    @pytest.mark.skipif(not pytest.importorskip("onnxruntime", reason="ONNX Runtime not available"), reason="ONNX Runtime not available")
+    @pytest.mark.skipif(
+        not pytest.importorskip("onnxruntime", reason="ONNX Runtime not available"),
+        reason="ONNX Runtime not available",
+    )
     def test_onnx_inference(self, sample_tabular_data):
         """Test ONNX inference matches PyTorch."""
-        from device_anomaly.models.vae_detector import VAEDetector, VAEDetectorConfig
         from device_anomaly.models.pytorch_onnx_exporter import ONNXVAEInference
+        from device_anomaly.models.vae_detector import VAEDetector, VAEDetectorConfig
 
         config = VAEDetectorConfig(epochs=5, batch_size=64)
         detector = VAEDetector(config)
@@ -393,8 +402,8 @@ class TestPyTorchInferenceEngine:
 
     def test_engine_from_checkpoint(self, sample_tabular_data):
         """Test loading engine from checkpoint."""
-        from device_anomaly.models.vae_detector import VAEDetector, VAEDetectorConfig
         from device_anomaly.models.pytorch_inference import PyTorchInferenceEngine
+        from device_anomaly.models.vae_detector import VAEDetector, VAEDetectorConfig
 
         config = VAEDetectorConfig(epochs=5, batch_size=64)
         detector = VAEDetector(config)
@@ -404,9 +413,7 @@ class TestPyTorchInferenceEngine:
             model_path = Path(tmpdir) / "vae_model"
             detector.save_model(model_path)
 
-            engine = PyTorchInferenceEngine.from_checkpoint(
-                model_path.with_suffix(".pt")
-            )
+            engine = PyTorchInferenceEngine.from_checkpoint(model_path.with_suffix(".pt"))
 
             X = detector._prepare_inference_data(sample_tabular_data)
             scores = engine.score_samples(X)
@@ -415,8 +422,8 @@ class TestPyTorchInferenceEngine:
 
     def test_engine_predict(self, sample_tabular_data):
         """Test engine prediction."""
-        from device_anomaly.models.vae_detector import VAEDetector, VAEDetectorConfig
         from device_anomaly.models.pytorch_inference import PyTorchInferenceEngine
+        from device_anomaly.models.vae_detector import VAEDetector, VAEDetectorConfig
 
         config = VAEDetectorConfig(epochs=5, batch_size=64)
         detector = VAEDetector(config)
@@ -426,9 +433,7 @@ class TestPyTorchInferenceEngine:
             model_path = Path(tmpdir) / "vae_model"
             detector.save_model(model_path)
 
-            engine = PyTorchInferenceEngine.from_checkpoint(
-                model_path.with_suffix(".pt")
-            )
+            engine = PyTorchInferenceEngine.from_checkpoint(model_path.with_suffix(".pt"))
 
             X = detector._prepare_inference_data(sample_tabular_data)
             predictions = engine.predict(X)
@@ -438,8 +443,8 @@ class TestPyTorchInferenceEngine:
 
     def test_engine_metrics(self, sample_tabular_data):
         """Test inference metrics collection."""
-        from device_anomaly.models.vae_detector import VAEDetector, VAEDetectorConfig
         from device_anomaly.models.pytorch_inference import PyTorchInferenceEngine
+        from device_anomaly.models.vae_detector import VAEDetector, VAEDetectorConfig
 
         config = VAEDetectorConfig(epochs=5, batch_size=64)
         detector = VAEDetector(config)
@@ -449,9 +454,7 @@ class TestPyTorchInferenceEngine:
             model_path = Path(tmpdir) / "vae_model"
             detector.save_model(model_path)
 
-            engine = PyTorchInferenceEngine.from_checkpoint(
-                model_path.with_suffix(".pt")
-            )
+            engine = PyTorchInferenceEngine.from_checkpoint(model_path.with_suffix(".pt"))
 
             X = detector._prepare_inference_data(sample_tabular_data)
             engine.score_samples(X)
@@ -490,7 +493,7 @@ class TestDLConfig:
 
     def test_preset_configs(self):
         """Test preset configurations."""
-        from device_anomaly.config.dl_config import get_preset, DL_PRESETS
+        from device_anomaly.config.dl_config import DL_PRESETS, get_preset
 
         for preset_name in DL_PRESETS.keys():
             config = get_preset(preset_name)

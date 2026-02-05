@@ -102,7 +102,8 @@ def run_synthetic_experiment(
         "is_injected_anomaly",
     }
     baseline_features = [
-        col for col in df_feat.columns
+        col
+        for col in df_feat.columns
         if pd.api.types.is_numeric_dtype(df_feat[col]) and col not in exclude_baseline_cols
     ]
     baselines_path = Path("artifacts/synthetic_baselines.json")
@@ -196,9 +197,9 @@ def run_synthetic_experiment(
         ground_truth = df_scored["is_injected_anomaly"]
         predicted_anomaly = df_scored["anomaly_label"] == -1
 
-        true_positives = int(((ground_truth == True) & predicted_anomaly).sum())   # noqa: E712
-        false_positives = int(((ground_truth == False) & predicted_anomaly).sum()) # noqa: E712
-        false_negatives = int(((ground_truth == True) & ~predicted_anomaly).sum()) # noqa: E712
+        true_positives = int(((ground_truth == True) & predicted_anomaly).sum())  # noqa: E712
+        false_positives = int(((ground_truth == False) & predicted_anomaly).sum())  # noqa: E712
+        false_negatives = int(((ground_truth == True) & ~predicted_anomaly).sum())  # noqa: E712
 
         precision = true_positives / (true_positives + false_positives + 1e-9)
         recall = true_positives / (true_positives + false_negatives + 1e-9)
@@ -238,10 +239,15 @@ def run_synthetic_experiment(
         )
         if baseline_suggestions:
             import json
+
             suggestion_path = Path("artifacts/synthetic_baseline_suggestions.json")
             suggestion_path.parent.mkdir(parents=True, exist_ok=True)
             suggestion_path.write_text(json.dumps(baseline_suggestions, indent=2, default=float))
-            logger.info("Captured %d baseline adjustment suggestions at %s", len(baseline_suggestions), suggestion_path)
+            logger.info(
+                "Captured %d baseline adjustment suggestions at %s",
+                len(baseline_suggestions),
+                suggestion_path,
+            )
     else:
         logger.info("Baseline suggestions skipped (baselines unavailable).")
 
@@ -310,9 +316,7 @@ def run_synthetic_experiment(
 def main() -> None:
     setup_logging()
 
-    parser = argparse.ArgumentParser(
-        description="Run synthetic anomaly detection experiment."
-    )
+    parser = argparse.ArgumentParser(description="Run synthetic anomaly detection experiment.")
     parser.add_argument(
         "-c",
         "--config",

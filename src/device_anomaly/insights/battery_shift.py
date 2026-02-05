@@ -221,10 +221,14 @@ class BatteryShiftAnalyzer:
             ShiftReadinessReport or None if no shift data
         """
         # Get location and shift info
-        location = self.db.query(LocationMetadata).filter(
-            LocationMetadata.tenant_id == self.tenant_id,
-            LocationMetadata.location_id == location_id,
-        ).first()
+        location = (
+            self.db.query(LocationMetadata)
+            .filter(
+                LocationMetadata.tenant_id == self.tenant_id,
+                LocationMetadata.location_id == location_id,
+            )
+            .first()
+        )
 
         if not location:
             logger.warning(f"Location not found: {location_id}")
@@ -252,12 +256,16 @@ class BatteryShiftAnalyzer:
 
         # Calculate summary metrics
         devices_ready = sum(1 for d in device_readiness if d.will_complete_shift)
-        devices_at_risk = sum(1 for d in device_readiness if not d.will_complete_shift and d.projected_end_battery > 0)
+        devices_at_risk = sum(
+            1 for d in device_readiness if not d.will_complete_shift and d.projected_end_battery > 0
+        )
         devices_critical = sum(1 for d in device_readiness if d.projected_end_battery <= 0)
         devices_not_charged = sum(1 for d in device_readiness if not d.was_fully_charged)
 
         # Get last week's readiness for comparison
-        last_week_readiness = self._get_historical_readiness(location_id, shift_date - timedelta(days=7))
+        last_week_readiness = self._get_historical_readiness(
+            location_id, shift_date - timedelta(days=7)
+        )
 
         total_devices = len(device_readiness)
         current_readiness = (devices_ready / total_devices * 100) if total_devices > 0 else 0
@@ -280,8 +288,12 @@ class BatteryShiftAnalyzer:
             devices_critical=devices_critical,
             readiness_percentage=current_readiness,
             device_readiness=device_readiness,
-            avg_battery_at_start=float(np.mean([d.current_battery for d in device_readiness])) if device_readiness else 0,
-            avg_drain_rate=float(np.mean([d.drain_rate_per_hour for d in device_readiness])) if device_readiness else 0,
+            avg_battery_at_start=float(np.mean([d.current_battery for d in device_readiness]))
+            if device_readiness
+            else 0,
+            avg_drain_rate=float(np.mean([d.drain_rate_per_hour for d in device_readiness]))
+            if device_readiness
+            else 0,
             devices_not_fully_charged=devices_not_charged,
             devices_will_die_during_shift=devices_critical,
             vs_last_week_readiness=vs_last_week,
@@ -301,10 +313,14 @@ class BatteryShiftAnalyzer:
         Returns:
             ChargingPatternReport with charging pattern insights
         """
-        location = self.db.query(LocationMetadata).filter(
-            LocationMetadata.tenant_id == self.tenant_id,
-            LocationMetadata.location_id == location_id,
-        ).first()
+        location = (
+            self.db.query(LocationMetadata)
+            .filter(
+                LocationMetadata.tenant_id == self.tenant_id,
+                LocationMetadata.location_id == location_id,
+            )
+            .first()
+        )
 
         if not location:
             return None
@@ -392,7 +408,11 @@ class BatteryShiftAnalyzer:
         patterns = self._detect_periodic_patterns(drain_data)
 
         # Calculate overall drain profile
-        avg_daily_drain = drain_data["drain_per_hour"].mean() * 24 if "drain_per_hour" in drain_data.columns else 0
+        avg_daily_drain = (
+            drain_data["drain_per_hour"].mean() * 24
+            if "drain_per_hour" in drain_data.columns
+            else 0
+        )
 
         # Find peak drain times
         if "hour" in drain_data.columns:
@@ -468,7 +488,11 @@ class BatteryShiftAnalyzer:
         # Estimate when it will die
         if drain_rate > 0:
             hours_until_dead = current_level / drain_rate
-            estimated_dead_time = now + timedelta(hours=hours_until_dead) if hours_until_dead < hours_until_target else None
+            estimated_dead_time = (
+                now + timedelta(hours=hours_until_dead)
+                if hours_until_dead < hours_until_target
+                else None
+            )
         else:
             estimated_dead_time = None
 
@@ -619,15 +643,19 @@ class BatteryShiftAnalyzer:
                 if metadata.get("location_id") != location_id:
                     continue
 
-                features = json.loads(feature.feature_values_json) if feature.feature_values_json else {}
+                features = (
+                    json.loads(feature.feature_values_json) if feature.feature_values_json else {}
+                )
 
-                records.append({
-                    "device_id": feature.device_id,
-                    "device_name": metadata.get("device_name"),
-                    "battery_level": features.get("BatteryLevel", 50),
-                    "drain_rate": features.get("BatteryDrainPerHour", 5),
-                    "computed_at": feature.computed_at,
-                })
+                records.append(
+                    {
+                        "device_id": feature.device_id,
+                        "device_name": metadata.get("device_name"),
+                        "battery_level": features.get("BatteryLevel", 50),
+                        "drain_rate": features.get("BatteryDrainPerHour", 5),
+                        "computed_at": feature.computed_at,
+                    }
+                )
                 seen_devices.add(feature.device_id)
 
             except (json.JSONDecodeError, TypeError):
@@ -656,7 +684,9 @@ class BatteryShiftAnalyzer:
         estimated_dead_time = None
         if not will_complete:
             hours_until_dead = current_battery / drain_rate if drain_rate > 0 else 999
-            dead_datetime = datetime.combine(datetime.today(), shift.start_time) + timedelta(hours=hours_until_dead)
+            dead_datetime = datetime.combine(datetime.today(), shift.start_time) + timedelta(
+                hours=hours_until_dead
+            )
             estimated_dead_time = dead_datetime.strftime("%H:%M")
 
         # Was fully charged?
@@ -700,9 +730,7 @@ class BatteryShiftAnalyzer:
         query = (
             self.db.query(
                 func.count(ShiftPerformance.id).label("total"),
-                func.sum(
-                    func.cast(ShiftPerformance.will_complete_shift, Integer)
-                ).label("ready"),
+                func.sum(func.cast(ShiftPerformance.will_complete_shift, Integer)).label("ready"),
             )
             .filter(
                 ShiftPerformance.tenant_id == self.tenant_id,
@@ -746,17 +774,21 @@ class BatteryShiftAnalyzer:
                 if metadata.get("location_id") != location_id:
                     continue
 
-                features = json.loads(feature.feature_values_json) if feature.feature_values_json else {}
+                features = (
+                    json.loads(feature.feature_values_json) if feature.feature_values_json else {}
+                )
 
-                records.append({
-                    "device_id": feature.device_id,
-                    "computed_at": feature.computed_at,
-                    "battery_level": features.get("BatteryLevel", 50),
-                    "ac_charge_count": features.get("AcChargeCount", 0),
-                    "usb_charge_count": features.get("UsbChargeCount", 0),
-                    "charge_pattern_good": features.get("ChargePatternGoodCount", 0),
-                    "charge_pattern_bad": features.get("ChargePatternBadCount", 0),
-                })
+                records.append(
+                    {
+                        "device_id": feature.device_id,
+                        "computed_at": feature.computed_at,
+                        "battery_level": features.get("BatteryLevel", 50),
+                        "ac_charge_count": features.get("AcChargeCount", 0),
+                        "usb_charge_count": features.get("UsbChargeCount", 0),
+                        "charge_pattern_good": features.get("ChargePatternGoodCount", 0),
+                        "charge_pattern_bad": features.get("ChargePatternBadCount", 0),
+                    }
+                )
             except (json.JSONDecodeError, TypeError):
                 continue
 
@@ -776,43 +808,49 @@ class BatteryShiftAnalyzer:
         # Check for incomplete charges
         max_battery = device_data["battery_level"].max()
         if max_battery < self.FULLY_CHARGED_THRESHOLD:
-            issues.append(ChargingPatternIssue(
-                device_id=device_id,
-                device_name=None,
-                issue_type="incomplete_charge",
-                description=f"Device rarely reaches full charge (max {max_battery:.0f}%)",
-                frequency="daily",
-                severity=InsightSeverity.MEDIUM,
-                recommendation="Ensure device is charged overnight to 100%",
-            ))
+            issues.append(
+                ChargingPatternIssue(
+                    device_id=device_id,
+                    device_name=None,
+                    issue_type="incomplete_charge",
+                    description=f"Device rarely reaches full charge (max {max_battery:.0f}%)",
+                    frequency="daily",
+                    severity=InsightSeverity.MEDIUM,
+                    recommendation="Ensure device is charged overnight to 100%",
+                )
+            )
 
         # Check for USB-only charging
         total_usb = device_data["usb_charge_count"].sum()
         total_ac = device_data["ac_charge_count"].sum()
         if total_usb > 0 and total_ac == 0:
-            issues.append(ChargingPatternIssue(
-                device_id=device_id,
-                device_name=None,
-                issue_type="usb_instead_ac",
-                description="Device only charges via USB (slower than AC)",
-                frequency="daily",
-                severity=InsightSeverity.LOW,
-                recommendation="Use AC charger for faster, more complete charging",
-            ))
+            issues.append(
+                ChargingPatternIssue(
+                    device_id=device_id,
+                    device_name=None,
+                    issue_type="usb_instead_ac",
+                    description="Device only charges via USB (slower than AC)",
+                    frequency="daily",
+                    severity=InsightSeverity.LOW,
+                    recommendation="Use AC charger for faster, more complete charging",
+                )
+            )
 
         # Check for bad charging patterns
         bad_patterns = device_data["charge_pattern_bad"].sum()
         good_patterns = device_data["charge_pattern_good"].sum()
         if bad_patterns > good_patterns and bad_patterns > 0:
-            issues.append(ChargingPatternIssue(
-                device_id=device_id,
-                device_name=None,
-                issue_type="short_charges",
-                description=f"Frequent short/interrupted charging sessions ({bad_patterns} bad vs {good_patterns} good)",
-                frequency="daily",
-                severity=InsightSeverity.MEDIUM,
-                recommendation="Allow device to charge fully without interruption",
-            ))
+            issues.append(
+                ChargingPatternIssue(
+                    device_id=device_id,
+                    device_name=None,
+                    issue_type="short_charges",
+                    description=f"Frequent short/interrupted charging sessions ({bad_patterns} bad vs {good_patterns} good)",
+                    frequency="daily",
+                    severity=InsightSeverity.MEDIUM,
+                    recommendation="Allow device to charge fully without interruption",
+                )
+            )
 
         return issues
 
@@ -829,7 +867,7 @@ class BatteryShiftAnalyzer:
 
         if incomplete > total * 0.2:
             recommendations.append(
-                f"{incomplete} devices ({incomplete/total*100:.0f}%) aren't reaching full charge. "
+                f"{incomplete} devices ({incomplete / total * 100:.0f}%) aren't reaching full charge. "
                 "Review overnight charging procedures."
             )
 
@@ -880,14 +918,18 @@ class BatteryShiftAnalyzer:
         records = []
         for feature in query:
             try:
-                features = json.loads(feature.feature_values_json) if feature.feature_values_json else {}
-                records.append({
-                    "computed_at": feature.computed_at,
-                    "drain_per_hour": features.get("BatteryDrainPerHour", 0),
-                    "battery_level": features.get("BatteryLevel", 50),
-                    "hour": feature.computed_at.hour,
-                    "day_of_week": feature.computed_at.weekday(),
-                })
+                features = (
+                    json.loads(feature.feature_values_json) if feature.feature_values_json else {}
+                )
+                records.append(
+                    {
+                        "computed_at": feature.computed_at,
+                        "drain_per_hour": features.get("BatteryDrainPerHour", 0),
+                        "battery_level": features.get("BatteryLevel", 50),
+                        "hour": feature.computed_at.hour,
+                        "day_of_week": feature.computed_at.weekday(),
+                    }
+                )
             except (json.JSONDecodeError, TypeError):
                 continue
 
@@ -912,14 +954,18 @@ class BatteryShiftAnalyzer:
 
         for hour, row in hourly_stats.iterrows():
             if row["mean"] > threshold and row["count"] >= 3:
-                patterns.append(PeriodicDrainEvent(
-                    day_of_week=None,  # Daily pattern
-                    time_of_day=time(hour=int(hour)),
-                    duration_minutes=60,
-                    avg_drain_rate=float(row["mean"]),
-                    occurrence_count=int(row["count"]),
-                    confidence=min(0.9, row["count"] / 14),  # More occurrences = higher confidence
-                ))
+                patterns.append(
+                    PeriodicDrainEvent(
+                        day_of_week=None,  # Daily pattern
+                        time_of_day=time(hour=int(hour)),
+                        duration_minutes=60,
+                        avg_drain_rate=float(row["mean"]),
+                        occurrence_count=int(row["count"]),
+                        confidence=min(
+                            0.9, row["count"] / 14
+                        ),  # More occurrences = higher confidence
+                    )
+                )
 
         return patterns
 
@@ -968,7 +1014,9 @@ class BatteryShiftAnalyzer:
         import json
 
         try:
-            features = json.loads(feature.feature_values_json) if feature.feature_values_json else {}
+            features = (
+                json.loads(feature.feature_values_json) if feature.feature_values_json else {}
+            )
             return {
                 "battery_level": features.get("BatteryLevel", 50),
                 "drain_rate": features.get("BatteryDrainPerHour", 5),

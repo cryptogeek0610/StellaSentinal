@@ -4,6 +4,7 @@ Data profiling module for analyzing SQL Server telemetry data.
 Provides comprehensive statistical analysis of DW and MobiControl tables
 to understand data distributions, patterns, and baselines for ML training.
 """
+
 from __future__ import annotations
 
 import json
@@ -73,6 +74,7 @@ def _ensure_safe_column(engine, table_name: str, column_name: str) -> str:
     if not _column_exists(engine, table_name, column_name):
         raise ValueError(f"Unknown column: {table_name}.{column_name}")
     return column_name
+
 
 # Known telemetry tables in XSight DW (used as fallback if discovery fails)
 # This is the LEGACY list - prefer using get_curated_xsight_tables() for dynamic discovery
@@ -150,6 +152,7 @@ def get_curated_xsight_tables(
                 SourceDatabase,
                 get_curated_table_list,
             )
+
             discovered = get_curated_table_list(
                 source_db=SourceDatabase.XSIGHT,
                 include_explicit=True,
@@ -187,6 +190,7 @@ def get_curated_mc_tables(
                 SourceDatabase,
                 get_curated_table_list,
             )
+
             discovered = get_curated_table_list(
                 source_db=SourceDatabase.MOBICONTROL,
                 include_explicit=True,
@@ -240,7 +244,8 @@ def discover_dw_tables(
             if exclude_time_slices:
                 original_count = len(tables)
                 tables = [
-                    t for t in tables
+                    t
+                    for t in tables
                     if not any(t.endswith(suffix) for suffix in TIME_SLICE_SUFFIXES)
                 ]
                 if len(tables) < original_count:
@@ -334,7 +339,9 @@ def _get_table_row_count(engine, table_name: str) -> int:
         return result[0] if result else 0
 
 
-def _get_date_range(engine, table_name: str, date_column: str = "CollectedDate") -> tuple[str | None, str | None]:
+def _get_date_range(
+    engine, table_name: str, date_column: str = "CollectedDate"
+) -> tuple[str | None, str | None]:
     """Get min and max dates from a table."""
     table_name = _ensure_safe_table(engine, table_name)
     date_column = _ensure_safe_column(engine, table_name, date_column)
@@ -397,7 +404,17 @@ def _compute_column_stats(
         logger.warning(f"Error getting null stats for {table_name}.{column_name}: {e}")
 
     # For numeric types, compute detailed statistics
-    numeric_types = ["int", "bigint", "smallint", "tinyint", "decimal", "numeric", "float", "real", "money"]
+    numeric_types = [
+        "int",
+        "bigint",
+        "smallint",
+        "tinyint",
+        "decimal",
+        "numeric",
+        "float",
+        "real",
+        "money",
+    ]
     if any(t in dtype.lower() for t in numeric_types):
         # Sample data for percentiles (for large tables)
         sample_query = text(f"""
@@ -522,7 +539,9 @@ def profile_dw_tables(
             logger.info(f"Profiling table: {table_name}")
             profile = profile_table(engine, table_name, sample_limit=sample_limit)
             profiles[table_name] = profile
-            logger.info(f"Profiled {table_name}: {profile.row_count:,} rows, {profile.device_count:,} devices")
+            logger.info(
+                f"Profiled {table_name}: {profile.row_count:,} rows, {profile.device_count:,} devices"
+            )
         except Exception as e:
             logger.error(f"Failed to profile {table_name}: {e}")
 
@@ -710,17 +729,19 @@ def generate_profile_report(
         rows = []
         for table_name, profile in profiles.items():
             for col_name, col_stats in profile.column_stats.items():
-                rows.append({
-                    "table_name": table_name,
-                    "column_name": col_name,
-                    "dtype": col_stats.dtype,
-                    "null_percent": col_stats.null_percent,
-                    "min_val": col_stats.min_val,
-                    "max_val": col_stats.max_val,
-                    "mean": col_stats.mean,
-                    "std": col_stats.std,
-                    **{f"percentile_{k}": v for k, v in col_stats.percentiles.items()},
-                })
+                rows.append(
+                    {
+                        "table_name": table_name,
+                        "column_name": col_name,
+                        "dtype": col_stats.dtype,
+                        "null_percent": col_stats.null_percent,
+                        "min_val": col_stats.min_val,
+                        "max_val": col_stats.max_val,
+                        "mean": col_stats.mean,
+                        "std": col_stats.std,
+                        **{f"percentile_{k}": v for k, v in col_stats.percentiles.items()},
+                    }
+                )
         df = pd.DataFrame(rows)
         df.to_parquet(output_path)
 
@@ -738,20 +759,32 @@ def get_available_metrics(profiles: dict[str, TableProfile]) -> list[dict[str, A
         List of metric info dicts with table, column, and basic stats
     """
     metrics = []
-    numeric_types = ["int", "bigint", "smallint", "tinyint", "decimal", "numeric", "float", "real", "money"]
+    numeric_types = [
+        "int",
+        "bigint",
+        "smallint",
+        "tinyint",
+        "decimal",
+        "numeric",
+        "float",
+        "real",
+        "money",
+    ]
 
     for table_name, profile in profiles.items():
         for col_name, col_stats in profile.column_stats.items():
             if any(t in col_stats.dtype.lower() for t in numeric_types):
                 if col_stats.mean is not None:  # Has computed stats
-                    metrics.append({
-                        "table": table_name,
-                        "column": col_name,
-                        "dtype": col_stats.dtype,
-                        "mean": col_stats.mean,
-                        "std": col_stats.std,
-                        "min": col_stats.min_val,
-                        "max": col_stats.max_val,
-                    })
+                    metrics.append(
+                        {
+                            "table": table_name,
+                            "column": col_name,
+                            "dtype": col_stats.dtype,
+                            "mean": col_stats.mean,
+                            "std": col_stats.std,
+                            "min": col_stats.min_val,
+                            "max": col_stats.max_val,
+                        }
+                    )
 
     return metrics

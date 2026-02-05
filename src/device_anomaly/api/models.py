@@ -1,4 +1,5 @@
 """Pydantic models for API requests and responses."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -517,7 +518,9 @@ class AnomalyGroup(BaseModel):
     sample_anomalies: list[AnomalyGroupMember]
 
     # Explanation of why these are grouped
-    grouping_factors: list[str]  # e.g., ["Same category: BATTERY_RAPID_DRAIN", "Similar score range"]
+    grouping_factors: list[
+        str
+    ]  # e.g., ["Same category: BATTERY_RAPID_DRAIN", "Similar score range"]
     avg_similarity_score: float | None = None
 
 

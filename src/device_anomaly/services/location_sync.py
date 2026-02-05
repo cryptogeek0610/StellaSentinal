@@ -6,6 +6,7 @@ location_metadata table for "Warehouse A vs Warehouse B" comparisons.
 
 This enables Carl's requirement: "Relate any anomalies to location"
 """
+
 import logging
 import time
 from datetime import datetime
@@ -111,7 +112,9 @@ def load_device_group_hierarchy_from_mc(limit: int = 1_000) -> pd.DataFrame:
             return df
     except Exception as e:
         logger.warning(f"Could not load device groups from MC: {e}")
-        return pd.DataFrame(columns=["DeviceGroupId", "GroupName", "ParentDeviceGroupId", "DeviceCount"])
+        return pd.DataFrame(
+            columns=["DeviceGroupId", "GroupName", "ParentDeviceGroupId", "DeviceCount"]
+        )
 
 
 def load_device_to_location_mapping(
@@ -190,10 +193,14 @@ def upsert_location_metadata(
             location_id = f"{label_type.lower()}-{label_value.lower().replace(' ', '-')}"
 
             # Check if exists
-            existing = db.query(LocationMetadata).filter(
-                LocationMetadata.tenant_id == tenant_id,
-                LocationMetadata.location_id == location_id,
-            ).first()
+            existing = (
+                db.query(LocationMetadata)
+                .filter(
+                    LocationMetadata.tenant_id == tenant_id,
+                    LocationMetadata.location_id == location_id,
+                )
+                .first()
+            )
 
             if existing:
                 # Update existing
@@ -262,10 +269,14 @@ def upsert_device_group_locations(
 
             location_id = f"group-{group_id}"
 
-            existing = db.query(LocationMetadata).filter(
-                LocationMetadata.tenant_id == tenant_id,
-                LocationMetadata.location_id == location_id,
-            ).first()
+            existing = (
+                db.query(LocationMetadata)
+                .filter(
+                    LocationMetadata.tenant_id == tenant_id,
+                    LocationMetadata.location_id == location_id,
+                )
+                .first()
+            )
 
             if existing:
                 existing.location_name = group_name
@@ -512,9 +523,7 @@ def get_location_sync_stats(tenant_id: str | None = None) -> dict:
             LocationMetadata.mapping_type == LocationMappingType.DEVICE_GROUP.value
         ).count()
 
-        last_sync = (
-            query.with_entities(func.max(LocationMetadata.updated_at)).scalar()
-        )
+        last_sync = query.with_entities(func.max(LocationMetadata.updated_at)).scalar()
 
         device_query = db.query(DeviceMetadata)
         if tenant_id:
@@ -570,10 +579,14 @@ def get_device_location(
         location_id = f"{label_type.lower()}-{label_value.lower().replace(' ', '-')}"
 
         # Look up the location name
-        location = db.query(LocationMetadata).filter(
-            LocationMetadata.tenant_id == tenant_id,
-            LocationMetadata.location_id == location_id,
-        ).first()
+        location = (
+            db.query(LocationMetadata)
+            .filter(
+                LocationMetadata.tenant_id == tenant_id,
+                LocationMetadata.location_id == location_id,
+            )
+            .first()
+        )
 
         if location:
             return location.location_name
@@ -617,8 +630,9 @@ def enrich_dataframe_with_locations(
 
     # Create location_id from mapping
     mapping_df["location_id"] = (
-        mapping_df["LocationLabelType"].str.lower() + "-" +
-        mapping_df["LocationValue"].str.lower().str.replace(" ", "-")
+        mapping_df["LocationLabelType"].str.lower()
+        + "-"
+        + mapping_df["LocationValue"].str.lower().str.replace(" ", "-")
     )
 
     # Merge with main dataframe (take first location per device)

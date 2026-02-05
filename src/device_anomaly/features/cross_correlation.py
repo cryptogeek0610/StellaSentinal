@@ -212,14 +212,16 @@ class CohortIssueTracker:
 
         for issue in issues:
             if issue.affected_metric in features:
-                relevant_issues.append({
-                    "type": issue.issue_type,
-                    "metric": issue.affected_metric,
-                    "severity": issue.severity,
-                    "confidence": issue.confidence,
-                    "device_count": issue.device_count,
-                    "description": issue.description,
-                })
+                relevant_issues.append(
+                    {
+                        "type": issue.issue_type,
+                        "metric": issue.affected_metric,
+                        "severity": issue.severity,
+                        "confidence": issue.confidence,
+                        "device_count": issue.device_count,
+                        "description": issue.description,
+                    }
+                )
 
                 # Suggest adjustment factor for anomaly scoring
                 # If it's a known cohort issue, reduce the anomaly weight
@@ -373,13 +375,15 @@ class CrossCorrelationFeatureBuilder:
             firmware_drop_std = df.groupby(firmware_id)["WifiDropCount"].transform("std").fillna(0)
 
             # Device's deviation from firmware norm
-            df["WifiDrop_vs_Firmware"] = (
-                df["WifiDropCount"] - firmware_drop_mean
-            ) / (firmware_drop_std + 1e-6)
+            df["WifiDrop_vs_Firmware"] = (df["WifiDropCount"] - firmware_drop_mean) / (
+                firmware_drop_std + 1e-6
+            )
 
             # Is this firmware problematic overall?
             global_drop_mean = df["WifiDropCount"].mean()
-            df["Firmware_WifiIssue_Flag"] = (firmware_drop_mean > global_drop_mean * 1.5).astype(int)
+            df["Firmware_WifiIssue_Flag"] = (firmware_drop_mean > global_drop_mean * 1.5).astype(
+                int
+            )
 
         if "TotalDropCnt" in df.columns:
             firmware_total_drop_mean = df.groupby(firmware_id)["TotalDropCnt"].transform("mean")
@@ -387,17 +391,14 @@ class CrossCorrelationFeatureBuilder:
 
             # Firmware connectivity quality score (0 = problematic, 1 = good)
             df["Firmware_ConnectivityScore"] = 1.0 - np.clip(
-                firmware_total_drop_mean / (global_total_drop_mean * 2 + 1e-6),
-                0, 1
+                firmware_total_drop_mean / (global_total_drop_mean * 2 + 1e-6), 0, 1
             )
 
         if "AvgSignalStrength" in df.columns:
             # Signal-to-drop ratio by firmware
             if "TotalDropCnt" in df.columns:
                 signal_quality = df["AvgSignalStrength"] + 100  # Convert dBm to positive
-                df["Firmware_SignalDropRatio"] = (
-                    df["TotalDropCnt"] / (signal_quality + 1)
-                )
+                df["Firmware_SignalDropRatio"] = df["TotalDropCnt"] / (signal_quality + 1)
 
                 # Compare to firmware average
                 fw_avg_ratio = df.groupby(firmware_id)["Firmware_SignalDropRatio"].transform("mean")
@@ -433,12 +434,14 @@ class CrossCorrelationFeatureBuilder:
         if "TotalBatteryLevelDrop" in df.columns:
             # Model-specific drain rate
             model_drain_mean = df.groupby(model_id)["TotalBatteryLevelDrop"].transform("mean")
-            model_drain_std = df.groupby(model_id)["TotalBatteryLevelDrop"].transform("std").fillna(0)
+            model_drain_std = (
+                df.groupby(model_id)["TotalBatteryLevelDrop"].transform("std").fillna(0)
+            )
 
             # Device's deviation from model norm
-            df["BatteryDrain_vs_Model"] = (
-                df["TotalBatteryLevelDrop"] - model_drain_mean
-            ) / (model_drain_std + 1e-6)
+            df["BatteryDrain_vs_Model"] = (df["TotalBatteryLevelDrop"] - model_drain_mean) / (
+                model_drain_std + 1e-6
+            )
 
             # Is this model a battery hog?
             global_drain_mean = df["TotalBatteryLevelDrop"].mean()
@@ -446,18 +449,19 @@ class CrossCorrelationFeatureBuilder:
 
             # Model battery efficiency score
             df["Model_BatteryEfficiency"] = 1.0 - np.clip(
-                model_drain_mean / (global_drain_mean * 2 + 1e-6),
-                0, 1
+                model_drain_mean / (global_drain_mean * 2 + 1e-6), 0, 1
             )
 
         if "CalculatedBatteryCapacity" in df.columns:
             # Model-specific capacity degradation
-            model_capacity_mean = df.groupby(model_id)["CalculatedBatteryCapacity"].transform("mean")
+            model_capacity_mean = df.groupby(model_id)["CalculatedBatteryCapacity"].transform(
+                "mean"
+            )
 
             # Is this device's battery worse than other same-model devices?
-            df["Capacity_vs_Model"] = (
-                df["CalculatedBatteryCapacity"] - model_capacity_mean
-            ) / (model_capacity_mean + 1e-6)
+            df["Capacity_vs_Model"] = (df["CalculatedBatteryCapacity"] - model_capacity_mean) / (
+                model_capacity_mean + 1e-6
+            )
 
         return df
 
@@ -500,9 +504,7 @@ class CrossCorrelationFeatureBuilder:
             os_crash_std = df.groupby(os_id)["TotalCrashEvents"].transform("std").fillna(0)
 
             # Device's deviation from OS norm
-            df["Crashes_vs_OS"] = (
-                df["TotalCrashEvents"] - os_crash_mean
-            ) / (os_crash_std + 1e-6)
+            df["Crashes_vs_OS"] = (df["TotalCrashEvents"] - os_crash_mean) / (os_crash_std + 1e-6)
 
             # Is this OS version unstable?
             global_crash_mean = df["TotalCrashEvents"].mean()
@@ -510,8 +512,7 @@ class CrossCorrelationFeatureBuilder:
 
             # OS stability score
             df["OS_StabilityScore"] = 1.0 - np.clip(
-                os_crash_mean / (global_crash_mean * 2 + 1e-6),
-                0, 1
+                os_crash_mean / (global_crash_mean * 2 + 1e-6), 0, 1
             )
 
         return df
@@ -563,9 +564,9 @@ class CrossCorrelationFeatureBuilder:
             loc_signal_std = df.groupby(location_id)[signal_col].transform("std").fillna(0)
 
             # Device's signal vs location norm
-            df[f"{signal_col}_vs_Location"] = (
-                df[signal_col] - loc_signal_mean
-            ) / (loc_signal_std + 1e-6)
+            df[f"{signal_col}_vs_Location"] = (df[signal_col] - loc_signal_mean) / (
+                loc_signal_std + 1e-6
+            )
 
             # Is this location a dead zone?
             global_signal_mean = df[signal_col].mean()
@@ -650,9 +651,7 @@ class CrossCorrelationFeatureBuilder:
 
         # OS × Model × Stability interaction
         if all(c in df.columns for c in ["OS_StabilityScore", "Model_BatteryEfficiency"]):
-            df["OS_Model_Stability"] = (
-                df["OS_StabilityScore"] * df["Model_BatteryEfficiency"]
-            )
+            df["OS_Model_Stability"] = df["OS_StabilityScore"] * df["Model_BatteryEfficiency"]
 
         # Location × Firmware × Signal interaction
         if all(c in df.columns for c in ["Location_SignalQuality", "Firmware_ConnectivityScore"]):

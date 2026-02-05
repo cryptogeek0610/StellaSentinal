@@ -7,6 +7,7 @@ This module transforms event log and alert data into ML features including:
 - Alert patterns (severity, escalation, resolution)
 - Event type diversity and entropy
 """
+
 from __future__ import annotations
 
 import logging
@@ -92,11 +93,13 @@ class EventFeatureBuilder:
 
     def _has_crash_data(self, df: pd.DataFrame) -> bool:
         """Check if crash-related data is available."""
-        return any(col in df.columns for col in ["CrashCount", "is_crash", "EventType"]) or \
-               (
-                   "Message" in df.columns and
-                   df["Message"].astype(str).str.contains("crash|exception|error", case=False, na=False).any()
-               )
+        return any(col in df.columns for col in ["CrashCount", "is_crash", "EventType"]) or (
+            "Message" in df.columns
+            and df["Message"]
+            .astype(str)
+            .str.contains("crash|exception|error", case=False, na=False)
+            .any()
+        )
 
     def _has_log_level_data(self, df: pd.DataFrame) -> bool:
         """Check if log level/event type data is available."""
@@ -130,12 +133,12 @@ class EventFeatureBuilder:
         daily_counts["date"] = pd.to_datetime(daily_counts["date"])
         daily_counts = daily_counts.sort_values(["DeviceId", "date"])
 
-        daily_counts["event_freq_roll_mean"] = daily_counts.groupby("DeviceId")["daily_event_count"].transform(
-            lambda x: x.rolling(window=self.window_days, min_periods=2).mean()
-        )
-        daily_counts["event_freq_roll_std"] = daily_counts.groupby("DeviceId")["daily_event_count"].transform(
-            lambda x: x.rolling(window=self.window_days, min_periods=2).std()
-        )
+        daily_counts["event_freq_roll_mean"] = daily_counts.groupby("DeviceId")[
+            "daily_event_count"
+        ].transform(lambda x: x.rolling(window=self.window_days, min_periods=2).mean())
+        daily_counts["event_freq_roll_std"] = daily_counts.groupby("DeviceId")[
+            "daily_event_count"
+        ].transform(lambda x: x.rolling(window=self.window_days, min_periods=2).std())
 
         # Event frequency trend (slope)
         def compute_trend(grp: pd.DataFrame) -> float:
@@ -153,9 +156,11 @@ class EventFeatureBuilder:
         trends.columns = ["DeviceId", "event_frequency_trend"]
 
         df = df.merge(
-            daily_counts[["DeviceId", "date", "event_freq_roll_mean", "event_freq_roll_std"]].drop_duplicates(),
+            daily_counts[
+                ["DeviceId", "date", "event_freq_roll_mean", "event_freq_roll_std"]
+            ].drop_duplicates(),
             on=["DeviceId", "date"],
-            how="left"
+            how="left",
         )
         df = df.merge(trends, on="DeviceId", how="left")
 
@@ -167,24 +172,33 @@ class EventFeatureBuilder:
         # Identify crash events
         if "is_crash" not in df.columns:
             if "EventType" in df.columns:
-                df["is_crash"] = df["EventType"].astype(str).str.contains(
-                    "crash|exception|fatal", case=False, na=False
-                ).astype(int)
+                df["is_crash"] = (
+                    df["EventType"]
+                    .astype(str)
+                    .str.contains("crash|exception|fatal", case=False, na=False)
+                    .astype(int)
+                )
             elif "Message" in df.columns:
-                df["is_crash"] = df["Message"].astype(str).str.contains(
-                    "crash|exception|fatal|error", case=False, na=False
-                ).astype(int)
+                df["is_crash"] = (
+                    df["Message"]
+                    .astype(str)
+                    .str.contains("crash|exception|fatal|error", case=False, na=False)
+                    .astype(int)
+                )
             else:
                 df["is_crash"] = 0
 
         # Crash rate per device
-        crash_stats = df.groupby("DeviceId").agg(
-            crash_count=("is_crash", "sum"),
-            total_events=("is_crash", "count")
-        ).reset_index()
+        crash_stats = (
+            df.groupby("DeviceId")
+            .agg(crash_count=("is_crash", "sum"), total_events=("is_crash", "count"))
+            .reset_index()
+        )
         crash_stats["crash_rate"] = crash_stats["crash_count"] / (crash_stats["total_events"] + 1)
 
-        df = df.merge(crash_stats[["DeviceId", "crash_count", "crash_rate"]], on="DeviceId", how="left")
+        df = df.merge(
+            crash_stats[["DeviceId", "crash_count", "crash_rate"]], on="DeviceId", how="left"
+        )
 
         # Crash trend (increasing/decreasing over time)
         if "Timestamp" in df.columns:
@@ -214,7 +228,9 @@ class EventFeatureBuilder:
             app_col = "AppName" if "AppName" in df.columns else "ApplicationId"
             crash_df = df[df["is_crash"] == 1]
             if not crash_df.empty:
-                crash_by_app = crash_df.groupby(["DeviceId", app_col]).size().reset_index(name="app_crashes")
+                crash_by_app = (
+                    crash_df.groupby(["DeviceId", app_col]).size().reset_index(name="app_crashes")
+                )
 
                 def concentration(grp: pd.DataFrame) -> float:
                     if grp["app_crashes"].sum() == 0:
@@ -249,20 +265,38 @@ class EventFeatureBuilder:
         df["is_info"] = level_lower.str.contains("info|debug", na=False).astype(int)
 
         # Error ratio per device
-        error_stats = df.groupby("DeviceId").agg(
-            error_count=("is_error", "sum"),
-            warning_count=("is_warning", "sum"),
-            total_events=("is_error", "count")
-        ).reset_index()
+        error_stats = (
+            df.groupby("DeviceId")
+            .agg(
+                error_count=("is_error", "sum"),
+                warning_count=("is_warning", "sum"),
+                total_events=("is_error", "count"),
+            )
+            .reset_index()
+        )
 
-        error_stats["error_event_ratio"] = error_stats["error_count"] / (error_stats["total_events"] + 1)
-        error_stats["warning_event_ratio"] = error_stats["warning_count"] / (error_stats["total_events"] + 1)
-        error_stats["warning_to_error_ratio"] = error_stats["warning_count"] / (error_stats["error_count"] + 1)
+        error_stats["error_event_ratio"] = error_stats["error_count"] / (
+            error_stats["total_events"] + 1
+        )
+        error_stats["warning_event_ratio"] = error_stats["warning_count"] / (
+            error_stats["total_events"] + 1
+        )
+        error_stats["warning_to_error_ratio"] = error_stats["warning_count"] / (
+            error_stats["error_count"] + 1
+        )
 
         df = df.merge(
-            error_stats[["DeviceId", "error_count", "error_event_ratio", "warning_event_ratio", "warning_to_error_ratio"]],
+            error_stats[
+                [
+                    "DeviceId",
+                    "error_count",
+                    "error_event_ratio",
+                    "warning_event_ratio",
+                    "warning_to_error_ratio",
+                ]
+            ],
             on="DeviceId",
-            how="left"
+            how="left",
         )
 
         return df
@@ -283,22 +317,36 @@ class EventFeatureBuilder:
         severity_values = df[severity_col]
         if severity_values.dtype == object:
             severity_map = {
-                "low": 1, "minor": 1, "info": 1,
-                "medium": 2, "warning": 2, "moderate": 2,
-                "high": 3, "major": 3, "error": 3,
-                "critical": 4, "severe": 4, "fatal": 4,
+                "low": 1,
+                "minor": 1,
+                "info": 1,
+                "medium": 2,
+                "warning": 2,
+                "moderate": 2,
+                "high": 3,
+                "major": 3,
+                "error": 3,
+                "critical": 4,
+                "severe": 4,
+                "fatal": 4,
             }
-            df["severity_numeric"] = severity_values.astype(str).str.lower().map(severity_map).fillna(2)
+            df["severity_numeric"] = (
+                severity_values.astype(str).str.lower().map(severity_map).fillna(2)
+            )
         else:
             df["severity_numeric"] = pd.to_numeric(severity_values, errors="coerce").fillna(2)
 
         # Alert severity stats per device
-        severity_stats = df.groupby("DeviceId").agg(
-            alert_severity_avg=("severity_numeric", "mean"),
-            alert_severity_max=("severity_numeric", "max"),
-            critical_alert_count=("severity_numeric", lambda x: (x >= 4).sum()),
-            high_alert_count=("severity_numeric", lambda x: (x >= 3).sum()),
-        ).reset_index()
+        severity_stats = (
+            df.groupby("DeviceId")
+            .agg(
+                alert_severity_avg=("severity_numeric", "mean"),
+                alert_severity_max=("severity_numeric", "max"),
+                critical_alert_count=("severity_numeric", lambda x: (x >= 4).sum()),
+                high_alert_count=("severity_numeric", lambda x: (x >= 3).sum()),
+            )
+            .reset_index()
+        )
 
         df = df.merge(severity_stats, on="DeviceId", how="left")
 
@@ -307,9 +355,11 @@ class EventFeatureBuilder:
             df = df.sort_values(["DeviceId", "Timestamp"])
             df["severity_change"] = df.groupby("DeviceId")["severity_numeric"].diff()
 
-            escalation = df.groupby("DeviceId")["severity_change"].agg(
-                lambda x: (x > 0).sum() / (len(x) + 1)
-            ).reset_index()
+            escalation = (
+                df.groupby("DeviceId")["severity_change"]
+                .agg(lambda x: (x > 0).sum() / (len(x) + 1))
+                .reset_index()
+            )
             escalation.columns = ["DeviceId", "alert_escalation_rate"]
             df = df.merge(escalation, on="DeviceId", how="left")
 

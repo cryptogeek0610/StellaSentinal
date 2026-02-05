@@ -27,13 +27,13 @@ logger = logging.getLogger(__name__)
 class MessageType(StrEnum):
     """Types of messages in the streaming system."""
 
-    TELEMETRY_RAW = "telemetry.raw"           # Raw telemetry from devices
+    TELEMETRY_RAW = "telemetry.raw"  # Raw telemetry from devices
     TELEMETRY_ENRICHED = "telemetry.enriched"  # Enriched with device metadata
-    FEATURES_COMPUTED = "features.computed"    # Features ready for scoring
-    ANOMALY_DETECTED = "anomaly.detected"      # Anomaly alert
-    DEVICE_ONLINE = "device.online"            # Device came online
-    DEVICE_OFFLINE = "device.offline"          # Device went offline
-    MODEL_UPDATED = "model.updated"            # ML model was updated
+    FEATURES_COMPUTED = "features.computed"  # Features ready for scoring
+    ANOMALY_DETECTED = "anomaly.detected"  # Anomaly alert
+    DEVICE_ONLINE = "device.online"  # Device came online
+    DEVICE_OFFLINE = "device.offline"  # Device went offline
+    MODEL_UPDATED = "model.updated"  # ML model was updated
 
 
 @dataclass
@@ -62,6 +62,7 @@ class StreamConfig:
     def from_env(cls) -> StreamConfig:
         """Load configuration from environment variables."""
         import os
+
         return cls(
             redis_url=os.getenv("REDIS_URL", "redis://localhost:6379"),
             redis_db=int(os.getenv("REDIS_DB", "0")),
@@ -83,14 +84,16 @@ class StreamMessage:
 
     def to_json(self) -> str:
         """Serialize message to JSON."""
-        return json.dumps({
-            "type": self.message_type.value,
-            "payload": self.payload,
-            "timestamp": self.timestamp.isoformat(),
-            "device_id": self.device_id,
-            "tenant_id": self.tenant_id,
-            "correlation_id": self.correlation_id,
-        })
+        return json.dumps(
+            {
+                "type": self.message_type.value,
+                "payload": self.payload,
+                "timestamp": self.timestamp.isoformat(),
+                "device_id": self.device_id,
+                "tenant_id": self.tenant_id,
+                "correlation_id": self.correlation_id,
+            }
+        )
 
     @classmethod
     def from_json(cls, data: str) -> StreamMessage:
@@ -319,10 +322,7 @@ class StreamingEngine:
                 return
 
             # Execute handlers concurrently with semaphore
-            tasks = [
-                self._execute_handler(handler, stream_message)
-                for handler in handlers
-            ]
+            tasks = [self._execute_handler(handler, stream_message) for handler in handlers]
             await asyncio.gather(*tasks, return_exceptions=True)
 
         except Exception as e:
@@ -378,12 +378,14 @@ class StreamingEngine:
         tenant_id: str | None = None,
     ) -> int:
         """Publish raw telemetry data."""
-        return await self.publish(StreamMessage(
-            message_type=MessageType.TELEMETRY_RAW,
-            payload=telemetry,
-            device_id=device_id,
-            tenant_id=tenant_id,
-        ))
+        return await self.publish(
+            StreamMessage(
+                message_type=MessageType.TELEMETRY_RAW,
+                payload=telemetry,
+                device_id=device_id,
+                tenant_id=tenant_id,
+            )
+        )
 
     async def publish_anomaly(
         self,
@@ -393,15 +395,17 @@ class StreamingEngine:
         tenant_id: str | None = None,
     ) -> int:
         """Publish an anomaly detection."""
-        return await self.publish(StreamMessage(
-            message_type=MessageType.ANOMALY_DETECTED,
-            payload={
-                "anomaly_score": anomaly_score,
-                **details,
-            },
-            device_id=device_id,
-            tenant_id=tenant_id,
-        ))
+        return await self.publish(
+            StreamMessage(
+                message_type=MessageType.ANOMALY_DETECTED,
+                payload={
+                    "anomaly_score": anomaly_score,
+                    **details,
+                },
+                device_id=device_id,
+                tenant_id=tenant_id,
+            )
+        )
 
 
 # Singleton instance for convenience

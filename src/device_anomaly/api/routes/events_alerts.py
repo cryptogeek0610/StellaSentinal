@@ -1,4 +1,5 @@
 """API routes for events and alerts monitoring."""
+
 from __future__ import annotations
 
 import logging
@@ -19,8 +20,10 @@ router = APIRouter(prefix="/insights/events", tags=["events-alerts"])
 # Response Models
 # ============================================================================
 
+
 class EventEntryResponse(BaseModel):
     """Single event from MainLog."""
+
     log_id: int
     timestamp: datetime
     event_id: int
@@ -33,6 +36,7 @@ class EventEntryResponse(BaseModel):
 
 class EventTimelineResponse(BaseModel):
     """Paginated event timeline."""
+
     tenant_id: str
     events: list[EventEntryResponse]
     total: int
@@ -45,6 +49,7 @@ class EventTimelineResponse(BaseModel):
 
 class AlertEntryResponse(BaseModel):
     """Single alert."""
+
     alert_id: int
     alert_key: str
     alert_name: str
@@ -57,12 +62,14 @@ class AlertEntryResponse(BaseModel):
 
 class AlertNameCount(BaseModel):
     """Alert count by name."""
+
     name: str
     count: int
 
 
 class AlertSummaryResponse(BaseModel):
     """Alert summary statistics."""
+
     tenant_id: str
     total_active: int
     total_acknowledged: int
@@ -77,6 +84,7 @@ class AlertSummaryResponse(BaseModel):
 
 class AlertTrendPointResponse(BaseModel):
     """Single point in alert trend."""
+
     timestamp: datetime
     count: int
     severity: str
@@ -84,6 +92,7 @@ class AlertTrendPointResponse(BaseModel):
 
 class AlertTrendsResponse(BaseModel):
     """Alert trends over time."""
+
     tenant_id: str
     trends: list[AlertTrendPointResponse]
     generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -91,6 +100,7 @@ class AlertTrendsResponse(BaseModel):
 
 class CorrelatedEventResponse(BaseModel):
     """Event that occurred before an anomaly."""
+
     event: EventEntryResponse
     time_before_minutes: float
     frequency_score: float
@@ -98,6 +108,7 @@ class CorrelatedEventResponse(BaseModel):
 
 class EventCorrelationResponse(BaseModel):
     """Event correlation analysis."""
+
     tenant_id: str
     anomaly_timestamp: datetime
     device_id: int
@@ -108,6 +119,7 @@ class EventCorrelationResponse(BaseModel):
 
 class EventStatisticsResponse(BaseModel):
     """Overall event statistics."""
+
     tenant_id: str
     total_events: int
     events_per_day: int
@@ -120,14 +132,23 @@ class EventStatisticsResponse(BaseModel):
 # Mock Data Functions
 # ============================================================================
 
+
 def get_mock_event_timeline(page: int, page_size: int) -> EventTimelineResponse:
     """Generate mock event timeline."""
     import random
+
     random.seed(42 + page)
 
     now = datetime.now(UTC)
     severities = ["Info", "Warning", "Error", "Critical"]
-    event_classes = ["DeviceConnect", "AppCrash", "BatteryLow", "NetworkDrop", "PolicyApply", "UserLogin"]
+    event_classes = [
+        "DeviceConnect",
+        "AppCrash",
+        "BatteryLow",
+        "NetworkDrop",
+        "PolicyApply",
+        "UserLogin",
+    ]
 
     events = []
     for i in range(page_size):
@@ -135,16 +156,18 @@ def get_mock_event_timeline(page: int, page_size: int) -> EventTimelineResponse:
         severity = random.choices(severities, weights=[50, 30, 15, 5])[0]
         event_class = random.choice(event_classes)
 
-        events.append(EventEntryResponse(
-            log_id=10000 + i + (page - 1) * page_size,
-            timestamp=ts,
-            event_id=random.randint(1000, 9999),
-            severity=severity,
-            event_class=event_class,
-            message=f"Sample {event_class} event for device",
-            device_id=random.randint(1000, 1250),
-            login_id=f"user_{random.randint(1, 10)}",
-        ))
+        events.append(
+            EventEntryResponse(
+                log_id=10000 + i + (page - 1) * page_size,
+                timestamp=ts,
+                event_id=random.randint(1000, 9999),
+                severity=severity,
+                event_class=event_class,
+                message=f"Sample {event_class} event for device",
+                device_id=random.randint(1000, 1250),
+                login_id=f"user_{random.randint(1, 10)}",
+            )
+        )
 
     return EventTimelineResponse(
         tenant_id="default",
@@ -233,6 +256,7 @@ def get_mock_alert_summary() -> AlertSummaryResponse:
 def get_mock_alert_trends(period_days: int, granularity: str) -> AlertTrendsResponse:
     """Generate mock alert trends."""
     import random
+
     random.seed(42)
 
     now = datetime.now(UTC)
@@ -248,11 +272,13 @@ def get_mock_alert_trends(period_days: int, granularity: str) -> AlertTrendsResp
             base = 5 if severity == "Info" else (3 if severity == "Warning" else 1)
             count = base + random.randint(-1, 2)
 
-            trends.append(AlertTrendPointResponse(
-                timestamp=ts,
-                count=max(0, count),
-                severity=severity,
-            ))
+            trends.append(
+                AlertTrendPointResponse(
+                    timestamp=ts,
+                    count=max(0, count),
+                    severity=severity,
+                )
+            )
 
     return AlertTrendsResponse(
         tenant_id="default",
@@ -280,6 +306,7 @@ def get_mock_event_statistics() -> EventStatisticsResponse:
 # ============================================================================
 # API Endpoints
 # ============================================================================
+
 
 @router.get("/timeline", response_model=EventTimelineResponse)
 def get_event_timeline(
@@ -394,8 +421,7 @@ def get_alert_summary(
         ]
 
         by_name = [
-            AlertNameCount(name=n["name"], count=n["count"])
-            for n in summary_data.by_alert_name
+            AlertNameCount(name=n["name"], count=n["count"]) for n in summary_data.by_alert_name
         ]
 
         return AlertSummaryResponse(

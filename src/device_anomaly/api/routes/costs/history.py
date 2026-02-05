@@ -1,6 +1,7 @@
 """
 Cost history and audit trail endpoints.
 """
+
 from __future__ import annotations
 
 import json
@@ -98,8 +99,12 @@ def get_cost_history(
                 entity_name=entity_name,
                 changed_by=log.user_id,
                 field_changed=changed_fields[0] if changed_fields else None,
-                old_value=str(old_values.get(changed_fields[0])) if old_values and changed_fields else None,
-                new_value=str(new_values.get(changed_fields[0])) if new_values and changed_fields else None,
+                old_value=str(old_values.get(changed_fields[0]))
+                if old_values and changed_fields
+                else None,
+                new_value=str(new_values.get(changed_fields[0]))
+                if new_values and changed_fields
+                else None,
                 before_snapshot=old_values,
                 after_snapshot=new_values,
             )

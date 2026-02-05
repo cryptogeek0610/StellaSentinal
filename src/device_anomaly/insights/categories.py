@@ -257,7 +257,6 @@ CATEGORY_METADATA = {
         "primary_metrics": ["BatteryHealth", "CycleCount", "FullChargeCapacity"],
         "icon": "battery-off",
     },
-
     # Device
     InsightCategory.EXCESSIVE_DROPS: {
         "domain": "device",
@@ -287,7 +286,6 @@ CATEGORY_METADATA = {
         "primary_metrics": ["CpuActiveTime", "AvailableRAM", "AvailableStorage"],
         "icon": "gauge",
     },
-
     # Network
     InsightCategory.WIFI_AP_HOPPING: {
         "domain": "network",
@@ -352,7 +350,6 @@ CATEGORY_METADATA = {
         "primary_metrics": ["TimeOnNoNetwork", "LastCheckInTime"],
         "icon": "eye-off",
     },
-
     # Apps
     InsightCategory.APP_CRASH_PATTERN: {
         "domain": "apps",
@@ -382,7 +379,6 @@ CATEGORY_METADATA = {
         "primary_metrics": ["LaunchCount", "AverageSessionDuration"],
         "icon": "gauge-low",
     },
-
     # Cohort
     InsightCategory.COHORT_PERFORMANCE_ISSUE: {
         "domain": "cohort",
@@ -412,7 +408,6 @@ CATEGORY_METADATA = {
         "primary_metrics": ["Manufacturer", "Model", "OsVersion", "FirmwareVersion"],
         "icon": "puzzle",
     },
-
     # Location
     InsightCategory.LOCATION_ANOMALY_CLUSTER: {
         "domain": "location",
@@ -447,10 +442,7 @@ CATEGORY_METADATA = {
 
 def get_categories_by_domain(domain: str) -> list[InsightCategory]:
     """Get all insight categories for a given domain."""
-    return [
-        cat for cat, meta in CATEGORY_METADATA.items()
-        if meta.get("domain") == domain
-    ]
+    return [cat for cat, meta in CATEGORY_METADATA.items() if meta.get("domain") == domain]
 
 
 def get_category_severity(category: InsightCategory) -> InsightSeverity:

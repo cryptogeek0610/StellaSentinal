@@ -4,6 +4,7 @@ This module provides an inference engine that implements the same interface
 as the existing sklearn and ONNX engines, allowing seamless integration
 with the anomaly detection pipeline.
 """
+
 from __future__ import annotations
 
 import logging
@@ -17,6 +18,7 @@ import numpy as np
 try:
     import torch
     import torch.nn as nn
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -39,6 +41,7 @@ class PyTorchEngineConfig:
         collect_metrics: Whether to collect inference metrics
         warmup_iterations: Number of warmup iterations
     """
+
     device: str = "cpu"
     use_half_precision: bool = False
     batch_size: int | None = None
@@ -60,6 +63,7 @@ class PyTorchInferenceMetrics:
         device: Device used for inference
         model_type: Type of model
     """
+
     total_samples: int = 0
     total_time_ms: float = 0.0
     avg_time_per_sample_ms: float = 0.0
@@ -197,7 +201,7 @@ class PyTorchInferenceEngine:
             # Batch processing
             scores = []
             for i in range(0, n_samples, self.config.batch_size):
-                batch = X[i:i + self.config.batch_size]
+                batch = X[i : i + self.config.batch_size]
                 batch_start = time.perf_counter()
                 batch_scores = self._forward(batch)
                 if self.config.collect_metrics:
@@ -242,8 +246,8 @@ class PyTorchInferenceEngine:
             self._metrics.avg_time_per_sample_ms = (
                 self._metrics.total_time_ms / self._metrics.total_samples
             )
-            self._metrics.throughput_samples_per_sec = (
-                self._metrics.total_samples / (self._metrics.total_time_ms / 1000)
+            self._metrics.throughput_samples_per_sec = self._metrics.total_samples / (
+                self._metrics.total_time_ms / 1000
             )
 
         if self._batch_times:
@@ -295,7 +299,9 @@ class PyTorchInferenceEngine:
             config=config,
             feature_cols=detector._feature_cols,
             scaler=detector.scaler,
-            impute_values=detector.impute_values.to_dict() if detector.impute_values is not None else None,
+            impute_values=detector.impute_values.to_dict()
+            if detector.impute_values is not None
+            else None,
         )
 
 
@@ -341,6 +347,7 @@ class FallbackPyTorchEngine:
         if sklearn_path:
             try:
                 from device_anomaly.models.anomaly_detector import AnomalyDetectorIsolationForest
+
                 self.sklearn_engine = AnomalyDetectorIsolationForest.load_model(sklearn_path)
                 logger.info("Loaded sklearn engine from %s", sklearn_path)
             except Exception as e:

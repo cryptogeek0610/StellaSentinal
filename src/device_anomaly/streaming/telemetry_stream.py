@@ -110,7 +110,7 @@ class DeviceBuffer:
         for metric, value in event.metrics.items():
             if value is not None and isinstance(value, (int, float)) and np.isfinite(value):
                 self._running_sums[metric] = self._running_sums.get(metric, 0) + value
-                self._running_sq_sums[metric] = self._running_sq_sums.get(metric, 0) + value ** 2
+                self._running_sq_sums[metric] = self._running_sq_sums.get(metric, 0) + value**2
                 self._counts[metric] = self._counts.get(metric, 0) + 1
 
         # Prune old events
@@ -140,7 +140,7 @@ class DeviceBuffer:
         for metric, value in event.metrics.items():
             if value is not None and isinstance(value, (int, float)) and np.isfinite(value):
                 self._running_sums[metric] = self._running_sums.get(metric, 0) - value
-                self._running_sq_sums[metric] = self._running_sq_sums.get(metric, 0) - value ** 2
+                self._running_sq_sums[metric] = self._running_sq_sums.get(metric, 0) - value**2
                 self._counts[metric] = max(0, self._counts.get(metric, 0) - 1)
 
     def get_rolling_mean(self, metric: str) -> float | None:
@@ -160,7 +160,7 @@ class DeviceBuffer:
         if mean is None:
             return None
 
-        variance = (self._running_sq_sums.get(metric, 0) / count) - (mean ** 2)
+        variance = (self._running_sq_sums.get(metric, 0) / count) - (mean**2)
         if variance < 0:
             variance = 0  # Numerical stability
         return np.sqrt(variance)
@@ -422,15 +422,17 @@ class TelemetryStream:
             timestamp: Event timestamp (defaults to now)
             tenant_id: Tenant identifier for multi-tenancy
         """
-        await self.engine.publish(StreamMessage(
-            message_type=MessageType.TELEMETRY_RAW,
-            payload={
-                "metrics": metrics,
-                "timestamp": (timestamp or datetime.now(UTC)).isoformat(),
-            },
-            device_id=device_id,
-            tenant_id=tenant_id,
-        ))
+        await self.engine.publish(
+            StreamMessage(
+                message_type=MessageType.TELEMETRY_RAW,
+                payload={
+                    "metrics": metrics,
+                    "timestamp": (timestamp or datetime.now(UTC)).isoformat(),
+                },
+                device_id=device_id,
+                tenant_id=tenant_id,
+            )
+        )
 
     async def _handle_raw_telemetry(self, message: StreamMessage) -> None:
         """Process raw telemetry message."""
@@ -450,18 +452,20 @@ class TelemetryStream:
             buffer = await self.buffer.add_event(event)
 
             # Publish enriched telemetry
-            await self.engine.publish(StreamMessage(
-                message_type=MessageType.TELEMETRY_ENRICHED,
-                payload={
-                    "event": event.to_dict(),
-                    "buffer_stats": {
-                        "event_count": len(buffer.events),
-                        "metrics": list(buffer._counts.keys()),
+            await self.engine.publish(
+                StreamMessage(
+                    message_type=MessageType.TELEMETRY_ENRICHED,
+                    payload={
+                        "event": event.to_dict(),
+                        "buffer_stats": {
+                            "event_count": len(buffer.events),
+                            "metrics": list(buffer._counts.keys()),
+                        },
                     },
-                },
-                device_id=message.device_id,
-                tenant_id=message.tenant_id,
-            ))
+                    device_id=message.device_id,
+                    tenant_id=message.tenant_id,
+                )
+            )
 
             logger.debug(
                 "Processed telemetry for device %d (%d metrics)",
@@ -553,5 +557,7 @@ class TelemetryStream:
             "total_events": self.buffer.get_total_events(),
             "metadata_cache_size": len(self._device_metadata_cache),
             "restored_at": self.buffer.restored_at.isoformat() if self.buffer.restored_at else None,
-            "restore_source": Path(self.buffer.restore_source).name if self.buffer.restore_source else None,
+            "restore_source": Path(self.buffer.restore_source).name
+            if self.buffer.restore_source
+            else None,
         }

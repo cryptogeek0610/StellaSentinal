@@ -1,6 +1,7 @@
 """
 Cost alerts endpoints.
 """
+
 from __future__ import annotations
 
 import json
@@ -66,7 +67,9 @@ def _serialize_cost_alert(alert: dict) -> CostAlert:
 def get_cost_alerts() -> CostAlertListResponse:
     """Return configured cost alerts for the tenant."""
     tenant_id = get_tenant_id()
-    alerts_raw = [alert for alert in _load_cost_alert_store() if alert.get("tenant_id") == tenant_id]
+    alerts_raw = [
+        alert for alert in _load_cost_alert_store() if alert.get("tenant_id") == tenant_id
+    ]
     alerts = [_serialize_cost_alert(alert) for alert in alerts_raw]
     return CostAlertListResponse(alerts=alerts, total=len(alerts))
 
@@ -150,7 +153,11 @@ def delete_cost_alert(
     """Delete a cost alert configuration."""
     tenant_id = get_tenant_id()
     alerts = _load_cost_alert_store()
-    remaining = [alert for alert in alerts if not (alert.get("tenant_id") == tenant_id and alert.get("id") == alert_id)]
+    remaining = [
+        alert
+        for alert in alerts
+        if not (alert.get("tenant_id") == tenant_id and alert.get("id") == alert_id)
+    ]
     if len(remaining) == len(alerts):
         raise HTTPException(status_code=404, detail="Cost alert not found")
     _save_cost_alert_store(remaining)

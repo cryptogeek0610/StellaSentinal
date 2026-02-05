@@ -26,8 +26,7 @@ def _load_raw_config(path: str) -> dict[str, Any]:
             import yaml  # type: ignore[import-not-found]
         except ImportError as e:  # pragma: no cover
             raise RuntimeError(
-                "PyYAML is required to load YAML config files. "
-                "Install it with: pip install pyyaml"
+                "PyYAML is required to load YAML config files. Install it with: pip install pyyaml"
             ) from e
 
         with open(path, encoding="utf-8") as f:
@@ -36,9 +35,7 @@ def _load_raw_config(path: str) -> dict[str, Any]:
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
     else:
-        raise ValueError(
-            f"Unsupported config extension '{ext}'. Use .yaml / .yml / .json."
-        )
+        raise ValueError(f"Unsupported config extension '{ext}'. Use .yaml / .yml / .json.")
 
     if not isinstance(data, dict):
         raise ValueError("Config root must be a JSON/YAML object (mapping).")

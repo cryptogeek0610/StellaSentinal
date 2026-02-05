@@ -1,4 +1,5 @@
 """API routes for dashboard endpoints."""
+
 from __future__ import annotations
 
 import logging
@@ -140,9 +141,11 @@ def _parse_api_error(error_str: str) -> str:
 
 @router.get("/stats", response_model=DashboardStatsResponse)
 def get_dashboard_stats(
-    active_only: bool = Query(False, description="Only count devices active in last 30 days for devices_monitored"),
+    active_only: bool = Query(
+        False, description="Only count devices active in last 30 days for devices_monitored"
+    ),
     mock_mode: bool = Depends(get_mock_mode),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Get dashboard statistics (KPIs).
 
@@ -268,7 +271,9 @@ def get_dashboard_trends(
         filter_end = end_date.replace(hour=23, minute=59, second=59, microsecond=999999)
     elif days:
         # Use days parameter (backward compatibility)
-        filter_start = (now - timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)
+        filter_start = (now - timedelta(days=days)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
         filter_end = now
     else:
         # Default to 7 days if nothing specified
@@ -329,13 +334,43 @@ def get_connection_status(mock_mode: bool = Depends(get_mock_mode)):
     if mock_mode:
         mock_data = get_mock_connection_status()
         return AllConnectionsStatusResponse(
-            backend_db=ConnectionStatusResponse(**mock_data.get("backend_db", {"connected": True, "server": "postgres:5432", "error": None, "status": "connected"})),
+            backend_db=ConnectionStatusResponse(
+                **mock_data.get(
+                    "backend_db",
+                    {
+                        "connected": True,
+                        "server": "postgres:5432",
+                        "error": None,
+                        "status": "connected",
+                    },
+                )
+            ),
             dw_sql=ConnectionStatusResponse(**mock_data["dw_sql"]),
             mc_sql=ConnectionStatusResponse(**mock_data["mc_sql"]),
             mobicontrol_api=ConnectionStatusResponse(**mock_data["mobicontrol_api"]),
             llm=ConnectionStatusResponse(**mock_data["llm"]),
-            redis=ConnectionStatusResponse(**mock_data.get("redis", {"connected": True, "server": "redis:6379", "error": None, "status": "connected"})),
-            qdrant=ConnectionStatusResponse(**mock_data.get("qdrant", {"connected": True, "server": "qdrant:6333", "error": None, "status": "connected"})),
+            redis=ConnectionStatusResponse(
+                **mock_data.get(
+                    "redis",
+                    {
+                        "connected": True,
+                        "server": "redis:6379",
+                        "error": None,
+                        "status": "connected",
+                    },
+                )
+            ),
+            qdrant=ConnectionStatusResponse(
+                **mock_data.get(
+                    "qdrant",
+                    {
+                        "connected": True,
+                        "server": "qdrant:6333",
+                        "error": None,
+                        "status": "connected",
+                    },
+                )
+            ),
             last_checked=datetime.fromisoformat(mock_data["last_checked"]),
         )
 
@@ -348,6 +383,7 @@ def get_connection_status(mock_mode: bool = Depends(get_mock_mode)):
     backend_db_status = "disconnected"
     try:
         from device_anomaly.db.session import DatabaseSession
+
         db = DatabaseSession()
         if db.test_connection():
             backend_db_connected = True
@@ -480,6 +516,7 @@ def get_connection_status(mock_mode: bool = Depends(get_mock_mode)):
 
     try:
         import redis as redis_client
+
         r = redis_client.from_url(redis_url, socket_timeout=3)
         r.ping()
         r.close()
@@ -502,6 +539,7 @@ def get_connection_status(mock_mode: bool = Depends(get_mock_mode)):
 
     try:
         import requests
+
         # Qdrant uses root endpoint for health check (returns version info)
         resp = requests.get(f"http://{qdrant_host}:{qdrant_port}/", timeout=3)
         if resp.status_code == 200:
@@ -642,15 +680,21 @@ def _generate_error_signature(failed_connections: list) -> str:
     for conn in failed_connections:
         error = conn.get("error", "").lower()
         # Remove IP addresses, hostnames, and specific server names
-        error = re.sub(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b', '[IP]', error)
-        error = re.sub(r'\b[a-z0-9\-]+\.(com|net|org|local|lan)\b', '[HOST]', error)
-        error = re.sub(r'\b[A-Z0-9\-]+\b', lambda m: m.group().lower() if len(m.group()) > 10 else m.group(), error)
+        error = re.sub(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b", "[IP]", error)
+        error = re.sub(r"\b[a-z0-9\-]+\.(com|net|org|local|lan)\b", "[HOST]", error)
+        error = re.sub(
+            r"\b[A-Z0-9\-]+\b",
+            lambda m: m.group().lower() if len(m.group()) > 10 else m.group(),
+            error,
+        )
 
-        normalized.append({
-            "service": conn.get("service", "").lower(),
-            "error_pattern": error,
-            "status": conn.get("status", "").lower()
-        })
+        normalized.append(
+            {
+                "service": conn.get("service", "").lower(),
+                "error_pattern": error,
+                "status": conn.get("status", "").lower(),
+            }
+        )
 
     # Sort to ensure consistent hashing regardless of order
     normalized.sort(key=lambda x: x["service"])
@@ -682,7 +726,9 @@ def _find_similar_cached_advice(
         cached.use_count += 1
         cached.last_used = datetime.now(UTC)
         db.commit()
-        logger.info(f"Reusing cached troubleshooting advice (signature: {error_signature[:16]}..., uses: {cached.use_count})")
+        logger.info(
+            f"Reusing cached troubleshooting advice (signature: {error_signature[:16]}..., uses: {cached.use_count})"
+        )
 
     return cached
 
@@ -707,54 +753,88 @@ def _generate_rule_based_advice(failed_connections: list) -> tuple[str, str]:
 
         if "sql" in service.lower():
             if "timeout" in error or "login timeout" in error:
-                advice_parts.append(f"**{service}**: Connection timeout detected. This usually means:\n- The database server is unreachable or slow\n- Firewall is blocking the connection\n- Network connectivity issues\n\n**Steps**:\n1. Verify the server is running: Check if the SQL Server service is active\n2. Test network connectivity: Try pinging the server\n3. Check firewall rules: Ensure port 1433 (or your configured port) is open\n4. Verify credentials: Ensure username and password are correct")
+                advice_parts.append(
+                    f"**{service}**: Connection timeout detected. This usually means:\n- The database server is unreachable or slow\n- Firewall is blocking the connection\n- Network connectivity issues\n\n**Steps**:\n1. Verify the server is running: Check if the SQL Server service is active\n2. Test network connectivity: Try pinging the server\n3. Check firewall rules: Ensure port 1433 (or your configured port) is open\n4. Verify credentials: Ensure username and password are correct"
+                )
                 summary_parts.append(f"{service} timeout")
             elif "login failed" in error or "authentication" in error:
-                advice_parts.append(f"**{service}**: Authentication failed. This indicates:\n- Invalid username or password\n- Windows authentication not configured properly\n- User account locked or disabled\n\n**Steps**:\n1. Verify credentials in configuration\n2. Check if Windows authentication is required\n3. Ensure the SQL user has proper permissions\n4. Contact database administrator if credentials are correct")
+                advice_parts.append(
+                    f"**{service}**: Authentication failed. This indicates:\n- Invalid username or password\n- Windows authentication not configured properly\n- User account locked or disabled\n\n**Steps**:\n1. Verify credentials in configuration\n2. Check if Windows authentication is required\n3. Ensure the SQL user has proper permissions\n4. Contact database administrator if credentials are correct"
+                )
                 summary_parts.append(f"{service} authentication error")
             elif "cannot open database" in error or "database" in error and "not found" in error:
-                advice_parts.append(f"**{service}**: Database access issue. Possible causes:\n- Database name is incorrect\n- Database doesn't exist\n- User lacks permissions to access the database\n\n**Steps**:\n1. Verify the database name in configuration\n2. Check if the database exists on the server\n3. Ensure the user has access permissions\n4. Contact database administrator")
+                advice_parts.append(
+                    f"**{service}**: Database access issue. Possible causes:\n- Database name is incorrect\n- Database doesn't exist\n- User lacks permissions to access the database\n\n**Steps**:\n1. Verify the database name in configuration\n2. Check if the database exists on the server\n3. Ensure the user has access permissions\n4. Contact database administrator"
+                )
                 summary_parts.append(f"{service} database access error")
             elif "network-related" in error or "connection refused" in error:
-                advice_parts.append(f"**{service}**: Network connectivity issue. This suggests:\n- Server is not running\n- Network path is incorrect\n- Firewall is blocking connections\n\n**Steps**:\n1. Verify server is running and accessible\n2. Check network connectivity (ping, telnet)\n3. Review firewall rules\n4. Verify server address and port in configuration")
+                advice_parts.append(
+                    f"**{service}**: Network connectivity issue. This suggests:\n- Server is not running\n- Network path is incorrect\n- Firewall is blocking connections\n\n**Steps**:\n1. Verify server is running and accessible\n2. Check network connectivity (ping, telnet)\n3. Review firewall rules\n4. Verify server address and port in configuration"
+                )
                 summary_parts.append(f"{service} network error")
             else:
-                advice_parts.append(f"**{service}**: Connection failed with error: {conn.get('error', 'Unknown error')}\n\n**General SQL Server troubleshooting**:\n1. Verify SQL Server service is running\n2. Check network connectivity\n3. Review firewall settings\n4. Validate credentials and permissions\n5. Check SQL Server error logs for details")
+                advice_parts.append(
+                    f"**{service}**: Connection failed with error: {conn.get('error', 'Unknown error')}\n\n**General SQL Server troubleshooting**:\n1. Verify SQL Server service is running\n2. Check network connectivity\n3. Review firewall settings\n4. Validate credentials and permissions\n5. Check SQL Server error logs for details"
+                )
                 summary_parts.append(f"{service} connection error")
 
         elif "api" in service.lower():
             if "401" in error or "authentication" in error:
-                advice_parts.append(f"**{service}**: Authentication failed (401). This means:\n- Invalid API credentials (client ID/secret)\n- Token expired or invalid\n- Insufficient permissions\n\n**Steps**:\n1. Verify API credentials in configuration\n2. Check if credentials need to be regenerated\n3. Ensure the API client has required permissions\n4. Contact API administrator for credential verification")
+                advice_parts.append(
+                    f"**{service}**: Authentication failed (401). This means:\n- Invalid API credentials (client ID/secret)\n- Token expired or invalid\n- Insufficient permissions\n\n**Steps**:\n1. Verify API credentials in configuration\n2. Check if credentials need to be regenerated\n3. Ensure the API client has required permissions\n4. Contact API administrator for credential verification"
+                )
                 summary_parts.append(f"{service} authentication error")
             elif "403" in error or "forbidden" in error:
-                advice_parts.append(f"**{service}**: Access forbidden (403). This indicates:\n- Credentials are valid but lack permissions\n- API endpoint requires different access level\n\n**Steps**:\n1. Verify API client permissions\n2. Check if API access level is sufficient\n3. Contact API administrator to grant permissions")
+                advice_parts.append(
+                    f"**{service}**: Access forbidden (403). This indicates:\n- Credentials are valid but lack permissions\n- API endpoint requires different access level\n\n**Steps**:\n1. Verify API client permissions\n2. Check if API access level is sufficient\n3. Contact API administrator to grant permissions"
+                )
                 summary_parts.append(f"{service} permission error")
             elif "timeout" in error:
-                advice_parts.append(f"**{service}**: Request timeout. Possible causes:\n- API server is slow or overloaded\n- Network latency issues\n- Server is not responding\n\n**Steps**:\n1. Check API server status\n2. Verify network connectivity\n3. Try again after a few moments\n4. Contact API administrator if issue persists")
+                advice_parts.append(
+                    f"**{service}**: Request timeout. Possible causes:\n- API server is slow or overloaded\n- Network latency issues\n- Server is not responding\n\n**Steps**:\n1. Check API server status\n2. Verify network connectivity\n3. Try again after a few moments\n4. Contact API administrator if issue persists"
+                )
                 summary_parts.append(f"{service} timeout")
             elif "connection" in error and ("refused" in error or "error" in error):
-                advice_parts.append(f"**{service}**: Cannot connect to API server. This suggests:\n- Server URL is incorrect\n- Server is not running\n- Network/firewall blocking connection\n\n**Steps**:\n1. Verify API server URL in configuration\n2. Check if API server is running\n3. Test network connectivity to the server\n4. Review firewall rules")
+                advice_parts.append(
+                    f"**{service}**: Cannot connect to API server. This suggests:\n- Server URL is incorrect\n- Server is not running\n- Network/firewall blocking connection\n\n**Steps**:\n1. Verify API server URL in configuration\n2. Check if API server is running\n3. Test network connectivity to the server\n4. Review firewall rules"
+                )
                 summary_parts.append(f"{service} connection error")
             else:
-                advice_parts.append(f"**{service}**: API connection failed: {conn.get('error', 'Unknown error')}\n\n**General API troubleshooting**:\n1. Verify API server URL is correct\n2. Check API server status\n3. Validate credentials\n4. Review network connectivity\n5. Check API documentation for specific error codes")
+                advice_parts.append(
+                    f"**{service}**: API connection failed: {conn.get('error', 'Unknown error')}\n\n**General API troubleshooting**:\n1. Verify API server URL is correct\n2. Check API server status\n3. Validate credentials\n4. Review network connectivity\n5. Check API documentation for specific error codes"
+                )
                 summary_parts.append(f"{service} API error")
 
         elif "llm" in service.lower():
             if "cannot connect" in error or "connection" in error:
-                advice_parts.append(f"**{service}**: Cannot connect to LLM service. This means:\n- LLM service (e.g., LM Studio) is not running\n- Server URL is incorrect\n- Port is blocked or incorrect\n\n**Steps**:\n1. Start the LLM service (e.g., launch LM Studio)\n2. Verify the service is listening on the configured port\n3. Check LLM_BASE_URL environment variable\n4. Test connection: curl http://localhost:1234/v1/models")
+                advice_parts.append(
+                    f"**{service}**: Cannot connect to LLM service. This means:\n- LLM service (e.g., LM Studio) is not running\n- Server URL is incorrect\n- Port is blocked or incorrect\n\n**Steps**:\n1. Start the LLM service (e.g., launch LM Studio)\n2. Verify the service is listening on the configured port\n3. Check LLM_BASE_URL environment variable\n4. Test connection: curl http://localhost:1234/v1/models"
+                )
                 summary_parts.append("LLM service not running")
             elif "no models loaded" in error:
-                advice_parts.append(f"**{service}**: LLM service is running but no models are loaded.\n\n**Steps**:\n1. Open LM Studio (or your LLM service)\n2. Load a compatible model\n3. Ensure the model is fully loaded before using\n4. Verify the model name matches configuration")
+                advice_parts.append(
+                    f"**{service}**: LLM service is running but no models are loaded.\n\n**Steps**:\n1. Open LM Studio (or your LLM service)\n2. Load a compatible model\n3. Ensure the model is fully loaded before using\n4. Verify the model name matches configuration"
+                )
                 summary_parts.append("LLM model not loaded")
             else:
-                advice_parts.append(f"**{service}**: LLM service error: {conn.get('error', 'Unknown error')}\n\n**Steps**:\n1. Verify LLM service is running\n2. Check LLM_BASE_URL configuration\n3. Ensure a model is loaded\n4. Review LLM service logs")
+                advice_parts.append(
+                    f"**{service}**: LLM service error: {conn.get('error', 'Unknown error')}\n\n**Steps**:\n1. Verify LLM service is running\n2. Check LLM_BASE_URL configuration\n3. Ensure a model is loaded\n4. Review LLM service logs"
+                )
                 summary_parts.append("LLM service error")
 
         else:
-            advice_parts.append(f"**{service}**: Connection failed: {conn.get('error', 'Unknown error')}\n\n**General troubleshooting**:\n1. Verify service is running\n2. Check network connectivity\n3. Review configuration settings\n4. Check service logs for details")
+            advice_parts.append(
+                f"**{service}**: Connection failed: {conn.get('error', 'Unknown error')}\n\n**General troubleshooting**:\n1. Verify service is running\n2. Check network connectivity\n3. Review configuration settings\n4. Check service logs for details"
+            )
             summary_parts.append(f"{service} connection error")
 
-    summary = "Multiple connection issues detected" if len(summary_parts) > 1 else summary_parts[0] if summary_parts else "Connection issues"
+    summary = (
+        "Multiple connection issues detected"
+        if len(summary_parts) > 1
+        else summary_parts[0]
+        if summary_parts
+        else "Connection issues"
+    )
     advice = "\n\n---\n\n".join(advice_parts)
 
     if len(failed_connections) > 1:
@@ -770,7 +850,7 @@ def _save_troubleshooting_cache(
     advice: str,
     summary: str | None,
     tenant_id: str,
-    service_type: str | None = None
+    service_type: str | None = None,
 ) -> TroubleshootingCache:
     """Save troubleshooting advice to cache for future reuse."""
     cached = TroubleshootingCache(
@@ -781,7 +861,7 @@ def _save_troubleshooting_cache(
         tenant_id=tenant_id,
         service_type=service_type,
         use_count=1,
-        last_used=datetime.now(UTC)
+        last_used=datetime.now(UTC),
     )
     db.add(cached)
     db.commit()
@@ -792,8 +872,7 @@ def _save_troubleshooting_cache(
 
 @router.post("/connections/troubleshoot", response_model=TroubleshootingAdviceResponse)
 def get_troubleshooting_advice(
-    connection_status: AllConnectionsStatusResponse,
-    db: Session = Depends(get_db)
+    connection_status: AllConnectionsStatusResponse, db: Session = Depends(get_db)
 ):
     """Get intelligent troubleshooting advice from LLM based on connection errors.
 
@@ -803,46 +882,55 @@ def get_troubleshooting_advice(
     failed_connections = []
 
     if not connection_status.dw_sql.connected and connection_status.dw_sql.error:
-        failed_connections.append({
-            "service": "XSight Database SQL Server",
-            "server": connection_status.dw_sql.server,
-            "error": connection_status.dw_sql.error,
-            "status": connection_status.dw_sql.status
-        })
+        failed_connections.append(
+            {
+                "service": "XSight Database SQL Server",
+                "server": connection_status.dw_sql.server,
+                "error": connection_status.dw_sql.error,
+                "status": connection_status.dw_sql.status,
+            }
+        )
 
     if not connection_status.mc_sql.connected and connection_status.mc_sql.error:
-        failed_connections.append({
-            "service": "MobiControl SQL Server",
-            "server": connection_status.mc_sql.server,
-            "error": connection_status.mc_sql.error,
-            "status": connection_status.mc_sql.status
-        })
+        failed_connections.append(
+            {
+                "service": "MobiControl SQL Server",
+                "server": connection_status.mc_sql.server,
+                "error": connection_status.mc_sql.error,
+                "status": connection_status.mc_sql.status,
+            }
+        )
 
     if not connection_status.mobicontrol_api.connected and connection_status.mobicontrol_api.error:
-        failed_connections.append({
-            "service": "MobiControl API",
-            "server": connection_status.mobicontrol_api.server,
-            "error": connection_status.mobicontrol_api.error,
-            "status": connection_status.mobicontrol_api.status
-        })
+        failed_connections.append(
+            {
+                "service": "MobiControl API",
+                "server": connection_status.mobicontrol_api.server,
+                "error": connection_status.mobicontrol_api.error,
+                "status": connection_status.mobicontrol_api.status,
+            }
+        )
 
     if not connection_status.llm.connected and connection_status.llm.error:
-        failed_connections.append({
-            "service": "LLM Service",
-            "server": connection_status.llm.server,
-            "error": connection_status.llm.error,
-            "status": connection_status.llm.status
-        })
+        failed_connections.append(
+            {
+                "service": "LLM Service",
+                "server": connection_status.llm.server,
+                "error": connection_status.llm.error,
+                "status": connection_status.llm.status,
+            }
+        )
 
     if not failed_connections:
         return TroubleshootingAdviceResponse(
             advice="All connections are healthy. No troubleshooting needed.",
-            summary="All systems operational"
+            summary="All systems operational",
         )
 
     tenant_id = get_tenant_id()
     # Generate error signature for caching
     import json
+
     error_signature = _generate_error_signature(failed_connections)
     error_pattern_json = json.dumps(failed_connections, indent=2)
 
@@ -861,10 +949,7 @@ def get_troubleshooting_advice(
     # Check cache first
     cached = _find_similar_cached_advice(db, error_signature, tenant_id, service_type)
     if cached:
-        return TroubleshootingAdviceResponse(
-            advice=cached.advice,
-            summary=cached.summary
-        )
+        return TroubleshootingAdviceResponse(advice=cached.advice, summary=cached.summary)
 
     # Cache miss - generate new advice from LLM
     errors_json = json.dumps(failed_connections, indent=2)
@@ -929,24 +1014,38 @@ Services in this system:
         # Check if it's a DummyLLMClient (no real LLM configured)
         if isinstance(llm_client, DummyLLMClient):
             # Use rule-based advice instead of dummy output
-            logger.info("LLM not configured or unavailable, using rule-based troubleshooting advice")
+            logger.info(
+                "LLM not configured or unavailable, using rule-based troubleshooting advice"
+            )
             raise ValueError("LLM not configured")
 
-        logger.info(f"Using LLM client: {type(llm_client).__name__} to generate troubleshooting advice")
+        logger.info(
+            f"Using LLM client: {type(llm_client).__name__} to generate troubleshooting advice"
+        )
         raw_advice = llm_client.generate(prompt, max_tokens=800, temperature=0.2)
         advice = strip_thinking_tags(raw_advice)
 
         # Check if we got dummy output (shouldn't happen, but be safe)
-        if "DUMMY LLM CLIENT" in advice or "Dummy explanation" in advice or ("Dummy" in advice and len(advice) < 200):
-            logger.warning("Received dummy LLM output despite using real client, falling back to rule-based advice")
+        if (
+            "DUMMY LLM CLIENT" in advice
+            or "Dummy explanation" in advice
+            or ("Dummy" in advice and len(advice) < 200)
+        ):
+            logger.warning(
+                "Received dummy LLM output despite using real client, falling back to rule-based advice"
+            )
             raise ValueError("Dummy LLM output received")
 
-        logger.info(f"Successfully generated LLM troubleshooting advice from {type(llm_client).__name__} (length: {len(advice)} chars)")
+        logger.info(
+            f"Successfully generated LLM troubleshooting advice from {type(llm_client).__name__} (length: {len(advice)} chars)"
+        )
 
         # Extract summary if present
         summary = None
         if "SUMMARY:" in advice:
-            summary = advice.split("SUMMARY:")[1].split("\n")[0].strip() if "SUMMARY:" in advice else None
+            summary = (
+                advice.split("SUMMARY:")[1].split("\n")[0].strip() if "SUMMARY:" in advice else None
+            )
 
         # Save to cache for future use
         try:
@@ -957,17 +1056,14 @@ Services in this system:
                 advice=advice,
                 summary=summary,
                 tenant_id=tenant_id,
-                service_type=service_type
+                service_type=service_type,
             )
         except Exception as cache_error:
             # Don't fail if caching fails, just log it
             logger.warning(f"Failed to cache troubleshooting advice: {cache_error}")
 
         logger.info(f"Successfully generated LLM troubleshooting advice (length: {len(advice)})")
-        return TroubleshootingAdviceResponse(
-            advice=advice,
-            summary=summary
-        )
+        return TroubleshootingAdviceResponse(advice=advice, summary=summary)
     except Exception as e:
         # Fallback to rule-based troubleshooting advice
         logger.info(f"Using rule-based troubleshooting (LLM unavailable: {e})")
@@ -996,24 +1092,21 @@ Services in this system:
                 advice=rule_advice,
                 summary=rule_summary,
                 tenant_id=tenant_id,
-                service_type=service_type
+                service_type=service_type,
             )
         except Exception as cache_error:
             logger.warning(f"Failed to cache rule-based troubleshooting advice: {cache_error}")
 
-        return TroubleshootingAdviceResponse(
-            advice=rule_advice,
-            summary=rule_summary
-        )
+        return TroubleshootingAdviceResponse(advice=rule_advice, summary=rule_summary)
 
 
 @router.get("/connections/troubleshoot/cache/stats")
 def get_troubleshooting_cache_stats(db: Session = Depends(get_db)):
     """Get statistics about the troubleshooting cache."""
     tenant_id = get_tenant_id()
-    total_cached = db.query(TroubleshootingCache).filter(
-        TroubleshootingCache.tenant_id == tenant_id
-    ).count()
+    total_cached = (
+        db.query(TroubleshootingCache).filter(TroubleshootingCache.tenant_id == tenant_id).count()
+    )
     total_uses = (
         db.query(func.sum(TroubleshootingCache.use_count))
         .filter(TroubleshootingCache.tenant_id == tenant_id)
@@ -1041,7 +1134,7 @@ def get_troubleshooting_cache_stats(db: Session = Depends(get_db)):
                 "last_used": item.last_used.isoformat() if item.last_used else None,
             }
             for item in most_used
-        ]
+        ],
     }
 
 
@@ -1067,6 +1160,7 @@ def get_model_info():
 
     try:
         import onnxruntime as ort
+
         available_providers = ort.get_available_providers()
     except Exception:
         available_providers = []
@@ -1138,9 +1232,21 @@ def get_isolation_forest_stats(
     feature_cols = (metadata or {}).get("feature_cols") or []
 
     config = IsolationForestConfigResponse(
-        n_estimators=int(detector_cfg.get("n_estimators", training_cfg.get("n_estimators", default_cfg.n_estimators))),
-        contamination=float(detector_cfg.get("contamination", training_cfg.get("contamination", default_cfg.contamination))),
-        random_state=int(detector_cfg.get("random_state", training_cfg.get("random_state", default_cfg.random_state))),
+        n_estimators=int(
+            detector_cfg.get(
+                "n_estimators", training_cfg.get("n_estimators", default_cfg.n_estimators)
+            )
+        ),
+        contamination=float(
+            detector_cfg.get(
+                "contamination", training_cfg.get("contamination", default_cfg.contamination)
+            )
+        ),
+        random_state=int(
+            detector_cfg.get(
+                "random_state", training_cfg.get("random_state", default_cfg.random_state)
+            )
+        ),
         scale_features=bool(detector_cfg.get("scale_features", default_cfg.scale_features)),
         min_variance=float(detector_cfg.get("min_variance", default_cfg.min_variance)),
         feature_count=len(feature_cols) if feature_cols else None,
@@ -1196,7 +1302,9 @@ def get_isolation_forest_stats(
     # so calculating anomaly_rate from stored data gives a misleading 100%.
     # Use the configured contamination rate instead, which represents the expected
     # proportion of anomalies the model is tuned to detect.
-    anomaly_rate = config.contamination if total_normal == 0 else total_anomalies / total_predictions
+    anomaly_rate = (
+        config.contamination if total_normal == 0 else total_anomalies / total_predictions
+    )
 
     mean_score = float(np.mean(scores_array))
     median_score = float(np.median(scores_array))
@@ -1206,8 +1314,12 @@ def get_isolation_forest_stats(
 
     # Create histogram bins (30 bins from min to max)
     num_bins = 30
-    normal_scores = np.array([score for score, label in zip(scores, labels, strict=False) if label == 1])
-    anomaly_scores = np.array([score for score, label in zip(scores, labels, strict=False) if label == -1])
+    normal_scores = np.array(
+        [score for score, label in zip(scores, labels, strict=False) if label == 1]
+    )
+    anomaly_scores = np.array(
+        [score for score, label in zip(scores, labels, strict=False) if label == -1]
+    )
 
     bins = []
     if min_score == max_score:
@@ -1215,19 +1327,23 @@ def get_isolation_forest_stats(
         bin_start = float(min_score - epsilon)
         bin_end = float(max_score + epsilon)
         if normal_scores.size:
-            bins.append(ScoreDistributionBin(
-                bin_start=bin_start,
-                bin_end=bin_end,
-                count=int(normal_scores.size),
-                is_anomaly=False,
-            ))
+            bins.append(
+                ScoreDistributionBin(
+                    bin_start=bin_start,
+                    bin_end=bin_end,
+                    count=int(normal_scores.size),
+                    is_anomaly=False,
+                )
+            )
         if anomaly_scores.size:
-            bins.append(ScoreDistributionBin(
-                bin_start=bin_start,
-                bin_end=bin_end,
-                count=int(anomaly_scores.size),
-                is_anomaly=True,
-            ))
+            bins.append(
+                ScoreDistributionBin(
+                    bin_start=bin_start,
+                    bin_end=bin_end,
+                    count=int(anomaly_scores.size),
+                    is_anomaly=True,
+                )
+            )
     else:
         bin_edges = np.linspace(min_score, max_score, num_bins + 1)
         normal_hist, _ = np.histogram(normal_scores, bins=bin_edges)
@@ -1240,20 +1356,24 @@ def get_isolation_forest_stats(
             anomaly_count = int(anomaly_hist[i])
 
             if normal_count > 0:
-                bins.append(ScoreDistributionBin(
-                    bin_start=bin_start,
-                    bin_end=bin_end,
-                    count=normal_count,
-                    is_anomaly=False,
-                ))
+                bins.append(
+                    ScoreDistributionBin(
+                        bin_start=bin_start,
+                        bin_end=bin_end,
+                        count=normal_count,
+                        is_anomaly=False,
+                    )
+                )
 
             if anomaly_count > 0:
-                bins.append(ScoreDistributionBin(
-                    bin_start=bin_start,
-                    bin_end=bin_end,
-                    count=anomaly_count,
-                    is_anomaly=True,
-                ))
+                bins.append(
+                    ScoreDistributionBin(
+                        bin_start=bin_start,
+                        bin_end=bin_end,
+                        count=anomaly_count,
+                        is_anomaly=True,
+                    )
+                )
 
     score_distribution = ScoreDistributionResponse(
         bins=bins,
@@ -1298,7 +1418,9 @@ def get_isolation_forest_stats(
             false_positives=false_pos,
             confirmed_anomalies=confirmed,
             projected_accuracy_gain=projected_gain,
-            last_retrain=last_training.completed_at.isoformat() if last_training and last_training.completed_at else None,
+            last_retrain=last_training.completed_at.isoformat()
+            if last_training and last_training.completed_at
+            else None,
         )
     except Exception as e:
         logger.warning(f"Failed to fetch feedback stats: {e}")
@@ -1355,7 +1477,11 @@ def get_custom_attributes(mock_mode: bool = Depends(get_mock_mode)):
             sample_device = devices[0]
             logger.debug(f"Sample device keys: {list(sample_device.keys())[:20]}")
             # Log if we see any custom attribute related fields
-            custom_fields = [k for k in sample_device if 'custom' in k.lower() or 'attribute' in k.lower() or 'Custom' in k]
+            custom_fields = [
+                k
+                for k in sample_device
+                if "custom" in k.lower() or "attribute" in k.lower() or "Custom" in k
+            ]
             if custom_fields:
                 logger.info(f"Found custom attribute related fields: {custom_fields}")
 
@@ -1380,6 +1506,7 @@ def get_custom_attributes(mock_mode: bool = Depends(get_mock_mode)):
                     # If it's a string, try to parse as JSON
                     try:
                         import json
+
                         parsed = json.loads(custom_attrs)
                         if isinstance(parsed, dict):
                             custom_attributes.update(parsed.keys())
@@ -1390,14 +1517,23 @@ def get_custom_attributes(mock_mode: bool = Depends(get_mock_mode)):
                     for attr in custom_attrs:
                         if isinstance(attr, dict):
                             # Try common keys for attribute name
-                            name = attr.get("name") or attr.get("Name") or attr.get("key") or attr.get("Key") or attr.get("attributeName") or attr.get("AttributeName")
+                            name = (
+                                attr.get("name")
+                                or attr.get("Name")
+                                or attr.get("key")
+                                or attr.get("Key")
+                                or attr.get("attributeName")
+                                or attr.get("AttributeName")
+                            )
                             if name:
                                 custom_attributes.add(name)
 
         # If no custom attributes found in list, try fetching individual device details
         # Custom attributes might only be available in full device details
         if not custom_attributes and devices:
-            logger.info("No custom attributes found in device list, trying individual device details...")
+            logger.info(
+                "No custom attributes found in device list, trying individual device details..."
+            )
             try:
                 # Sample a few devices to get custom attributes
                 sample_size = min(5, len(devices))
@@ -1406,7 +1542,12 @@ def get_custom_attributes(mock_mode: bool = Depends(get_mock_mode)):
                         continue
 
                     # Get device ID from various possible fields
-                    device_id = device.get("DeviceId") or device.get("deviceId") or device.get("id") or device.get("ID")
+                    device_id = (
+                        device.get("DeviceId")
+                        or device.get("deviceId")
+                        or device.get("id")
+                        or device.get("ID")
+                    )
                     if not device_id:
                         continue
 
@@ -1426,6 +1567,7 @@ def get_custom_attributes(mock_mode: bool = Depends(get_mock_mode)):
                             elif isinstance(custom_attrs, str):
                                 try:
                                     import json
+
                                     parsed = json.loads(custom_attrs)
                                     if isinstance(parsed, dict):
                                         custom_attributes.update(parsed.keys())
@@ -1450,7 +1592,9 @@ def get_custom_attributes(mock_mode: bool = Depends(get_mock_mode)):
 
 @router.get("/location-heatmap", response_model=LocationHeatmapResponse)
 def get_location_heatmap(
-    attribute_name: str | None = Query(None, description="Custom attribute name (e.g., 'Store', 'Warehouse')"),
+    attribute_name: str | None = Query(
+        None, description="Custom attribute name (e.g., 'Store', 'Warehouse')"
+    ),
     mock_mode: bool = Depends(get_mock_mode),
     db: Session = Depends(get_db),
 ):
@@ -1516,7 +1660,9 @@ def get_location_heatmap(
 
 @router.get("/ai-summary")
 def get_dashboard_ai_summary(
-    force_regenerate: bool = Query(False, description="Force regeneration of AI summary, bypassing cache"),
+    force_regenerate: bool = Query(
+        False, description="Force regeneration of AI summary, bypassing cache"
+    ),
     mock_mode: bool = Depends(get_mock_mode),
     db: Session = Depends(get_db),
 ):
@@ -1540,7 +1686,7 @@ def get_dashboard_ai_summary(
             "priority_actions": [
                 "Investigate battery drain at Westside Mall (12 devices affected)",
                 "Review 3 critical anomalies flagged in the last hour",
-                "Schedule firmware update for devices showing connectivity issues"
+                "Schedule firmware update for devices showing connectivity issues",
             ],
             "health_status": "degraded",
             "generated_at": datetime.now(UTC).isoformat(),
@@ -1550,8 +1696,8 @@ def get_dashboard_ai_summary(
                 "critical_issues": 3,
                 "anomalies_today": 7,
                 "resolved_today": 4,
-                "devices_monitored": 250
-            }
+                "devices_monitored": 250,
+            },
         }
 
     tenant_id = get_tenant_id()
@@ -1630,7 +1776,7 @@ def get_dashboard_ai_summary(
         "critical_issues": critical_issues,
         "anomalies_today": anomalies_today,
         "resolved_today": resolved_today,
-        "devices_monitored": devices_monitored
+        "devices_monitored": devices_monitored,
     }
 
     # Determine health status
@@ -1656,11 +1802,11 @@ Respond in this exact JSON format (no markdown, just raw JSON):
 </output_format>
 
 <current_status>
-- Open incidents: {stats['open_cases']}
-- Critical issues: {stats['critical_issues']}
-- Anomalies detected today: {stats['anomalies_today']}
-- Resolved today: {stats['resolved_today']}
-- Total devices monitored: {stats['devices_monitored']}
+- Open incidents: {stats["open_cases"]}
+- Critical issues: {stats["critical_issues"]}
+- Anomalies detected today: {stats["anomalies_today"]}
+- Resolved today: {stats["resolved_today"]}
+- Total devices monitored: {stats["devices_monitored"]}
 </current_status>
 
 <instructions>
@@ -1691,7 +1837,8 @@ Respond in this exact JSON format (no markdown, just raw JSON):
         try:
             # Try to extract JSON from response
             import re
-            json_match = re.search(r'\{[^{}]*\}', response, re.DOTALL)
+
+            json_match = re.search(r"\{[^{}]*\}", response, re.DOTALL)
             if json_match:
                 parsed = json.loads(json_match.group())
                 summary = parsed.get("summary", "Fleet status analyzed.")
@@ -1728,7 +1875,7 @@ Respond in this exact JSON format (no markdown, just raw JSON):
         "health_status": health_status,
         "generated_at": datetime.now(UTC).isoformat(),
         "cached": False,
-        "based_on": stats
+        "based_on": stats,
     }
 
     # Cache the result for 5 minutes

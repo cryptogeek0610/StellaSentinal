@@ -4,21 +4,22 @@ Shared pytest fixtures for the AnomalyDetection test suite.
 This file centralizes common test fixtures to reduce duplication
 and ensure consistent test setup across all test modules.
 """
+
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 from unittest.mock import MagicMock
 
 import numpy as np
 import pandas as pd
 import pytest
 
-
 # =============================================================================
 # Path Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def fixtures_dir() -> Path:
@@ -44,6 +45,7 @@ def tiny_telemetry_df(tiny_telemetry_path: Path) -> pd.DataFrame:
 # Temporary Directory Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def temp_cache_dir(tmp_path: Path) -> Path:
     """Create a temporary cache directory for watermarks, etc."""
@@ -68,6 +70,7 @@ def temp_results_db(tmp_path: Path) -> Path:
 
     # Reset database connection singletons
     from device_anomaly.database import connection as db_connection
+
     db_connection._ENGINE = None
     db_connection._SESSION_FACTORY = None
 
@@ -78,20 +81,23 @@ def temp_results_db(tmp_path: Path) -> Path:
 # Sample Data Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def sample_telemetry_df() -> pd.DataFrame:
     """Generate a synthetic telemetry DataFrame with realistic patterns."""
     np.random.seed(42)
     n_rows = 100
 
-    return pd.DataFrame({
-        "DeviceId": np.repeat([1, 2, 3, 4, 5], n_rows // 5),
-        "Timestamp": pd.date_range("2025-01-01", periods=n_rows, freq="H"),
-        "TotalBatteryLevelDrop": np.random.normal(10, 2, size=n_rows),
-        "Rssi": np.random.normal(-60, 5, size=n_rows),
-        "AvgCpuUsage": np.random.normal(30, 10, size=n_rows),
-        "AvgMemUsage": np.random.normal(50, 15, size=n_rows),
-    })
+    return pd.DataFrame(
+        {
+            "DeviceId": np.repeat([1, 2, 3, 4, 5], n_rows // 5),
+            "Timestamp": pd.date_range("2025-01-01", periods=n_rows, freq="H"),
+            "TotalBatteryLevelDrop": np.random.normal(10, 2, size=n_rows),
+            "Rssi": np.random.normal(-60, 5, size=n_rows),
+            "AvgCpuUsage": np.random.normal(30, 10, size=n_rows),
+            "AvgMemUsage": np.random.normal(50, 15, size=n_rows),
+        }
+    )
 
 
 @pytest.fixture
@@ -100,20 +106,24 @@ def sample_data_with_anomalies() -> pd.DataFrame:
     np.random.seed(42)
 
     # Normal data
-    normal = pd.DataFrame({
-        "DeviceId": 1,
-        "Timestamp": pd.date_range("2025-01-01", periods=30, freq="D"),
-        "TotalBatteryLevelDrop": np.random.normal(10, 1, size=30),
-        "Rssi": np.random.normal(-60, 2, size=30),
-    })
+    normal = pd.DataFrame(
+        {
+            "DeviceId": 1,
+            "Timestamp": pd.date_range("2025-01-01", periods=30, freq="D"),
+            "TotalBatteryLevelDrop": np.random.normal(10, 1, size=30),
+            "Rssi": np.random.normal(-60, 2, size=30),
+        }
+    )
 
     # Anomalous data point
-    anomaly = pd.DataFrame({
-        "DeviceId": [1],
-        "Timestamp": [pd.Timestamp("2025-02-01")],
-        "TotalBatteryLevelDrop": [120],  # Extreme value
-        "Rssi": [-110],  # Extreme value
-    })
+    anomaly = pd.DataFrame(
+        {
+            "DeviceId": [1],
+            "Timestamp": [pd.Timestamp("2025-02-01")],
+            "TotalBatteryLevelDrop": [120],  # Extreme value
+            "Rssi": [-110],  # Extreme value
+        }
+    )
 
     return pd.concat([normal, anomaly], ignore_index=True)
 
@@ -122,8 +132,9 @@ def sample_data_with_anomalies() -> pd.DataFrame:
 # Baseline Fixtures
 # =============================================================================
 
+
 @pytest.fixture
-def sample_baselines() -> Dict[str, Any]:
+def sample_baselines() -> dict[str, Any]:
     """Return a sample baselines payload for testing."""
     return {
         "schema_version": "data_driven_v1",
@@ -147,7 +158,7 @@ def sample_baselines() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def baselines_file(temp_model_dir: Path, sample_baselines: Dict[str, Any]) -> Path:
+def baselines_file(temp_model_dir: Path, sample_baselines: dict[str, Any]) -> Path:
     """Create a baselines.json file in the temp model directory."""
     baselines_path = temp_model_dir / "baselines.json"
     baselines_path.write_text(json.dumps(sample_baselines))
@@ -157,6 +168,7 @@ def baselines_file(temp_model_dir: Path, sample_baselines: Dict[str, Any]) -> Pa
 # =============================================================================
 # Mock Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def mock_db_cursor() -> MagicMock:
@@ -192,7 +204,7 @@ class DummyWatermarkStore:
     """A simple in-memory watermark store for testing."""
 
     def __init__(self):
-        self._watermarks: Dict[str, datetime] = {}
+        self._watermarks: dict[str, datetime] = {}
 
     def get_watermark(self, source: str, table: str) -> datetime | None:
         key = f"{source}:{table}"
@@ -224,10 +236,12 @@ def dummy_watermark_store() -> DummyWatermarkStore:
 # API Client Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def api_client(temp_results_db: Path):
     """Create a FastAPI test client with isolated database."""
     from fastapi.testclient import TestClient
+
     from device_anomaly.api.main import app
 
     return TestClient(app)
@@ -244,8 +258,11 @@ def api_client_with_baselines(api_client, temp_model_dir: Path, baselines_file: 
 # Pytest Markers Registration
 # =============================================================================
 
+
 def pytest_configure(config):
     """Register custom pytest markers."""
     config.addinivalue_line("markers", "unit: Unit tests (fast, no external dependencies)")
-    config.addinivalue_line("markers", "integration: Integration tests (may require database/services)")
+    config.addinivalue_line(
+        "markers", "integration: Integration tests (may require database/services)"
+    )
     config.addinivalue_line("markers", "slow: Slow tests (ML training, large data processing)")

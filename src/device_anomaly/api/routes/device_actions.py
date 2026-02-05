@@ -34,6 +34,7 @@ router = APIRouter(prefix="/devices", tags=["device-actions"])
 
 class ActionType(StrEnum):
     """Available device control actions."""
+
     LOCK = "lock"
     RESTART = "restart"
     WIPE = "wipe"
@@ -46,28 +47,35 @@ class ActionType(StrEnum):
 
 class DeviceActionRequest(BaseModel):
     """Base request for device actions."""
+
     reason: str | None = Field(None, description="Reason for the action (for audit)")
 
 
 class SendMessageRequest(DeviceActionRequest):
     """Request to send a message to a device."""
+
     title: str = Field(default="Message from Admin", max_length=100)
     message: str = Field(..., min_length=1, max_length=500)
 
 
 class WipeDeviceRequest(DeviceActionRequest):
     """Request to wipe a device."""
-    factory_reset: bool = Field(default=False, description="Perform factory reset instead of enterprise wipe")
+
+    factory_reset: bool = Field(
+        default=False, description="Perform factory reset instead of enterprise wipe"
+    )
     confirm: bool = Field(default=False, description="Confirmation required for wipe action")
 
 
 class ClearAppDataRequest(DeviceActionRequest):
     """Request to clear app data."""
+
     package_name: str = Field(..., description="Package name of the app to clear")
 
 
 class DeviceActionResponse(BaseModel):
     """Response for device actions."""
+
     success: bool
     action: str
     device_id: int
@@ -78,6 +86,7 @@ class DeviceActionResponse(BaseModel):
 
 class DeviceLocationResponse(BaseModel):
     """Response for device location."""
+
     success: bool
     device_id: int
     latitude: float | None = None
@@ -104,6 +113,7 @@ def get_mobicontrol_client():
 
     try:
         from device_anomaly.data_access.mobicontrol_client import MobiControlClient
+
         return MobiControlClient()
     except Exception as e:
         logger.error(f"Failed to create MobiControl client: {e}")
@@ -203,7 +213,15 @@ def lock_device(
         )
     except Exception as e:
         logger.error(f"Failed to lock device {device_id}: {e}")
-        log_device_action(db, device_id, "lock", tenant_id, reason=request.reason, success=False, error_message=str(e))
+        log_device_action(
+            db,
+            device_id,
+            "lock",
+            tenant_id,
+            reason=request.reason,
+            success=False,
+            error_message=str(e),
+        )
         raise HTTPException(status_code=500, detail=f"Failed to lock device: {e}")
 
 
@@ -245,7 +263,15 @@ def restart_device(
         )
     except Exception as e:
         logger.error(f"Failed to restart device {device_id}: {e}")
-        log_device_action(db, device_id, "restart", tenant_id, reason=request.reason, success=False, error_message=str(e))
+        log_device_action(
+            db,
+            device_id,
+            "restart",
+            tenant_id,
+            reason=request.reason,
+            success=False,
+            error_message=str(e),
+        )
         raise HTTPException(status_code=500, detail=f"Failed to restart device: {e}")
 
 
@@ -277,7 +303,9 @@ def wipe_device(
 
     if mock_mode:
         log_device_action(db, device_id, wipe_type, tenant_id, reason=request.reason)
-        return create_mock_response(wipe_type, device_id, f"Device {wipe_type} initiated (mock mode)")
+        return create_mock_response(
+            wipe_type, device_id, f"Device {wipe_type} initiated (mock mode)"
+        )
 
     client = get_mobicontrol_client()
     if not client:
@@ -299,7 +327,15 @@ def wipe_device(
         )
     except Exception as e:
         logger.error(f"Failed to wipe device {device_id}: {e}")
-        log_device_action(db, device_id, wipe_type, tenant_id, reason=request.reason, success=False, error_message=str(e))
+        log_device_action(
+            db,
+            device_id,
+            wipe_type,
+            tenant_id,
+            reason=request.reason,
+            success=False,
+            error_message=str(e),
+        )
         raise HTTPException(status_code=500, detail=f"Failed to wipe device: {e}")
 
 
@@ -317,7 +353,9 @@ def send_message_to_device(
     tenant_id = get_tenant_id()
 
     if mock_mode:
-        log_device_action(db, device_id, "message", tenant_id, reason=f"Message: {request.message[:50]}...")
+        log_device_action(
+            db, device_id, "message", tenant_id, reason=f"Message: {request.message[:50]}..."
+        )
         return create_mock_response("message", device_id, "Message sent successfully (mock mode)")
 
     client = get_mobicontrol_client()
@@ -329,7 +367,9 @@ def send_message_to_device(
 
     try:
         result = client.send_message(str(device_id), request.message, request.title)
-        log_device_action(db, device_id, "message", tenant_id, reason=f"Message: {request.message[:50]}...")
+        log_device_action(
+            db, device_id, "message", tenant_id, reason=f"Message: {request.message[:50]}..."
+        )
         return DeviceActionResponse(
             success=True,
             action="message",
@@ -340,7 +380,15 @@ def send_message_to_device(
         )
     except Exception as e:
         logger.error(f"Failed to send message to device {device_id}: {e}")
-        log_device_action(db, device_id, "message", tenant_id, reason=request.reason, success=False, error_message=str(e))
+        log_device_action(
+            db,
+            device_id,
+            "message",
+            tenant_id,
+            reason=request.reason,
+            success=False,
+            error_message=str(e),
+        )
         raise HTTPException(status_code=500, detail=f"Failed to send message: {e}")
 
 
@@ -394,7 +442,15 @@ def locate_device(
         )
     except Exception as e:
         logger.error(f"Failed to locate device {device_id}: {e}")
-        log_device_action(db, device_id, "locate", tenant_id, reason=request.reason, success=False, error_message=str(e))
+        log_device_action(
+            db,
+            device_id,
+            "locate",
+            tenant_id,
+            reason=request.reason,
+            success=False,
+            error_message=str(e),
+        )
         raise HTTPException(status_code=500, detail=f"Failed to locate device: {e}")
 
 
@@ -436,7 +492,15 @@ def sync_device(
         )
     except Exception as e:
         logger.error(f"Failed to sync device {device_id}: {e}")
-        log_device_action(db, device_id, "sync", tenant_id, reason=request.reason, success=False, error_message=str(e))
+        log_device_action(
+            db,
+            device_id,
+            "sync",
+            tenant_id,
+            reason=request.reason,
+            success=False,
+            error_message=str(e),
+        )
         raise HTTPException(status_code=500, detail=f"Failed to sync device: {e}")
 
 
@@ -474,7 +538,9 @@ def clear_device_cache(
             result = client.clear_app_data(str(device_id), "*")
             message = "System cache cleared"
 
-        log_device_action(db, device_id, "clearCache", tenant_id, reason=request.reason if request else None)
+        log_device_action(
+            db, device_id, "clearCache", tenant_id, reason=request.reason if request else None
+        )
         return DeviceActionResponse(
             success=True,
             action="clearCache",
@@ -485,7 +551,15 @@ def clear_device_cache(
         )
     except Exception as e:
         logger.error(f"Failed to clear cache on device {device_id}: {e}")
-        log_device_action(db, device_id, "clearCache", tenant_id, reason=request.reason if request else None, success=False, error_message=str(e))
+        log_device_action(
+            db,
+            device_id,
+            "clearCache",
+            tenant_id,
+            reason=request.reason if request else None,
+            success=False,
+            error_message=str(e),
+        )
         raise HTTPException(status_code=500, detail=f"Failed to clear cache: {e}")
 
 
@@ -540,18 +614,18 @@ def get_device_action_history(
 
 class BatterySyncRequest(BaseModel):
     """Request to sync battery status to MobiControl."""
+
     device_ids: list[int] | None = Field(
-        None,
-        description="Specific device IDs to sync (all devices if not provided)"
+        None, description="Specific device IDs to sync (all devices if not provided)"
     )
     dry_run: bool = Field(
-        False,
-        description="If true, return what would be updated without making changes"
+        False, description="If true, return what would be updated without making changes"
     )
 
 
 class BatterySyncResponse(BaseModel):
     """Response from battery status sync."""
+
     success: bool
     devices_processed: int
     devices_updated: int
@@ -601,7 +675,9 @@ def sync_battery_status_to_mobicontrol(
                 {"device_id": "1003", "status": "Replace Soon", "health": 65},
                 {"device_id": "1004", "status": "Replace Now", "health": 55},
                 {"device_id": "1005", "status": "Good", "health": 92},
-            ] if request.dry_run else None,
+            ]
+            if request.dry_run
+            else None,
         )
 
     try:

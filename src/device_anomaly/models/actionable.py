@@ -64,7 +64,9 @@ def build_actionable_outputs(
             {
                 "DeviceId": int(row["DeviceId"]),
                 "Timestamp": row.get("Timestamp"),
-                "What": f"Anomalous behavior across {', '.join(f['feature'] for f in factors[:2])}" if factors else "Anomaly flagged",
+                "What": f"Anomalous behavior across {', '.join(f['feature'] for f in factors[:2])}"
+                if factors
+                else "Anomaly flagged",
                 "Where": where,
                 "WhyFactors": factors,
                 "LikelyCause": likely_cause or "Correlated feature shifts",

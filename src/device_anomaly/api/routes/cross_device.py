@@ -7,6 +7,7 @@ Enables detection of patterns like:
 - "Zebra TC52 + firmware 8.0.1: 45% more battery drain than previous firmware"
 - "All devices at Warehouse B: 3x more network disconnects"
 """
+
 from __future__ import annotations
 
 import logging
@@ -39,7 +40,9 @@ class CohortIssue(BaseModel):
     firmware: str | None = None
     device_count: int = Field(description="Number of devices in cohort")
     fleet_percentage: float = Field(description="Percentage of total fleet")
-    issue_type: str = Field(description="Type of issue: model_issue, os_issue, firmware_issue, etc.")
+    issue_type: str = Field(
+        description="Type of issue: model_issue, os_issue, firmware_issue, etc."
+    )
     severity: str = Field(description="Severity: critical, high, medium, low")
     primary_metric: str = Field(description="Primary metric showing deviation")
     metric_value: float = Field(description="Cohort's average value for metric")
@@ -460,13 +463,13 @@ def get_mock_firmware_impact(
     # Filter by manufacturer/model if specified
     if manufacturer:
         firmware_versions = [
-            f for f in firmware_versions
+            f
+            for f in firmware_versions
             if f.manufacturer and f.manufacturer.lower() == manufacturer.lower()
         ]
     if model:
         firmware_versions = [
-            f for f in firmware_versions
-            if f.model and f.model.lower() == model.lower()
+            f for f in firmware_versions if f.model and f.model.lower() == model.lower()
         ]
 
     return FirmwareImpactResponse(
@@ -530,8 +533,12 @@ def _get_cohort_detector():
 async def get_systemic_issues(
     min_devices: int = Query(10, description="Minimum devices in cohort to flag"),
     min_z: float = Query(2.0, description="Minimum Z-score for flagging"),
-    severity: list[str] | None = Query(None, description="Filter by severity: critical, high, medium, low"),
-    issue_type: list[str] | None = Query(None, description="Filter by issue type: model_issue, os_issue, etc."),
+    severity: list[str] | None = Query(
+        None, description="Filter by severity: critical, high, medium, low"
+    ),
+    issue_type: list[str] | None = Query(
+        None, description="Filter by issue type: model_issue, os_issue, etc."
+    ),
     mock_mode: bool = Depends(get_mock_mode),
 ) -> SystemicIssuesResponse:
     """
@@ -551,7 +558,6 @@ async def get_systemic_issues(
 
     # Real implementation
     try:
-
         df = _load_cross_device_data()
         if df is None or df.empty:
             logger.warning("No data available for cross-device analysis")
@@ -607,7 +613,9 @@ async def get_systemic_issues(
 
         return SystemicIssuesResponse(
             total_devices_analyzed=len(df),
-            total_cohorts_analyzed=len(set(df.get("cohort_id", []))) if "cohort_id" in df.columns else 0,
+            total_cohorts_analyzed=len(set(df.get("cohort_id", [])))
+            if "cohort_id" in df.columns
+            else 0,
             cohorts_with_issues=len({i.cohort_id for i in issues}),
             critical_issues=len([i for i in issues if i.severity == "critical"]),
             high_issues=len([i for i in issues if i.severity == "high"]),
@@ -659,20 +667,22 @@ async def get_model_reliability(
             if r.get("reliability_score", 0) < -2:
                 status = "critical"
 
-            models.append(ModelReliability(
-                model_id=r.get("model_id", "unknown"),
-                model_name=r.get("model_name", "Unknown Model"),
-                manufacturer=r.get("manufacturer"),
-                device_count=r.get("device_count", 0),
-                fleet_percentage=round(100 * r.get("device_count", 0) / max(1, len(df)), 1),
-                reliability_score=r.get("reliability_score", 0),
-                avg_crash_count=r.get("avg_crashcount"),
-                avg_drop_count=r.get("avg_totaldropcnt"),
-                avg_reboot_count=r.get("avg_rebootcount"),
-                crash_z=r.get("crashcount_z"),
-                drop_z=r.get("totaldropcnt_z"),
-                status=status,
-            ))
+            models.append(
+                ModelReliability(
+                    model_id=r.get("model_id", "unknown"),
+                    model_name=r.get("model_name", "Unknown Model"),
+                    manufacturer=r.get("manufacturer"),
+                    device_count=r.get("device_count", 0),
+                    fleet_percentage=round(100 * r.get("device_count", 0) / max(1, len(df)), 1),
+                    reliability_score=r.get("reliability_score", 0),
+                    avg_crash_count=r.get("avg_crashcount"),
+                    avg_drop_count=r.get("avg_totaldropcnt"),
+                    avg_reboot_count=r.get("avg_rebootcount"),
+                    crash_z=r.get("crashcount_z"),
+                    drop_z=r.get("totaldropcnt_z"),
+                    status=status,
+                )
+            )
 
         return ModelReliabilityResponse(
             period_days=period_days,
@@ -715,18 +725,20 @@ async def get_os_stability(
 
         os_versions = []
         for os in os_analysis:
-            os_versions.append(OsStability(
-                os_version_id=os.get("os_version_id", "unknown"),
-                os_version=os.get("os_version", "Unknown OS"),
-                device_count=os.get("device_count", 0),
-                fleet_percentage=os.get("fleet_percentage", 0),
-                avg_crash_count=os.get("avg_crashcount"),
-                avg_anr_count=os.get("avg_anrcount"),
-                avg_reboot_count=os.get("avg_rebootcount"),
-                crash_z=os.get("crashcount_z"),
-                issues=os.get("issues", []),
-                status=os.get("status", "healthy"),
-            ))
+            os_versions.append(
+                OsStability(
+                    os_version_id=os.get("os_version_id", "unknown"),
+                    os_version=os.get("os_version", "Unknown OS"),
+                    device_count=os.get("device_count", 0),
+                    fleet_percentage=os.get("fleet_percentage", 0),
+                    avg_crash_count=os.get("avg_crashcount"),
+                    avg_anr_count=os.get("avg_anrcount"),
+                    avg_reboot_count=os.get("avg_rebootcount"),
+                    crash_z=os.get("crashcount_z"),
+                    issues=os.get("issues", []),
+                    status=os.get("status", "healthy"),
+                )
+            )
 
         return OsStabilityResponse(
             total_os_versions=len(os_versions),
@@ -779,17 +791,19 @@ async def get_firmware_impact(
 
         firmware_versions = []
         for fw in firmware_analysis:
-            firmware_versions.append(FirmwareImpact(
-                firmware_version=fw.get("firmware_version", "unknown"),
-                manufacturer=fw.get("manufacturer"),
-                model=fw.get("model"),
-                device_count=fw.get("device_count", 0),
-                health_score=fw.get("health_score", 0),
-                avg_battery_drain=fw.get("avg_totalbatteryleveldrop"),
-                avg_crash_count=fw.get("avg_crashcount"),
-                avg_drop_count=fw.get("avg_totaldropcnt"),
-                status=fw.get("status", "healthy"),
-            ))
+            firmware_versions.append(
+                FirmwareImpact(
+                    firmware_version=fw.get("firmware_version", "unknown"),
+                    manufacturer=fw.get("manufacturer"),
+                    model=fw.get("model"),
+                    device_count=fw.get("device_count", 0),
+                    health_score=fw.get("health_score", 0),
+                    avg_battery_drain=fw.get("avg_totalbatteryleveldrop"),
+                    avg_crash_count=fw.get("avg_crashcount"),
+                    avg_drop_count=fw.get("avg_totaldropcnt"),
+                    status=fw.get("status", "healthy"),
+                )
+            )
 
         return FirmwareImpactResponse(
             manufacturer_filter=manufacturer,

@@ -38,23 +38,27 @@ class TemporalResidualDetector:
             self.feature_cols = []
             self.delta_median = None
             self.delta_mad = None
-            LOGGER.warning("TemporalResidualDetector requires Timestamp and DeviceId; skipping temporal fit.")
+            LOGGER.warning(
+                "TemporalResidualDetector requires Timestamp and DeviceId; skipping temporal fit."
+            )
             return
 
         self.feature_cols = [
             c for c in feature_cols if c in df.columns and np.issubdtype(df[c].dtype, np.number)
         ]
         if not self.feature_cols:
-            LOGGER.warning("TemporalResidualDetector found no overlapping numeric columns; skipping temporal fit.")
+            LOGGER.warning(
+                "TemporalResidualDetector found no overlapping numeric columns; skipping temporal fit."
+            )
             return
 
         df_sorted = df.sort_values(["DeviceId", "Timestamp"])
         deltas = df_sorted.groupby("DeviceId")[self.feature_cols].diff()
 
         self.delta_median = deltas.median(skipna=True)
-        self.delta_mad = deltas.apply(
-            lambda s: (s - s.median()).abs().median()
-        ).fillna(self.config.min_mad)
+        self.delta_mad = deltas.apply(lambda s: (s - s.median()).abs().median()).fillna(
+            self.config.min_mad
+        )
 
     def score(self, df: pd.DataFrame) -> pd.Series:
         if not self.feature_cols or self.delta_median is None or self.delta_mad is None:
@@ -118,7 +122,9 @@ class HybridAnomalyDetector:
         self.temporal_detector.fit(df, self.global_detector.feature_cols)
 
         temporal_scores = self.temporal_detector.score(df)
-        combined_raw = self._combine_raw_scores(pd.Series(iso_scores, index=df.index), temporal_scores)
+        combined_raw = self._combine_raw_scores(
+            pd.Series(iso_scores, index=df.index), temporal_scores
+        )
         self._score_scale = float(np.nanmax(np.abs(combined_raw)) or 1.0)
         combined = np.clip(combined_raw / max(self._score_scale, 1e-6), -1.0, 1.0)
         contamination = np.clip(self.config.iso_config.contamination, 0.001, 0.5)
@@ -141,9 +147,13 @@ class HybridAnomalyDetector:
                 except ValueError:
                     continue
             if self.cohort_models:
-                LOGGER.info("Trained %d cohort-specific IsolationForest models.", len(self.cohort_models))
+                LOGGER.info(
+                    "Trained %d cohort-specific IsolationForest models.", len(self.cohort_models)
+                )
 
-    def score_dataframe(self, df: pd.DataFrame, heuristic_flags: pd.DataFrame | None = None) -> pd.DataFrame:
+    def score_dataframe(
+        self, df: pd.DataFrame, heuristic_flags: pd.DataFrame | None = None
+    ) -> pd.DataFrame:
         df_scored = df.copy()
         iso_scores = pd.Series(self.global_detector.score(df), index=df.index, name="iforest_score")
         iso_preds = pd.Series(self.global_detector.predict(df), index=df.index)
@@ -159,20 +169,32 @@ class HybridAnomalyDetector:
                     iso_preds.loc[mask] = model.predict(df.loc[mask])
                     cohort_used.loc[mask] = True
                 except ValueError:
-                    LOGGER.warning("Cohort model %s missing features; falling back to global model.", cohort_id)
+                    LOGGER.warning(
+                        "Cohort model %s missing features; falling back to global model.", cohort_id
+                    )
 
         temporal_scores = self.temporal_detector.score(df)
         combined_raw = self._combine_raw_scores(iso_scores, temporal_scores)
 
         heuristic_score = pd.Series(0.0, index=df.index, name="heuristic_score")
         heuristic_reasons = pd.Series("", index=df.index, name="heuristic_reasons")
-        if heuristic_flags is not None and not heuristic_flags.empty and "DeviceId" in df_scored.columns:
+        if (
+            heuristic_flags is not None
+            and not heuristic_flags.empty
+            and "DeviceId" in df_scored.columns
+        ):
             summary = summarize_heuristics(heuristic_flags)
             if not summary.empty:
                 summary_indexed = summary.set_index("DeviceId")
-                heuristic_score = df_scored["DeviceId"].map(summary_indexed["HeuristicScore"]).fillna(0.0)
-                heuristic_reasons = df_scored["DeviceId"].map(summary_indexed["HeuristicReasons"]).fillna("")
-                combined_raw = combined_raw - self.config.heuristic_weight * heuristic_score.to_numpy()
+                heuristic_score = (
+                    df_scored["DeviceId"].map(summary_indexed["HeuristicScore"]).fillna(0.0)
+                )
+                heuristic_reasons = (
+                    df_scored["DeviceId"].map(summary_indexed["HeuristicReasons"]).fillna("")
+                )
+                combined_raw = (
+                    combined_raw - self.config.heuristic_weight * heuristic_score.to_numpy()
+                )
 
         combined = np.clip(combined_raw / max(self._score_scale, 1e-6), -1.0, 1.0)
 

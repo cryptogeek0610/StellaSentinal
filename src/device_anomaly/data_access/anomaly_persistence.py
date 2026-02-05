@@ -1,4 +1,5 @@
 """Module for persisting anomaly detection results to database."""
+
 from __future__ import annotations
 
 import json
@@ -25,6 +26,7 @@ class PersistenceResult:
     existing_updated: int = 0
     errors: list[str] = field(default_factory=list)
 
+
 _FEATURE_TOKENS = (
     "_roll_",
     "_delta",
@@ -38,11 +40,7 @@ _FEATURE_TOKENS = (
 
 def _select_feature_columns(df: pd.DataFrame) -> list[str]:
     """Select derived feature columns worth persisting for explanations/baselines."""
-    return [
-        col
-        for col in df.columns
-        if any(token in col for token in _FEATURE_TOKENS)
-    ]
+    return [col for col in df.columns if any(token in col for token in _FEATURE_TOKENS)]
 
 
 def _get_str_value(row: pd.Series, *col_names: str) -> str | None:
@@ -147,7 +145,9 @@ def upsert_device_metadata(df: pd.DataFrame, db=None, tenant_id: str = None) -> 
             location = _get_str_value(row, "StoreName", "SiteId", "StoreId", "Location", "location")
             os_version = _get_str_value(row, "OSVersion", "OsVersionName", "os_version")
             agent_version = _get_str_value(row, "AgentVersion", "agent_version")
-            last_seen = _get_datetime_value(row, "LastCheckInTime", "LastConnTime", "Timestamp", "last_seen")
+            last_seen = _get_datetime_value(
+                row, "LastCheckInTime", "LastConnTime", "Timestamp", "last_seen"
+            )
             status = _derive_status(row)
 
             # Try to get existing device metadata
@@ -278,14 +278,28 @@ def persist_anomaly_results(
                     "timestamp": pd.to_datetime(row["Timestamp"]),
                     "anomaly_score": float(row["anomaly_score"]),
                     "anomaly_label": int(row["anomaly_label"]),
-                    "total_battery_level_drop": float(row.get("TotalBatteryLevelDrop", 0)) if pd.notna(row.get("TotalBatteryLevelDrop")) else None,
-                    "total_free_storage_kb": float(row.get("TotalFreeStorageKb", 0)) if pd.notna(row.get("TotalFreeStorageKb")) else None,
-                    "download": float(row.get("Download", 0)) if pd.notna(row.get("Download")) else None,
+                    "total_battery_level_drop": float(row.get("TotalBatteryLevelDrop", 0))
+                    if pd.notna(row.get("TotalBatteryLevelDrop"))
+                    else None,
+                    "total_free_storage_kb": float(row.get("TotalFreeStorageKb", 0))
+                    if pd.notna(row.get("TotalFreeStorageKb"))
+                    else None,
+                    "download": float(row.get("Download", 0))
+                    if pd.notna(row.get("Download"))
+                    else None,
                     "upload": float(row.get("Upload", 0)) if pd.notna(row.get("Upload")) else None,
-                    "offline_time": float(row.get("OfflineTime", 0)) if pd.notna(row.get("OfflineTime")) else None,
-                    "disconnect_count": float(row.get("DisconnectCount", 0)) if pd.notna(row.get("DisconnectCount")) else None,
-                    "wifi_signal_strength": float(row.get("WiFiSignalStrength", 0)) if pd.notna(row.get("WiFiSignalStrength")) else None,
-                    "connection_time": float(row.get("ConnectionTime", 0)) if pd.notna(row.get("ConnectionTime")) else None,
+                    "offline_time": float(row.get("OfflineTime", 0))
+                    if pd.notna(row.get("OfflineTime"))
+                    else None,
+                    "disconnect_count": float(row.get("DisconnectCount", 0))
+                    if pd.notna(row.get("DisconnectCount"))
+                    else None,
+                    "wifi_signal_strength": float(row.get("WiFiSignalStrength", 0))
+                    if pd.notna(row.get("WiFiSignalStrength"))
+                    else None,
+                    "connection_time": float(row.get("ConnectionTime", 0))
+                    if pd.notna(row.get("ConnectionTime"))
+                    else None,
                     "feature_values_json": json.dumps(feature_values) if feature_values else None,
                     "status": AnomalyStatus.OPEN.value,
                     "created_at": datetime.utcnow(),
@@ -325,9 +339,13 @@ def persist_anomaly_results(
             db.commit()
 
             result.total_processed += len(batch_records)
-            logger.info(f"Upserted batch: {len(batch_records)} anomalies (total: {result.total_processed})")
+            logger.info(
+                f"Upserted batch: {len(batch_records)} anomalies (total: {result.total_processed})"
+            )
 
-        logger.info(f"Successfully persisted {result.total_processed} anomaly records (upsert mode).")
+        logger.info(
+            f"Successfully persisted {result.total_processed} anomaly records (upsert mode)."
+        )
         return result
 
     except Exception as e:

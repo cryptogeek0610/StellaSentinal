@@ -6,6 +6,7 @@ Used for intelligent device grouping in the Security Posture dashboard.
 
 Example PATH: "North America / East Region / Store-NYC-001"
 """
+
 from __future__ import annotations
 
 import logging

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import numpy as np
 import pandas as pd
@@ -45,7 +45,9 @@ def test_cohort_stats_use_train_only():
 
     store = CohortStatsStore(train_payload)
     val_scored = apply_cohort_stats(val_df, store)
-    expected = (100.0 - train_median) / (train_payload["stats"][cohort_id]["BatteryDrop"]["mad"] + 1e-6)
+    expected = (100.0 - train_median) / (
+        train_payload["stats"][cohort_id]["BatteryDrop"]["mad"] + 1e-6
+    )
     assert np.isclose(val_scored["BatteryDrop_cohort_z"].iloc[0], expected)
 
 
@@ -65,7 +67,7 @@ def test_cohort_stats_parity_streaming_offline():
     features: dict[str, float] = {}
     event = TelemetryEvent(
         device_id=1,
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         metrics={"BatteryDrop": 12.0},
         manufacturer_id=1,
         model_id=1,

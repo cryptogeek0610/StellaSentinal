@@ -3,6 +3,7 @@
 This module provides database connectivity and repository patterns
 for accessing the backend SQL Server database.
 """
+
 from device_anomaly.db.models import (
     Anomaly,
     AuditLog,

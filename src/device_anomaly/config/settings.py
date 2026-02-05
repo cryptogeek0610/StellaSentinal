@@ -29,6 +29,7 @@ except ImportError:
 
 class TrainingDataSource(BaseModel):
     """Configuration for a single training data source (customer database)."""
+
     name: str  # e.g., "BENELUX", "PIBLIC"
     xsight_db: str  # XSight database name
     mc_db: str  # MobiControl database name
@@ -45,6 +46,7 @@ class DBSettings(BaseModel):
     Both XSight and MobiControl databases typically reside on the same SQL Server.
     Test environment: A0024952\\SQLEXPRESS (a0024952.mobicontrol.cloud:1433)
     """
+
     host: str
     database: str
     user: str
@@ -62,6 +64,7 @@ class DBSettings(BaseModel):
 
 class PostgresSettings(BaseModel):
     """PostgreSQL connection settings (for application backend data)."""
+
     host: str = "localhost"
     port: int = 5432
     database: str = "anomaly_detection"
@@ -120,6 +123,7 @@ class MobiControlSettings(BaseModel):
 
 class ResultsDBSettings(BaseModel):
     """Settings for the results database (where anomaly results are stored)."""
+
     url: str | None = os.getenv("RESULTS_DB_URL")
     path: str = os.getenv("RESULTS_DB_PATH", "anomaly_results.db")
 
@@ -134,28 +138,34 @@ class AppSettings(BaseModel):
     env: str = "local"
 
     # XSight SQL Database (telemetry source data)
-    dw: DBSettings = Field(default_factory=lambda: DBSettings(
-        host="host.docker.internal",
-        database="XSight",
-        user="",
-        password="",
-    ))
+    dw: DBSettings = Field(
+        default_factory=lambda: DBSettings(
+            host="host.docker.internal",
+            database="XSight",
+            user="",
+            password="",
+        )
+    )
 
     # Backend database (anomaly detection app state) - PostgreSQL
     backend_db: PostgresSettings = Field(default_factory=lambda: PostgresSettings())
 
     # MobiControl SQL Database (device inventory, policies - optional enrichment)
-    mc: DBSettings = Field(default_factory=lambda: DBSettings(
-        host="host.docker.internal",
-        database="MobiControlDB",
-        user="",
-        password="",
-    ))
+    mc: DBSettings = Field(
+        default_factory=lambda: DBSettings(
+            host="host.docker.internal",
+            database="MobiControlDB",
+            user="",
+            password="",
+        )
+    )
 
     results_db: ResultsDBSettings = Field(default_factory=lambda: ResultsDBSettings())
     llm: LLMSettings = Field(default_factory=lambda: LLMSettings())
     local_llm: LocalLLMSettings = Field(default_factory=lambda: LocalLLMSettings())
-    mobicontrol: MobiControlSettings = Field(default_factory=lambda: MobiControlSettings(server_url=""))
+    mobicontrol: MobiControlSettings = Field(
+        default_factory=lambda: MobiControlSettings(server_url="")
+    )
 
     # Feature flags
     enable_llm: bool = False
@@ -163,7 +173,9 @@ class AppSettings(BaseModel):
 
     # Extended data ingestion feature flags (ON by default for full data coverage)
     enable_mc_timeseries: bool = True  # MobiControl time-series tables (DeviceStatInt, etc.)
-    enable_xsight_hourly: bool = True  # XSight hourly tables (cs_DataUsageByHour, etc.) - HIGH VOLUME
+    enable_xsight_hourly: bool = (
+        True  # XSight hourly tables (cs_DataUsageByHour, etc.) - HIGH VOLUME
+    )
     enable_xsight_extended: bool = True  # Extended XSight tables (cs_WiFiLocation, etc.)
     enable_schema_discovery: bool = True  # Runtime schema discovery caching (safe, metadata only)
 
@@ -217,7 +229,15 @@ class AppSettings(BaseModel):
     # MobiControl label types that represent physical locations
     # Devices with these labels will be mapped to location_metadata for location-based analysis
     location_label_types: list[str] = Field(
-        default_factory=lambda: ["Store", "Warehouse", "Site", "Building", "Location", "Branch", "Facility"]
+        default_factory=lambda: [
+            "Store",
+            "Warehouse",
+            "Site",
+            "Building",
+            "Location",
+            "Branch",
+            "Facility",
+        ]
     )
 
     # MobiControl label types that represent user assignments
@@ -231,7 +251,7 @@ class AppSettings(BaseModel):
         default_factory=lambda: ["reboot", "restart", "boot", "power cycle", "device started"]
     )
 
-    @model_validator(mode='before')
+    @model_validator(mode="before")
     @classmethod
     def load_from_environment(cls, data: dict) -> dict:
         """Load all settings from os.environ at instantiation time."""
@@ -239,19 +259,20 @@ class AppSettings(BaseModel):
         # This allows explicit values to override env vars
 
         # Environment
-        if 'env' not in data:
-            data['env'] = os.getenv("APP_ENV", "local")
+        if "env" not in data:
+            data["env"] = os.getenv("APP_ENV", "local")
 
         # XSight Database
-        if 'dw' not in data:
-            data['dw'] = DBSettings(
+        if "dw" not in data:
+            data["dw"] = DBSettings(
                 host=os.getenv("DW_DB_HOST", "host.docker.internal"),
                 database=os.getenv("DW_DB_NAME", "XSight"),
                 user=os.getenv("DW_DB_USER", ""),
                 password=os.getenv("DW_DB_PASS", ""),
                 port=int(os.getenv("DW_DB_PORT", "1433")),
                 driver=os.getenv("DW_DB_DRIVER", "ODBC Driver 18 for SQL Server"),
-                trust_server_certificate=os.getenv("DW_TRUST_SERVER_CERT", "true").lower() == "true",
+                trust_server_certificate=os.getenv("DW_TRUST_SERVER_CERT", "true").lower()
+                == "true",
                 connect_timeout=int(os.getenv("DW_DB_CONNECT_TIMEOUT", "15")),
                 query_timeout=int(os.getenv("DW_DB_QUERY_TIMEOUT", "60")),
                 pool_size=int(os.getenv("DW_DB_POOL_SIZE", "5")),
@@ -259,8 +280,8 @@ class AppSettings(BaseModel):
             )
 
         # Backend Database
-        if 'backend_db' not in data:
-            data['backend_db'] = PostgresSettings(
+        if "backend_db" not in data:
+            data["backend_db"] = PostgresSettings(
                 host=os.getenv("BACKEND_DB_HOST", "postgres"),
                 port=int(os.getenv("BACKEND_DB_PORT", "5432")),
                 database=os.getenv("BACKEND_DB_NAME", "anomaly_detection"),
@@ -269,15 +290,16 @@ class AppSettings(BaseModel):
             )
 
         # MobiControl Database
-        if 'mc' not in data:
-            data['mc'] = DBSettings(
+        if "mc" not in data:
+            data["mc"] = DBSettings(
                 host=os.getenv("MC_DB_HOST", "host.docker.internal"),
                 database=os.getenv("MC_DB_NAME", "MobiControlDB"),
                 user=os.getenv("MC_DB_USER", ""),
                 password=os.getenv("MC_DB_PASS", ""),
                 port=int(os.getenv("MC_DB_PORT", "1433")),
                 driver=os.getenv("MC_DB_DRIVER", "ODBC Driver 18 for SQL Server"),
-                trust_server_certificate=os.getenv("MC_TRUST_SERVER_CERT", "true").lower() == "true",
+                trust_server_certificate=os.getenv("MC_TRUST_SERVER_CERT", "true").lower()
+                == "true",
                 connect_timeout=int(os.getenv("MC_DB_CONNECT_TIMEOUT", "15")),
                 query_timeout=int(os.getenv("MC_DB_QUERY_TIMEOUT", "60")),
                 pool_size=int(os.getenv("MC_DB_POOL_SIZE", "5")),
@@ -285,15 +307,15 @@ class AppSettings(BaseModel):
             )
 
         # Results Database
-        if 'results_db' not in data:
-            data['results_db'] = ResultsDBSettings(
+        if "results_db" not in data:
+            data["results_db"] = ResultsDBSettings(
                 url=os.getenv("RESULTS_DB_URL"),
                 path=os.getenv("RESULTS_DB_PATH", "anomaly_results.db"),
             )
 
         # LLM Settings
-        if 'llm' not in data:
-            data['llm'] = LLMSettings(
+        if "llm" not in data:
+            data["llm"] = LLMSettings(
                 api_key=os.getenv("LLM_API_KEY"),
                 model_name=os.getenv("LLM_MODEL_NAME"),
                 base_url=os.getenv("LLM_BASE_URL"),
@@ -301,21 +323,22 @@ class AppSettings(BaseModel):
             )
 
         # Local LLM Settings (Ollama, LM Studio, vLLM)
-        if 'local_llm' not in data:
-            data['local_llm'] = LocalLLMSettings(
+        if "local_llm" not in data:
+            data["local_llm"] = LocalLLMSettings(
                 provider=os.getenv("LOCAL_LLM_PROVIDER", "ollama"),
                 base_url=os.getenv("LOCAL_LLM_BASE_URL", "http://ollama:11434"),
                 model_name=os.getenv("LOCAL_LLM_MODEL_NAME"),
                 fallback_model=os.getenv("LOCAL_LLM_FALLBACK_MODEL", "llama3.2:1b"),
                 enable_caching=os.getenv("LOCAL_LLM_ENABLE_CACHING", "true").lower() == "true",
-                fallback_to_rules=os.getenv("LOCAL_LLM_FALLBACK_TO_RULES", "true").lower() == "true",
+                fallback_to_rules=os.getenv("LOCAL_LLM_FALLBACK_TO_RULES", "true").lower()
+                == "true",
                 max_retries=int(os.getenv("LOCAL_LLM_MAX_RETRIES", "3")),
                 timeout_seconds=int(os.getenv("LOCAL_LLM_TIMEOUT_SECONDS", "30")),
             )
 
         # MobiControl API Settings
-        if 'mobicontrol' not in data:
-            data['mobicontrol'] = MobiControlSettings(
+        if "mobicontrol" not in data:
+            data["mobicontrol"] = MobiControlSettings(
                 server_url=os.getenv("MOBICONTROL_SERVER_URL", ""),
                 client_id=os.getenv("MOBICONTROL_CLIENT_ID"),
                 client_secret=os.getenv("MOBICONTROL_CLIENT_SECRET"),
@@ -326,108 +349,140 @@ class AppSettings(BaseModel):
                 attr_battery_health=os.getenv("MC_ATTR_BATTERY_HEALTH", "BatteryHealthPercent"),
                 attr_battery_status=os.getenv("MC_ATTR_BATTERY_STATUS", "BatteryStatus"),
                 attr_replacement_due=os.getenv("MC_ATTR_REPLACEMENT_DUE", "BatteryReplacementDue"),
-                attr_replacement_urgency=os.getenv("MC_ATTR_REPLACEMENT_URGENCY", "BatteryReplacementUrgency"),
-                attr_replacement_date=os.getenv("MC_ATTR_REPLACEMENT_DATE", "BatteryReplacementDate"),
+                attr_replacement_urgency=os.getenv(
+                    "MC_ATTR_REPLACEMENT_URGENCY", "BatteryReplacementUrgency"
+                ),
+                attr_replacement_date=os.getenv(
+                    "MC_ATTR_REPLACEMENT_DATE", "BatteryReplacementDate"
+                ),
             )
 
         # Feature flags
-        if 'enable_llm' not in data:
-            data['enable_llm'] = os.getenv("ENABLE_LLM", "false").lower() == "true"
-        if 'enable_mobicontrol' not in data:
-            data['enable_mobicontrol'] = os.getenv("ENABLE_MOBICONTROL", "false").lower() == "true"
+        if "enable_llm" not in data:
+            data["enable_llm"] = os.getenv("ENABLE_LLM", "false").lower() == "true"
+        if "enable_mobicontrol" not in data:
+            data["enable_mobicontrol"] = os.getenv("ENABLE_MOBICONTROL", "false").lower() == "true"
 
         # Extended data ingestion feature flags (ON by default for full data coverage)
-        if 'enable_mc_timeseries' not in data:
-            data['enable_mc_timeseries'] = os.getenv("ENABLE_MC_TIMESERIES", "true").lower() == "true"
-        if 'enable_xsight_hourly' not in data:
-            data['enable_xsight_hourly'] = os.getenv("ENABLE_XSIGHT_HOURLY", "true").lower() == "true"
-        if 'enable_xsight_extended' not in data:
-            data['enable_xsight_extended'] = os.getenv("ENABLE_XSIGHT_EXTENDED", "true").lower() == "true"
-        if 'enable_schema_discovery' not in data:
-            data['enable_schema_discovery'] = os.getenv("ENABLE_SCHEMA_DISCOVERY", "true").lower() == "true"
+        if "enable_mc_timeseries" not in data:
+            data["enable_mc_timeseries"] = (
+                os.getenv("ENABLE_MC_TIMESERIES", "true").lower() == "true"
+            )
+        if "enable_xsight_hourly" not in data:
+            data["enable_xsight_hourly"] = (
+                os.getenv("ENABLE_XSIGHT_HOURLY", "true").lower() == "true"
+            )
+        if "enable_xsight_extended" not in data:
+            data["enable_xsight_extended"] = (
+                os.getenv("ENABLE_XSIGHT_EXTENDED", "true").lower() == "true"
+            )
+        if "enable_schema_discovery" not in data:
+            data["enable_schema_discovery"] = (
+                os.getenv("ENABLE_SCHEMA_DISCOVERY", "true").lower() == "true"
+            )
 
         # ML Training expansion flags
-        if 'enable_hourly_training' not in data:
-            data['enable_hourly_training'] = os.getenv("ENABLE_HOURLY_TRAINING", "false").lower() == "true"
-        if 'enable_training_discovery' not in data:
-            data['enable_training_discovery'] = os.getenv("ENABLE_TRAINING_DISCOVERY", "false").lower() == "true"
-        if 'hourly_max_days' not in data:
-            data['hourly_max_days'] = int(os.getenv("HOURLY_MAX_DAYS", "7"))
+        if "enable_hourly_training" not in data:
+            data["enable_hourly_training"] = (
+                os.getenv("ENABLE_HOURLY_TRAINING", "false").lower() == "true"
+            )
+        if "enable_training_discovery" not in data:
+            data["enable_training_discovery"] = (
+                os.getenv("ENABLE_TRAINING_DISCOVERY", "false").lower() == "true"
+            )
+        if "hourly_max_days" not in data:
+            data["hourly_max_days"] = int(os.getenv("HOURLY_MAX_DAYS", "7"))
 
         # Table allowlists (comma-separated)
-        if 'xsight_table_allowlist' not in data:
+        if "xsight_table_allowlist" not in data:
             allowlist = os.getenv("XSIGHT_TABLE_ALLOWLIST", "")
-            data['xsight_table_allowlist'] = [t.strip() for t in allowlist.split(",") if t.strip()]
-        if 'mc_table_allowlist' not in data:
+            data["xsight_table_allowlist"] = [t.strip() for t in allowlist.split(",") if t.strip()]
+        if "mc_table_allowlist" not in data:
             allowlist = os.getenv("MC_TABLE_ALLOWLIST", "")
-            data['mc_table_allowlist'] = [t.strip() for t in allowlist.split(",") if t.strip()]
+            data["mc_table_allowlist"] = [t.strip() for t in allowlist.split(",") if t.strip()]
 
         # Ingestion configuration
-        if 'ingest_lookback_hours' not in data:
-            data['ingest_lookback_hours'] = int(os.getenv("INGEST_LOOKBACK_HOURS", "24"))
-        if 'ingest_batch_size' not in data:
-            data['ingest_batch_size'] = int(os.getenv("INGEST_BATCH_SIZE", "50000"))
-        if 'ingest_max_tables_parallel' not in data:
-            data['ingest_max_tables_parallel'] = int(os.getenv("INGEST_MAX_TABLES_PARALLEL", "3"))
-        if 'enable_canonical_event_storage' not in data:
-            data['enable_canonical_event_storage'] = os.getenv(
-                "ENABLE_CANONICAL_EVENT_STORAGE", "false"
-            ).lower() == "true"
-        if 'auto_create_canonical_events_tables' not in data:
-            data['auto_create_canonical_events_tables'] = os.getenv(
-                "AUTO_CREATE_CANONICAL_EVENTS_TABLES", "false"
-            ).lower() == "true"
-        if 'max_backfill_days_hourly' not in data:
-            data['max_backfill_days_hourly'] = int(os.getenv("MAX_BACKFILL_DAYS_HOURLY", "2"))
+        if "ingest_lookback_hours" not in data:
+            data["ingest_lookback_hours"] = int(os.getenv("INGEST_LOOKBACK_HOURS", "24"))
+        if "ingest_batch_size" not in data:
+            data["ingest_batch_size"] = int(os.getenv("INGEST_BATCH_SIZE", "50000"))
+        if "ingest_max_tables_parallel" not in data:
+            data["ingest_max_tables_parallel"] = int(os.getenv("INGEST_MAX_TABLES_PARALLEL", "3"))
+        if "enable_canonical_event_storage" not in data:
+            data["enable_canonical_event_storage"] = (
+                os.getenv("ENABLE_CANONICAL_EVENT_STORAGE", "false").lower() == "true"
+            )
+        if "auto_create_canonical_events_tables" not in data:
+            data["auto_create_canonical_events_tables"] = (
+                os.getenv("AUTO_CREATE_CANONICAL_EVENTS_TABLES", "false").lower() == "true"
+            )
+        if "max_backfill_days_hourly" not in data:
+            data["max_backfill_days_hourly"] = int(os.getenv("MAX_BACKFILL_DAYS_HOURLY", "2"))
 
         # Watermark configuration
-        if 'enable_file_watermark_fallback' not in data:
-            data['enable_file_watermark_fallback'] = os.getenv("ENABLE_FILE_WATERMARK_FALLBACK", "false").lower() == "true"
+        if "enable_file_watermark_fallback" not in data:
+            data["enable_file_watermark_fallback"] = (
+                os.getenv("ENABLE_FILE_WATERMARK_FALLBACK", "false").lower() == "true"
+            )
 
         # Observability
-        if 'enable_ingestion_metrics' not in data:
-            data['enable_ingestion_metrics'] = os.getenv("ENABLE_INGESTION_METRICS", "true").lower() == "true"
-        if 'enable_daily_coverage_report' not in data:
-            data['enable_daily_coverage_report'] = os.getenv("ENABLE_DAILY_COVERAGE_REPORT", "true").lower() == "true"
-        if 'auto_create_metrics_tables' not in data:
-            data['auto_create_metrics_tables'] = os.getenv("AUTO_CREATE_METRICS_TABLES", "false").lower() == "true"
+        if "enable_ingestion_metrics" not in data:
+            data["enable_ingestion_metrics"] = (
+                os.getenv("ENABLE_INGESTION_METRICS", "true").lower() == "true"
+            )
+        if "enable_daily_coverage_report" not in data:
+            data["enable_daily_coverage_report"] = (
+                os.getenv("ENABLE_DAILY_COVERAGE_REPORT", "true").lower() == "true"
+            )
+        if "auto_create_metrics_tables" not in data:
+            data["auto_create_metrics_tables"] = (
+                os.getenv("AUTO_CREATE_METRICS_TABLES", "false").lower() == "true"
+            )
 
         # API settings
-        if 'api_host' not in data:
-            data['api_host'] = os.getenv("API_HOST", "0.0.0.0")
-        if 'api_port' not in data:
-            data['api_port'] = int(os.getenv("API_PORT", "8000"))
+        if "api_host" not in data:
+            data["api_host"] = os.getenv("API_HOST", "0.0.0.0")
+        if "api_port" not in data:
+            data["api_port"] = int(os.getenv("API_PORT", "8000"))
 
         # Qdrant
-        if 'qdrant_host' not in data:
-            data['qdrant_host'] = os.getenv("QDRANT_HOST", "localhost")
-        if 'qdrant_port' not in data:
-            data['qdrant_port'] = int(os.getenv("QDRANT_PORT", "6333"))
+        if "qdrant_host" not in data:
+            data["qdrant_host"] = os.getenv("QDRANT_HOST", "localhost")
+        if "qdrant_port" not in data:
+            data["qdrant_port"] = int(os.getenv("QDRANT_PORT", "6333"))
 
         # Carl's Requirements: Location and User Assignment Labels
-        if 'location_label_types' not in data:
-            labels = os.getenv("LOCATION_LABEL_TYPES", "Store,Warehouse,Site,Building,Location,Branch,Facility")
-            data['location_label_types'] = [t.strip() for t in labels.split(",") if t.strip()]
-        if 'user_assignment_label_types' not in data:
-            labels = os.getenv("USER_ASSIGNMENT_LABEL_TYPES", "Owner,User,AssignedUser,Operator,Employee,Worker")
-            data['user_assignment_label_types'] = [t.strip() for t in labels.split(",") if t.strip()]
-        if 'reboot_event_patterns' not in data:
-            patterns = os.getenv("REBOOT_EVENT_PATTERNS", "reboot,restart,boot,power cycle,device started")
-            data['reboot_event_patterns'] = [p.strip() for p in patterns.split(",") if p.strip()]
+        if "location_label_types" not in data:
+            labels = os.getenv(
+                "LOCATION_LABEL_TYPES", "Store,Warehouse,Site,Building,Location,Branch,Facility"
+            )
+            data["location_label_types"] = [t.strip() for t in labels.split(",") if t.strip()]
+        if "user_assignment_label_types" not in data:
+            labels = os.getenv(
+                "USER_ASSIGNMENT_LABEL_TYPES", "Owner,User,AssignedUser,Operator,Employee,Worker"
+            )
+            data["user_assignment_label_types"] = [
+                t.strip() for t in labels.split(",") if t.strip()
+            ]
+        if "reboot_event_patterns" not in data:
+            patterns = os.getenv(
+                "REBOOT_EVENT_PATTERNS", "reboot,restart,boot,power cycle,device started"
+            )
+            data["reboot_event_patterns"] = [p.strip() for p in patterns.split(",") if p.strip()]
 
         # Training data sources
-        if 'training_data_sources' not in data:
+        if "training_data_sources" not in data:
             sources_json = os.getenv("TRAINING_DATA_SOURCES", "")
             if sources_json:
                 try:
                     sources_list = json.loads(sources_json)
-                    data['training_data_sources'] = [
+                    data["training_data_sources"] = [
                         TrainingDataSource(**src) for src in sources_list
                     ]
                 except (json.JSONDecodeError, TypeError):
-                    data['training_data_sources'] = []
+                    data["training_data_sources"] = []
             else:
-                data['training_data_sources'] = []
+                data["training_data_sources"] = []
 
         return data
 

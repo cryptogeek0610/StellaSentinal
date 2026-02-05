@@ -204,7 +204,9 @@ class ScikitLearnEngine(InferenceEngine):
             "engine_type": "sklearn",
             "model_class": self.model.__class__.__name__,
             "model_path": str(self.model_path),
-            "model_size_mb": self.model_path.stat().st_size / 1e6 if self.model_path.exists() else 0,
+            "model_size_mb": self.model_path.stat().st_size / 1e6
+            if self.model_path.exists()
+            else 0,
         }
 
 
@@ -323,7 +325,9 @@ class ONNXInferenceEngine(InferenceEngine):
         return {
             "engine_type": "onnx",
             "model_path": str(self.model_path),
-            "model_size_mb": self.model_path.stat().st_size / 1e6 if self.model_path.exists() else 0,
+            "model_size_mb": self.model_path.stat().st_size / 1e6
+            if self.model_path.exists()
+            else 0,
             "provider": self.config.onnx_provider.value,
             "active_providers": self.session.get_providers() if self.session else [],
             "available_providers": self._get_available_providers(),
@@ -406,8 +410,7 @@ def create_pytorch_engine(
         )
     except ImportError as e:
         raise ImportError(
-            "PyTorch is required for PyTorch engine. "
-            "Install with: pip install torch"
+            "PyTorch is required for PyTorch engine. Install with: pip install torch"
         ) from e
 
     # Convert EngineConfig to PyTorchEngineConfig
@@ -455,7 +458,9 @@ class FallbackInferenceEngine(InferenceEngine):
 
             except Exception as e2:
                 logger.error("Both ONNX and sklearn engines failed to load")
-                raise RuntimeError(f"No valid inference engine available: ONNX={e}, sklearn={e2}") from e2
+                raise RuntimeError(
+                    f"No valid inference engine available: ONNX={e}, sklearn={e2}"
+                ) from e2
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         """Forward to active engine"""

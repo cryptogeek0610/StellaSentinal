@@ -48,7 +48,8 @@ class IsoScoreCalibrator:
         ] + FeatureConfig.genericFeatures
 
         self.features = [
-            col for col in candidate_features
+            col
+            for col in candidate_features
             if col in aligned.columns and np.issubdtype(aligned[col].dtype, np.number)
         ][: self.config.feature_limit]
 

@@ -3,6 +3,7 @@
 This module provides data access methods for baseline profiles,
 supporting different scopes (tenant, site, device_group, device).
 """
+
 from __future__ import annotations
 
 import json
@@ -240,6 +241,7 @@ class BaselineRepository(BaseRepository[Baseline]):
 
         # Create new baseline with same config but updated stats
         import uuid
+
         new_baseline_id = f"baseline_{uuid.uuid4().hex[:12]}"
 
         return self.create_baseline(
@@ -250,7 +252,9 @@ class BaselineRepository(BaseRepository[Baseline]):
             scope_id=old_baseline.scope_id,
             metric_id=old_baseline.metric_id,
             stats=stats,
-            window_config=json.loads(old_baseline.window_config) if old_baseline.window_config else None,
+            window_config=json.loads(old_baseline.window_config)
+            if old_baseline.window_config
+            else None,
             created_by="system",
         )
 

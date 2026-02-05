@@ -3,6 +3,7 @@
 This module provides comprehensive mock data generation for demo/testing purposes.
 All mock data is consistent and internally coherent (device IDs match across endpoints, etc.).
 """
+
 from __future__ import annotations
 
 import random
@@ -50,6 +51,7 @@ MOCK_ANOMALY_TYPES = [
 # Mock Device Generation
 # ============================================================================
 
+
 def _generate_mock_devices(count: int = 50) -> list[dict[str, Any]]:
     """Generate a consistent set of mock devices."""
     devices = []
@@ -68,20 +70,24 @@ def _generate_mock_devices(count: int = 50) -> list[dict[str, Any]]:
         else:
             status = "Charging"
 
-        devices.append({
-            "device_id": i,
-            "device_name": f"Device-{i:04d}",
-            "device_model": model,
-            "location": store["name"],
-            "region": store["region"],
-            "store_id": store["id"],
-            "status": status,
-            "battery": _rng.randint(15, 100),
-            "is_charging": status == "Charging",
-            "last_seen": (datetime.now() - timedelta(minutes=_rng.randint(0, 1440))).isoformat(),
-            "os_version": f"Android {_rng.choice(['12', '13', '14'])}",
-            "agent_version": f"15.{_rng.randint(1, 5)}.{_rng.randint(0, 9)}",
-        })
+        devices.append(
+            {
+                "device_id": i,
+                "device_name": f"Device-{i:04d}",
+                "device_model": model,
+                "location": store["name"],
+                "region": store["region"],
+                "store_id": store["id"],
+                "status": status,
+                "battery": _rng.randint(15, 100),
+                "is_charging": status == "Charging",
+                "last_seen": (
+                    datetime.now() - timedelta(minutes=_rng.randint(0, 1440))
+                ).isoformat(),
+                "os_version": f"Android {_rng.choice(['12', '13', '14'])}",
+                "agent_version": f"15.{_rng.randint(1, 5)}.{_rng.randint(0, 9)}",
+            }
+        )
 
     return devices
 
@@ -106,6 +112,7 @@ def get_mock_devices() -> list[dict[str, Any]]:
 # ============================================================================
 # Mock Anomaly Generation
 # ============================================================================
+
 
 def _generate_mock_anomalies(count: int = 100) -> list[dict[str, Any]]:
     """Generate a consistent set of mock anomalies."""
@@ -132,9 +139,7 @@ def _generate_mock_anomalies(count: int = 100) -> list[dict[str, Any]]:
 
         # Time offset (spread over past 14 days)
         time_offset = timedelta(
-            days=_rng.randint(0, 13),
-            hours=_rng.randint(0, 23),
-            minutes=_rng.randint(0, 59)
+            days=_rng.randint(0, 13), hours=_rng.randint(0, 23), minutes=_rng.randint(0, 59)
         )
         timestamp = base_time - time_offset
 
@@ -146,13 +151,27 @@ def _generate_mock_anomalies(count: int = 100) -> list[dict[str, Any]]:
             "anomaly_label": -1,
             "status": status,
             "assigned_to": _rng.choice([None, "Admin", "Operator", "System"]),
-            "total_battery_level_drop": _rng.randint(10, 80) if anomaly_type == "battery_drain" else _rng.randint(5, 20),
-            "total_free_storage_kb": _rng.randint(50000, 500000) if anomaly_type == "storage_critical" else _rng.randint(1000000, 5000000),
-            "download": _rng.randint(100000, 5000000) if anomaly_type == "data_spike" else _rng.randint(10000, 500000),
-            "upload": _rng.randint(50000, 2000000) if anomaly_type == "data_spike" else _rng.randint(5000, 100000),
-            "offline_time": _rng.randint(60, 480) if anomaly_type == "offline_extended" else _rng.randint(0, 30),
-            "disconnect_count": _rng.randint(5, 25) if anomaly_type == "network_instability" else _rng.randint(0, 5),
-            "wifi_signal_strength": _rng.randint(10, 40) if anomaly_type == "network_instability" else _rng.randint(50, 90),
+            "total_battery_level_drop": _rng.randint(10, 80)
+            if anomaly_type == "battery_drain"
+            else _rng.randint(5, 20),
+            "total_free_storage_kb": _rng.randint(50000, 500000)
+            if anomaly_type == "storage_critical"
+            else _rng.randint(1000000, 5000000),
+            "download": _rng.randint(100000, 5000000)
+            if anomaly_type == "data_spike"
+            else _rng.randint(10000, 500000),
+            "upload": _rng.randint(50000, 2000000)
+            if anomaly_type == "data_spike"
+            else _rng.randint(5000, 100000),
+            "offline_time": _rng.randint(60, 480)
+            if anomaly_type == "offline_extended"
+            else _rng.randint(0, 30),
+            "disconnect_count": _rng.randint(5, 25)
+            if anomaly_type == "network_instability"
+            else _rng.randint(0, 5),
+            "wifi_signal_strength": _rng.randint(10, 40)
+            if anomaly_type == "network_instability"
+            else _rng.randint(50, 90),
             "connection_time": _rng.randint(30, 120),
             "feature_values_json": None,
             "created_at": timestamp.isoformat(),
@@ -172,12 +191,12 @@ _MOCK_ANOMALIES = _generate_mock_anomalies(100)
 # Public Mock Data Functions
 # ============================================================================
 
+
 def get_mock_dashboard_stats() -> dict[str, Any]:
     """Get mock dashboard KPI statistics."""
     today = datetime.now().date()
     today_anomalies = [
-        a for a in _MOCK_ANOMALIES
-        if datetime.fromisoformat(a["timestamp"]).date() == today
+        a for a in _MOCK_ANOMALIES if datetime.fromisoformat(a["timestamp"]).date() == today
     ]
 
     # Count open cases
@@ -193,9 +212,7 @@ def get_mock_dashboard_stats() -> dict[str, Any]:
 
 
 def get_mock_dashboard_trends(
-    days: int = 7,
-    start_date: datetime | None = None,
-    end_date: datetime | None = None
+    days: int = 7, start_date: datetime | None = None, end_date: datetime | None = None
 ) -> list[dict[str, Any]]:
     """Get mock anomaly trend data."""
     if end_date is None:
@@ -218,10 +235,12 @@ def get_mock_dashboard_trends(
         else:
             count = base_count + _rng.randint(-2, 3)
 
-        trends.append({
-            "date": current.isoformat(),
-            "anomaly_count": max(0, count),
-        })
+        trends.append(
+            {
+                "date": current.isoformat(),
+                "anomaly_count": max(0, count),
+            }
+        )
         current += timedelta(days=1)
 
     return trends
@@ -369,12 +388,14 @@ def get_mock_isolation_forest_stats(days: int = 30) -> dict[str, Any]:
             is_anomaly = True
             total_anomalies += count
 
-        bins.append({
-            "bin_start": round(bin_start, 1),
-            "bin_end": round(bin_end, 1),
-            "count": count,
-            "is_anomaly": is_anomaly,
-        })
+        bins.append(
+            {
+                "bin_start": round(bin_start, 1),
+                "bin_end": round(bin_end, 1),
+                "count": count,
+                "is_anomaly": is_anomaly,
+            }
+        )
 
     total = total_normal + total_anomalies
 
@@ -414,16 +435,18 @@ def get_mock_baseline_suggestions(source: str | None = None) -> list[dict[str, A
 
     suggestions = []
     for feature, level, group_key, baseline, observed, proposed in features:
-        suggestions.append({
-            "level": level,
-            "group_key": group_key,
-            "feature": feature,
-            "baseline_median": baseline,
-            "observed_median": observed,
-            "proposed_new_median": proposed,
-            "rationale": f"Observed {feature} has drifted from baseline. "
-                        f"Recommend adjusting threshold to reduce false positives.",
-        })
+        suggestions.append(
+            {
+                "level": level,
+                "group_key": group_key,
+                "feature": feature,
+                "baseline_median": baseline,
+                "observed_median": observed,
+                "proposed_new_median": proposed,
+                "rationale": f"Observed {feature} has drifted from baseline. "
+                f"Recommend adjusting threshold to reduce false positives.",
+            }
+        )
 
     return suggestions
 
@@ -438,16 +461,18 @@ def get_mock_location_heatmap(attribute_name: str | None = None) -> dict[str, An
         utilization = round(active_count / device_count * 100, 1)
         baseline = _rng.randint(70, 85)
 
-        locations.append({
-            "id": store["id"],
-            "name": store["name"],
-            "utilization": utilization,
-            "baseline": baseline,
-            "deviceCount": device_count,
-            "activeDeviceCount": active_count,
-            "region": store["region"],
-            "anomalyCount": _rng.randint(0, 5),
-        })
+        locations.append(
+            {
+                "id": store["id"],
+                "name": store["name"],
+                "utilization": utilization,
+                "baseline": baseline,
+                "deviceCount": device_count,
+                "activeDeviceCount": active_count,
+                "region": store["region"],
+                "anomalyCount": _rng.randint(0, 5),
+            }
+        )
 
     return {
         "locations": locations,

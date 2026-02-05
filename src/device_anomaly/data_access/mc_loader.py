@@ -15,6 +15,7 @@ Tables queried:
 - ZebraAndroidDevice: Zebra Android-specific features
 - LabelDevice/LabelType: Custom device labels
 """
+
 import logging
 from collections.abc import Iterable
 
@@ -465,8 +466,11 @@ def _normalize_mc_columns(df: pd.DataFrame) -> pd.DataFrame:
 
     # Security score (composite)
     security_cols = [
-        "HasPasscode", "IsEncrypted", "IsAndroidSafetynetAttestationPassed",
-        "FileVaultEnabled", "IsSystemIntegrityProtectionEnabled"
+        "HasPasscode",
+        "IsEncrypted",
+        "IsAndroidSafetynetAttestationPassed",
+        "FileVaultEnabled",
+        "IsSystemIntegrityProtectionEnabled",
     ]
     security_score = pd.Series(0.0, index=df.index)
     security_count = 0
@@ -479,17 +483,32 @@ def _normalize_mc_columns(df: pd.DataFrame) -> pd.DataFrame:
 
     # Compliance score
     if "ComplianceState" in df.columns:
-        df["IsCompliant"] = df["ComplianceState"].fillna("").str.lower().isin(
-            ["compliant", "true", "1", "yes"]
-        ).astype(int)
+        df["IsCompliant"] = (
+            df["ComplianceState"]
+            .fillna("")
+            .str.lower()
+            .isin(["compliant", "true", "1", "yes"])
+            .astype(int)
+        )
 
     # Convert boolean columns to int for ML
     bool_cols = [
-        "Online", "IsCharging", "HasPasscode", "IsEncrypted", "IsRooted",
-        "IsJailbroken", "IsDeveloperModeEnabled", "IsUSBDebuggingEnabled",
-        "IsSupervised", "IsLostModeEnabled", "IsActivationLockEnabled",
-        "FileVaultEnabled", "IsSystemIntegrityProtectionEnabled",
-        "InRoaming", "VPNConnected", "IsHotspotEnabled"
+        "Online",
+        "IsCharging",
+        "HasPasscode",
+        "IsEncrypted",
+        "IsRooted",
+        "IsJailbroken",
+        "IsDeveloperModeEnabled",
+        "IsUSBDebuggingEnabled",
+        "IsSupervised",
+        "IsLostModeEnabled",
+        "IsActivationLockEnabled",
+        "FileVaultEnabled",
+        "IsSystemIntegrityProtectionEnabled",
+        "InRoaming",
+        "VPNConnected",
+        "IsHotspotEnabled",
     ]
     for col in bool_cols:
         if col in df.columns:
@@ -689,7 +708,9 @@ ORDER BY d.DeviceId, ca.Name;
         return pd.DataFrame(columns=["DeviceId", "AttributeName", "AttributeValue"])
 
 
-def get_device_custom_attributes_dict(device_ids: Iterable[int] | None = None) -> dict[int, dict[str, str]]:
+def get_device_custom_attributes_dict(
+    device_ids: Iterable[int] | None = None,
+) -> dict[int, dict[str, str]]:
     """
     Get custom attributes as a dictionary for easy lookup.
 
@@ -875,7 +896,9 @@ ORDER BY ml.DeviceId, ml.DateTime;
         return df
     except Exception as e:
         logger.warning(f"Could not load reboot events: {e}")
-        return pd.DataFrame(columns=["DeviceId", "reboot_time", "EventClass", "reboot_reason", "Severity"])
+        return pd.DataFrame(
+            columns=["DeviceId", "reboot_time", "EventClass", "reboot_reason", "Severity"]
+        )
 
 
 def calculate_reboots_from_boot_time(
@@ -1013,10 +1036,16 @@ def aggregate_reboot_counts(
     reboots = load_all_reboot_events(start_dt, end_dt, device_ids)
 
     if reboots.empty:
-        return pd.DataFrame(columns=[
-            "DeviceId", "reboot_count", "first_reboot", "last_reboot",
-            "avg_hours_between_reboots", "consecutive_reboot_count"
-        ])
+        return pd.DataFrame(
+            columns=[
+                "DeviceId",
+                "reboot_count",
+                "first_reboot",
+                "last_reboot",
+                "avg_hours_between_reboots",
+                "consecutive_reboot_count",
+            ]
+        )
 
     # Calculate aggregates per device
     def compute_device_reboot_stats(group: pd.DataFrame) -> pd.Series:
@@ -1038,17 +1067,19 @@ def aggregate_reboot_counts(
         if count > 1:
             sorted_times = group["reboot_time"].sort_values().reset_index(drop=True)
             for i in range(1, len(sorted_times)):
-                diff_hours = (sorted_times[i] - sorted_times[i-1]).total_seconds() / 3600
+                diff_hours = (sorted_times[i] - sorted_times[i - 1]).total_seconds() / 3600
                 if diff_hours < 1:
                     consecutive += 1
 
-        return pd.Series({
-            "reboot_count": count,
-            "first_reboot": first,
-            "last_reboot": last,
-            "avg_hours_between_reboots": avg_hours,
-            "consecutive_reboot_count": consecutive,
-        })
+        return pd.Series(
+            {
+                "reboot_count": count,
+                "first_reboot": first,
+                "last_reboot": last,
+                "avg_hours_between_reboots": avg_hours,
+                "consecutive_reboot_count": consecutive,
+            }
+        )
 
     result = reboots.groupby("DeviceId").apply(compute_device_reboot_stats).reset_index()
     logger.info(f"Aggregated reboot counts for {len(result):,} devices")
@@ -1120,9 +1151,9 @@ ORDER BY ld.DeviceId, lt.Name;
         return df
     except Exception as e:
         logger.warning(f"Could not load user assignments from labels: {e}")
-        return pd.DataFrame(columns=[
-            "DeviceId", "user_id", "user_name", "assignment_type", "source_label_type"
-        ])
+        return pd.DataFrame(
+            columns=["DeviceId", "user_id", "user_name", "assignment_type", "source_label_type"]
+        )
 
 
 def load_device_user_assignments_from_devinfo(
@@ -1180,9 +1211,9 @@ FROM dbo.DevInfo d
         return df
     except Exception as e:
         logger.warning(f"Could not load user assignments from DevInfo: {e}")
-        return pd.DataFrame(columns=[
-            "DeviceId", "user_id", "user_name", "user_email", "assignment_type", "source"
-        ])
+        return pd.DataFrame(
+            columns=["DeviceId", "user_id", "user_name", "user_email", "assignment_type", "source"]
+        )
 
 
 def load_all_user_assignments(
@@ -1219,9 +1250,9 @@ def load_all_user_assignments(
 
     # Combine with DevInfo taking priority
     if label_df.empty and devinfo_df.empty:
-        return pd.DataFrame(columns=[
-            "DeviceId", "user_id", "user_name", "user_email", "assignment_type", "source"
-        ])
+        return pd.DataFrame(
+            columns=["DeviceId", "user_id", "user_name", "user_email", "assignment_type", "source"]
+        )
 
     # Get devices that have DevInfo assignments
     devinfo_devices = set(devinfo_df["DeviceId"].unique()) if not devinfo_df.empty else set()

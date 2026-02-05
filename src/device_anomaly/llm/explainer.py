@@ -8,6 +8,8 @@ import pandas as pd
 from sqlalchemy import text
 
 from device_anomaly.config.feature_config import FeatureConfig
+from device_anomaly.costs.calculator import CostCalculator
+from device_anomaly.costs.models import CostContext
 from device_anomaly.llm.client import BaseLLMClient, get_default_llm_client, strip_thinking_tags
 from device_anomaly.llm.prompt_utils import (
     NO_THINKING_INSTRUCTION,
@@ -15,8 +17,6 @@ from device_anomaly.llm.prompt_utils import (
     get_severity_word,
     get_z_score_description,
 )
-from device_anomaly.costs.calculator import CostCalculator
-from device_anomaly.costs.models import CostContext
 from device_anomaly.models.drift_monitor import load_stats
 
 
@@ -167,6 +167,7 @@ z-score interpretation:
 5. Don't be alarmist - some anomalies are benign (e.g., unusually busy day)
 </instructions>"""
     return prompt.strip()
+
 
 def explain_anomaly_row(row: pd.Series, ctx: ExplanationContext) -> dict[str, str]:
     """
@@ -327,7 +328,9 @@ def generate_and_save_row_explanation(engine, result_id: int) -> str:
             return row["Explanation"]
 
         source = str(row.get("Source") or "dw").lower()
-        stats_path = Path("artifacts/synthetic_stats.json" if source == "synthetic" else "artifacts/dw_stats.json")
+        stats_path = Path(
+            "artifacts/synthetic_stats.json" if source == "synthetic" else "artifacts/dw_stats.json"
+        )
         stats = load_stats(stats_path) or {}
 
         metrics = {}
@@ -368,6 +371,7 @@ def generate_and_save_row_explanation(engine, result_id: int) -> str:
 # =============================================================================
 # COST-AWARE EXPLANATION FUNCTIONS
 # =============================================================================
+
 
 def explain_anomaly_with_cost(
     metrics: dict,
@@ -493,7 +497,9 @@ def generate_cost_aware_explanation(
 
         # Load stats
         source = str(row.get("Source") or "dw").lower()
-        stats_path = Path("artifacts/synthetic_stats.json" if source == "synthetic" else "artifacts/dw_stats.json")
+        stats_path = Path(
+            "artifacts/synthetic_stats.json" if source == "synthetic" else "artifacts/dw_stats.json"
+        )
         stats = load_stats(stats_path) or {}
 
         # Parse metrics
@@ -507,7 +513,9 @@ def generate_cost_aware_explanation(
 
         # Build cost context
         config = get_cost_config()
-        device_value = Decimal(str(device_value_usd)) if device_value_usd else config.average_device_cost_usd
+        device_value = (
+            Decimal(str(device_value_usd)) if device_value_usd else config.average_device_cost_usd
+        )
 
         device_context = DeviceCostContext(
             device_id=int(row.get("DeviceId", -1)),

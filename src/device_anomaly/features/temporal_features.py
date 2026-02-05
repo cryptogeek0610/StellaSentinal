@@ -7,6 +7,7 @@ This module provides advanced time-series features including:
 - Seasonality pattern features
 - Residual-based anomaly signals
 """
+
 from __future__ import annotations
 
 import logging
@@ -130,7 +131,9 @@ class TemporalFeatureBuilder:
                 grp[f"{column}_residual_zscore"] = np.nan
                 return grp
 
-            series = series.interpolate(method="linear").fillna(method="bfill").fillna(method="ffill")
+            series = (
+                series.interpolate(method="linear").fillna(method="bfill").fillna(method="ffill")
+            )
 
             try:
                 # Perform STL decomposition

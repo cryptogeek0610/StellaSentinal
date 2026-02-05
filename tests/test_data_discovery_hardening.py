@@ -9,12 +9,9 @@ Tests:
 - Table allowlists
 - Weight-based parallelism throttling
 """
+
 import asyncio
-import hashlib
-import json
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List
-from unittest.mock import MagicMock, patch
+from datetime import UTC, datetime
 
 import pytest
 
@@ -43,18 +40,14 @@ class TestMonotonicWatermarks:
         )
 
         # Set initial watermark
-        t1 = datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc)
-        success, error = store.set_watermark(
-            "xsight", "cs_BatteryStat", t1
-        )
+        t1 = datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC)
+        success, error = store.set_watermark("xsight", "cs_BatteryStat", t1)
         assert success is True
         assert error is None
 
         # Try to set watermark backward - should be rejected
-        t2 = datetime(2024, 1, 14, 10, 0, 0, tzinfo=timezone.utc)  # 1 day earlier
-        success, error = store.set_watermark(
-            "xsight", "cs_BatteryStat", t2
-        )
+        t2 = datetime(2024, 1, 14, 10, 0, 0, tzinfo=UTC)  # 1 day earlier
+        success, error = store.set_watermark("xsight", "cs_BatteryStat", t2)
         assert success is False
         assert "Monotonic violation" in error
 
@@ -75,12 +68,12 @@ class TestMonotonicWatermarks:
         )
 
         # Set initial watermark
-        t1 = datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc)
+        t1 = datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC)
         success, _ = store.set_watermark("xsight", "cs_BatteryStat", t1)
         assert success is True
 
         # Set watermark forward - should succeed
-        t2 = datetime(2024, 1, 16, 10, 0, 0, tzinfo=timezone.utc)
+        t2 = datetime(2024, 1, 16, 10, 0, 0, tzinfo=UTC)
         success, error = store.set_watermark("xsight", "cs_BatteryStat", t2)
         assert success is True
         assert error is None
@@ -102,14 +95,12 @@ class TestMonotonicWatermarks:
         )
 
         # Set initial watermark far in the future
-        t1 = datetime(2024, 6, 1, 0, 0, 0, tzinfo=timezone.utc)
+        t1 = datetime(2024, 6, 1, 0, 0, 0, tzinfo=UTC)
         store.set_watermark("xsight", "cs_BatteryStat", t1)
 
         # Reset to explicit past time
-        t2 = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
-        new_wm, success = store.reset_watermark(
-            "xsight", "cs_BatteryStat", to_datetime=t2
-        )
+        t2 = datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC)
+        new_wm, success = store.reset_watermark("xsight", "cs_BatteryStat", to_datetime=t2)
 
         assert success is True
         assert new_wm == t2
@@ -130,7 +121,7 @@ class TestMonotonicWatermarks:
             enable_file_fallback=True,
         )
 
-        t1 = datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc)
+        t1 = datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC)
         store.set_watermark("xsight", "cs_BatteryStat", t1)
 
         # Set same watermark again
@@ -150,7 +141,7 @@ class TestStableEventId:
             source_db="xsight",
             source_table="cs_BatteryStat",
             device_id=123,
-            event_time=datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
+            event_time=datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
             metric_name="battery_level",
             metric_value=85,
             dimensions={"app": "test"},
@@ -160,7 +151,7 @@ class TestStableEventId:
             source_db="xsight",
             source_table="cs_BatteryStat",
             device_id=123,
-            event_time=datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
+            event_time=datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
             metric_name="battery_level",
             metric_value=85,
             dimensions={"app": "test"},
@@ -177,7 +168,7 @@ class TestStableEventId:
             "source_db": "xsight",
             "source_table": "cs_BatteryStat",
             "device_id": 123,
-            "event_time": datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
+            "event_time": datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
             "metric_name": "battery_level",
             "metric_value": 85,
             "dimensions": {},
@@ -186,20 +177,16 @@ class TestStableEventId:
         event_id_base = compute_stable_event_id(**base_params)
 
         # Different device_id
-        event_id_diff_device = compute_stable_event_id(
-            **{**base_params, "device_id": 456}
-        )
+        event_id_diff_device = compute_stable_event_id(**{**base_params, "device_id": 456})
         assert event_id_base != event_id_diff_device
 
         # Different metric_value
-        event_id_diff_value = compute_stable_event_id(
-            **{**base_params, "metric_value": 90}
-        )
+        event_id_diff_value = compute_stable_event_id(**{**base_params, "metric_value": 90})
         assert event_id_base != event_id_diff_value
 
         # Different event_time
         event_id_diff_time = compute_stable_event_id(
-            **{**base_params, "event_time": datetime(2024, 1, 15, 11, 0, 0, tzinfo=timezone.utc)}
+            **{**base_params, "event_time": datetime(2024, 1, 15, 11, 0, 0, tzinfo=UTC)}
         )
         assert event_id_base != event_id_diff_time
 
@@ -220,7 +207,7 @@ class TestStableEventId:
             source_db="xsight",
             source_table="cs_BatteryStat",
             device_id=123,
-            event_time=datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
+            event_time=datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
             metric_name="battery_level",
             metric_value=85,
             dimensions={"z": 3, "a": 1, "m": 2},
@@ -230,7 +217,7 @@ class TestStableEventId:
             source_db="xsight",
             source_table="cs_BatteryStat",
             device_id=123,
-            event_time=datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
+            event_time=datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
             metric_name="battery_level",
             metric_value=85,
             dimensions={"a": 1, "m": 2, "z": 3},
@@ -251,7 +238,7 @@ class TestEventDeduplication:
             dedupe_events,
         )
 
-        base_time = datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc)
+        base_time = datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC)
 
         events = [
             CanonicalEvent(
@@ -302,7 +289,7 @@ class TestEventDeduplication:
             dedupe_events,
         )
 
-        base_time = datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc)
+        base_time = datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC)
 
         event1 = CanonicalEvent(
             tenant_id="default",
@@ -374,9 +361,9 @@ class TestWeightBasedThrottling:
     def test_table_weight_assignment(self):
         """Test that tables are assigned correct weights."""
         from device_anomaly.services.ingestion_orchestrator import (
-            get_table_weight,
             TableCategory,
             get_table_category,
+            get_table_weight,
         )
 
         # XSight hourly huge tables - weight 5
@@ -567,8 +554,8 @@ class TestIngestionMetrics:
         """Test TableIngestionMetric computed properties."""
         from device_anomaly.services.ingestion_metrics import TableIngestionMetric
 
-        started = datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc)
-        completed = datetime(2024, 1, 15, 10, 0, 5, tzinfo=timezone.utc)
+        started = datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC)
+        completed = datetime(2024, 1, 15, 10, 0, 5, tzinfo=UTC)
 
         metric = TableIngestionMetric(
             source_db="xsight",
@@ -594,7 +581,7 @@ class TestIngestionMetrics:
         from device_anomaly.services.ingestion_metrics import DailyCoverageReport
 
         report = DailyCoverageReport(
-            report_date=datetime(2024, 1, 15, tzinfo=timezone.utc),
+            report_date=datetime(2024, 1, 15, tzinfo=UTC),
             xsight_tables_loaded=10,
             xsight_tables_failed=1,
             xsight_total_rows=100000,
@@ -618,6 +605,7 @@ class TestGracefulDegradation:
 
     def test_missing_table_returns_empty(self):
         """Test that missing tables return empty results gracefully."""
+
         # This would test the actual loader - for now test the pattern
         def load_table(table_name: str, tables_available: set) -> list:
             if table_name not in tables_available:
@@ -629,6 +617,7 @@ class TestGracefulDegradation:
 
     def test_missing_columns_handled(self):
         """Test that missing columns are handled gracefully."""
+
         def validate_columns(requested: list, available: set) -> list:
             return [c for c in requested if c in available]
 

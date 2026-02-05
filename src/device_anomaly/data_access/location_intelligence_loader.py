@@ -10,6 +10,7 @@ Data Sources:
 - cs_WifiHour (XSight_DW): WiFi connectivity by AP, ~755K rows
 - DeviceStatLocation (MobiControl): GPS with speed/heading, ~619K rows
 """
+
 from __future__ import annotations
 
 import logging
@@ -43,6 +44,7 @@ SIGNAL_THRESHOLDS = {
 @dataclass
 class HeatmapCell:
     """Single cell in a WiFi heatmap grid."""
+
     lat: float
     long: float
     signal_strength: float
@@ -54,6 +56,7 @@ class HeatmapCell:
 @dataclass
 class GeoBounds:
     """Geographic bounding box."""
+
     min_lat: float
     max_lat: float
     min_long: float
@@ -63,6 +66,7 @@ class GeoBounds:
 @dataclass
 class WiFiHeatmapData:
     """Complete WiFi heatmap data."""
+
     grid_cells: list[HeatmapCell] = field(default_factory=list)
     bounds: GeoBounds | None = None
     total_readings: int = 0
@@ -73,6 +77,7 @@ class WiFiHeatmapData:
 @dataclass
 class DeadZone:
     """Dead zone location data."""
+
     zone_id: str
     lat: float
     long: float
@@ -86,6 +91,7 @@ class DeadZone:
 @dataclass
 class MovementPoint:
     """Single point in device movement history."""
+
     timestamp: datetime
     lat: float
     long: float
@@ -96,6 +102,7 @@ class MovementPoint:
 @dataclass
 class DeviceMovementData:
     """Device movement summary."""
+
     device_id: int
     movements: list[MovementPoint] = field(default_factory=list)
     total_distance_km: float = 0.0
@@ -107,6 +114,7 @@ class DeviceMovementData:
 @dataclass
 class DwellZone:
     """Location where devices spend significant time."""
+
     zone_id: str
     lat: float
     long: float
@@ -162,10 +170,14 @@ def load_wifi_heatmap(
 
     try:
         with engine.connect() as conn:
-            df = pd.read_sql(query, conn, params={
-                "start_time": start_time,
-                "min_signal": min_signal,
-            })
+            df = pd.read_sql(
+                query,
+                conn,
+                params={
+                    "start_time": start_time,
+                    "min_signal": min_signal,
+                },
+            )
     except Exception as e:
         logger.error(f"Failed to load WiFi location data: {e}")
         return WiFiHeatmapData()
@@ -178,10 +190,16 @@ def load_wifi_heatmap(
     df["grid_long"] = (df["Longitude"] / grid_size).round() * grid_size
 
     # Aggregate by grid cell
-    grid_agg = df.groupby(["grid_lat", "grid_long"]).agg({
-        "WiFiSignalStrength": ["mean", "count"],
-        "AccessPointId": lambda x: x.mode().iloc[0] if len(x.mode()) > 0 else None,
-    }).reset_index()
+    grid_agg = (
+        df.groupby(["grid_lat", "grid_long"])
+        .agg(
+            {
+                "WiFiSignalStrength": ["mean", "count"],
+                "AccessPointId": lambda x: x.mode().iloc[0] if len(x.mode()) > 0 else None,
+            }
+        )
+        .reset_index()
+    )
 
     grid_agg.columns = ["lat", "long", "avg_signal", "reading_count", "access_point"]
 
@@ -194,14 +212,16 @@ def load_wifi_heatmap(
         if is_dead:
             dead_zone_count += 1
 
-        cells.append(HeatmapCell(
-            lat=float(row["lat"]),
-            long=float(row["long"]),
-            signal_strength=float(row["avg_signal"]),
-            reading_count=int(row["reading_count"]),
-            is_dead_zone=is_dead,
-            access_point_id=str(row["access_point"]) if row["access_point"] else None,
-        ))
+        cells.append(
+            HeatmapCell(
+                lat=float(row["lat"]),
+                long=float(row["long"]),
+                signal_strength=float(row["avg_signal"]),
+                reading_count=int(row["reading_count"]),
+                is_dead_zone=is_dead,
+                access_point_id=str(row["access_point"]) if row["access_point"] else None,
+            )
+        )
 
     # Calculate bounds
     bounds = GeoBounds(
@@ -270,12 +290,16 @@ def detect_dead_zones(
 
     try:
         with engine.connect() as conn:
-            df = pd.read_sql(query, conn, params={
-                "start_time": start_time,
-                "grid_size": grid_size,
-                "threshold": signal_threshold,
-                "min_readings": min_readings,
-            })
+            df = pd.read_sql(
+                query,
+                conn,
+                params={
+                    "start_time": start_time,
+                    "grid_size": grid_size,
+                    "threshold": signal_threshold,
+                    "min_readings": min_readings,
+                },
+            )
     except Exception as e:
         logger.error(f"Failed to detect dead zones: {e}")
         return []
@@ -291,16 +315,18 @@ def detect_dead_zones(
         if isinstance(last_dt, str):
             last_dt = datetime.fromisoformat(last_dt)
 
-        dead_zones.append(DeadZone(
-            zone_id=f"dz_{idx}",
-            lat=float(row["grid_lat"]),
-            long=float(row["grid_long"]),
-            avg_signal=float(row["avg_signal"]),
-            affected_devices=int(row["device_count"]),
-            total_readings=int(row["reading_count"]),
-            first_detected=first_dt,
-            last_detected=last_dt,
-        ))
+        dead_zones.append(
+            DeadZone(
+                zone_id=f"dz_{idx}",
+                lat=float(row["grid_lat"]),
+                long=float(row["grid_long"]),
+                avg_signal=float(row["avg_signal"]),
+                affected_devices=int(row["device_count"]),
+                total_readings=int(row["reading_count"]),
+                first_detected=first_dt,
+                last_detected=last_dt,
+            )
+        )
 
     return dead_zones
 
@@ -346,10 +372,14 @@ def load_device_movements(
 
     try:
         with engine.connect() as conn:
-            df = pd.read_sql(query, conn, params={
-                "device_id": device_id,
-                "start_time": start_time,
-            })
+            df = pd.read_sql(
+                query,
+                conn,
+                params={
+                    "device_id": device_id,
+                    "start_time": start_time,
+                },
+            )
     except Exception as e:
         logger.error(f"Failed to load device movements: {e}")
         return DeviceMovementData(device_id=device_id)
@@ -363,30 +393,35 @@ def load_device_movements(
         ts = row["ServerDateTime"]
         if isinstance(ts, str):
             ts = datetime.fromisoformat(ts)
-        elif hasattr(ts, 'to_pydatetime'):
+        elif hasattr(ts, "to_pydatetime"):
             ts = ts.to_pydatetime()
 
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=UTC)
 
-        movements.append(MovementPoint(
-            timestamp=ts,
-            lat=float(row["Latitude"]),
-            long=float(row["Longitude"]),
-            speed=float(row["Speed"]) if pd.notna(row["Speed"]) else 0.0,
-            heading=float(row["Heading"]) if pd.notna(row["Heading"]) else 0.0,
-        ))
+        movements.append(
+            MovementPoint(
+                timestamp=ts,
+                lat=float(row["Latitude"]),
+                long=float(row["Longitude"]),
+                speed=float(row["Speed"]) if pd.notna(row["Speed"]) else 0.0,
+                heading=float(row["Heading"]) if pd.notna(row["Heading"]) else 0.0,
+            )
+        )
 
     # Calculate statistics
     total_distance = 0.0
     if len(movements) > 1:
         for i in range(1, len(movements)):
             # Haversine distance approximation
-            lat1, lon1 = movements[i-1].lat, movements[i-1].long
+            lat1, lon1 = movements[i - 1].lat, movements[i - 1].long
             lat2, lon2 = movements[i].lat, movements[i].long
             dlat = np.radians(lat2 - lat1)
             dlon = np.radians(lon2 - lon1)
-            a = np.sin(dlat/2)**2 + np.cos(np.radians(lat1)) * np.cos(np.radians(lat2)) * np.sin(dlon/2)**2
+            a = (
+                np.sin(dlat / 2) ** 2
+                + np.cos(np.radians(lat1)) * np.cos(np.radians(lat2)) * np.sin(dlon / 2) ** 2
+            )
             c = 2 * np.arcsin(np.sqrt(a))
             total_distance += 6371 * c  # Earth radius in km
 
@@ -464,11 +499,15 @@ def load_dwell_time_analysis(
 
     try:
         with engine.connect() as conn:
-            df = pd.read_sql(query, conn, params={
-                "start_time": start_time,
-                "grid_size": grid_size,
-                "min_readings": 10,  # Minimum readings to be considered a dwell zone
-            })
+            df = pd.read_sql(
+                query,
+                conn,
+                params={
+                    "start_time": start_time,
+                    "grid_size": grid_size,
+                    "min_readings": 10,  # Minimum readings to be considered a dwell zone
+                },
+            )
     except Exception as e:
         logger.error(f"Failed to load dwell time data: {e}")
         return []
@@ -480,15 +519,17 @@ def load_dwell_time_analysis(
         avg_dwell = (row["visit_count"] / row["device_count"]) * 5  # Assume 5 min between readings
 
         if avg_dwell >= min_dwell_minutes:
-            zones.append(DwellZone(
-                zone_id=f"dwell_{idx}",
-                lat=float(row["grid_lat"]),
-                long=float(row["grid_long"]),
-                avg_dwell_minutes=avg_dwell,
-                device_count=int(row["device_count"]),
-                visit_count=int(row["visit_count"]),
-                peak_hours=[9, 10, 11, 14, 15, 16],  # Business hours as default
-            ))
+            zones.append(
+                DwellZone(
+                    zone_id=f"dwell_{idx}",
+                    lat=float(row["grid_lat"]),
+                    long=float(row["grid_long"]),
+                    avg_dwell_minutes=avg_dwell,
+                    device_count=int(row["device_count"]),
+                    visit_count=int(row["visit_count"]),
+                    peak_hours=[9, 10, 11, 14, 15, 16],  # Business hours as default
+                )
+            )
 
     return zones
 
@@ -534,7 +575,12 @@ def get_coverage_summary(
             result = conn.execute(query, {"start_time": start_time}).fetchone()
     except Exception as e:
         logger.error(f"Failed to get coverage summary: {e}")
-        return {"total_readings": 0, "unique_locations": 0, "avg_signal": 0, "coverage_distribution": {}}
+        return {
+            "total_readings": 0,
+            "unique_locations": 0,
+            "avg_signal": 0,
+            "coverage_distribution": {},
+        }
 
     if result:
         total = result[0] or 0
@@ -550,4 +596,9 @@ def get_coverage_summary(
             },
         }
 
-    return {"total_readings": 0, "unique_locations": 0, "avg_signal": 0, "coverage_distribution": {}}
+    return {
+        "total_readings": 0,
+        "unique_locations": 0,
+        "avg_signal": 0,
+        "coverage_distribution": {},
+    }

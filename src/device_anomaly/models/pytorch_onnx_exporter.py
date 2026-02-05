@@ -7,6 +7,7 @@ to ONNX format for optimized inference. It includes:
 - Metadata embedding
 - Optional quantization
 """
+
 from __future__ import annotations
 
 import logging
@@ -19,6 +20,7 @@ import numpy as np
 try:
     import torch
     import torch.nn as nn
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -28,6 +30,7 @@ except ImportError:
 try:
     import onnx
     import onnxruntime as ort
+
     ONNX_AVAILABLE = True
 except ImportError:
     ONNX_AVAILABLE = False
@@ -52,6 +55,7 @@ class PyTorchONNXExportConfig:
         validation_tolerance: Maximum allowed difference
         validate_reconstruction: For VAE, validate reconstruction output
     """
+
     opset_version: int = 15
     do_constant_folding: bool = True
     export_params: bool = True
@@ -280,9 +284,7 @@ class PyTorchONNXExporter:
         device = next(pytorch_model.parameters()).device
 
         # Create test input
-        test_input = np.random.randn(
-            self.config.validation_samples, input_dim
-        ).astype(np.float32)
+        test_input = np.random.randn(self.config.validation_samples, input_dim).astype(np.float32)
 
         # PyTorch inference
         with torch.no_grad():
@@ -293,30 +295,26 @@ class PyTorchONNXExporter:
             pt_output = pt_output.cpu().numpy()
 
         # ONNX inference
-        session = ort.InferenceSession(
-            str(onnx_path),
-            providers=["CPUExecutionProvider"]
-        )
+        session = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
         onnx_output = session.run([output_name], {"input": test_input})[0]
 
         # Compare
         max_diff = np.max(np.abs(pt_output - onnx_output))
         mean_diff = np.mean(np.abs(pt_output - onnx_output))
-        match_rate = np.mean(
-            np.abs(pt_output - onnx_output) < self.config.validation_tolerance
-        )
+        match_rate = np.mean(np.abs(pt_output - onnx_output) < self.config.validation_tolerance)
 
         if match_rate < 0.99:
             logger.warning(
                 "ONNX validation: only %.2f%% values match within tolerance. "
                 "max_diff=%.6f, mean_diff=%.6f",
-                match_rate * 100, max_diff, mean_diff
+                match_rate * 100,
+                max_diff,
+                mean_diff,
             )
             return False
 
         logger.info(
-            "ONNX validation passed: %.2f%% match, max_diff=%.6f",
-            match_rate * 100, max_diff
+            "ONNX validation passed: %.2f%% match, max_diff=%.6f", match_rate * 100, max_diff
         )
         return True
 
@@ -340,9 +338,7 @@ class PyTorchONNXExporter:
         device = next(pytorch_model.parameters()).device
 
         # Create test input
-        test_input = np.random.randn(
-            self.config.validation_samples, input_dim
-        ).astype(np.float32)
+        test_input = np.random.randn(self.config.validation_samples, input_dim).astype(np.float32)
 
         # PyTorch inference
         with torch.no_grad():
@@ -351,29 +347,25 @@ class PyTorchONNXExporter:
             pt_recon = pt_recon.cpu().numpy()
 
         # ONNX inference
-        session = ort.InferenceSession(
-            str(onnx_path),
-            providers=["CPUExecutionProvider"]
-        )
+        session = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
         onnx_recon = session.run(["reconstruction"], {"input": test_input})[0]
 
         # Compare reconstructions
         max_diff = np.max(np.abs(pt_recon - onnx_recon))
         mean_diff = np.mean(np.abs(pt_recon - onnx_recon))
-        match_rate = np.mean(
-            np.abs(pt_recon - onnx_recon) < self.config.validation_tolerance
-        )
+        match_rate = np.mean(np.abs(pt_recon - onnx_recon) < self.config.validation_tolerance)
 
         if match_rate < 0.99:
             logger.warning(
                 "VAE ONNX validation: %.2f%% match. max_diff=%.6f, mean_diff=%.6f",
-                match_rate * 100, max_diff, mean_diff
+                match_rate * 100,
+                max_diff,
+                mean_diff,
             )
             return False
 
         logger.info(
-            "VAE ONNX validation passed: %.2f%% match, max_diff=%.6f",
-            match_rate * 100, max_diff
+            "VAE ONNX validation passed: %.2f%% match, max_diff=%.6f", match_rate * 100, max_diff
         )
         return True
 
@@ -439,9 +431,7 @@ class PyTorchONNXExporter:
             info["outputs"].append(output_info)
 
         # Get metadata
-        info["metadata"] = {
-            meta.key: meta.value for meta in model.metadata_props
-        }
+        info["metadata"] = {meta.key: meta.value for meta in model.metadata_props}
 
         return info
 

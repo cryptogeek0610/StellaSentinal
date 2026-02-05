@@ -1,6 +1,7 @@
 """
 Battery forecast and NFF (No Fault Found) summary endpoints.
 """
+
 from __future__ import annotations
 
 import json
@@ -62,15 +63,23 @@ def get_battery_forecast(
     if all_device_ids:
         # Get latest feature record for each device
         subq = (
-            results_db.query(DeviceFeature.device_id, func.max(DeviceFeature.computed_at).label("latest"))
-            .filter(DeviceFeature.tenant_id == tenant_id, DeviceFeature.device_id.in_(all_device_ids))
+            results_db.query(
+                DeviceFeature.device_id, func.max(DeviceFeature.computed_at).label("latest")
+            )
+            .filter(
+                DeviceFeature.tenant_id == tenant_id, DeviceFeature.device_id.in_(all_device_ids)
+            )
             .group_by(DeviceFeature.device_id)
             .subquery()
         )
 
         latest_features = (
             results_db.query(DeviceFeature)
-            .join(subq, (DeviceFeature.device_id == subq.c.device_id) & (DeviceFeature.computed_at == subq.c.latest))
+            .join(
+                subq,
+                (DeviceFeature.device_id == subq.c.device_id)
+                & (DeviceFeature.computed_at == subq.c.latest),
+            )
             .filter(DeviceFeature.tenant_id == tenant_id)
             .all()
         )
@@ -81,7 +90,11 @@ def get_battery_forecast(
                     features = json.loads(feature.feature_values_json)
                     # Look for BatteryHealth in the feature data
                     health = features.get("BatteryHealth") or features.get("battery_health")
-                    if health is not None and isinstance(health, (int, float)) and 0 <= health <= 100:
+                    if (
+                        health is not None
+                        and isinstance(health, (int, float))
+                        and 0 <= health <= 100
+                    ):
                         battery_health_by_device[feature.device_id] = float(health)
                         devices_with_health += 1
                 except (json.JSONDecodeError, TypeError):
@@ -118,7 +131,12 @@ def get_battery_forecast(
                 if cost_entry.replacement_cost
                 else cents_to_dollars(cost_entry.purchase_cost)
             )
-            lifespan = cost_entry.battery_lifespan_months or cost_entry.warranty_months or cost_entry.depreciation_months or 24
+            lifespan = (
+                cost_entry.battery_lifespan_months
+                or cost_entry.warranty_months
+                or cost_entry.depreciation_months
+                or 24
+            )
             battery_cost = cost_entry.battery_replacement_cost
             if battery_cost:
                 battery_replacement_cost = cents_to_dollars(battery_cost)
@@ -130,7 +148,11 @@ def get_battery_forecast(
             battery_replacement_cost = Decimal("40.00")
 
         # Check if we have real battery health data for this model
-        health_values = [battery_health_by_device.get(d) for d in dev_ids if battery_health_by_device.get(d) is not None]
+        health_values = [
+            battery_health_by_device.get(d)
+            for d in dev_ids
+            if battery_health_by_device.get(d) is not None
+        ]
 
         if health_values:
             # Use real battery health data

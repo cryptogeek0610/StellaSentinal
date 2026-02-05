@@ -8,6 +8,7 @@ DL models. It handles:
 - Outlier clipping
 - Data type conversion for PyTorch
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -32,15 +33,23 @@ class DLPreprocessorConfig:
         prefer_cohort_features: Prefer *_cohort_z features if available
         max_features: Maximum number of features to keep (None for no limit)
     """
+
     normalize_method: str = "standard"
     handle_missing: str = "impute_median"
     clip_outliers: bool = True
     outlier_std: float = 5.0
     min_variance: float = 1e-6
-    exclude_patterns: list[str] = field(default_factory=lambda: [
-        "DeviceId", "ModelId", "ManufacturerId", "OsVersionId",
-        "is_injected_anomaly", "anomaly_score", "anomaly_label",
-    ])
+    exclude_patterns: list[str] = field(
+        default_factory=lambda: [
+            "DeviceId",
+            "ModelId",
+            "ManufacturerId",
+            "OsVersionId",
+            "is_injected_anomaly",
+            "anomaly_score",
+            "anomaly_label",
+        ]
+    )
     prefer_cohort_features: bool = True
     max_features: int | None = None
 
@@ -96,16 +105,10 @@ class DLFeaturePreprocessor:
         import pandas.api.types as ptypes
 
         # Get all numeric columns
-        numeric_cols = [
-            c for c in df.columns
-            if ptypes.is_numeric_dtype(df[c])
-        ]
+        numeric_cols = [c for c in df.columns if ptypes.is_numeric_dtype(df[c])]
 
         # Exclude specified patterns
-        candidates = [
-            c for c in numeric_cols
-            if c not in self.config.exclude_patterns
-        ]
+        candidates = [c for c in numeric_cols if c not in self.config.exclude_patterns]
 
         # Prefer cohort-normalized features if configured
         if self.config.prefer_cohort_features:
@@ -294,9 +297,9 @@ class DLFeaturePreprocessor:
             }
 
             if self._scaler is not None:
-                if hasattr(self._scaler, 'mean_'):
+                if hasattr(self._scaler, "mean_"):
                     feature_stats["scaler_mean"] = float(self._scaler.mean_[i])
-                if hasattr(self._scaler, 'scale_'):
+                if hasattr(self._scaler, "scale_"):
                     feature_stats["scaler_scale"] = float(self._scaler.scale_[i])
 
             if self._clip_bounds and col in self._clip_bounds:
@@ -318,7 +321,9 @@ class DLFeaturePreprocessor:
         state = {
             "config": self.config,
             "feature_cols": self._feature_cols,
-            "impute_values": self._impute_values.to_dict() if self._impute_values is not None else None,
+            "impute_values": self._impute_values.to_dict()
+            if self._impute_values is not None
+            else None,
             "scaler": self._scaler,
             "clip_bounds": self._clip_bounds,
             "is_fitted": self._is_fitted,
@@ -359,7 +364,7 @@ def create_dl_preprocessor(
     normalize_method: str = "standard",
     clip_outliers: bool = True,
     prefer_cohort_features: bool = True,
-    **kwargs
+    **kwargs,
 ) -> DLFeaturePreprocessor:
     """Create a DL preprocessor with common configuration.
 
@@ -376,6 +381,6 @@ def create_dl_preprocessor(
         normalize_method=normalize_method,
         clip_outliers=clip_outliers,
         prefer_cohort_features=prefer_cohort_features,
-        **kwargs
+        **kwargs,
     )
     return DLFeaturePreprocessor(config)

@@ -7,6 +7,7 @@ This module provides REST endpoints for:
 - Monitoring real-time status
 - Managing alerts and notifications
 """
+
 from __future__ import annotations
 
 import json
@@ -27,8 +28,10 @@ router = APIRouter(prefix="/automation", tags=["Automation"])
 # PYDANTIC MODELS
 # =============================================================================
 
+
 class ScheduleInterval(StrEnum):
     """Supported scheduling intervals."""
+
     HOURLY = "hourly"
     EVERY_6_HOURS = "every_6_hours"
     EVERY_12_HOURS = "every_12_hours"
@@ -39,6 +42,7 @@ class ScheduleInterval(StrEnum):
 
 class SchedulerConfigResponse(BaseModel):
     """Scheduler configuration response."""
+
     # Training settings
     training_enabled: bool = True
     training_interval: ScheduleInterval = ScheduleInterval.DAILY
@@ -66,11 +70,17 @@ class SchedulerConfigResponse(BaseModel):
     insights_enabled: bool = True
     daily_digest_hour: int = Field(5, ge=0, le=23, description="Hour for daily digest (0-23)")
     shift_readiness_enabled: bool = True
-    shift_readiness_lead_minutes: int = Field(60, ge=15, le=180, description="Minutes before shift to generate readiness report")
+    shift_readiness_lead_minutes: int = Field(
+        60, ge=15, le=180, description="Minutes before shift to generate readiness report"
+    )
     shift_schedules: list[str] = Field(default_factory=lambda: ["morning", "afternoon", "day"])
     location_baseline_enabled: bool = True
-    location_baseline_day_of_week: int = Field(0, ge=0, le=6, description="Day of week for baseline computation (0=Mon)")
-    location_baseline_hour: int = Field(3, ge=0, le=23, description="Hour for baseline computation (0-23)")
+    location_baseline_day_of_week: int = Field(
+        0, ge=0, le=6, description="Day of week for baseline computation (0=Mon)"
+    )
+    location_baseline_hour: int = Field(
+        3, ge=0, le=23, description="Hour for baseline computation (0-23)"
+    )
 
     # Timestamps
     last_training_time: str | None = None
@@ -83,6 +93,7 @@ class SchedulerConfigResponse(BaseModel):
 
 class SchedulerConfigUpdate(BaseModel):
     """Scheduler configuration update request."""
+
     training_enabled: bool | None = None
     training_interval: ScheduleInterval | None = None
     training_hour: int | None = Field(None, ge=0, le=23)
@@ -111,6 +122,7 @@ class SchedulerConfigUpdate(BaseModel):
 
 class SchedulerStatusResponse(BaseModel):
     """Scheduler status response."""
+
     is_running: bool = False
     training_status: str = "idle"
     scoring_status: str = "idle"
@@ -130,6 +142,7 @@ class SchedulerStatusResponse(BaseModel):
 
 class AlertResponse(BaseModel):
     """Alert notification."""
+
     id: str
     timestamp: str
     message: str
@@ -138,17 +151,25 @@ class AlertResponse(BaseModel):
 
 class ManualJobRequest(BaseModel):
     """Request to trigger a manual job."""
-    job_type: str = Field(..., description="Job type: 'training', 'scoring', 'daily_digest', 'shift_readiness', 'location_baseline', or 'device_metadata_sync'")
+
+    job_type: str = Field(
+        ...,
+        description="Job type: 'training', 'scoring', 'daily_digest', 'shift_readiness', 'location_baseline', or 'device_metadata_sync'",
+    )
     # Training-specific
     start_date: str | None = None
     end_date: str | None = None
     validation_days: int | None = 7
     # Shift readiness-specific
-    shift_name: str | None = Field(None, description="Shift name for shift_readiness job: 'morning', 'afternoon', 'night', or 'day'")
+    shift_name: str | None = Field(
+        None,
+        description="Shift name for shift_readiness job: 'morning', 'afternoon', 'night', or 'day'",
+    )
 
 
 class ManualJobResponse(BaseModel):
     """Response from manual job trigger."""
+
     success: bool
     job_id: str | None = None
     message: str
@@ -156,6 +177,7 @@ class ManualJobResponse(BaseModel):
 
 class ScoreRequest(BaseModel):
     """Request to score specific devices."""
+
     device_ids: list[int] | None = None
     start_date: str
     end_date: str
@@ -163,6 +185,7 @@ class ScoreRequest(BaseModel):
 
 class ScoreResponse(BaseModel):
     """Scoring response."""
+
     success: bool
     total_scored: int = 0
     anomalies_detected: int = 0
@@ -172,6 +195,7 @@ class ScoreResponse(BaseModel):
 
 class JobHistoryEntry(BaseModel):
     """Job history entry for automation history."""
+
     type: str
     timestamp: str
     triggered_by: str = "schedule"
@@ -184,15 +208,19 @@ class JobHistoryEntry(BaseModel):
 # HELPER FUNCTIONS
 # =============================================================================
 
+
 def generate_alert_id(timestamp: str, message: str) -> str:
     """Generate a stable, unique alert ID based on timestamp and message content."""
     import hashlib
+
     content = f"{timestamp}:{message}"
     return f"alert_{hashlib.sha256(content.encode()).hexdigest()[:12]}"
+
 
 def get_redis_client() -> redis.Redis:
     """Get Redis client."""
     import os
+
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     return redis.from_url(redis_url, decode_responses=True)
 
@@ -252,7 +280,11 @@ def get_scheduler_status() -> dict[str, Any]:
                     # Type validation for critical fields
                     if key == "is_running" and not isinstance(value, bool):
                         value = bool(value)
-                    elif key in ("total_anomalies_detected", "total_insights_generated", "uptime_seconds"):
+                    elif key in (
+                        "total_anomalies_detected",
+                        "total_insights_generated",
+                        "uptime_seconds",
+                    ):
                         value = int(value) if value is not None else 0
                     elif key == "false_positive_rate":
                         value = float(value) if value is not None else 0.0
@@ -271,6 +303,7 @@ def get_scheduler_status() -> dict[str, Any]:
 # =============================================================================
 # API ENDPOINTS
 # =============================================================================
+
 
 @router.get("/config", response_model=SchedulerConfigResponse)
 async def get_config():
@@ -370,6 +403,7 @@ async def trigger_manual_job(request: ManualJobRequest):
 
             # Use historical end date if configured, otherwise use today
             import os
+
             historical_date_str = os.getenv("HISTORICAL_DATA_END_DATE")
             if historical_date_str:
                 try:
@@ -404,13 +438,18 @@ async def trigger_manual_job(request: ManualJobRequest):
             client.rpush("ml:training:queue", json.dumps(job_data))
 
             # Update status to show pending job
-            client.set("ml:training:status", json.dumps({
-                "run_id": job_id,
-                "status": "pending",
-                "progress": 0,
-                "message": "Job queued, waiting for worker...",
-                "submitted_at": submitted_at,
-            }))
+            client.set(
+                "ml:training:status",
+                json.dumps(
+                    {
+                        "run_id": job_id,
+                        "status": "pending",
+                        "progress": 0,
+                        "message": "Job queued, waiting for worker...",
+                        "submitted_at": submitted_at,
+                    }
+                ),
+            )
 
             return ManualJobResponse(
                 success=True,
@@ -558,16 +597,16 @@ async def score_data(request: ScoreRequest):
         anomaly_rate = anomaly_count / total_count if total_count > 0 else 0
 
         # Prepare results (top anomalies)
-        top_anomalies = scored_df[scored_df["anomaly_label"] == -1].nsmallest(
-            10, "anomaly_score"
-        )
+        top_anomalies = scored_df[scored_df["anomaly_label"] == -1].nsmallest(10, "anomaly_score")
         results = []
         for _, row in top_anomalies.iterrows():
-            results.append({
-                "device_id": int(row.get("DeviceId", 0)),
-                "timestamp": str(row.get("Timestamp", "")),
-                "anomaly_score": float(row.get("anomaly_score", 0)),
-            })
+            results.append(
+                {
+                    "device_id": int(row.get("DeviceId", 0)),
+                    "timestamp": str(row.get("Timestamp", "")),
+                    "anomaly_score": float(row.get("anomaly_score", 0)),
+                }
+            )
 
         return ScoreResponse(
             success=True,
@@ -586,6 +625,7 @@ async def score_data(request: ScoreRequest):
 
 class DeviceMetadataSyncResponse(BaseModel):
     """Response from device metadata sync."""
+
     success: bool
     synced_count: int = 0
     duration_seconds: float = 0.0
@@ -657,8 +697,7 @@ async def get_alerts(
             # Generate stable ID based on content if not present
             if "id" not in alert:
                 alert["id"] = generate_alert_id(
-                    alert.get("timestamp", ""),
-                    alert.get("message", "")
+                    alert.get("timestamp", ""), alert.get("message", "")
                 )
             if acknowledged is None or alert.get("acknowledged", False) == acknowledged:
                 alerts.append(AlertResponse(**alert))
@@ -687,10 +726,7 @@ async def acknowledge_alert(alert_id: str):
             # Get stored ID or generate stable ID
             stored_id = alert.get("id")
             if not stored_id:
-                stored_id = generate_alert_id(
-                    alert.get("timestamp", ""),
-                    alert.get("message", "")
-                )
+                stored_id = generate_alert_id(alert.get("timestamp", ""), alert.get("message", ""))
 
             if stored_id == alert_id:
                 alert["acknowledged"] = True
@@ -743,11 +779,11 @@ async def get_job_history(
 
                 # Determine timestamp - try multiple fields
                 timestamp = (
-                    item.get("timestamp") or
-                    item.get("completed_at") or
-                    item.get("started_at") or
-                    item.get("submitted_at") or
-                    datetime.utcnow().isoformat()
+                    item.get("timestamp")
+                    or item.get("completed_at")
+                    or item.get("started_at")
+                    or item.get("submitted_at")
+                    or datetime.utcnow().isoformat()
                 )
 
                 # Determine success status
@@ -785,9 +821,9 @@ async def get_job_history(
             try:
                 item = json.loads(data)
                 timestamp = (
-                    item.get("timestamp") or
-                    item.get("completed_at") or
-                    datetime.utcnow().isoformat()
+                    item.get("timestamp")
+                    or item.get("completed_at")
+                    or datetime.utcnow().isoformat()
                 )
 
                 entry = JobHistoryEntry(
@@ -915,13 +951,17 @@ async def get_diagnostics():
             elif training_interval == "every_6_hours":
                 hour = (now.hour // 6 + 1) * 6
                 if hour >= 24:
-                    next_time = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+                    next_time = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(
+                        days=1
+                    )
                 else:
                     next_time = now.replace(hour=hour, minute=0, second=0, microsecond=0)
             elif training_interval == "every_12_hours":
                 hour = (now.hour // 12 + 1) * 12
                 if hour >= 24:
-                    next_time = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+                    next_time = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(
+                        days=1
+                    )
                 else:
                     next_time = now.replace(hour=hour, minute=0, second=0, microsecond=0)
             elif training_interval == "daily":
@@ -949,7 +989,10 @@ async def get_diagnostics():
     # Format time until next training (handle NaN/Inf)
     if time_until_next_training_seconds is not None:
         import math
-        if math.isnan(time_until_next_training_seconds) or math.isinf(time_until_next_training_seconds):
+
+        if math.isnan(time_until_next_training_seconds) or math.isinf(
+            time_until_next_training_seconds
+        ):
             time_until_next_training_seconds = None
             time_until_human = "N/A"
         else:
@@ -962,7 +1005,6 @@ async def get_diagnostics():
     return {
         "timestamp": now.isoformat(),
         "redis_connected": redis_connected,
-
         # Scheduler status
         "scheduler": {
             "is_running": status.get("is_running", False),
@@ -973,7 +1015,6 @@ async def get_diagnostics():
             "last_training_result": status.get("last_training_result"),
             "errors": status.get("errors", [])[-5:],  # Last 5 errors
         },
-
         # Config
         "config": {
             "training_enabled": training_enabled,
@@ -985,22 +1026,18 @@ async def get_diagnostics():
             "last_training_time": config.get("last_training_time"),
             "last_scoring_time": config.get("last_scoring_time"),
         },
-
         # Calculated values
         "next_scheduled_training": next_scheduled_training,
         "time_until_next_training_seconds": time_until_next_training_seconds,
         "time_until_next_training_human": time_until_human,
-
         # Queue status
         "queues": {
             "training_queue_length": training_queue_length,
             "scoring_queue_length": scoring_queue_length,
             "insights_queue_length": insights_queue_length,
         },
-
         # ML Worker
         "ml_worker_status": ml_worker_status,
-
         # Debugging hints
         "debug_hints": _get_debug_hints(status, config, training_queue_length),
     }
@@ -1029,7 +1066,9 @@ def _get_debug_hints(status: dict, config: dict, training_queue_length: int) -> 
     hints = []
 
     if not status.get("is_running"):
-        hints.append("CRITICAL: Scheduler is not running. Check if scheduler container is up: docker compose ps scheduler")
+        hints.append(
+            "CRITICAL: Scheduler is not running. Check if scheduler container is up: docker compose ps scheduler"
+        )
 
     if not config.get("training_enabled", True):
         hints.append("Training is DISABLED in config. Enable it via API or UI.")
@@ -1038,12 +1077,15 @@ def _get_debug_hints(status: dict, config: dict, training_queue_length: int) -> 
         hints.append("Training interval is set to MANUAL - no automatic training will occur.")
 
     if training_queue_length > 0:
-        hints.append(f"There are {training_queue_length} jobs in the training queue. Check if ML worker is running.")
+        hints.append(
+            f"There are {training_queue_length} jobs in the training queue. Check if ML worker is running."
+        )
 
     if status.get("training_status") == "failed":
         hints.append("Last training job FAILED. Check errors and logs.")
 
     import os
+
     if os.getenv("MOCK_MODE", "false").lower() in ("true", "1", "yes"):
         hints.append("MOCK_MODE is enabled - training will use mock data, not real database.")
 

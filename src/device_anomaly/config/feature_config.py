@@ -31,17 +31,14 @@ class FeatureConfig:
         "TotalDischargeTime_Sec",
         "CalculatedBatteryCapacity",
         "TotalFreeStorageKb",
-
         # Charge patterns
         "ChargePatternBadCount",
         "ChargePatternGoodCount",
         "ChargePatternMediumCount",
-
         # Charge sources
         "AcChargeCount",
         "UsbChargeCount",
         "WirelessChargeCount",
-
         # Battery health (extended - query if available)
         "BatteryHealth",
         "BatteryTemperature",
@@ -53,7 +50,6 @@ class FeatureConfig:
         "ChargingCurrent",
         "BatteryStatus",
         "IsCharging",
-
         # Power management
         "ScreenOnTime_Sec",
         "ScreenOffTime_Sec",
@@ -62,7 +58,6 @@ class FeatureConfig:
         "WakeLockTime_Sec",
         "CpuActiveTime_Sec",
         "CpuIdleTime_Sec",
-
         # Storage (often in BatteryStat)
         "TotalInternalStorage",
         "AvailableInternalStorage",
@@ -76,7 +71,6 @@ class FeatureConfig:
         "AppVisitCount",
         "AppForegroundTime",
         "TotalForegroundTime",
-
         # Extended app metrics
         "UniqueAppsUsed",
         "SystemAppForegroundTime",
@@ -85,17 +79,14 @@ class FeatureConfig:
         "CrashCount",
         "ANRCount",  # App Not Responding
         "ForceStopCount",
-
         # Session metrics
         "LongestSessionDuration",
         "AverageSessionDuration",
         "SessionCount",
-
         # Background activity
         "BackgroundTime",
         "BackgroundDataUsage",
         "BackgroundBatteryDrain",
-
         # Notifications
         "NotificationCount",
         "NotificationDismissCount",
@@ -122,23 +113,19 @@ class FeatureConfig:
         "Upload",
         "TotalDownload",
         "TotalUpload",
-
         # By network type
         "WifiDownload",
         "WifiUpload",
         "MobileDownload",
         "MobileUpload",
-
         # Roaming
         "RoamingDownload",
         "RoamingUpload",
-
         # Background data
         "BackgroundDownload",
         "BackgroundUpload",
         "ForegroundDownload",
         "ForegroundUpload",
-
         # Per-app data (aggregated)
         "TopAppDataUsage",
         "SystemAppDataUsage",
@@ -163,25 +150,21 @@ class FeatureConfig:
         "MinSignalStrength",
         "MaxSignalStrength",
         "SignalStrengthStd",
-
         # Connection quality
         "TotalDropCnt",
         "TotalSignalReadings",
         "DropRate",
-
         # WiFi specific
         "WifiSignalStrength",
         "WifiDropCount",
         "WifiConnectionTime",
         "WifiDisconnectCount",
-
         # Cellular specific
         "CellSignalStrength",
         "CellDropCount",
         "CellConnectionTime",
         "CellTowerChanges",
         "HandoffCount",
-
         # Network type distribution
         "TimeOn2G",
         "TimeOn3G",
@@ -189,7 +172,6 @@ class FeatureConfig:
         "TimeOn5G",
         "TimeOnWifi",
         "TimeOnNoNetwork",
-
         # Roaming
         "RoamingTime",
         "RoamingDataUsage",
@@ -207,19 +189,16 @@ class FeatureConfig:
         "DevName",
         "TypeId",
         "DeviceKindId",
-
         # Status
         "Online",
         "Mode",
         "Flags",
-
         # Timestamps
         "EnrollmentTime",
         "LastConnTime",
         "LastDisconnTime",
         "LastCheckInTime",
         "LastUpdateStatus",
-
         # Agent info
         "AgentVersion",
         "AgentVersionInt",
@@ -409,7 +388,6 @@ class FeatureConfig:
         "BackgroundAppBatteryDrain": "battery",
         "ForegroundAppBatteryDrain": "battery",
         "MaxSingleAppDrain": "battery",
-
         # RF/Network domain
         "AvgSignalStrength": "rf",
         "MinSignalStrength": "rf",
@@ -439,7 +417,6 @@ class FeatureConfig:
         "TimeOnNoNetwork": "rf",
         "RoamingTime": "rf",
         "ConnectionStabilityScore": "rf",
-
         # Throughput domain
         "Download": "throughput",
         "Upload": "throughput",
@@ -456,7 +433,6 @@ class FeatureConfig:
         "ForegroundDownload": "throughput",
         "ForegroundUpload": "throughput",
         "RoamingDataUsage": "throughput",
-
         # Usage domain
         "AppVisitCount": "usage",
         "AppForegroundTime": "usage",
@@ -478,7 +454,6 @@ class FeatureConfig:
         "WebVisitCount": "usage",
         "WebForegroundTime": "usage",
         "WebErrorCount": "usage",
-
         # Storage domain
         "TotalFreeStorageKb": "storage",
         "TotalInternalStorage": "storage",
@@ -491,11 +466,9 @@ class FeatureConfig:
         "AvailableRAM": "storage",
         "TotalSDCardStorage": "storage",
         "AvailableSDCardStorage": "storage",
-
         # CPU domain
         "CpuActiveTime_Sec": "cpu",
         "CpuIdleTime_Sec": "cpu",
-
         # Security domain
         "HasPasscode": "security",
         "IsEncrypted": "security",
@@ -511,7 +484,6 @@ class FeatureConfig:
         "IsRecoveryLockEnabled": "security",
         "AntivirusLastQuickScanTime": "security",
         "AntivirusLastFullScanTime": "security",
-
         # Firmware/Hardware domain
         "FirmwareVersion": "firmware",
         "FirmwareVersionCode": "firmware",
@@ -536,14 +508,14 @@ class FeatureConfig:
     # =========================================================================
 
     domain_weights: ClassVar[dict[str, float]] = {
-        "battery": 0.6,       # Lower to prevent domination
-        "rf": 1.1,            # Higher for connectivity issues
+        "battery": 0.6,  # Lower to prevent domination
+        "rf": 1.1,  # Higher for connectivity issues
         "throughput": 1.0,
         "usage": 1.0,
         "storage": 0.9,
         "cpu": 0.8,
-        "security": 1.3,      # High weight for security anomalies
-        "firmware": 1.2,      # Important for cohort analysis
+        "security": 1.3,  # High weight for security anomalies
+        "firmware": 1.2,  # Important for cohort analysis
         "hardware": 1.0,
     }
 
@@ -554,6 +526,7 @@ class FeatureConfig:
     @dataclass
     class DerivedFeature:
         """Definition of a computed feature."""
+
         name: str
         formula: str  # Description of calculation
         dependencies: list[str]
@@ -599,7 +572,6 @@ class FeatureConfig:
             "dependencies": ["ScreenOnTime_Sec", "ScreenOffTime_Sec"],
             "domain": "battery",
         },
-
         # Network efficiency
         "DataPerSignalQuality": {
             "formula": "(Download + Upload) / (AvgSignalStrength + 100)",  # +100 to handle negative dBm
@@ -636,7 +608,6 @@ class FeatureConfig:
             "dependencies": ["TotalDropCnt", "TotalSignalReadings"],
             "domain": "rf",
         },
-
         # Storage utilization
         "StorageUtilization": {
             "formula": "1 - (AvailableStorage / (TotalStorage + 1))",
@@ -653,7 +624,6 @@ class FeatureConfig:
             "dependencies": ["AvailableInternalStorage", "TotalInternalStorage"],
             "domain": "storage",
         },
-
         # Usage intensity
         "UsageIntensity": {
             "formula": "AppForegroundTime / (24 * 3600)",  # Fraction of day
@@ -690,7 +660,6 @@ class FeatureConfig:
             "dependencies": ["BackgroundTime", "AppForegroundTime"],
             "domain": "usage",
         },
-
         # Data usage patterns
         "UploadToDownloadRatio": {
             "formula": "Upload / (Download + 1)",
@@ -712,11 +681,14 @@ class FeatureConfig:
             "dependencies": ["Download", "Upload", "UniqueAppsUsed"],
             "domain": "throughput",
         },
-
         # Cross-domain composite scores
         "DeviceHealthScore": {
             "formula": "Composite of battery + storage + connectivity",
-            "dependencies": ["BatteryHealthRatio", "StorageUtilization", "ConnectionStabilityScore"],
+            "dependencies": [
+                "BatteryHealthRatio",
+                "StorageUtilization",
+                "ConnectionStabilityScore",
+            ],
             "domain": "composite",
         },
         "AnomalyRiskScore": {
@@ -849,7 +821,6 @@ class FeatureConfig:
             "dependencies": ["BatteryLevel", "ShiftStartTime", "ShiftEndTime"],
             "domain": "battery",
         },
-
         # Network pattern features (Carl: AP hopping, carrier patterns)
         "ApChangeCount": {
             "formula": "Number of unique APs connected in period",
@@ -891,7 +862,6 @@ class FeatureConfig:
             "dependencies": ["TimeOn5G", "TimeOn4G", "TimeOn3G", "TimeOn2G"],
             "domain": "rf",
         },
-
         # App power features (Carl: Apps consuming too much power)
         "AppDrainPerForegroundHour": {
             "formula": "TotalBatteryAppDrain / (AppForegroundTime / 3600 + 1)",
@@ -918,7 +888,6 @@ class FeatureConfig:
             "dependencies": ["ANRCount"],
             "domain": "usage",
         },
-
         # Device abuse features (Carl: Excessive drops/reboots)
         "DropCountNormalized": {
             "formula": "TotalDropCnt / days_in_period",
@@ -945,7 +914,6 @@ class FeatureConfig:
             "dependencies": ["TotalDropCnt", "RebootCount", "CrashCount"],
             "domain": "composite",
         },
-
         # Location comparison features (Carl: Warehouse 1 vs Warehouse 2)
         "LocationAnomalyRate": {
             "formula": "Anomalies at location / total devices at location",
@@ -994,7 +962,6 @@ class FeatureConfig:
             "severity": 0.9,
             "description": "Critical battery level during work hours",
         },
-
         # Charging patterns (Carl: "Batteries not fully charged in the morning")
         {
             "name": "morning_charge_incomplete",
@@ -1012,7 +979,6 @@ class FeatureConfig:
             "severity": 0.5,
             "description": "Frequent poor charging patterns",
         },
-
         # AP hopping (Carl: "AP hopping/stickiness")
         {
             "name": "excessive_ap_roaming",
@@ -1030,7 +996,6 @@ class FeatureConfig:
             "severity": 0.5,
             "description": "Device stuck on weak WiFi AP",
         },
-
         # Tower hopping (Carl: "Tower hopping/stickiness")
         {
             "name": "excessive_tower_hopping",
@@ -1040,7 +1005,6 @@ class FeatureConfig:
             "severity": 0.5,
             "description": "Excessive cell tower switching",
         },
-
         # Disconnects (Carl: "Server disconnection patterns")
         {
             "name": "high_disconnect_rate",
@@ -1058,7 +1022,6 @@ class FeatureConfig:
             "severity": 0.6,
             "description": "Excessive time without network connectivity",
         },
-
         # Drops (Carl: "Devices with excessive drops")
         {
             "name": "excessive_drops",
@@ -1076,7 +1039,6 @@ class FeatureConfig:
             "severity": 0.6,
             "description": "High drop rate relative to usage",
         },
-
         # Reboots (Carl: "Devices with excessive reboots")
         {
             "name": "excessive_reboots",
@@ -1086,7 +1048,6 @@ class FeatureConfig:
             "severity": 0.7,
             "description": "Excessive device reboots",
         },
-
         # App crashes (Carl: "Crashes")
         {
             "name": "high_crash_rate",
@@ -1104,7 +1065,6 @@ class FeatureConfig:
             "severity": 0.6,
             "description": "Frequent App Not Responding events",
         },
-
         # App power drain (Carl: "Apps consuming too much power")
         {
             "name": "high_app_battery_drain",
@@ -1122,7 +1082,6 @@ class FeatureConfig:
             "severity": 0.7,
             "description": "Single app consuming too much battery",
         },
-
         # Cohort issues (Carl: "Performance by manufacturer/model/OS")
         {
             "name": "storage_pressure",

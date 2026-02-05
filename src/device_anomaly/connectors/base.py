@@ -3,6 +3,7 @@
 This module defines the abstract base class that all connectors must implement.
 It ensures a consistent API across XSight, MobiControl, and other data sources.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

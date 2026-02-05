@@ -4,6 +4,7 @@ This module provides a factory pattern for registering and instantiating
 data connectors. It allows dynamic registration of new connector types
 and provides a unified interface for creating connector instances.
 """
+
 from __future__ import annotations
 
 from device_anomaly.connectors.base import BaseConnector, ConnectorConfig
@@ -207,8 +208,7 @@ class ConnectorManager:
             List of connected connector names
         """
         return [
-            name for name, connector in self._active_connectors.items()
-            if connector.is_connected
+            name for name, connector in self._active_connectors.items() if connector.is_connected
         ]
 
     def disconnect_all(self) -> None:

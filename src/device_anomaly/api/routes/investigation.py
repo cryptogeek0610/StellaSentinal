@@ -1,4 +1,5 @@
 """API routes for the Investigation Panel - enhanced anomaly analysis."""
+
 from __future__ import annotations
 
 import hashlib
@@ -135,20 +136,20 @@ def _filter_benign_evidence(text: str) -> str:
     # We want to remove lines that mention these with positive deviation context
     benign_patterns = [
         # Free Storage mentioned as high/above baseline (benign)
-        r'Free\s*Storage.*(?:above|higher|increased|significant|large|high).*(?:baseline|normal|typical)',
-        r'Free\s*Storage.*\d+\.?\d*\s*(?:GB|MB|TB).*(?:above|higher|deviation)',
-        r'(?:High|Large|Significant|Elevated).*[Ff]ree\s*[Ss]torage',
-        r'Free\s*Storage.*(?:\+|\bpositive\b).*deviation',
-        r'Free\s*Storage.*(?:11\.1|[5-9]\d*\.?\d*)\s*σ',  # High positive sigma
+        r"Free\s*Storage.*(?:above|higher|increased|significant|large|high).*(?:baseline|normal|typical)",
+        r"Free\s*Storage.*\d+\.?\d*\s*(?:GB|MB|TB).*(?:above|higher|deviation)",
+        r"(?:High|Large|Significant|Elevated).*[Ff]ree\s*[Ss]torage",
+        r"Free\s*Storage.*(?:\+|\bpositive\b).*deviation",
+        r"Free\s*Storage.*(?:11\.1|[5-9]\d*\.?\d*)\s*σ",  # High positive sigma
         # Memory mentioned as high (benign)
-        r'(?:Free|Available)\s*Memory.*(?:above|higher|high)',
+        r"(?:Free|Available)\s*Memory.*(?:above|higher|high)",
         # Battery level high (benign)
-        r'Battery\s*Level.*(?:high|above|good)',
+        r"Battery\s*Level.*(?:high|above|good)",
         # Signal strength strong (benign)
-        r'Signal\s*Strength.*(?:strong|high|good|above)',
+        r"Signal\s*Strength.*(?:strong|high|good|above)",
     ]
 
-    lines = text.split('\n')
+    lines = text.split("\n")
     filtered_lines = []
 
     for line in lines:
@@ -161,7 +162,7 @@ def _filter_benign_evidence(text: str) -> str:
         if not is_benign:
             filtered_lines.append(line)
 
-    return '\n'.join(filtered_lines)
+    return "\n".join(filtered_lines)
 
 
 def _calculate_baseline_stats(db: Session, tenant_id: str, device_id: int, days: int = 30) -> dict:
@@ -171,12 +172,24 @@ def _calculate_baseline_stats(db: Session, tenant_id: str, device_id: int, days:
     # Default baseline values (industry-typical for mobile devices)
     default_baselines = {
         "total_battery_level_drop": {"mean": 15.0, "std": 8.0, "min": 2.0, "max": 40.0, "count": 0},
-        "total_free_storage_kb": {"mean": 8000000.0, "std": 3000000.0, "min": 1000000.0, "max": 20000000.0, "count": 0},
+        "total_free_storage_kb": {
+            "mean": 8000000.0,
+            "std": 3000000.0,
+            "min": 1000000.0,
+            "max": 20000000.0,
+            "count": 0,
+        },
         "download": {"mean": 150.0, "std": 100.0, "min": 5.0, "max": 500.0, "count": 0},
         "upload": {"mean": 50.0, "std": 40.0, "min": 1.0, "max": 200.0, "count": 0},
         "offline_time": {"mean": 5.0, "std": 10.0, "min": 0.0, "max": 60.0, "count": 0},
         "disconnect_count": {"mean": 2.0, "std": 3.0, "min": 0.0, "max": 15.0, "count": 0},
-        "wifi_signal_strength": {"mean": -55.0, "std": 15.0, "min": -85.0, "max": -30.0, "count": 0},
+        "wifi_signal_strength": {
+            "mean": -55.0,
+            "std": 15.0,
+            "min": -85.0,
+            "max": -30.0,
+            "count": 0,
+        },
         "connection_time": {"mean": 2.0, "std": 1.5, "min": 0.5, "max": 10.0, "count": 0},
     }
 
@@ -201,8 +214,14 @@ def _calculate_baseline_stats(db: Session, tenant_id: str, device_id: int, days:
 
     # Calculate stats for each feature, overwriting defaults where we have data
     features = [
-        "total_battery_level_drop", "total_free_storage_kb", "download", "upload",
-        "offline_time", "disconnect_count", "wifi_signal_strength", "connection_time"
+        "total_battery_level_drop",
+        "total_free_storage_kb",
+        "download",
+        "upload",
+        "offline_time",
+        "disconnect_count",
+        "wifi_signal_strength",
+        "connection_time",
     ]
 
     for feature in features:
@@ -221,13 +240,21 @@ def _calculate_baseline_stats(db: Session, tenant_id: str, device_id: int, days:
     return baseline_stats
 
 
-def _build_feature_contributions(anomaly: AnomalyResult, baseline_stats: dict) -> list[FeatureContribution]:
+def _build_feature_contributions(
+    anomaly: AnomalyResult, baseline_stats: dict
+) -> list[FeatureContribution]:
     """Build feature contribution breakdown for an anomaly."""
     contributions = []
 
     features = [
-        "total_battery_level_drop", "total_free_storage_kb", "download", "upload",
-        "offline_time", "disconnect_count", "wifi_signal_strength", "connection_time"
+        "total_battery_level_drop",
+        "total_free_storage_kb",
+        "download",
+        "upload",
+        "offline_time",
+        "disconnect_count",
+        "wifi_signal_strength",
+        "connection_time",
     ]
 
     # Calculate z-scores for each feature that has data
@@ -282,24 +309,28 @@ def _build_feature_contributions(anomaly: AnomalyResult, baseline_stats: dict) -
         else:
             explanation = f"{display_name} is within normal range (baseline: {_format_value(feature, stats['mean'])})"
 
-        contributions.append(FeatureContribution(
-            feature_name=feature,
-            feature_display_name=display_name,
-            contribution_percentage=round(contribution_pct, 1),
-            contribution_direction=direction,
-            current_value=value if has_value else 0,
-            current_value_display=_format_value(feature, value) if has_value else "N/A",
-            baseline_value=stats["mean"],
-            baseline_value_display=_format_value(feature, stats["mean"]),
-            deviation_sigma=round(z, 2) if has_value else 0.0,
-            percentile=round(percentile, 1),
-            plain_text_explanation=explanation,
-        ))
+        contributions.append(
+            FeatureContribution(
+                feature_name=feature,
+                feature_display_name=display_name,
+                contribution_percentage=round(contribution_pct, 1),
+                contribution_direction=direction,
+                current_value=value if has_value else 0,
+                current_value_display=_format_value(feature, value) if has_value else "N/A",
+                baseline_value=stats["mean"],
+                baseline_value_display=_format_value(feature, stats["mean"]),
+                deviation_sigma=round(z, 2) if has_value else 0.0,
+                percentile=round(percentile, 1),
+                plain_text_explanation=explanation,
+            )
+        )
 
     return contributions
 
 
-def _build_explanation(anomaly: AnomalyResult, contributions: list[FeatureContribution]) -> AnomalyExplanation:
+def _build_explanation(
+    anomaly: AnomalyResult, contributions: list[FeatureContribution]
+) -> AnomalyExplanation:
     """Build the anomaly explanation from contributions."""
     if not contributions:
         return AnomalyExplanation(
@@ -356,13 +387,17 @@ def _build_explanation(anomaly: AnomalyResult, contributions: list[FeatureContri
         summary_text=summary_text,
         detailed_explanation=detailed_explanation,
         feature_contributions=contributions,
-        top_contributing_features=[c.feature_name for c in contributions_with_data[:5]] if contributions_with_data else [],
+        top_contributing_features=[c.feature_name for c in contributions_with_data[:5]]
+        if contributions_with_data
+        else [],
         explanation_method="z_score",
         explanation_generated_at=datetime.now(UTC),
     )
 
 
-def _build_baseline_comparison(anomaly: AnomalyResult, baseline_stats: dict) -> BaselineComparison | None:
+def _build_baseline_comparison(
+    anomaly: AnomalyResult, baseline_stats: dict
+) -> BaselineComparison | None:
     """Build baseline comparison data."""
     if not baseline_stats:
         return None
@@ -371,8 +406,14 @@ def _build_baseline_comparison(anomaly: AnomalyResult, baseline_stats: dict) -> 
     total_deviation = 0
 
     features = [
-        "total_battery_level_drop", "total_free_storage_kb", "download", "upload",
-        "offline_time", "disconnect_count", "wifi_signal_strength", "connection_time"
+        "total_battery_level_drop",
+        "total_free_storage_kb",
+        "download",
+        "upload",
+        "offline_time",
+        "disconnect_count",
+        "wifi_signal_strength",
+        "connection_time",
     ]
 
     for feature in features:
@@ -392,25 +433,31 @@ def _build_baseline_comparison(anomaly: AnomalyResult, baseline_stats: dict) -> 
             is_anomalous = abs(z) >= 2 if value is not None else False
             direction = "above" if z > 0 else "below" if z < 0 else "normal"
 
-            deviation_pct = ((current_value - stats["mean"]) / stats["mean"]) * 100 if stats["mean"] != 0 else 0
+            deviation_pct = (
+                ((current_value - stats["mean"]) / stats["mean"]) * 100 if stats["mean"] != 0 else 0
+            )
             percentile = min(99.9, max(0.1, 50 + (z * 34)))
 
-            metrics.append(BaselineMetric(
-                metric_name=feature,
-                metric_display_name=FEATURE_DISPLAY_NAMES.get(feature, feature),
-                metric_unit=FEATURE_UNITS.get(feature, ""),
-                current_value=current_value,
-                current_value_display=_format_value(feature, current_value) if value is not None else "N/A",
-                baseline_mean=stats["mean"],
-                baseline_std=stats["std"],
-                baseline_min=stats["min"],
-                baseline_max=stats["max"],
-                deviation_sigma=round(z, 2) if value is not None else 0.0,
-                deviation_percentage=round(deviation_pct, 1) if value is not None else 0.0,
-                percentile_rank=round(percentile, 1) if value is not None else 50.0,
-                is_anomalous=is_anomalous,
-                anomaly_direction=direction if value is not None else "normal",
-            ))
+            metrics.append(
+                BaselineMetric(
+                    metric_name=feature,
+                    metric_display_name=FEATURE_DISPLAY_NAMES.get(feature, feature),
+                    metric_unit=FEATURE_UNITS.get(feature, ""),
+                    current_value=current_value,
+                    current_value_display=_format_value(feature, current_value)
+                    if value is not None
+                    else "N/A",
+                    baseline_mean=stats["mean"],
+                    baseline_std=stats["std"],
+                    baseline_min=stats["min"],
+                    baseline_max=stats["max"],
+                    deviation_sigma=round(z, 2) if value is not None else 0.0,
+                    deviation_percentage=round(deviation_pct, 1) if value is not None else 0.0,
+                    percentile_rank=round(percentile, 1) if value is not None else 50.0,
+                    is_anomalous=is_anomalous,
+                    anomaly_direction=direction if value is not None else "normal",
+                )
+            )
 
             if value is not None:
                 total_deviation += abs(z)
@@ -421,14 +468,18 @@ def _build_baseline_comparison(anomaly: AnomalyResult, baseline_stats: dict) -> 
     metrics_with_values = [m for m in metrics if m.current_value_display != "N/A"]
     return BaselineComparison(
         baseline_config=BaselineConfig(
-            baseline_type="rolling_average" if any(s.get("count", 0) > 0 for s in baseline_stats.values()) else "default",
+            baseline_type="rolling_average"
+            if any(s.get("count", 0) > 0 for s in baseline_stats.values())
+            else "default",
             baseline_period_days=30,
             comparison_window_hours=24,
             statistical_method="z_score",
             baseline_calculated_at=datetime.now(UTC),
         ),
         metrics=metrics,
-        overall_deviation_score=round(total_deviation / len(metrics_with_values), 2) if metrics_with_values else 0,
+        overall_deviation_score=round(total_deviation / len(metrics_with_values), 2)
+        if metrics_with_values
+        else 0,
     )
 
 
@@ -438,170 +489,192 @@ def _generate_evidence_events(anomaly: AnomalyResult) -> list[EvidenceEvent]:
     timestamp = anomaly.timestamp
 
     # Add anomaly detection event
-    events.append(EvidenceEvent(
-        event_id=str(uuid.uuid4()),
-        timestamp=timestamp,
-        event_type="anomaly_detected",
-        event_category="system",
-        severity="high" if anomaly.anomaly_score <= -0.5 else "medium",
-        title="Anomaly Detected",
-        description=f"Isolation Forest model detected anomaly with score {anomaly.anomaly_score:.4f}",
-        is_contributing_event=True,
-        contribution_note="Primary detection event",
-    ))
+    events.append(
+        EvidenceEvent(
+            event_id=str(uuid.uuid4()),
+            timestamp=timestamp,
+            event_type="anomaly_detected",
+            event_category="system",
+            severity="high" if anomaly.anomaly_score <= -0.5 else "medium",
+            title="Anomaly Detected",
+            description=f"Isolation Forest model detected anomaly with score {anomaly.anomaly_score:.4f}",
+            is_contributing_event=True,
+            contribution_note="Primary detection event",
+        )
+    )
 
     # Add events based on anomalous metrics
     if anomaly.total_battery_level_drop and anomaly.total_battery_level_drop > 30:
-        events.append(EvidenceEvent(
-            event_id=str(uuid.uuid4()),
-            timestamp=timestamp - timedelta(minutes=15),
-            event_type="battery_drain",
-            event_category="battery",
-            severity="high" if anomaly.total_battery_level_drop > 50 else "medium",
-            title="Excessive Battery Drain",
-            description=f"Battery dropped {anomaly.total_battery_level_drop:.1f}% in measurement period",
-            is_contributing_event=True,
-            contribution_note="High battery drain contributing to anomaly",
-        ))
+        events.append(
+            EvidenceEvent(
+                event_id=str(uuid.uuid4()),
+                timestamp=timestamp - timedelta(minutes=15),
+                event_type="battery_drain",
+                event_category="battery",
+                severity="high" if anomaly.total_battery_level_drop > 50 else "medium",
+                title="Excessive Battery Drain",
+                description=f"Battery dropped {anomaly.total_battery_level_drop:.1f}% in measurement period",
+                is_contributing_event=True,
+                contribution_note="High battery drain contributing to anomaly",
+            )
+        )
 
     if anomaly.total_free_storage_kb and anomaly.total_free_storage_kb < 500000:
-        events.append(EvidenceEvent(
-            event_id=str(uuid.uuid4()),
-            timestamp=timestamp - timedelta(minutes=10),
-            event_type="storage_low",
-            event_category="storage",
-            severity="critical" if anomaly.total_free_storage_kb < 100000 else "high",
-            title="Low Storage Space",
-            description=f"Free storage at {_format_value('total_free_storage_kb', anomaly.total_free_storage_kb)}",
-            is_contributing_event=True,
-            contribution_note="Critical storage level",
-        ))
+        events.append(
+            EvidenceEvent(
+                event_id=str(uuid.uuid4()),
+                timestamp=timestamp - timedelta(minutes=10),
+                event_type="storage_low",
+                event_category="storage",
+                severity="critical" if anomaly.total_free_storage_kb < 100000 else "high",
+                title="Low Storage Space",
+                description=f"Free storage at {_format_value('total_free_storage_kb', anomaly.total_free_storage_kb)}",
+                is_contributing_event=True,
+                contribution_note="Critical storage level",
+            )
+        )
 
     if anomaly.offline_time and anomaly.offline_time > 60:
-        events.append(EvidenceEvent(
-            event_id=str(uuid.uuid4()),
-            timestamp=timestamp - timedelta(minutes=int(anomaly.offline_time / 2)),
-            event_type="extended_offline",
-            event_category="network",
-            severity="medium",
-            title="Extended Offline Period",
-            description=f"Device was offline for {anomaly.offline_time:.0f} minutes",
-            is_contributing_event=True,
-            contribution_note="Unusual offline duration",
-        ))
+        events.append(
+            EvidenceEvent(
+                event_id=str(uuid.uuid4()),
+                timestamp=timestamp - timedelta(minutes=int(anomaly.offline_time / 2)),
+                event_type="extended_offline",
+                event_category="network",
+                severity="medium",
+                title="Extended Offline Period",
+                description=f"Device was offline for {anomaly.offline_time:.0f} minutes",
+                is_contributing_event=True,
+                contribution_note="Unusual offline duration",
+            )
+        )
 
     if anomaly.disconnect_count and anomaly.disconnect_count > 5:
-        events.append(EvidenceEvent(
-            event_id=str(uuid.uuid4()),
-            timestamp=timestamp - timedelta(minutes=20),
-            event_type="frequent_disconnects",
-            event_category="network",
-            severity="medium",
-            title="Frequent Network Disconnections",
-            description=f"{int(anomaly.disconnect_count)} disconnections recorded",
-            is_contributing_event=True,
-            contribution_note="Network instability detected",
-        ))
+        events.append(
+            EvidenceEvent(
+                event_id=str(uuid.uuid4()),
+                timestamp=timestamp - timedelta(minutes=20),
+                event_type="frequent_disconnects",
+                event_category="network",
+                severity="medium",
+                title="Frequent Network Disconnections",
+                description=f"{int(anomaly.disconnect_count)} disconnections recorded",
+                is_contributing_event=True,
+                contribution_note="Network instability detected",
+            )
+        )
 
     # Sort by timestamp descending
     events.sort(key=lambda e: e.timestamp, reverse=True)
     return events
 
 
-def _generate_remediation_suggestions(anomaly: AnomalyResult, contributions: list[FeatureContribution]) -> list[RemediationSuggestion]:
+def _generate_remediation_suggestions(
+    anomaly: AnomalyResult, contributions: list[FeatureContribution]
+) -> list[RemediationSuggestion]:
     """Generate remediation suggestions based on anomaly characteristics."""
     suggestions = []
     priority = 1
 
     # Storage-related remediation
     if anomaly.total_free_storage_kb and anomaly.total_free_storage_kb < 500000:
-        suggestions.append(RemediationSuggestion(
-            remediation_id=str(uuid.uuid4()),
-            title="Clear Device Storage",
-            description="Free up storage space by removing unnecessary files and apps",
-            detailed_steps=[
-                "Review and remove unused applications",
-                "Clear application caches",
-                "Remove old downloads and media files",
-                "Consider offloading data to cloud storage",
-            ],
-            priority=priority,
-            confidence_score=0.85,
-            confidence_level="high",
-            source="policy",
-            source_details="Standard procedure for low storage",
-            estimated_impact="Could recover 500MB-2GB of storage",
-            is_automated=False,
-        ))
+        suggestions.append(
+            RemediationSuggestion(
+                remediation_id=str(uuid.uuid4()),
+                title="Clear Device Storage",
+                description="Free up storage space by removing unnecessary files and apps",
+                detailed_steps=[
+                    "Review and remove unused applications",
+                    "Clear application caches",
+                    "Remove old downloads and media files",
+                    "Consider offloading data to cloud storage",
+                ],
+                priority=priority,
+                confidence_score=0.85,
+                confidence_level="high",
+                source="policy",
+                source_details="Standard procedure for low storage",
+                estimated_impact="Could recover 500MB-2GB of storage",
+                is_automated=False,
+            )
+        )
         priority += 1
 
     # Battery-related remediation
     if anomaly.total_battery_level_drop and anomaly.total_battery_level_drop > 30:
-        suggestions.append(RemediationSuggestion(
-            remediation_id=str(uuid.uuid4()),
-            title="Investigate Battery Drain",
-            description="Identify and address causes of excessive battery consumption",
-            detailed_steps=[
-                "Check battery usage by app in device settings",
-                "Identify background apps consuming power",
-                "Review location services and sync settings",
-                "Consider disabling power-hungry features",
-            ],
-            priority=priority,
-            confidence_score=0.75,
-            confidence_level="medium",
-            source="ai_generated",
-            source_details="Based on battery drain pattern",
-            estimated_impact="Could improve battery life by 20-40%",
-            is_automated=False,
-        ))
+        suggestions.append(
+            RemediationSuggestion(
+                remediation_id=str(uuid.uuid4()),
+                title="Investigate Battery Drain",
+                description="Identify and address causes of excessive battery consumption",
+                detailed_steps=[
+                    "Check battery usage by app in device settings",
+                    "Identify background apps consuming power",
+                    "Review location services and sync settings",
+                    "Consider disabling power-hungry features",
+                ],
+                priority=priority,
+                confidence_score=0.75,
+                confidence_level="medium",
+                source="ai_generated",
+                source_details="Based on battery drain pattern",
+                estimated_impact="Could improve battery life by 20-40%",
+                is_automated=False,
+            )
+        )
         priority += 1
 
     # Network-related remediation
     if anomaly.disconnect_count and anomaly.disconnect_count > 5:
-        suggestions.append(RemediationSuggestion(
-            remediation_id=str(uuid.uuid4()),
-            title="Diagnose Network Connectivity",
-            description="Investigate and resolve network disconnection issues",
-            detailed_steps=[
-                "Check WiFi signal strength at device location",
-                "Verify network credentials are current",
-                "Test device connectivity in different locations",
-                "Consider network infrastructure review",
-            ],
-            priority=priority,
-            confidence_score=0.70,
-            confidence_level="medium",
-            source="ai_generated",
-            source_details="Based on disconnect frequency",
-            estimated_impact="Could stabilize connectivity",
-            is_automated=False,
-        ))
+        suggestions.append(
+            RemediationSuggestion(
+                remediation_id=str(uuid.uuid4()),
+                title="Diagnose Network Connectivity",
+                description="Investigate and resolve network disconnection issues",
+                detailed_steps=[
+                    "Check WiFi signal strength at device location",
+                    "Verify network credentials are current",
+                    "Test device connectivity in different locations",
+                    "Consider network infrastructure review",
+                ],
+                priority=priority,
+                confidence_score=0.70,
+                confidence_level="medium",
+                source="ai_generated",
+                source_details="Based on disconnect frequency",
+                estimated_impact="Could stabilize connectivity",
+                is_automated=False,
+            )
+        )
         priority += 1
 
     # General recommendation
-    suggestions.append(RemediationSuggestion(
-        remediation_id=str(uuid.uuid4()),
-        title="Contact Device User",
-        description="Reach out to the device user for more context",
-        detailed_steps=[
-            "Send notification to device user",
-            "Ask about recent changes or issues",
-            "Gather additional context about device usage",
-            "Document findings in investigation notes",
-        ],
-        priority=priority,
-        confidence_score=0.50,
-        confidence_level="low",
-        source="policy",
-        source_details="Standard investigation procedure",
-        is_automated=False,
-    ))
+    suggestions.append(
+        RemediationSuggestion(
+            remediation_id=str(uuid.uuid4()),
+            title="Contact Device User",
+            description="Reach out to the device user for more context",
+            detailed_steps=[
+                "Send notification to device user",
+                "Ask about recent changes or issues",
+                "Gather additional context about device usage",
+                "Document findings in investigation notes",
+            ],
+            priority=priority,
+            confidence_score=0.50,
+            confidence_level="low",
+            source="policy",
+            source_details="Standard investigation procedure",
+            is_automated=False,
+        )
+    )
 
     return suggestions
 
 
-def _find_similar_cases(db: Session, tenant_id: str, anomaly: AnomalyResult, limit: int = 5) -> list[SimilarCase]:
+def _find_similar_cases(
+    db: Session, tenant_id: str, anomaly: AnomalyResult, limit: int = 5
+) -> list[SimilarCase]:
     """Find similar historical anomaly cases."""
     # Find resolved anomalies with similar characteristics, joined with device metadata
     similar = (
@@ -637,21 +710,25 @@ def _find_similar_cases(db: Session, tenant_id: str, anomaly: AnomalyResult, lim
         if s.updated_at and s.timestamp:
             resolution_hours = (s.updated_at - s.timestamp).total_seconds() / 3600
 
-        cases.append(SimilarCase(
-            case_id=str(uuid.uuid4()),
-            anomaly_id=s.id,
-            device_id=s.device_id,
-            device_name=device_name,
-            detected_at=s.timestamp,
-            resolved_at=s.updated_at if s.status == "resolved" else None,
-            similarity_score=min(1.0, similarity),
-            similarity_factors=similarity_factors if similarity_factors else ["Similar pattern"],
-            anomaly_type="device_anomaly",
-            severity=_get_severity(s.anomaly_score),
-            resolution_status=s.status,
-            resolution_summary=s.notes[:100] if s.notes else None,
-            time_to_resolution_hours=resolution_hours,
-        ))
+        cases.append(
+            SimilarCase(
+                case_id=str(uuid.uuid4()),
+                anomaly_id=s.id,
+                device_id=s.device_id,
+                device_name=device_name,
+                detected_at=s.timestamp,
+                resolved_at=s.updated_at if s.status == "resolved" else None,
+                similarity_score=min(1.0, similarity),
+                similarity_factors=similarity_factors
+                if similarity_factors
+                else ["Similar pattern"],
+                anomaly_type="device_anomaly",
+                severity=_get_severity(s.anomaly_score),
+                resolution_status=s.status,
+                resolution_summary=s.notes[:100] if s.notes else None,
+                time_to_resolution_hours=resolution_hours,
+            )
+        )
 
     # Sort by similarity
     cases.sort(key=lambda c: c.similarity_score, reverse=True)
@@ -800,11 +877,19 @@ def get_historical_timeline(
 
     # Validate metric name
     valid_metrics = [
-        "total_battery_level_drop", "total_free_storage_kb", "download", "upload",
-        "offline_time", "disconnect_count", "wifi_signal_strength", "connection_time"
+        "total_battery_level_drop",
+        "total_free_storage_kb",
+        "download",
+        "upload",
+        "offline_time",
+        "disconnect_count",
+        "wifi_signal_strength",
+        "connection_time",
     ]
     if metric not in valid_metrics:
-        raise HTTPException(status_code=400, detail=f"Invalid metric. Valid options: {valid_metrics}")
+        raise HTTPException(
+            status_code=400, detail=f"Invalid metric. Valid options: {valid_metrics}"
+        )
 
     # Get historical data
     cutoff = datetime.now(UTC) - timedelta(days=days)
@@ -824,15 +909,18 @@ def get_historical_timeline(
         value = getattr(r, metric)
         if value is not None:
             values.append(value)
-            data_points.append(TimeSeriesDataPoint(
-                timestamp=r.timestamp,
-                value=value,
-                is_anomalous=(r.anomaly_label == -1),
-            ))
+            data_points.append(
+                TimeSeriesDataPoint(
+                    timestamp=r.timestamp,
+                    value=value,
+                    is_anomalous=(r.anomaly_label == -1),
+                )
+            )
 
     # Calculate baseline stats
     if values:
         import statistics
+
         mean = statistics.mean(values)
         std = statistics.stdev(values) if len(values) > 1 else mean * 0.1
     else:
@@ -893,11 +981,24 @@ def get_ai_analysis(
     # Features where HIGH values are benign (not problems)
     # Only low values of these metrics are issues
     benign_high_features = {
-        "freestorage", "free_storage", "totalfreestoragekb", "total_free_storage_kb",
-        "availablestorage", "available_storage", "freememory", "free_memory",
-        "availablememory", "available_memory", "batterylevel", "battery_level",
-        "batterycapacity", "battery_capacity", "signalstrength", "signal_strength",
-        "wifisignalstrength", "wifi_signal_strength",
+        "freestorage",
+        "free_storage",
+        "totalfreestoragekb",
+        "total_free_storage_kb",
+        "availablestorage",
+        "available_storage",
+        "freememory",
+        "free_memory",
+        "availablememory",
+        "available_memory",
+        "batterylevel",
+        "battery_level",
+        "batterycapacity",
+        "battery_capacity",
+        "signalstrength",
+        "signal_strength",
+        "wifisignalstrength",
+        "wifi_signal_strength",
     }
 
     def is_benign_high_deviation(fc) -> bool:
@@ -909,10 +1010,12 @@ def get_ai_analysis(
 
     # Build prompt - filter out benign high deviations
     top_features = [fc for fc in contributions if not is_benign_high_deviation(fc)][:5]
-    feature_summary = "\n".join([
-        f"- {fc.feature_display_name}: {fc.current_value_display} (baseline: {fc.baseline_value_display}, deviation: {fc.deviation_sigma:.1f}σ)"
-        for fc in top_features
-    ])
+    feature_summary = "\n".join(
+        [
+            f"- {fc.feature_display_name}: {fc.current_value_display} (baseline: {fc.baseline_value_display}, deviation: {fc.deviation_sigma:.1f}σ)"
+            for fc in top_features
+        ]
+    )
 
     # Determine severity description
     severity_word = get_severity_word(anomaly.anomaly_score)
@@ -1005,7 +1108,9 @@ Top Contributing Factors (metrics most different from normal):
             likelihood=0.75,
             evidence_for=[
                 EvidenceHypothesis(
-                    statement=f"{top_features[0].feature_display_name} shows significant deviation" if top_features else "Multiple metrics deviated from baseline",
+                    statement=f"{top_features[0].feature_display_name} shows significant deviation"
+                    if top_features
+                    else "Multiple metrics deviated from baseline",
                     strength="strong",
                     source="telemetry",
                 )
@@ -1041,7 +1146,10 @@ Top Contributing Factors (metrics most different from normal):
                 )
             ],
             evidence_against=[],
-            recommended_actions=["Review recent device activity", "Contact device user for context"],
+            recommended_actions=[
+                "Review recent device activity",
+                "Contact device user for context",
+            ],
         )
 
     analysis = AIAnalysisResponse(
@@ -1068,7 +1176,9 @@ Top Contributing Factors (metrics most different from normal):
         ],
         confidence_score=0.70 if not llm_response else 0.85,
         confidence_level="medium" if not llm_response else "high",
-        confidence_explanation="Analysis based on statistical deviation and pattern matching" if not llm_response else "Analysis generated using AI model with telemetry context",
+        confidence_explanation="Analysis based on statistical deviation and pattern matching"
+        if not llm_response
+        else "Analysis generated using AI model with telemetry context",
         similar_cases_analyzed=0,
     )
 
@@ -1216,10 +1326,12 @@ def record_remediation_outcome(
         outcome=request.outcome,
         outcome_recorded_at=datetime.now(UTC),
         outcome_notes=request.notes,
-        anomaly_context_json=json.dumps({
-            "anomaly_score": anomaly.anomaly_score,
-            "status": anomaly.status,
-        }),
+        anomaly_context_json=json.dumps(
+            {
+                "anomaly_score": anomaly.anomaly_score,
+                "status": anomaly.status,
+            }
+        ),
     )
     db.add(outcome)
     db.commit()

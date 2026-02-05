@@ -12,6 +12,7 @@ Data Sources:
 - MobiControl: DevInfo security columns
 - Policy compliance states
 """
+
 from __future__ import annotations
 
 import logging
@@ -157,7 +158,7 @@ class SecurityFeatureBuilder:
                 val = df[col].fillna(False)
                 if val.dtype == "object":
                     val = val.map(lambda x: str(x).lower() in ("true", "1", "yes"))
-                df["is_rooted_or_jailbroken"] = (df["is_rooted_or_jailbroken"] | val.astype(int))
+                df["is_rooted_or_jailbroken"] = df["is_rooted_or_jailbroken"] | val.astype(int)
 
         # Developer attack surface
         df["has_developer_risk"] = 0
@@ -166,7 +167,7 @@ class SecurityFeatureBuilder:
                 val = df[col].fillna(False)
                 if val.dtype == "object":
                     val = val.map(lambda x: str(x).lower() in ("true", "1", "yes"))
-                df["has_developer_risk"] = (df["has_developer_risk"] | val.astype(int))
+                df["has_developer_risk"] = df["has_developer_risk"] | val.astype(int)
 
         # Encryption status
         df["is_encrypted"] = 0
@@ -175,7 +176,7 @@ class SecurityFeatureBuilder:
                 val = df[col].fillna(False)
                 if val.dtype == "object":
                     val = val.map(lambda x: str(x).lower() in ("true", "1", "yes"))
-                df["is_encrypted"] = (df["is_encrypted"] | val.astype(int))
+                df["is_encrypted"] = df["is_encrypted"] | val.astype(int)
 
         # Passcode protection
         df["has_passcode"] = 0
@@ -192,7 +193,7 @@ class SecurityFeatureBuilder:
                 val = df[col].fillna(False)
                 if val.dtype == "object":
                     val = val.map(lambda x: str(x).lower() in ("true", "1", "yes", "passed"))
-                df["attestation_passed"] = (df["attestation_passed"] | val.astype(int))
+                df["attestation_passed"] = df["attestation_passed"] | val.astype(int)
 
         return df
 
@@ -239,7 +240,9 @@ class SecurityFeatureBuilder:
 
         # Warning and critical flags
         df["patch_age_warning"] = (df["patch_age_days"] >= self.patch_age_warning_days).astype(int)
-        df["patch_age_critical"] = (df["patch_age_days"] >= self.patch_age_critical_days).astype(int)
+        df["patch_age_critical"] = (df["patch_age_days"] >= self.patch_age_critical_days).astype(
+            int
+        )
 
         # Clean up
         df = df.drop(columns=["_patch_date"], errors="ignore")
@@ -303,7 +306,7 @@ class SecurityFeatureBuilder:
                     val = val.str.lower().isin(["compliant", "true", "1", "yes"])
                 else:
                     val = val.astype(bool)
-                df["is_compliant"] = (df["is_compliant"] | val.astype(int))
+                df["is_compliant"] = df["is_compliant"] | val.astype(int)
 
         # Managed state
         df["is_managed"] = 0
@@ -314,7 +317,7 @@ class SecurityFeatureBuilder:
                     val = val.str.lower().isin(["true", "1", "yes", "enrolled", "supervised"])
                 else:
                     val = val.astype(bool)
-                df["is_managed"] = (df["is_managed"] | val.astype(int))
+                df["is_managed"] = df["is_managed"] | val.astype(int)
 
         return df
 

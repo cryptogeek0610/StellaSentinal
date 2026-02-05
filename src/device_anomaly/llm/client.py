@@ -148,34 +148,32 @@ def strip_thinking_tags(text: str) -> str:
     original_text = text
 
     # Remove <think>...</think> blocks (including multiline content)
-    cleaned = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL | re.IGNORECASE)
     # Also handle unclosed <think> tags (in case response was truncated)
-    cleaned = re.sub(r'<think>.*$', '', cleaned, flags=re.DOTALL | re.IGNORECASE)
+    cleaned = re.sub(r"<think>.*$", "", cleaned, flags=re.DOTALL | re.IGNORECASE)
     # Clean up any extra whitespace left behind
-    cleaned = re.sub(r'\n\s*\n\s*\n', '\n\n', cleaned)
+    cleaned = re.sub(r"\n\s*\n\s*\n", "\n\n", cleaned)
     cleaned = cleaned.strip()
 
     # If we ended up with an empty result but original had content,
     # the model likely placed the actual response inside thinking tags
-    if not cleaned and '<think>' in original_text.lower():
+    if not cleaned and "<think>" in original_text.lower():
         # Try to extract content from within the thinking block
         # Look for common response markers that indicate the actual output
         response_markers = [
-            r'SUMMARY:',
-            r'Summary:',
-            r'TROUBLESHOOTING STEPS:',
-            r'Troubleshooting Steps:',
-            r'\*\*SUMMARY\*\*',
-            r'\*\*Summary\*\*',
+            r"SUMMARY:",
+            r"Summary:",
+            r"TROUBLESHOOTING STEPS:",
+            r"Troubleshooting Steps:",
+            r"\*\*SUMMARY\*\*",
+            r"\*\*Summary\*\*",
             r'1\.\s+For\s+"',  # Numbered troubleshooting steps
-            r'##\s+Summary',
+            r"##\s+Summary",
         ]
 
         # Extract content within think tags
         think_content_match = re.search(
-            r'<think>(.*?)(?:</think>|$)',
-            original_text,
-            flags=re.DOTALL | re.IGNORECASE
+            r"<think>(.*?)(?:</think>|$)", original_text, flags=re.DOTALL | re.IGNORECASE
         )
 
         if think_content_match:
@@ -192,16 +190,17 @@ def strip_thinking_tags(text: str) -> str:
             if earliest_pos < len(think_content):
                 cleaned = think_content[earliest_pos:].strip()
                 # Remove any trailing </think> if present
-                cleaned = re.sub(r'</think>\s*$', '', cleaned, flags=re.IGNORECASE)
-                logger.info(f"Extracted response from within thinking tags (length: {len(cleaned)})")
+                cleaned = re.sub(r"</think>\s*$", "", cleaned, flags=re.IGNORECASE)
+                logger.info(
+                    f"Extracted response from within thinking tags (length: {len(cleaned)})"
+                )
 
     return cleaned
 
 
 class BaseLLMClient(ABC):
     @abstractmethod
-    def generate(self, prompt: str, **kwargs: Any) -> str:
-        ...
+    def generate(self, prompt: str, **kwargs: Any) -> str: ...
 
 
 class DummyLLMClient(BaseLLMClient):
@@ -271,8 +270,7 @@ class OpenAICompatibleClient(BaseLLMClient):
 
         if isinstance(content, list):
             content = "".join(
-                part.get("text", "") if isinstance(part, dict) else str(part)
-                for part in content
+                part.get("text", "") if isinstance(part, dict) else str(part) for part in content
             )
         return str(content).strip()
 
@@ -331,8 +329,7 @@ class AzureOpenAILLMClient(BaseLLMClient):
         # previous defensive logic just in case.
         if isinstance(content, list):
             content = "".join(
-                part.get("text", "") if isinstance(part, dict) else str(part)
-                for part in content
+                part.get("text", "") if isinstance(part, dict) else str(part) for part in content
             )
         return str(content).strip()
 
@@ -530,7 +527,7 @@ class LocalLLMClient(BaseLLMClient):
 
             except Exception as e:
                 last_error = e
-                wait_time = (2 ** attempt) * 0.5  # 0.5s, 1s, 2s
+                wait_time = (2**attempt) * 0.5  # 0.5s, 1s, 2s
                 logger.warning(
                     "LLM generation attempt %d failed: %s. Retrying in %.1fs",
                     attempt + 1,
@@ -554,9 +551,7 @@ class LocalLLMClient(BaseLLMClient):
             return self._rule_based_fallback(prompt)
 
         # No fallback - raise the error
-        raise RuntimeError(
-            f"LLM generation failed after {self.max_retries} retries: {last_error}"
-        )
+        raise RuntimeError(f"LLM generation failed after {self.max_retries} retries: {last_error}")
 
     def _do_generate(
         self,
@@ -591,8 +586,7 @@ class LocalLLMClient(BaseLLMClient):
 
         if isinstance(content, list):
             content = "".join(
-                part.get("text", "") if isinstance(part, dict) else str(part)
-                for part in content
+                part.get("text", "") if isinstance(part, dict) else str(part) for part in content
             )
         return str(content).strip()
 
@@ -819,7 +813,13 @@ def get_default_llm_client() -> BaseLLMClient:
     llm_api_key = config["resolved_api_key"]
     llm_api_version = config["resolved_api_version"]
 
-    logger.info("LLM resolved: base_url=%s model=%s api_key_set=%s api_version=%s", llm_base_url, llm_model, bool(llm_api_key), llm_api_version)
+    logger.info(
+        "LLM resolved: base_url=%s model=%s api_key_set=%s api_version=%s",
+        llm_base_url,
+        llm_model,
+        bool(llm_api_key),
+        llm_api_version,
+    )
 
     # Auto-fix localhost URLs when running in Docker
     if os.path.exists("/.dockerenv") and llm_base_url and "localhost" in llm_base_url:
@@ -829,7 +829,7 @@ def get_default_llm_client() -> BaseLLMClient:
             "LLM base_url was '%s' but changed to '%s' for Docker container access. "
             "If this doesn't work, use your host IP address instead (e.g., http://192.168.x.x:1234).",
             original_url,
-            llm_base_url
+            llm_base_url,
         )
 
     # Check for Azure OpenAI configuration first
@@ -850,7 +850,9 @@ def get_default_llm_client() -> BaseLLMClient:
 
     base_url_api = _normalize_openai_base_url(llm_base_url)
     if base_url_api != llm_base_url:
-        logger.info("Normalized LLM base_url for OpenAI client: %s -> %s", llm_base_url, base_url_api)
+        logger.info(
+            "Normalized LLM base_url for OpenAI client: %s -> %s", llm_base_url, base_url_api
+        )
 
     # Try to connect to local LLM service even if model name not specified
     try:
@@ -898,7 +900,11 @@ def get_default_llm_client() -> BaseLLMClient:
         else:
             logger.warning("LLM service at %s returned status %s", base_url_api, resp.status_code)
     except requests.exceptions.ConnectionError:
-        logger.warning("Cannot connect to LLM service at %s - service may not be running", base_url_api, exc_info=True)
+        logger.warning(
+            "Cannot connect to LLM service at %s - service may not be running",
+            base_url_api,
+            exc_info=True,
+        )
     except requests.exceptions.Timeout:
         logger.warning("LLM service at %s timed out", base_url_api, exc_info=True)
     except Exception:

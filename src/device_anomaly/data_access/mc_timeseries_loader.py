@@ -18,6 +18,7 @@ Features:
 - Graceful handling of missing tables/columns
 - Canonical event normalization
 """
+
 from __future__ import annotations
 
 import logging
@@ -57,6 +58,7 @@ def _ensure_stat_types(engine: Engine) -> None:
     finally:
         _STAT_TYPES_DISCOVERED = True
 
+
 # Default batch size for incremental loads
 DEFAULT_BATCH_SIZE = int(os.getenv("INGEST_BATCH_SIZE", "50000"))
 
@@ -71,8 +73,16 @@ MC_TIMESERIES_TABLES = {
     "DeviceStatLocation": {
         "timestamp_col": "ServerDateTime",
         "device_col": "DeviceId",
-        "columns": ["DeviceId", "TimeStamp", "Latitude", "Longitude", "Altitude",
-                   "Heading", "Speed", "ServerDateTime"],
+        "columns": [
+            "DeviceId",
+            "TimeStamp",
+            "Latitude",
+            "Longitude",
+            "Altitude",
+            "Heading",
+            "Speed",
+            "ServerDateTime",
+        ],
         "order_by": "ServerDateTime",
     },
     "DeviceStatString": {
@@ -84,29 +94,62 @@ MC_TIMESERIES_TABLES = {
     "DeviceStatNetTraffic": {
         "timestamp_col": "ServerDateTime",
         "device_col": "DeviceId",
-        "columns": ["DeviceId", "TimeStamp", "StatType", "Upload", "Download",
-                   "InterfaceType", "InterfaceID", "Application", "ServerDateTime"],
+        "columns": [
+            "DeviceId",
+            "TimeStamp",
+            "StatType",
+            "Upload",
+            "Download",
+            "InterfaceType",
+            "InterfaceID",
+            "Application",
+            "ServerDateTime",
+        ],
         "order_by": "ServerDateTime",
     },
     "MainLog": {
         "timestamp_col": "DateTime",
         "device_col": "DeviceId",
-        "columns": ["ILogId", "DateTime", "EventId", "Severity", "EventClass",
-                   "ResTxt", "DeviceId", "LoginId"],
+        "columns": [
+            "ILogId",
+            "DateTime",
+            "EventId",
+            "Severity",
+            "EventClass",
+            "ResTxt",
+            "DeviceId",
+            "LoginId",
+        ],
         "order_by": "DateTime",
     },
     "Alert": {
         "timestamp_col": "SetDateTime",
         "device_col": None,  # DevId is a string, not int
-        "columns": ["AlertId", "AlertKey", "AlertName", "AlertSeverity",
-                   "DevId", "Status", "SetDateTime", "AckDateTime"],
+        "columns": [
+            "AlertId",
+            "AlertKey",
+            "AlertName",
+            "AlertSeverity",
+            "DevId",
+            "Status",
+            "SetDateTime",
+            "AckDateTime",
+        ],
         "order_by": "SetDateTime",
     },
     "DeviceInstalledApp": {
         "timestamp_col": "LastChangedDate",
         "device_col": "DeviceId",
-        "columns": ["DeviceId", "InstalledAppId", "StatusId", "Version",
-                   "Size", "DataSize", "IsRunning", "LastChangedDate"],
+        "columns": [
+            "DeviceId",
+            "InstalledAppId",
+            "StatusId",
+            "Version",
+            "Size",
+            "DataSize",
+            "IsRunning",
+            "LastChangedDate",
+        ],
         "order_by": "LastChangedDate",
     },
 }
@@ -233,7 +276,7 @@ def load_mc_timeseries_incremental(
             if pd.notna(max_ts):
                 if isinstance(max_ts, str):
                     new_watermark = datetime.fromisoformat(max_ts.replace("Z", "+00:00"))
-                elif hasattr(max_ts, 'to_pydatetime'):
+                elif hasattr(max_ts, "to_pydatetime"):
                     new_watermark = max_ts.to_pydatetime()
                 else:
                     new_watermark = max_ts
@@ -446,9 +489,11 @@ def get_mc_timeseries_stats(
                 table_stats["row_count"] = int(result[0]) if result and result[0] else 0
 
                 # Date range
-                result = conn.execute(text(f"""
+                result = conn.execute(
+                    text(f"""
                     SELECT MIN({ts_col}), MAX({ts_col}) FROM dbo.{table_name}
-                """)).fetchone()
+                """)
+                ).fetchone()
                 if result:
                     table_stats["min_date"] = str(result[0]) if result[0] else None
                     table_stats["max_date"] = str(result[1]) if result[1] else None

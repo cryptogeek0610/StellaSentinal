@@ -10,6 +10,7 @@ from device_anomaly.data_access.db_connection import create_dw_engine
 
 logger = logging.getLogger(__name__)
 
+
 def build_anomaly_results_df(
     df_scored: pd.DataFrame,
     explanations: list[str] | None,
@@ -36,9 +37,7 @@ def build_anomaly_results_df(
         explanation = next(explanations_iter) if explanations_iter is not None else None
 
         metrics = {
-            col: row[col]
-            for col in FeatureConfig.genericFeatures
-            if col in df_scored.columns
+            col: row[col] for col in FeatureConfig.genericFeatures if col in df_scored.columns
         }
         # Keep heuristic context inside metrics payload so dashboards can display it without schema changes.
         if "heuristic_reasons" in df_scored.columns or "heuristic_score" in df_scored.columns:
@@ -87,6 +86,7 @@ def save_anomaly_results(df_results: pd.DataFrame) -> int:
     logger.info("Saved %d anomaly results to dbo.ml_AnomalyResults.", len(df_results))
     return len(df_results)
 
+
 def save_anomaly_events(df_events: pd.DataFrame) -> int:
     """
     Append anomaly event rows to dbo.ml_AnomalyEvents.
@@ -110,6 +110,7 @@ def save_anomaly_events(df_events: pd.DataFrame) -> int:
 
     logger.info("Saved %d anomaly events to dbo.ml_AnomalyEvents.", len(df_events))
     return len(df_events)
+
 
 def save_device_patterns(df_patterns: pd.DataFrame) -> int:
     """

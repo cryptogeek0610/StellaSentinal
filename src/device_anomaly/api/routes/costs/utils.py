@@ -1,6 +1,7 @@
 """
 Utility functions for cost calculations.
 """
+
 from __future__ import annotations
 
 import json
@@ -27,7 +28,7 @@ def calculate_monthly_equivalent(amount: Decimal, cost_type: str) -> Decimal:
     """Calculate monthly equivalent of a cost based on its type."""
     multipliers = {
         "hourly": Decimal("160"),  # ~40 hours/week * 4 weeks
-        "daily": Decimal("22"),    # ~22 working days/month
+        "daily": Decimal("22"),  # ~22 working days/month
         "per_incident": Decimal("10"),  # Assume 10 incidents/month
         "fixed_monthly": Decimal("1"),
         "per_device": Decimal("1"),  # Per device is already monthly-ish

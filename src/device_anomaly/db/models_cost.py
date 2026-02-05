@@ -9,6 +9,7 @@ Design principles:
 3. Temporal validity (valid_from/valid_to) for cost history
 4. Full audit trail for compliance
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -51,6 +52,7 @@ class DeviceTypeCost(Base):
         depreciation_months: Expected useful life in months
         residual_value_percent: Expected value at end of life as percentage
     """
+
     __tablename__ = "device_type_costs"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
@@ -129,6 +131,7 @@ class OperationalCost(Base):
         - maintenance: Regular maintenance costs
         - other: Other operational costs
     """
+
     __tablename__ = "operational_costs"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
@@ -139,7 +142,9 @@ class OperationalCost(Base):
     description = Column(Text)
 
     # Categorization
-    category = Column(String(50), nullable=False)  # labor, downtime, support, infrastructure, maintenance, other
+    category = Column(
+        String(50), nullable=False
+    )  # labor, downtime, support, infrastructure, maintenance, other
 
     # Currency
     currency_code = Column(String(3), default="USD", nullable=False)
@@ -148,11 +153,15 @@ class OperationalCost(Base):
     amount = Column(BigInteger, nullable=False)  # Primary cost value
 
     # Cost type and unit
-    cost_type = Column(String(50), nullable=False)  # hourly, daily, per_incident, fixed_monthly, per_device
+    cost_type = Column(
+        String(50), nullable=False
+    )  # hourly, daily, per_incident, fixed_monthly, per_device
     unit = Column(String(50))  # hour, day, incident, month, device
 
     # Scope (what this cost applies to)
-    scope_type = Column(String(50), default="tenant")  # tenant, location, device_group, device_model
+    scope_type = Column(
+        String(50), default="tenant"
+    )  # tenant, location, device_group, device_model
     scope_id = Column(String(100))  # ID of the scope entity (null for tenant-wide)
 
     # Active status
@@ -196,6 +205,7 @@ class CostAuditLog(Base):
         - update: Existing cost modified
         - delete: Cost record removed
     """
+
     __tablename__ = "cost_audit_logs"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
@@ -239,7 +249,9 @@ class CostAuditLog(Base):
     )
 
     def __repr__(self):
-        return f"<CostAuditLog(entity='{self.entity_type}:{self.entity_id}', action='{self.action}')>"
+        return (
+            f"<CostAuditLog(entity='{self.entity_type}:{self.entity_id}', action='{self.action}')>"
+        )
 
 
 class CostCalculationCache(Base):
@@ -253,6 +265,7 @@ class CostCalculationCache(Base):
         - Downtime cost based on event duration
         - IT support cost for investigation time
     """
+
     __tablename__ = "cost_calculation_cache"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)

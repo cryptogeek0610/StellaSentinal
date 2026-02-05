@@ -7,6 +7,7 @@ Provides endpoints for monitoring data quality between XSight and MobiControl:
 - Missing device tracking
 - Quality scoring
 """
+
 from __future__ import annotations
 
 import logging
@@ -235,7 +236,9 @@ async def get_reconciliation_report(
         report = service.generate_reconciliation_report()
 
         return ReconciliationReportResponse(
-            report_date=report.report_date.isoformat() if report.report_date else datetime.now(UTC).isoformat(),
+            report_date=report.report_date.isoformat()
+            if report.report_date
+            else datetime.now(UTC).isoformat(),
             xsight_device_count=report.xsight_device_count,
             mobicontrol_device_count=report.mobicontrol_device_count,
             matched_devices=report.matched_devices,
@@ -280,7 +283,9 @@ async def get_data_freshness(
         for key, data in freshness.items():
             sources[key] = DataFreshnessResponse(
                 source_name=data.source_name,
-                latest_timestamp=data.latest_timestamp.isoformat() if data.latest_timestamp else None,
+                latest_timestamp=data.latest_timestamp.isoformat()
+                if data.latest_timestamp
+                else None,
                 staleness_hours=data.staleness_hours,
                 device_count=data.device_count,
                 record_count=data.record_count,

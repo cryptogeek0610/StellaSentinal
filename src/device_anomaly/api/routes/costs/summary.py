@@ -1,6 +1,7 @@
 """
 Cost summary endpoints.
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -103,7 +104,9 @@ def get_cost_summary(
                     category="hardware",
                     total_cost=total_hardware_value,
                     item_count=len(hardware_costs),
-                    percentage_of_total=float(total_hardware_value / total_all * 100) if total_all > 0 else 0,
+                    percentage_of_total=float(total_hardware_value / total_all * 100)
+                    if total_all > 0
+                    else 0,
                 )
             )
 

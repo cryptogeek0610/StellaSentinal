@@ -1,4 +1,5 @@
 """FastAPI application main entry point."""
+
 from __future__ import annotations
 
 import hmac
@@ -104,7 +105,9 @@ app = FastAPI(
 _env = os.getenv("APP_ENV", "local")
 _cors_origins_env = os.getenv("CORS_ORIGINS", "")
 _require_api_key = os.getenv("REQUIRE_API_KEY", "false").lower() == "true" or _env == "production"
-_require_tenant = os.getenv("REQUIRE_TENANT_HEADER", "false").lower() == "true" or _env == "production"
+_require_tenant = (
+    os.getenv("REQUIRE_TENANT_HEADER", "false").lower() == "true" or _env == "production"
+)
 _api_key = os.getenv("API_KEY")
 _default_tenant = os.getenv("DEFAULT_TENANT_ID", "default")
 _default_user_role = os.getenv("DEFAULT_USER_ROLE", "viewer")
@@ -112,9 +115,7 @@ _api_key_role = os.getenv("API_KEY_ROLE", _default_user_role)
 _trust_client_headers = os.getenv("TRUST_CLIENT_HEADERS", "false").lower() == "true"
 _enable_metrics = os.getenv("ENABLE_METRICS", "true").lower() == "true"
 _tenant_allowlist = {
-    tenant.strip()
-    for tenant in os.getenv("TENANT_ID_ALLOWLIST", "").split(",")
-    if tenant.strip()
+    tenant.strip() for tenant in os.getenv("TENANT_ID_ALLOWLIST", "").split(",") if tenant.strip()
 }
 
 if _cors_origins_env:
@@ -126,7 +127,9 @@ elif _env in ("local", "development"):
 else:
     # Production: no default origins - must be explicitly configured
     CORS_ORIGINS = []
-    logger.warning("No CORS_ORIGINS configured for production. Set CORS_ORIGINS environment variable.")
+    logger.warning(
+        "No CORS_ORIGINS configured for production. Set CORS_ORIGINS environment variable."
+    )
 
 # Restrict methods and headers based on environment
 if _env in ("local", "development"):
@@ -249,6 +252,7 @@ async def add_request_context(request: Request, call_next):
     response.headers["X-Request-Id"] = request_id
     return response
 
+
 # Include routers with /api prefix
 app.include_router(anomalies.router, prefix="/api")
 app.include_router(devices.router, prefix="/api")
@@ -310,6 +314,7 @@ def readiness():
         from sqlalchemy import text
 
         from device_anomaly.database.connection import get_results_db_session
+
         session = get_results_db_session()
         session.execute(text("SELECT 1"))
         session.close()
@@ -320,6 +325,7 @@ def readiness():
     # Check backend database (PostgreSQL)
     try:
         from device_anomaly.db.session import DatabaseSession
+
         db = DatabaseSession()
         checks["backend_db"] = db.test_connection()
     except Exception as e:
@@ -328,6 +334,7 @@ def readiness():
     # Check LLM service - optional (OpenAI-compatible API)
     try:
         import requests
+
         llm_base_url = os.getenv("LLM_BASE_URL", "")
         if llm_base_url:
             # Try OpenAI-compatible models endpoint
@@ -339,6 +346,7 @@ def readiness():
     # Check Qdrant (vector database) - optional
     try:
         import requests
+
         qdrant_host = os.getenv("QDRANT_HOST", "localhost")
         qdrant_port = os.getenv("QDRANT_PORT", "6333")
         resp = requests.get(f"http://{qdrant_host}:{qdrant_port}/healthz", timeout=2)

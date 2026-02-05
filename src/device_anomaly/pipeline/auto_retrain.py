@@ -7,6 +7,7 @@ This module orchestrates automatic retraining based on:
 - Time-based retraining schedules
 - Manual triggers
 """
+
 from __future__ import annotations
 
 import logging
@@ -108,7 +109,7 @@ class AutoRetrainingOrchestrator:
                 "days_since_retrain": self._days_since_retrain(current_date),
                 "anomaly_rate": current_anomaly_rate,
                 "drift_metrics": drift_metrics,
-            }
+            },
         )
 
     def _days_since_retrain(self, current_date: datetime) -> int | None:
@@ -122,9 +123,7 @@ class AutoRetrainingOrchestrator:
         """Check time-based retraining triggers."""
         if self.last_retrain_date is None:
             return RetrainingTrigger(
-                should_retrain=True,
-                reason="No previous training found",
-                priority="high"
+                should_retrain=True, reason="No previous training found", priority="high"
             )
 
         days_since = self._days_since_retrain(current_date)
@@ -140,12 +139,11 @@ class AutoRetrainingOrchestrator:
                 should_retrain=True,
                 reason=f"Max interval reached ({days_since} days)",
                 priority="normal",
-                metrics={"days_since_retrain": days_since}
+                metrics={"days_since_retrain": days_since},
             )
 
         return RetrainingTrigger(
-            should_retrain=False,
-            reason=f"Within normal retraining window ({days_since} days)"
+            should_retrain=False, reason=f"Within normal retraining window ({days_since} days)"
         )
 
     def _check_drift_triggers(
@@ -154,16 +152,12 @@ class AutoRetrainingOrchestrator:
     ) -> RetrainingTrigger:
         """Check drift-based retraining triggers."""
         if not drift_metrics:
-            return RetrainingTrigger(
-                should_retrain=False,
-                reason="No drift metrics available"
-            )
+            return RetrainingTrigger(should_retrain=False, reason="No drift metrics available")
 
         # Check PSI values
         psi_scores = drift_metrics.get("psi", {})
         high_psi_features = [
-            f for f, score in psi_scores.items()
-            if score > self.config.psi_trigger_threshold
+            f for f, score in psi_scores.items() if score > self.config.psi_trigger_threshold
         ]
 
         if len(high_psi_features) >= self.config.min_features_drifted:
@@ -174,7 +168,7 @@ class AutoRetrainingOrchestrator:
                 metrics={
                     "high_psi_features": high_psi_features[:10],
                     "max_psi": max(psi_scores.values()) if psi_scores else 0,
-                }
+                },
             )
 
         # Check feature drift ratio
@@ -191,13 +185,10 @@ class AutoRetrainingOrchestrator:
                     metrics={
                         "drift_ratio": drift_ratio,
                         "drifted_features": warn_features[:10],
-                    }
+                    },
                 )
 
-        return RetrainingTrigger(
-            should_retrain=False,
-            reason="Drift within acceptable limits"
-        )
+        return RetrainingTrigger(should_retrain=False, reason="Drift within acceptable limits")
 
     def _check_anomaly_rate_triggers(
         self,
@@ -208,14 +199,12 @@ class AutoRetrainingOrchestrator:
             # Set baseline if not set
             self.baseline_anomaly_rate = current_rate
             return RetrainingTrigger(
-                should_retrain=False,
-                reason="Setting initial anomaly rate baseline"
+                should_retrain=False, reason="Setting initial anomaly rate baseline"
             )
 
         if self.baseline_anomaly_rate == 0:
             return RetrainingTrigger(
-                should_retrain=False,
-                reason="Baseline rate is zero, skipping rate check"
+                should_retrain=False, reason="Baseline rate is zero, skipping rate check"
             )
 
         rate_deviation = abs(current_rate - self.baseline_anomaly_rate) / self.baseline_anomaly_rate
@@ -229,12 +218,11 @@ class AutoRetrainingOrchestrator:
                     "current_rate": current_rate,
                     "baseline_rate": self.baseline_anomaly_rate,
                     "deviation": rate_deviation,
-                }
+                },
             )
 
         return RetrainingTrigger(
-            should_retrain=False,
-            reason="Anomaly rate within acceptable range"
+            should_retrain=False, reason="Anomaly rate within acceptable range"
         )
 
     async def trigger_retraining(
@@ -265,8 +253,8 @@ class AutoRetrainingOrchestrator:
             start_date = end_date - timedelta(days=self.config.training_lookback_days)
 
             job_id = await worker.queue_training_job(
-                start_date=start_date.strftime('%Y-%m-%d'),
-                end_date=end_date.strftime('%Y-%m-%d'),
+                start_date=start_date.strftime("%Y-%m-%d"),
+                end_date=end_date.strftime("%Y-%m-%d"),
                 reason=reason,
                 priority=priority,
             )
@@ -304,14 +292,16 @@ class AutoRetrainingOrchestrator:
     def get_status(self) -> dict[str, Any]:
         """Get current retraining status."""
         return {
-            "last_retrain_date": self.last_retrain_date.isoformat() if self.last_retrain_date else None,
+            "last_retrain_date": self.last_retrain_date.isoformat()
+            if self.last_retrain_date
+            else None,
             "baseline_anomaly_rate": self.baseline_anomaly_rate,
             "pending_retrain": self._pending_retrain,
             "config": {
                 "psi_threshold": self.config.psi_trigger_threshold,
                 "max_days_interval": self.config.max_days_without_retraining,
                 "min_days_interval": self.config.min_days_between_retraining,
-            }
+            },
         }
 
     def update_baseline(

@@ -109,7 +109,9 @@ def test_get_devices():
                     for key in list(first_device.keys())[:15]:  # Show first 15 keys
                         value = first_device[key]
                         if isinstance(value, (dict, list)):
-                            print(f"      {key}: {type(value).__name__} ({len(value) if hasattr(value, '__len__') else 'N/A'})")
+                            print(
+                                f"      {key}: {type(value).__name__} ({len(value) if hasattr(value, '__len__') else 'N/A'})"
+                            )
                         else:
                             print(f"      {key}: {value}")
                 else:
@@ -131,7 +133,9 @@ def test_get_devices():
                     for key in list(first_device.keys())[:15]:  # Show first 15 keys
                         value = first_device[key]
                         if isinstance(value, (dict, list)):
-                            print(f"      {key}: {type(value).__name__} ({len(value) if hasattr(value, '__len__') else 'N/A'})")
+                            print(
+                                f"      {key}: {type(value).__name__} ({len(value) if hasattr(value, '__len__') else 'N/A'})"
+                            )
                         else:
                             print(f"      {key}: {value}")
 
@@ -175,7 +179,9 @@ def test_get_single_device():
         devices_result = client.get_devices(page=1, page_size=1)
 
         # Handle both list and dict responses
-        devices_list = devices_result if isinstance(devices_result, list) else devices_result.get("data", [])
+        devices_list = (
+            devices_result if isinstance(devices_result, list) else devices_result.get("data", [])
+        )
 
         if not devices_list:
             print("❌ No devices found to test with")
@@ -186,7 +192,9 @@ def test_get_single_device():
             print(f"❌ Unexpected device data format: {type(first_device)}")
             return False
 
-        device_id = first_device.get("deviceId") or first_device.get("id") or first_device.get("DeviceId")
+        device_id = (
+            first_device.get("deviceId") or first_device.get("id") or first_device.get("DeviceId")
+        )
         if not device_id:
             # Try to find any ID-like field
             for key in first_device:
@@ -208,7 +216,9 @@ def test_get_single_device():
         for key in list(device.keys())[:15]:  # Show first 15 keys
             value = device[key]
             if isinstance(value, (dict, list)):
-                print(f"    {key}: {type(value).__name__} ({len(value) if hasattr(value, '__len__') else 'N/A'})")
+                print(
+                    f"    {key}: {type(value).__name__} ({len(value) if hasattr(value, '__len__') else 'N/A'})"
+                )
             else:
                 print(f"    {key}: {value}")
 

@@ -45,8 +45,7 @@ class StreamingAnomalyResult:
             "confidence": self.confidence,
             "severity": self.severity,
             "contributing_features": [
-                {"feature": f, "z_score": z}
-                for f, z in self.contributing_features
+                {"feature": f, "z_score": z} for f, z in self.contributing_features
             ],
             "cohort_id": self.cohort_id,
             "tenant_id": self.tenant_id,
@@ -199,9 +198,7 @@ class AnomalyStreamProcessor:
         import pandas as pd
 
         if self._model.impute_values is None:
-            self._model.impute_values = pd.Series(
-                dict.fromkeys(self._model.feature_cols, 0.0)
-            )
+            self._model.impute_values = pd.Series(dict.fromkeys(self._model.feature_cols, 0.0))
 
         # Build feature vector matching model's expected features
         feature_vector = {}
@@ -308,12 +305,14 @@ class AnomalyStreamProcessor:
 
     async def _publish_alert(self, result: StreamingAnomalyResult) -> None:
         """Publish anomaly alert."""
-        await self.engine.publish(StreamMessage(
-            message_type=MessageType.ANOMALY_DETECTED,
-            payload=result.to_dict(),
-            device_id=result.device_id,
-            tenant_id=result.tenant_id,
-        ))
+        await self.engine.publish(
+            StreamMessage(
+                message_type=MessageType.ANOMALY_DETECTED,
+                payload=result.to_dict(),
+                device_id=result.device_id,
+                tenant_id=result.tenant_id,
+            )
+        )
 
     def get_stats(self) -> dict[str, Any]:
         """Get processor statistics."""

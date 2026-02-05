@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from device_anomaly.config.settings import reset_settings
 from device_anomaly.services.ingestion_pipeline import run_ingestion_batch
@@ -14,18 +14,28 @@ class DummyWatermarkStore:
     def _key(self, source_db: str, table_name: str) -> str:
         return f"{source_db}.{table_name}"
 
-    def get_watermark(self, source_db: str, table_name: str, default_lookback_hours: int | None = None):
+    def get_watermark(
+        self, source_db: str, table_name: str, default_lookback_hours: int | None = None
+    ):
         if default_lookback_hours is None:
             default_lookback_hours = 1
         return self._values.get(
             self._key(source_db, table_name),
-            datetime.now(timezone.utc) - timedelta(hours=default_lookback_hours),
+            datetime.now(UTC) - timedelta(hours=default_lookback_hours),
         )
 
     def get_watermark_metadata(self, source_db: str, table_name: str):
         return self._metadata.get(self._key(source_db, table_name))
 
-    def set_watermark(self, source_db: str, table_name: str, watermark_value, watermark_column=None, rows_extracted=0, metadata=None):
+    def set_watermark(
+        self,
+        source_db: str,
+        table_name: str,
+        watermark_value,
+        watermark_column=None,
+        rows_extracted=0,
+        metadata=None,
+    ):
         self._values[self._key(source_db, table_name)] = watermark_value
         if metadata is not None:
             self._metadata[self._key(source_db, table_name)] = metadata

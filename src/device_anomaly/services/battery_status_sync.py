@@ -39,8 +39,8 @@ class BatteryStatusSyncService:
 
     # Battery health thresholds
     HEALTH_CRITICAL = 60  # Below this = Replace Now
-    HEALTH_WARNING = 70   # Below this = Replace Soon
-    HEALTH_CAUTION = 80   # Below this = Plan Replacement
+    HEALTH_WARNING = 70  # Below this = Replace Soon
+    HEALTH_CAUTION = 80  # Below this = Plan Replacement
 
     def __init__(
         self,
@@ -104,9 +104,8 @@ class BatteryStatusSyncService:
         from sqlalchemy import func
 
         # Get device metadata for MC device ID mapping
-        device_query = (
-            self.results_db.query(DeviceMetadata)
-            .filter(DeviceMetadata.tenant_id == self.tenant_id)
+        device_query = self.results_db.query(DeviceMetadata).filter(
+            DeviceMetadata.tenant_id == self.tenant_id
         )
         if device_ids:
             device_query = device_query.filter(DeviceMetadata.device_id.in_(device_ids))
@@ -120,12 +119,11 @@ class BatteryStatusSyncService:
         # Get latest feature data per device
         subq = (
             self.results_db.query(
-                DeviceFeature.device_id,
-                func.max(DeviceFeature.computed_at).label("latest")
+                DeviceFeature.device_id, func.max(DeviceFeature.computed_at).label("latest")
             )
             .filter(
                 DeviceFeature.tenant_id == self.tenant_id,
-                DeviceFeature.device_id.in_(list(devices.keys()))
+                DeviceFeature.device_id.in_(list(devices.keys())),
             )
             .group_by(DeviceFeature.device_id)
             .subquery()
@@ -135,8 +133,8 @@ class BatteryStatusSyncService:
             self.results_db.query(DeviceFeature)
             .join(
                 subq,
-                (DeviceFeature.device_id == subq.c.device_id) &
-                (DeviceFeature.computed_at == subq.c.latest)
+                (DeviceFeature.device_id == subq.c.device_id)
+                & (DeviceFeature.computed_at == subq.c.latest),
             )
             .filter(DeviceFeature.tenant_id == self.tenant_id)
             .all()
@@ -165,14 +163,16 @@ class BatteryStatusSyncService:
             # Use device_id as MC device ID (they should match, but could be mapped differently)
             mc_device_id = str(device.device_id)
 
-            updates.append(BatteryStatusUpdate(
-                device_id=str(feature.device_id),
-                mc_device_id=mc_device_id,
-                battery_health_percent=health,
-                battery_status=status,
-                replacement_due=replacement_due,
-                replacement_urgency=urgency,
-            ))
+            updates.append(
+                BatteryStatusUpdate(
+                    device_id=str(feature.device_id),
+                    mc_device_id=mc_device_id,
+                    battery_health_percent=health,
+                    battery_status=status,
+                    replacement_due=replacement_due,
+                    replacement_urgency=urgency,
+                )
+            )
 
         return updates
 
@@ -263,10 +263,12 @@ class BatteryStatusSyncService:
                     )
                 except Exception as e:
                     result["devices_failed"] += 1
-                    result["errors"].append({
-                        "device_id": update.device_id,
-                        "error": str(e),
-                    })
+                    result["errors"].append(
+                        {
+                            "device_id": update.device_id,
+                            "error": str(e),
+                        }
+                    )
                     logger.exception(
                         "Unexpected error updating battery status for device %s",
                         update.device_id,
@@ -274,8 +276,7 @@ class BatteryStatusSyncService:
 
             result["success"] = result["devices_failed"] == 0
             result["message"] = (
-                f"Updated {result['devices_updated']} devices, "
-                f"{result['devices_failed']} failed"
+                f"Updated {result['devices_updated']} devices, {result['devices_failed']} failed"
             )
 
         except Exception as e:
@@ -284,9 +285,7 @@ class BatteryStatusSyncService:
             logger.exception("Battery status sync failed")
 
         result["completed_at"] = datetime.now(UTC).isoformat()
-        result["duration_seconds"] = (
-            datetime.now(UTC) - start_time
-        ).total_seconds()
+        result["duration_seconds"] = (datetime.now(UTC) - start_time).total_seconds()
 
         return result
 

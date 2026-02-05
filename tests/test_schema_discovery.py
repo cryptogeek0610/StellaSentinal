@@ -4,11 +4,9 @@ Unit tests for schema discovery module.
 Tests runtime table/view discovery, caching, and high-value table identification
 without requiring a real SQL Server connection.
 """
+
 import json
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Dict, List
-from unittest.mock import MagicMock, patch
+from datetime import UTC, datetime
 
 import pytest
 
@@ -16,7 +14,7 @@ import pytest
 class MockCursor:
     """Mock SQL cursor for testing."""
 
-    def __init__(self, results: List[tuple]):
+    def __init__(self, results: list[tuple]):
         self._results = results
         self._index = 0
 
@@ -34,7 +32,7 @@ class MockCursor:
 class MockConnection:
     """Mock SQL connection for testing."""
 
-    def __init__(self, results: Dict[str, List[tuple]]):
+    def __init__(self, results: dict[str, list[tuple]]):
         self._results = results
         self._last_query = ""
 
@@ -56,7 +54,7 @@ class MockConnection:
 class MockEngine:
     """Mock SQLAlchemy engine for testing."""
 
-    def __init__(self, results: Dict[str, List[tuple]]):
+    def __init__(self, results: dict[str, list[tuple]]):
         self._results = results
 
     def connect(self):
@@ -363,7 +361,7 @@ class TestWatermarkStore:
         wm = store.get_watermark("xsight", "cs_BatteryStat")
 
         # Should be approximately now - 24 hours
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         diff = now - wm
         assert 23 * 3600 <= diff.total_seconds() <= 25 * 3600
 
@@ -379,7 +377,7 @@ class TestWatermarkStore:
             enable_file_fallback=True,
         )
 
-        test_time = datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
+        test_time = datetime(2024, 1, 15, 10, 30, 0, tzinfo=UTC)
 
         # Set watermark
         success, _ = store.set_watermark(
@@ -408,14 +406,14 @@ class TestWatermarkStore:
         )
 
         # Set a recent watermark
-        recent = datetime(2024, 1, 20, 0, 0, 0, tzinfo=timezone.utc)
+        recent = datetime(2024, 1, 20, 0, 0, 0, tzinfo=UTC)
         store.set_watermark("xsight", "cs_AppUsage", recent)
 
         # Reset to 48 hours back
         new_wm, _ = store.reset_watermark("xsight", "cs_AppUsage")
 
         # Should be approximately now - 48 hours
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         diff = now - new_wm
         assert 47 * 3600 <= diff.total_seconds() <= 49 * 3600
 
@@ -455,7 +453,7 @@ class TestCanonicalEvents:
             source_db=SourceDatabase.MOBICONTROL,
             source_table="DeviceStatInt",
             device_id=123,
-            event_time=datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
+            event_time=datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
             metric_name="battery_level",
             metric_type=MetricType.INT,
             metric_value=85,
@@ -466,7 +464,7 @@ class TestCanonicalEvents:
             source_db=SourceDatabase.MOBICONTROL,
             source_table="DeviceStatInt",
             device_id=123,
-            event_time=datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
+            event_time=datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
             metric_name="battery_level",
             metric_type=MetricType.INT,
             metric_value=85,
@@ -481,7 +479,7 @@ class TestCanonicalEvents:
             source_db=SourceDatabase.MOBICONTROL,
             source_table="DeviceStatInt",
             device_id=123,
-            event_time=datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
+            event_time=datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
             metric_name="battery_level",
             metric_type=MetricType.INT,
             metric_value=90,  # Different value
@@ -564,7 +562,7 @@ class TestCanonicalEvents:
             source_db=SourceDatabase.XSIGHT,
             source_table="cs_BatteryStat",
             device_id=789,
-            event_time=datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
+            event_time=datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
             metric_name="total_battery_level_drop",
             metric_type=MetricType.INT,
             metric_value=15,

@@ -5,6 +5,7 @@ for PyTorch-based anomaly detectors. All DL detectors inherit from
 BaseDLDetector which provides a consistent interface matching the
 existing sklearn-based detectors.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -20,6 +21,7 @@ import pandas as pd
 try:
     import torch
     import torch.nn as nn
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -51,6 +53,7 @@ class DLDetectorConfig:
         validation_split: Fraction of training data for validation
         scale_features: Whether to apply StandardScaler to features
     """
+
     name: str = "dl_detector"
     latent_dim: int = 32
     hidden_dims: list[int] = field(default_factory=lambda: [256, 128, 64])
@@ -71,12 +74,14 @@ class DLDetectorConfig:
     scale_features: bool = True
 
     # Severity thresholds (reconstruction error based)
-    severity_thresholds: dict[str, float] = field(default_factory=lambda: {
-        "critical": 3.0,  # >3 std above mean error
-        "high": 2.0,
-        "medium": 1.5,
-        "low": 1.0,
-    })
+    severity_thresholds: dict[str, float] = field(
+        default_factory=lambda: {
+            "critical": 3.0,  # >3 std above mean error
+            "high": 2.0,
+            "medium": 1.5,
+            "low": 1.0,
+        }
+    )
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -96,10 +101,11 @@ class DLTrainingMetrics:
         reconstruction_error_std: Std of reconstruction error
         reconstruction_error_percentiles: Percentile values for thresholding
     """
+
     train_loss_history: list[float] = field(default_factory=list)
     val_loss_history: list[float] = field(default_factory=list)
     best_epoch: int = 0
-    best_val_loss: float = float('inf')
+    best_val_loss: float = float("inf")
     final_train_loss: float = 0.0
     training_time_seconds: float = 0.0
     early_stopped: bool = False
@@ -135,8 +141,7 @@ class BaseDLDetector(ABC):
         """
         if not TORCH_AVAILABLE:
             raise ImportError(
-                "PyTorch is required for DL detectors. "
-                "Install with: pip install torch"
+                "PyTorch is required for DL detectors. Install with: pip install torch"
             )
 
         self.config = config or DLDetectorConfig()
@@ -205,10 +210,7 @@ class BaseDLDetector(ABC):
         pass
 
     @abstractmethod
-    def _compute_reconstruction_error(
-        self,
-        x: torch.Tensor
-    ) -> torch.Tensor:
+    def _compute_reconstruction_error(self, x: torch.Tensor) -> torch.Tensor:
         """Compute reconstruction error for input batch.
 
         Args:
@@ -246,14 +248,16 @@ class BaseDLDetector(ABC):
         """
         import pandas.api.types as ptypes
 
-        numeric_cols = [
-            c for c in df.columns
-            if ptypes.is_numeric_dtype(df[c])
-        ]
+        numeric_cols = [c for c in df.columns if ptypes.is_numeric_dtype(df[c])]
 
         exclude = {
-            "DeviceId", "ModelId", "ManufacturerId", "OsVersionId",
-            "is_injected_anomaly", "anomaly_score", "anomaly_label",
+            "DeviceId",
+            "ModelId",
+            "ManufacturerId",
+            "OsVersionId",
+            "is_injected_anomaly",
+            "anomaly_score",
+            "anomaly_label",
         }
 
         candidates = [c for c in numeric_cols if c not in exclude]
@@ -269,10 +273,7 @@ class BaseDLDetector(ABC):
 
         return feature_cols
 
-    def _prepare_training_data(
-        self,
-        df: pd.DataFrame
-    ) -> tuple[np.ndarray, np.ndarray]:
+    def _prepare_training_data(self, df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
         """Prepare training data with train/validation split.
 
         Args:
@@ -322,7 +323,7 @@ class BaseDLDetector(ABC):
             )
         else:
             train_data = data
-            val_data = data[:min(100, len(data))]  # Small validation set
+            val_data = data[: min(100, len(data))]  # Small validation set
 
         return train_data.astype(np.float32), val_data.astype(np.float32)
 
@@ -398,11 +399,11 @@ class BaseDLDetector(ABC):
             weight_decay=self.config.weight_decay,
         )
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode='min', factor=0.5, patience=5
+            optimizer, mode="min", factor=0.5, patience=5
         )
 
         metrics = DLTrainingMetrics()
-        best_val_loss = float('inf')
+        best_val_loss = float("inf")
         patience_counter = 0
         best_state = None
 
@@ -430,7 +431,10 @@ class BaseDLDetector(ABC):
             if epoch % 10 == 0:
                 logger.debug(
                     "Epoch %d: train_loss=%.4f, val_loss=%.4f, lr=%.6f",
-                    epoch, train_loss, val_loss, optimizer.param_groups[0]['lr']
+                    epoch,
+                    train_loss,
+                    val_loss,
+                    optimizer.param_groups[0]["lr"],
                 )
 
             if patience_counter >= self.config.early_stopping_patience:
@@ -462,9 +466,7 @@ class BaseDLDetector(ABC):
         return metrics
 
     def _create_dataloader(
-        self,
-        data: np.ndarray,
-        shuffle: bool = False
+        self, data: np.ndarray, shuffle: bool = False
     ) -> torch.utils.data.DataLoader:
         """Create a PyTorch DataLoader from numpy array."""
         tensor = torch.tensor(data, dtype=torch.float32)
@@ -497,8 +499,7 @@ class BaseDLDetector(ABC):
 
             if self.config.gradient_clip_val is not None:
                 torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(),
-                    self.config.gradient_clip_val
+                    self.model.parameters(), self.config.gradient_clip_val
                 )
 
             optimizer.step()
@@ -508,10 +509,7 @@ class BaseDLDetector(ABC):
 
         return total_loss / max(n_batches, 1)
 
-    def _validate_epoch(
-        self,
-        val_loader: torch.utils.data.DataLoader
-    ) -> float:
+    def _validate_epoch(self, val_loader: torch.utils.data.DataLoader) -> float:
         """Run validation and return average loss."""
         self.model.eval()
         total_loss = 0.0
@@ -628,11 +626,7 @@ class BaseDLDetector(ABC):
 
         return df_scored
 
-    def save_model(
-        self,
-        output_path: str | Path,
-        export_onnx: bool = False
-    ) -> dict[str, Path]:
+    def save_model(self, output_path: str | Path, export_onnx: bool = False) -> dict[str, Path]:
         """Save trained model to disk.
 
         Args:
@@ -657,7 +651,9 @@ class BaseDLDetector(ABC):
             "model_class": self.model.__class__.__name__,
             "input_dim": len(self._feature_cols),
             "feature_cols": self._feature_cols,
-            "impute_values": self.impute_values.to_dict() if self.impute_values is not None else None,
+            "impute_values": self.impute_values.to_dict()
+            if self.impute_values is not None
+            else None,
             "scaler": self.scaler,
             "config": self.config,
             "threshold": self._threshold,

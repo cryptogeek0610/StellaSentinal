@@ -1,4 +1,5 @@
 """API routes for system health monitoring."""
+
 from __future__ import annotations
 
 import logging
@@ -18,8 +19,10 @@ router = APIRouter(prefix="/insights/system-health", tags=["system-health"])
 # Response Models
 # ============================================================================
 
+
 class SystemHealthMetricsResponse(BaseModel):
     """Aggregated system health metrics."""
+
     avg_cpu_usage: float = Field(description="Average CPU usage percentage")
     avg_memory_usage: float = Field(description="Average memory usage percentage")
     avg_storage_available_pct: float = Field(description="Average storage available percentage")
@@ -34,6 +37,7 @@ class SystemHealthMetricsResponse(BaseModel):
 
 class SystemHealthSummaryResponse(BaseModel):
     """Complete system health summary with fleet score."""
+
     tenant_id: str
     fleet_health_score: float = Field(description="Overall fleet health score 0-100")
     health_trend: str = Field(description="Trend: improving, stable, or degrading")
@@ -49,6 +53,7 @@ class SystemHealthSummaryResponse(BaseModel):
 
 class CohortHealthResponse(BaseModel):
     """Health breakdown for a device cohort."""
+
     cohort_id: str
     cohort_name: str
     device_count: int
@@ -61,6 +66,7 @@ class CohortHealthResponse(BaseModel):
 
 class HealthTrendResponse(BaseModel):
     """Time-series health trend point."""
+
     timestamp: datetime
     value: float
     device_count: int
@@ -68,6 +74,7 @@ class HealthTrendResponse(BaseModel):
 
 class StorageForecastDeviceResponse(BaseModel):
     """Storage forecast for a single device."""
+
     device_id: int
     device_name: str
     current_storage_pct: float
@@ -79,6 +86,7 @@ class StorageForecastDeviceResponse(BaseModel):
 
 class StorageForecastResponse(BaseModel):
     """Storage exhaustion forecast summary."""
+
     tenant_id: str
     devices_at_risk: list[StorageForecastDeviceResponse]
     total_at_risk_count: int
@@ -91,9 +99,11 @@ class StorageForecastResponse(BaseModel):
 # Mock Data Functions
 # ============================================================================
 
+
 def get_mock_system_health_summary(period_days: int = 7) -> SystemHealthSummaryResponse:
     """Generate mock system health summary."""
     import random
+
     random.seed(42)
 
     metrics = SystemHealthMetricsResponse(
@@ -167,7 +177,9 @@ def get_mock_system_health_summary(period_days: int = 7) -> SystemHealthSummaryR
         )
 
     total = metrics.total_devices
-    critical = metrics.devices_high_temp + (metrics.devices_low_storage if metrics.avg_storage_available_pct < 10 else 0)
+    critical = metrics.devices_high_temp + (
+        metrics.devices_low_storage if metrics.avg_storage_available_pct < 10 else 0
+    )
     warning = metrics.devices_high_cpu + metrics.devices_high_memory + metrics.devices_low_storage
     healthy = max(0, total - warning - critical)
 
@@ -185,10 +197,13 @@ def get_mock_system_health_summary(period_days: int = 7) -> SystemHealthSummaryR
     )
 
 
-def get_mock_health_trends(metric: str, period_days: int, granularity: str) -> list[HealthTrendResponse]:
+def get_mock_health_trends(
+    metric: str, period_days: int, granularity: str
+) -> list[HealthTrendResponse]:
     """Generate mock health trend data."""
     import random
     from datetime import timedelta
+
     random.seed(hash(metric) % 100)
 
     base_values = {
@@ -210,14 +225,18 @@ def get_mock_health_trends(metric: str, period_days: int, granularity: str) -> l
         ts = now - step * (hours - i - 1)
         # Add some variation with daily pattern
         hour_of_day = ts.hour
-        daily_factor = 1 + 0.2 * (hour_of_day >= 9 and hour_of_day <= 17)  # Higher during work hours
+        daily_factor = 1 + 0.2 * (
+            hour_of_day >= 9 and hour_of_day <= 17
+        )  # Higher during work hours
         value = base * daily_factor + random.uniform(-5, 5)
 
-        trends.append(HealthTrendResponse(
-            timestamp=ts,
-            value=max(0, value),
-            device_count=random.randint(240, 250),
-        ))
+        trends.append(
+            HealthTrendResponse(
+                timestamp=ts,
+                value=max(0, value),
+                device_count=random.randint(240, 250),
+            )
+        )
 
     return trends
 
@@ -273,6 +292,7 @@ def get_mock_storage_forecast() -> StorageForecastResponse:
 # ============================================================================
 # API Endpoints
 # ============================================================================
+
 
 @router.get("/summary", response_model=SystemHealthSummaryResponse)
 def get_system_health_summary(
@@ -352,7 +372,9 @@ def get_system_health_summary(
         # Calculate device status counts
         total = metrics.total_devices
         critical = metrics.devices_high_temp
-        warning = metrics.devices_high_cpu + metrics.devices_high_memory + metrics.devices_low_storage
+        warning = (
+            metrics.devices_high_cpu + metrics.devices_high_memory + metrics.devices_low_storage
+        )
         healthy = max(0, total - warning - critical)
 
         return SystemHealthSummaryResponse(
@@ -380,9 +402,15 @@ def get_system_health_summary(
             warning_count=0,
             critical_count=0,
             metrics=SystemHealthMetricsResponse(
-                avg_cpu_usage=0, avg_memory_usage=0, avg_storage_available_pct=0,
-                avg_device_temp=0, avg_battery_temp=0, devices_high_cpu=0,
-                devices_high_memory=0, devices_low_storage=0, devices_high_temp=0,
+                avg_cpu_usage=0,
+                avg_memory_usage=0,
+                avg_storage_available_pct=0,
+                avg_device_temp=0,
+                avg_battery_temp=0,
+                devices_high_cpu=0,
+                devices_high_memory=0,
+                devices_low_storage=0,
+                devices_high_temp=0,
                 total_devices=0,
             ),
             cohort_breakdown=[],
@@ -392,7 +420,10 @@ def get_system_health_summary(
 
 @router.get("/trends", response_model=list[HealthTrendResponse])
 def get_health_trends(
-    metric: str = Query(..., description="Metric: cpu_usage, memory_usage, storage_available_pct, device_temperature, battery_temperature"),
+    metric: str = Query(
+        ...,
+        description="Metric: cpu_usage, memory_usage, storage_available_pct, device_temperature, battery_temperature",
+    ),
     period_days: int = Query(7, ge=1, le=30, description="Period in days"),
     granularity: str = Query("hourly", description="Granularity: hourly or daily"),
     mock_mode: bool = Depends(get_mock_mode),

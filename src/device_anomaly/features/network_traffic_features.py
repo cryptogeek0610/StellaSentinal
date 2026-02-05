@@ -12,6 +12,7 @@ Data Sources:
 - XSight: cs_DataUsageByHour (104M rows), cs_DataUsage
 - MobiControl: DeviceStatNetTraffic (244K rows)
 """
+
 from __future__ import annotations
 
 import logging
@@ -161,7 +162,9 @@ class NetworkTrafficFeatureBuilder:
         df["exfiltration_risk"] = (upload_download_ratio > self.upload_ratio_threshold).astype(int)
 
         # High upload anomaly score
-        df["upload_anomaly_score"] = np.clip(upload_download_ratio / self.upload_ratio_threshold, 0, 10)
+        df["upload_anomaly_score"] = np.clip(
+            upload_download_ratio / self.upload_ratio_threshold, 0, 10
+        )
 
         return df
 
@@ -189,18 +192,22 @@ class NetworkTrafficFeatureBuilder:
 
             # Herfindahl-Hirschman Index (concentration measure)
             shares = app_traffic / total_traffic
-            hhi = (shares ** 2).sum()
+            hhi = (shares**2).sum()
 
             # Top app percentage
             top_app_pct = app_traffic.max() / total_traffic if total_traffic > 0 else 0
 
-            return pd.Series({
-                "traffic_concentration": hhi,
-                "top_app_data_pct": top_app_pct,
-            })
+            return pd.Series(
+                {
+                    "traffic_concentration": hhi,
+                    "top_app_data_pct": top_app_pct,
+                }
+            )
 
         if "total_data" in df.columns:
-            concentration = df.groupby("DeviceId").apply(compute_traffic_concentration).reset_index()
+            concentration = (
+                df.groupby("DeviceId").apply(compute_traffic_concentration).reset_index()
+            )
             df = df.merge(concentration, on="DeviceId", how="left")
 
         return df
@@ -232,10 +239,14 @@ class NetworkTrafficFeatureBuilder:
         # WiFi vs Cellular ratio (if we can identify them)
         # Common convention: ConnectionTypeId 1 = WiFi, 2 = Cellular
         if df[interface_col].dtype in [np.int64, np.float64, "int64", "float64"]:
-            wifi_data = df[df[interface_col] == 1].groupby("DeviceId")["total_data"].sum().reset_index()
+            wifi_data = (
+                df[df[interface_col] == 1].groupby("DeviceId")["total_data"].sum().reset_index()
+            )
             wifi_data.columns = ["DeviceId", "wifi_data_total"]
 
-            cellular_data = df[df[interface_col] == 2].groupby("DeviceId")["total_data"].sum().reset_index()
+            cellular_data = (
+                df[df[interface_col] == 2].groupby("DeviceId")["total_data"].sum().reset_index()
+            )
             cellular_data.columns = ["DeviceId", "cellular_data_total"]
 
             df = df.merge(wifi_data, on="DeviceId", how="left")
@@ -273,12 +284,14 @@ class NetworkTrafficFeatureBuilder:
         def compute_temporal_pattern(grp: pd.DataFrame) -> pd.Series:
             total = grp["total_data"].sum()
             if total == 0:
-                return pd.Series({
-                    "business_hour_data_pct": 0.5,
-                    "night_data_pct": 0.0,
-                    "peak_hour": 12,
-                    "hourly_entropy": 0,
-                })
+                return pd.Series(
+                    {
+                        "business_hour_data_pct": 0.5,
+                        "night_data_pct": 0.0,
+                        "peak_hour": 12,
+                        "hourly_entropy": 0,
+                    }
+                )
 
             business_data = grp[grp["is_business_hour"] == 1]["total_data"].sum()
             night_data = grp[grp["is_night_hour"] == 1]["total_data"].sum()
@@ -291,12 +304,14 @@ class NetworkTrafficFeatureBuilder:
             hourly_pct = hourly_data / (total + 1e-6)
             entropy = -np.sum(hourly_pct * np.log2(hourly_pct + 1e-10)) / np.log2(24)  # Normalized
 
-            return pd.Series({
-                "business_hour_data_pct": business_data / total,
-                "night_data_pct": night_data / total,
-                "peak_hour": peak_hour,
-                "hourly_entropy": entropy,
-            })
+            return pd.Series(
+                {
+                    "business_hour_data_pct": business_data / total,
+                    "night_data_pct": night_data / total,
+                    "peak_hour": peak_hour,
+                    "hourly_entropy": entropy,
+                }
+            )
 
         temporal_patterns = df.groupby("DeviceId").apply(compute_temporal_pattern).reset_index()
         df = df.merge(temporal_patterns, on="DeviceId", how="left")

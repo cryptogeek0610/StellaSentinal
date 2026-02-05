@@ -14,17 +14,17 @@ Tests the new feature engineering, ML models, and pipeline components:
 - Model governance
 - Auto-retraining
 """
+
+from datetime import UTC, datetime, timedelta
+
 import numpy as np
 import pandas as pd
 import pytest
-from datetime import datetime, timedelta
-from pathlib import Path
-import tempfile
-
 
 # =============================================================================
 # FIXTURES
 # =============================================================================
+
 
 @pytest.fixture
 def sample_telemetry_df():
@@ -37,38 +37,40 @@ def sample_telemetry_df():
     for device_id in range(1, n_devices + 1):
         for day in range(n_days):
             timestamp = datetime.now() - timedelta(days=n_days - day)
-            data.append({
-                "DeviceId": device_id,
-                "Timestamp": timestamp,
-                "ManufacturerId": device_id % 3,
-                "ModelId": device_id % 5,
-                "OsVersionId": device_id % 2,
-                # Battery metrics
-                "TotalBatteryLevelDrop": np.random.uniform(10, 50),
-                "BatteryDrainPerHour": np.random.uniform(1, 10),
-                "TotalDischargeTime_Sec": np.random.uniform(3600, 36000),
-                # App metrics
-                "AppForegroundTime": np.random.uniform(1000, 10000),
-                "CrashCount": np.random.poisson(1),
-                "ANRCount": np.random.poisson(0.5),
-                # Network metrics
-                "Download": np.random.uniform(1e6, 1e9),
-                "Upload": np.random.uniform(1e5, 1e8),
-                "AvgSignalStrength": np.random.uniform(-100, -50),
-                "TotalDropCnt": np.random.poisson(5),
-                "TotalSignalReadings": np.random.randint(100, 1000),
-                # Location
-                "Latitude": 40.7 + np.random.uniform(-0.1, 0.1),
-                "Longitude": -74.0 + np.random.uniform(-0.1, 0.1),
-                "SignalStrength": np.random.uniform(-100, -50),
-                # System health
-                "CpuUsage": np.random.uniform(10, 90),
-                "AvailableRAM": np.random.uniform(1e9, 4e9),
-                "TotalRAM": 4e9,
-                "AvailableStorage": np.random.uniform(1e10, 5e10),
-                "TotalStorage": 6e10,
-                "Temperature": np.random.uniform(30, 50),
-            })
+            data.append(
+                {
+                    "DeviceId": device_id,
+                    "Timestamp": timestamp,
+                    "ManufacturerId": device_id % 3,
+                    "ModelId": device_id % 5,
+                    "OsVersionId": device_id % 2,
+                    # Battery metrics
+                    "TotalBatteryLevelDrop": np.random.uniform(10, 50),
+                    "BatteryDrainPerHour": np.random.uniform(1, 10),
+                    "TotalDischargeTime_Sec": np.random.uniform(3600, 36000),
+                    # App metrics
+                    "AppForegroundTime": np.random.uniform(1000, 10000),
+                    "CrashCount": np.random.poisson(1),
+                    "ANRCount": np.random.poisson(0.5),
+                    # Network metrics
+                    "Download": np.random.uniform(1e6, 1e9),
+                    "Upload": np.random.uniform(1e5, 1e8),
+                    "AvgSignalStrength": np.random.uniform(-100, -50),
+                    "TotalDropCnt": np.random.poisson(5),
+                    "TotalSignalReadings": np.random.randint(100, 1000),
+                    # Location
+                    "Latitude": 40.7 + np.random.uniform(-0.1, 0.1),
+                    "Longitude": -74.0 + np.random.uniform(-0.1, 0.1),
+                    "SignalStrength": np.random.uniform(-100, -50),
+                    # System health
+                    "CpuUsage": np.random.uniform(10, 90),
+                    "AvailableRAM": np.random.uniform(1e9, 4e9),
+                    "TotalRAM": 4e9,
+                    "AvailableStorage": np.random.uniform(1e10, 5e10),
+                    "TotalStorage": 6e10,
+                    "Temperature": np.random.uniform(30, 50),
+                }
+            )
 
     return pd.DataFrame(data)
 
@@ -84,13 +86,15 @@ def sample_event_df():
 
     data = []
     for i in range(n_events):
-        data.append({
-            "DeviceId": np.random.randint(1, 6),
-            "Timestamp": datetime.now() - timedelta(hours=np.random.randint(0, 720)),
-            "EventType": np.random.choice(event_types),
-            "Severity": np.random.choice(severities),
-            "Message": f"Event message {i}",
-        })
+        data.append(
+            {
+                "DeviceId": np.random.randint(1, 6),
+                "Timestamp": datetime.now() - timedelta(hours=np.random.randint(0, 720)),
+                "EventType": np.random.choice(event_types),
+                "Severity": np.random.choice(severities),
+                "Message": f"Event message {i}",
+            }
+        )
 
     return pd.DataFrame(data)
 
@@ -99,16 +103,19 @@ def sample_event_df():
 # FEATURE ENGINEERING TESTS
 # =============================================================================
 
+
 class TestLocationFeatures:
     """Tests for location feature engineering."""
 
     def test_location_feature_builder_init(self):
         from device_anomaly.features.location_features import LocationFeatureBuilder
+
         builder = LocationFeatureBuilder()
         assert builder.signal_threshold_dbm == -80.0
 
     def test_transform_with_gps_data(self, sample_telemetry_df):
         from device_anomaly.features.location_features import LocationFeatureBuilder
+
         builder = LocationFeatureBuilder()
         result = builder.transform(sample_telemetry_df)
 
@@ -133,11 +140,13 @@ class TestEventFeatures:
 
     def test_event_feature_builder_init(self):
         from device_anomaly.features.event_features import EventFeatureBuilder
+
         builder = EventFeatureBuilder(window_days=7)
         assert builder.window_days == 7
 
     def test_transform_with_events(self, sample_event_df):
         from device_anomaly.features.event_features import EventFeatureBuilder
+
         builder = EventFeatureBuilder()
         result = builder.transform(sample_event_df)
 
@@ -146,6 +155,7 @@ class TestEventFeatures:
 
     def test_crash_detection(self, sample_event_df):
         from device_anomaly.features.event_features import EventFeatureBuilder
+
         builder = EventFeatureBuilder()
         result = builder.transform(sample_event_df)
 
@@ -158,11 +168,13 @@ class TestSystemHealthFeatures:
 
     def test_system_health_builder_init(self):
         from device_anomaly.features.system_health_features import SystemHealthFeatureBuilder
+
         builder = SystemHealthFeatureBuilder(cpu_spike_threshold=95.0)
         assert builder.cpu_spike_threshold == 95.0
 
     def test_transform_with_health_data(self, sample_telemetry_df):
         from device_anomaly.features.system_health_features import SystemHealthFeatureBuilder
+
         builder = SystemHealthFeatureBuilder()
         result = builder.transform(sample_telemetry_df)
 
@@ -175,11 +187,13 @@ class TestTemporalFeatures:
 
     def test_temporal_builder_init(self):
         from device_anomaly.features.temporal_features import TemporalFeatureBuilder
+
         builder = TemporalFeatureBuilder(seasonal_period=24)
         assert builder.seasonal_period == 24
 
     def test_temporal_pattern_features(self, sample_telemetry_df):
         from device_anomaly.features.temporal_features import TemporalFeatureBuilder
+
         builder = TemporalFeatureBuilder()
         result = builder.transform(sample_telemetry_df)
 
@@ -191,17 +205,19 @@ class TestTemporalFeatures:
 # ML MODEL TESTS
 # =============================================================================
 
+
 class TestEnsembleDetector:
     """Tests for ensemble anomaly detector."""
 
     def test_ensemble_config(self):
         from device_anomaly.models.ensemble_detector import EnsembleConfig
+
         config = EnsembleConfig(contamination=0.1)
         assert config.contamination == 0.1
 
     def test_ensemble_fit_predict(self, sample_telemetry_df):
-        from device_anomaly.models.ensemble_detector import EnsembleAnomalyDetector, EnsembleConfig
         from device_anomaly.features.device_features import DeviceFeatureBuilder
+        from device_anomaly.models.ensemble_detector import EnsembleAnomalyDetector, EnsembleConfig
 
         # Build features
         builder = DeviceFeatureBuilder(compute_cohort=False)
@@ -220,8 +236,8 @@ class TestEnsembleDetector:
         assert (result["ensemble_label"] == -1).sum() > 0
 
     def test_ensemble_save_load(self, sample_telemetry_df, tmp_path):
-        from device_anomaly.models.ensemble_detector import EnsembleAnomalyDetector
         from device_anomaly.features.device_features import DeviceFeatureBuilder
+        from device_anomaly.models.ensemble_detector import EnsembleAnomalyDetector
 
         builder = DeviceFeatureBuilder(compute_cohort=False)
         df_features = builder.transform(sample_telemetry_df)
@@ -254,8 +270,9 @@ class TestSHAPExplainer:
         assert explainer.config.top_features == 3
 
     def test_fallback_explanations(self, sample_telemetry_df):
-        from device_anomaly.models.explainer import AnomalyExplainer
         from sklearn.ensemble import IsolationForest
+
+        from device_anomaly.models.explainer import AnomalyExplainer
 
         # Train a simple model
         feature_cols = ["TotalBatteryLevelDrop", "CrashCount", "TotalDropCnt"]
@@ -277,6 +294,7 @@ class TestWeakLabeling:
 
     def test_weak_label_generator_init(self):
         from device_anomaly.models.weak_labeling import WeakLabelGenerator
+
         generator = WeakLabelGenerator()
         assert len(generator._heuristic_rules) > 0
 
@@ -284,9 +302,8 @@ class TestWeakLabeling:
         from device_anomaly.models.weak_labeling import WeakLabelGenerator
 
         # Add derived features
-        sample_telemetry_df["DropRate"] = (
-            sample_telemetry_df["TotalDropCnt"] /
-            (sample_telemetry_df["TotalSignalReadings"] + 1)
+        sample_telemetry_df["DropRate"] = sample_telemetry_df["TotalDropCnt"] / (
+            sample_telemetry_df["TotalSignalReadings"] + 1
         )
 
         generator = WeakLabelGenerator()
@@ -301,6 +318,7 @@ class TestPredictiveDetector:
 
     def test_predictive_config(self):
         from device_anomaly.models.predictive_detector import PredictiveConfig
+
         config = PredictiveConfig(battery_critical_level=15.0)
         assert config.battery_critical_level == 15.0
 
@@ -340,11 +358,13 @@ class TestPredictiveDetector:
 # PIPELINE TESTS
 # =============================================================================
 
+
 class TestAutoRetraining:
     """Tests for auto-retraining pipeline."""
 
     def test_retraining_config(self):
         from device_anomaly.pipeline.auto_retrain import RetrainingConfig
+
         config = RetrainingConfig(psi_trigger_threshold=0.3)
         assert config.psi_trigger_threshold == 0.3
 
@@ -361,11 +381,12 @@ class TestAutoRetraining:
         assert result.should_retrain == True  # No previous training
 
     def test_time_triggers(self):
+        from datetime import datetime
+
         from device_anomaly.pipeline.auto_retrain import AutoRetrainingOrchestrator
-        from datetime import datetime, timezone
 
         orchestrator = AutoRetrainingOrchestrator()
-        orchestrator.last_retrain_date = datetime.now(timezone.utc) - timedelta(days=35)
+        orchestrator.last_retrain_date = datetime.now(UTC) - timedelta(days=35)
 
         result = orchestrator.evaluate_triggers(
             drift_metrics={},
@@ -436,6 +457,7 @@ class TestRootCauseAnalysis:
 
     def test_analyzer_init(self):
         from device_anomaly.insights.root_cause import RootCauseAnalyzer
+
         analyzer = RootCauseAnalyzer()
         assert len(analyzer._causal_graph) > 0
 
@@ -460,6 +482,7 @@ class TestRootCauseAnalysis:
 # =============================================================================
 # INTEGRATION TESTS
 # =============================================================================
+
 
 class TestExtendedFeatures:
     """Integration tests for extended feature building."""

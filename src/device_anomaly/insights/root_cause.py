@@ -7,6 +7,7 @@ This module identifies probable root causes of anomalies using:
 - Cohort comparison (what's different about affected devices)
 - Causal graph traversal
 """
+
 from __future__ import annotations
 
 import logging
@@ -105,45 +106,38 @@ class RootCauseAnalyzer:
             "ChargingPattern": ["BatteryHealth", "BatteryCapacity"],
             "BatteryHealth": ["BatteryDrain", "BatteryCapacity"],
             "Temperature": ["BatteryDrain", "CPUThrottle"],
-
             # Network causes
             "LocationMovement": ["APHopping", "NetworkDrops"],
             "WeakWifiCoverage": ["NetworkDrops", "SignalStrength"],
             "CellCoverage": ["TowerHopping", "NetworkDrops"],
             "APHopping": ["BatteryDrain", "NetworkDrops"],
             "HighDataUsage": ["BatteryDrain", "NetworkCongestion"],
-
             # App causes
             "AppVersion": ["AppCrash", "ANR"],
             "LowMemory": ["AppCrash", "ANR", "SlowPerformance"],
             "LowStorage": ["AppCrash", "InstallFailure"],
             "HighCPU": ["BatteryDrain", "Temperature", "SlowPerformance"],
-
             # System causes
             "OsVersion": ["AppCrash", "SecurityVulnerability"],
             "AgentVersion": ["DataCollectionIssues"],
             "Rooted": ["SecurityIssues", "AppBehavior"],
-
             # Network Traffic causes (NEW - from network_traffic_features.py)
             "high_upload_ratio": ["DataExfiltration", "SecurityRisk"],
             "exfiltration_risk": ["DataExfiltration", "SecurityBreach"],
             "unusual_night_activity": ["SecurityRisk", "MalwareBehavior"],
             "interface_switching_rate": ["BatteryDrain", "NetworkInstability"],
             "traffic_concentration": ["DataExfiltration", "SingleAppAbuse"],
-
             # Security Posture causes (NEW - from security_features.py)
             "is_rooted_or_jailbroken": ["SecurityBreach", "MalwareBehavior", "AppBehavior"],
             "has_developer_risk": ["SecurityRisk", "DataLeakage"],
             "patch_age_critical": ["SecurityVulnerability", "ExploitRisk"],
             "low_security_score": ["SecurityBreach", "ComplianceViolation"],
-
             # Location Intelligence causes (NEW - from location_features.py)
             "dead_zone_time_pct": ["NetworkDrops", "BatteryDrain", "DataLoss"],
             "location_entropy": ["APHopping", "BatteryDrain"],
             "ap_hopping_rate": ["BatteryDrain", "NetworkDrops"],
             "signal_variability": ["NetworkDrops", "PoorConnectivity"],
             "problematic_ap_count": ["NetworkDrops", "SlowPerformance"],
-
             # Temporal Pattern causes (NEW - from temporal_features.py)
             "unusual_peak_hour": ["Malware", "AppAbuse"],
             "night_usage_anomaly": ["SecurityRisk", "MalwareBehavior"],
@@ -168,7 +162,6 @@ class RootCauseAnalyzer:
             "HighCPU": "Identify CPU-intensive apps and optimize",
             "AppVersion": "Update apps to latest versions",
             "OsVersion": "Update to latest OS version",
-
             # Network Traffic recommendations (NEW)
             "high_upload_ratio": "Investigate apps with high upload activity - potential data exfiltration",
             "exfiltration_risk": "Review network traffic for unauthorized data transfers",
@@ -176,21 +169,18 @@ class RootCauseAnalyzer:
             "interface_switching_rate": "Stabilize network connection - frequent switching drains battery",
             "traffic_concentration": "Review app dominating network traffic - may indicate abuse",
             "upload_anomaly_score": "Audit applications sending excessive data",
-
             # Security Posture recommendations (NEW)
             "is_rooted_or_jailbroken": "Device is compromised - reimage or replace immediately",
             "has_developer_risk": "Disable developer mode and USB debugging in production",
             "patch_age_critical": "Apply security patches urgently - device is vulnerable",
             "low_security_score": "Review security settings and enable encryption",
             "security_score": "Improve security posture: enable passcode, encryption, update patches",
-
             # Location Intelligence recommendations (NEW)
             "dead_zone_time_pct": "Device frequently in poor coverage areas - consider WiFi extenders",
             "location_entropy": "High mobility pattern - may need better network handoff policies",
             "ap_hopping_rate": "Frequent AP changes causing battery drain - review AP placement",
             "signal_variability": "Inconsistent signal - investigate WiFi infrastructure",
             "problematic_ap_count": "Multiple problematic APs - review WiFi network configuration",
-
             # Temporal Pattern recommendations (NEW)
             "unusual_peak_hour": "Activity at unusual hours - verify legitimate use",
             "night_usage_anomaly": "Unexpected night activity - check for malware or misuse",
@@ -247,17 +237,13 @@ class RootCauseAnalyzer:
         # 1. Check temporal precedence
         if historical_features:
             temporal_causes = self._analyze_temporal_precedence(
-                anomaly_features,
-                historical_features
+                anomaly_features, historical_features
             )
             root_causes.extend(temporal_causes)
 
         # 2. Check cohort deviation
         if cohort_baseline:
-            cohort_causes = self._analyze_cohort_deviation(
-                anomaly_features,
-                cohort_baseline
-            )
+            cohort_causes = self._analyze_cohort_deviation(anomaly_features, cohort_baseline)
             root_causes.extend(cohort_causes)
 
         # 3. Analyze feature correlations
@@ -321,18 +307,20 @@ class RootCauseAnalyzer:
                     continue
 
                 direction = "increased" if change > 0 else "decreased"
-                causes.append(RootCause(
-                    cause_type="temporal",
-                    feature=key,
-                    evidence=f"{key} {direction} by {change_pct:.0%}",
-                    confidence=min(0.8, change_pct),
-                    details={
-                        "previous_value": recent_val,
-                        "current_value": current_val,
-                        "change_pct": change_pct,
-                    },
-                    recommendation=self._feature_recommendations.get(key, ""),
-                ))
+                causes.append(
+                    RootCause(
+                        cause_type="temporal",
+                        feature=key,
+                        evidence=f"{key} {direction} by {change_pct:.0%}",
+                        confidence=min(0.8, change_pct),
+                        details={
+                            "previous_value": recent_val,
+                            "current_value": current_val,
+                            "change_pct": change_pct,
+                        },
+                        recommendation=self._feature_recommendations.get(key, ""),
+                    )
+                )
 
         return causes
 
@@ -368,17 +356,19 @@ class RootCauseAnalyzer:
                 if self._is_benign_deviation(key, current_val, cohort_val):
                     continue
 
-                causes.append(RootCause(
-                    cause_type="cohort",
-                    feature=key,
-                    evidence=f"{key} is {deviation:.0%} different from cohort average",
-                    confidence=min(0.7, deviation / 2),
-                    details={
-                        "device_value": current_val,
-                        "cohort_value": cohort_val,
-                        "deviation": deviation,
-                    },
-                ))
+                causes.append(
+                    RootCause(
+                        cause_type="cohort",
+                        feature=key,
+                        evidence=f"{key} is {deviation:.0%} different from cohort average",
+                        confidence=min(0.7, deviation / 2),
+                        details={
+                            "device_value": current_val,
+                            "cohort_value": cohort_val,
+                            "deviation": deviation,
+                        },
+                    )
+                )
 
         return causes
 
@@ -407,17 +397,19 @@ class RootCauseAnalyzer:
             # Check if both are elevated/problematic
             if isinstance(effect_val, (int, float)) and isinstance(cause_val, (int, float)):
                 if effect_val > 0 and cause_val > 0:
-                    causes.append(RootCause(
-                        cause_type="correlation",
-                        feature=cause_feat,
-                        evidence=explanation,
-                        confidence=0.6,
-                        details={
-                            "effect_feature": effect,
-                            "effect_value": effect_val,
-                            "cause_value": cause_val,
-                        },
-                    ))
+                    causes.append(
+                        RootCause(
+                            cause_type="correlation",
+                            feature=cause_feat,
+                            evidence=explanation,
+                            confidence=0.6,
+                            details={
+                                "effect_feature": effect,
+                                "effect_value": effect_val,
+                                "cause_value": cause_val,
+                            },
+                        )
+                    )
 
         return causes
 
@@ -456,17 +448,19 @@ class RootCauseAnalyzer:
                         if variant in features:
                             val = features[variant]
                             if isinstance(val, (int, float)) and val > 0:
-                                causes.append(RootCause(
-                                    cause_type="causal",
-                                    feature=cause,
-                                    evidence=f"{cause} can cause {effect}",
-                                    confidence=0.5,
-                                    details={
-                                        "causal_path": f"{cause} -> {effect}",
-                                        "feature_value": val,
-                                    },
-                                    recommendation=self._feature_recommendations.get(cause, ""),
-                                ))
+                                causes.append(
+                                    RootCause(
+                                        cause_type="causal",
+                                        feature=cause,
+                                        evidence=f"{cause} can cause {effect}",
+                                        confidence=0.5,
+                                        details={
+                                            "causal_path": f"{cause} -> {effect}",
+                                            "feature_value": val,
+                                        },
+                                        recommendation=self._feature_recommendations.get(cause, ""),
+                                    )
+                                )
                             break
 
         return causes
@@ -554,7 +548,8 @@ def analyze_dataframe_root_causes(
     # Get feature columns
     if feature_cols is None:
         feature_cols = [
-            c for c in df.columns
+            c
+            for c in df.columns
             if c not in ["DeviceId", "Timestamp", anomaly_col]
             and df[c].dtype in [np.float64, np.int64, float, int]
         ]
@@ -570,11 +565,13 @@ def analyze_dataframe_root_causes(
             anomaly_features=features,
             device_id=row.get("DeviceId"),
         )
-        analyses.append({
-            "top_cause": result.top_cause.feature if result.top_cause else None,
-            "confidence": result.analysis_confidence,
-            "recommendations": result.recommendations[:2],
-        })
+        analyses.append(
+            {
+                "top_cause": result.top_cause.feature if result.top_cause else None,
+                "confidence": result.analysis_confidence,
+                "recommendations": result.recommendations[:2],
+            }
+        )
 
     df["root_cause_analysis"] = analyses
     return df

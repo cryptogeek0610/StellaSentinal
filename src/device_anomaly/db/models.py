@@ -7,6 +7,7 @@ This module defines the canonical data model for storing:
 - Baselines and anomalies
 - Change logs and LLM explanations
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -15,6 +16,7 @@ from datetime import UTC, datetime
 def _utc_now() -> datetime:
     """Return current UTC time. Used as default for DateTime columns."""
     return datetime.now(UTC)
+
 
 from sqlalchemy import (
     BigInteger,
@@ -40,6 +42,7 @@ class Tenant(Base):
     Each tenant represents a separate customer/organization.
     All data access must be filtered by tenant_id.
     """
+
     __tablename__ = "tenants"
 
     tenant_id = Column(String(50), primary_key=True)
@@ -58,6 +61,7 @@ class Device(Base):
     Devices are identified by device_id (internal) and external_id (from source).
     The 'source' field indicates origin: 'xsight', 'mobicontrol', etc.
     """
+
     __tablename__ = "devices"
 
     device_id = Column(String(50), primary_key=True)
@@ -88,6 +92,7 @@ class MetricDefinition(Base):
     Standard metrics: TotalBatteryLevelDrop, Download, Upload, etc.
     Custom metrics: Discovered from data sources, registered here.
     """
+
     __tablename__ = "metric_definitions"
 
     metric_id = Column(String(50), primary_key=True)
@@ -115,6 +120,7 @@ class TelemetryPoint(Base):
     Stores individual metric measurements over time.
     Partitioned by timestamp for performance (see migration script).
     """
+
     __tablename__ = "telemetry_points"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
@@ -148,6 +154,7 @@ class Baseline(Base):
     - device_group: A group of similar devices
     - device: Individual device baseline
     """
+
     __tablename__ = "baselines"
 
     baseline_id = Column(String(50), primary_key=True)
@@ -178,6 +185,7 @@ class Anomaly(Base):
     Each record represents one anomaly detection event.
     Includes severity, score, explanation, and user feedback.
     """
+
     __tablename__ = "anomalies"
 
     anomaly_id = Column(String(50), primary_key=True)
@@ -220,12 +228,15 @@ class ChangeLog(Base):
     - Access Point additions/removals
     - Configuration changes
     """
+
     __tablename__ = "change_log"
 
     change_id = Column(String(50), primary_key=True)
     tenant_id = Column(String(50), ForeignKey("tenants.tenant_id"), nullable=False)
     timestamp = Column(DateTime, nullable=False)
-    change_type = Column(String(50), nullable=False)  # policy, os_version, app_version, ap_added, etc.
+    change_type = Column(
+        String(50), nullable=False
+    )  # policy, os_version, app_version, ap_added, etc.
     description = Column(Text)  # Detailed description
     affected_devices = Column(Text)  # JSON: list of device_ids or device_group_ids
     source = Column(String(50))  # xsight, mobicontrol, manual, api
@@ -250,6 +261,7 @@ class Explanation(Base):
     - Token usage for cost tracking
     - Retrieved context for transparency
     """
+
     __tablename__ = "explanations"
 
     explanation_id = Column(String(50), primary_key=True)
@@ -281,6 +293,7 @@ class User(Base):
     - analyst: Can provide feedback, manage baselines
     - admin: Full access including user management
     """
+
     __tablename__ = "users"
 
     user_id = Column(String(50), primary_key=True)
@@ -310,6 +323,7 @@ class AuditLog(Base):
     Required for compliance (GDPR, SOC2, etc.).
     Tracks who accessed what data when.
     """
+
     __tablename__ = "audit_logs"
 
     log_id = Column(BigInteger, primary_key=True, autoincrement=True)
@@ -340,6 +354,7 @@ class AnomalyEvent(Base):
     An event represents a sequence of anomalous rows where gaps
     between consecutive anomalies are within a threshold.
     """
+
     __tablename__ = "anomaly_events"
 
     event_id = Column(String(50), primary_key=True)
@@ -375,6 +390,7 @@ class DevicePattern(Base):
     Stores aggregated pattern analysis for devices over time periods,
     including anomaly rates, event counts, and pattern summaries.
     """
+
     __tablename__ = "device_patterns"
 
     pattern_id = Column(String(50), primary_key=True)
@@ -409,6 +425,7 @@ class MLModel(Base):
     Tracks ML models used for anomaly detection, including configuration,
     feature columns, and deployment status.
     """
+
     __tablename__ = "ml_models"
 
     model_id = Column(String(50), primary_key=True)
@@ -439,6 +456,7 @@ class ModelDeployment(Base):
 
     Manages model deployment lifecycle across different environments.
     """
+
     __tablename__ = "model_deployments"
 
     deployment_id = Column(String(50), primary_key=True)
@@ -464,6 +482,7 @@ class ModelMetric(Base):
     Tracks model performance over time including precision, recall, F1,
     and confusion matrix components.
     """
+
     __tablename__ = "model_metrics"
 
     metric_id = Column(BigInteger, primary_key=True, autoincrement=True)
@@ -493,12 +512,15 @@ class AlertRule(Base):
     Defines rules that trigger alerts based on anomaly characteristics,
     patterns, or other conditions.
     """
+
     __tablename__ = "alert_rules"
 
     rule_id = Column(String(50), primary_key=True)
     tenant_id = Column(String(50), ForeignKey("tenants.tenant_id"), nullable=False)
     name = Column(String(255), nullable=False)
-    rule_type = Column(String(50), nullable=False)  # anomaly_severity, anomaly_count, pattern_detected, etc.
+    rule_type = Column(
+        String(50), nullable=False
+    )  # anomaly_severity, anomaly_count, pattern_detected, etc.
     conditions_json = Column(Text, nullable=False)  # JSON: rule conditions
     severity = Column(String(20), nullable=False)  # low, medium, high, critical
     actions_json = Column(Text)  # JSON: notification actions (email, webhook, etc.)
@@ -522,14 +544,19 @@ class Alert(Base):
     Stores alerts that have been triggered by alert rules,
     including status and resolution tracking.
     """
+
     __tablename__ = "alerts"
 
     alert_id = Column(String(50), primary_key=True)
     rule_id = Column(String(50), ForeignKey("alert_rules.rule_id"), nullable=False)
     tenant_id = Column(String(50), ForeignKey("tenants.tenant_id"), nullable=False)
-    anomaly_id = Column(String(50), ForeignKey("anomalies.anomaly_id"))  # Optional: link to specific anomaly
+    anomaly_id = Column(
+        String(50), ForeignKey("anomalies.anomaly_id")
+    )  # Optional: link to specific anomaly
     device_id = Column(String(50), ForeignKey("devices.device_id"))  # Optional: link to device
-    event_id = Column(String(50), ForeignKey("anomaly_events.event_id"))  # Optional: link to anomaly event
+    event_id = Column(
+        String(50), ForeignKey("anomaly_events.event_id")
+    )  # Optional: link to anomaly event
     severity = Column(String(20), nullable=False)  # low, medium, high, critical
     status = Column(String(20), default="open")  # open, acknowledged, resolved, suppressed
     message = Column(Text, nullable=False)
@@ -557,12 +584,15 @@ class AlertNotification(Base):
     Tracks individual notification attempts for alerts across
     different channels (email, webhook, SMS, etc.).
     """
+
     __tablename__ = "alert_notifications"
 
     notification_id = Column(BigInteger, primary_key=True, autoincrement=True)
     alert_id = Column(String(50), ForeignKey("alerts.alert_id"), nullable=False)
     channel = Column(String(50), nullable=False)  # email, webhook, sms, slack, etc.
-    recipient = Column(String(255), nullable=False)  # email address, webhook URL, phone number, etc.
+    recipient = Column(
+        String(255), nullable=False
+    )  # email address, webhook URL, phone number, etc.
     status = Column(String(20), default="pending")  # pending, sent, failed, delivered
     response_json = Column(Text)  # JSON: response from notification service
     sent_at = Column(DateTime)

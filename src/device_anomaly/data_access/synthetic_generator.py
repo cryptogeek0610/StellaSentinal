@@ -32,10 +32,10 @@ def generate_synthetic_device_telemetry(
 
     for device_id in range(1, n_devices + 1):
         # Base characteristics per device
-        base_battery_drop = rng.uniform(5, 20)             # daily discharge index
+        base_battery_drop = rng.uniform(5, 20)  # daily discharge index
         base_storage_free = rng.integers(2_000_000, 8_000_000)  # KB
-        base_wifi_signal = rng.integers(40, 80)            # pseudo dBm
-        base_download_hour = rng.integers(20_000, 200_000) # bytes / KB units
+        base_wifi_signal = rng.integers(40, 80)  # pseudo dBm
+        base_download_hour = rng.integers(20_000, 200_000)  # bytes / KB units
         base_upload_hour = rng.integers(5_000, 50_000)
 
         for date in timestamps:
@@ -43,7 +43,9 @@ def generate_synthetic_device_telemetry(
             day_battery_drop = base_battery_drop + rng.normal(0, 3)
             day_storage = base_storage_free + rng.normal(0, 50_000)
 
-            day_hours = pd.date_range(date, periods=int(24 * (pd.Timedelta("1D") / pd.Timedelta(freq))), freq=freq)
+            day_hours = pd.date_range(
+                date, periods=int(24 * (pd.Timedelta("1D") / pd.Timedelta(freq))), freq=freq
+            )
             for ts in day_hours:
                 hour = ts.hour
 
@@ -68,9 +70,7 @@ def generate_synthetic_device_telemetry(
                 offline_time = max(0, rng.poisson(2 if usage_factor > 1 else 5))
                 disconnects = max(0, rng.poisson(0.5 if usage_factor > 1 else 1.5))
 
-                wifi_signal = int(
-                    np.clip(base_wifi_signal + rng.normal(0, 5), 0, 100)
-                )
+                wifi_signal = int(np.clip(base_wifi_signal + rng.normal(0, 5), 0, 100))
                 connection_time = max(
                     0,
                     int(60 * usage_factor + rng.normal(0, 10)),
@@ -93,11 +93,23 @@ def generate_synthetic_device_telemetry(
                 )
 
         # Inject anomalies for this device across its rows
-        device_start = (device_id - 1) * len(timestamps) * len(
-            pd.date_range(timestamps[0], periods=int(24 * (pd.Timedelta("1D") / pd.Timedelta(freq))), freq=freq)
+        device_start = (
+            (device_id - 1)
+            * len(timestamps)
+            * len(
+                pd.date_range(
+                    timestamps[0],
+                    periods=int(24 * (pd.Timedelta("1D") / pd.Timedelta(freq))),
+                    freq=freq,
+                )
+            )
         )
         device_end = device_start + len(timestamps) * len(
-            pd.date_range(timestamps[0], periods=int(24 * (pd.Timedelta("1D") / pd.Timedelta(freq))), freq=freq)
+            pd.date_range(
+                timestamps[0],
+                periods=int(24 * (pd.Timedelta("1D") / pd.Timedelta(freq))),
+                freq=freq,
+            )
         )
 
         n_rows_device = device_end - device_start

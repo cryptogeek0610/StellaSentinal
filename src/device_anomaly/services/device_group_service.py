@@ -4,6 +4,7 @@ DeviceGroup Hierarchy Service for Network Intelligence.
 Provides functions to load DeviceGroup hierarchy from MobiControl
 and compute full PATH strings for navigation.
 """
+
 from __future__ import annotations
 
 import logging
@@ -63,9 +64,7 @@ def load_device_groups_with_path(limit: int = 10_000) -> list[dict[str, Any]]:
     for _, row in df.iterrows():
         gid = int(row["DeviceGroupId"])
         parent_map[gid] = (
-            int(row["ParentDeviceGroupId"])
-            if pd.notna(row["ParentDeviceGroupId"])
-            else None
+            int(row["ParentDeviceGroupId"]) if pd.notna(row["ParentDeviceGroupId"]) else None
         )
         name_map[gid] = str(row["GroupName"])
 
@@ -148,9 +147,7 @@ def build_hierarchy_tree(groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return roots
 
 
-def get_device_ids_in_group(
-    device_group_id: int, include_descendants: bool = True
-) -> list[int]:
+def get_device_ids_in_group(device_group_id: int, include_descendants: bool = True) -> list[int]:
     """
     Get all device IDs belonging to a device group.
 
@@ -239,9 +236,7 @@ def get_group_by_id(device_group_id: int) -> dict[str, Any] | None:
             return {
                 "device_group_id": int(row[0]),
                 "group_name": str(row[1]),
-                "parent_device_group_id": (
-                    int(row[2]) if row[2] is not None else None
-                ),
+                "parent_device_group_id": (int(row[2]) if row[2] is not None else None),
                 "device_count": int(row[3]),
                 "full_path": str(row[1]),
             }

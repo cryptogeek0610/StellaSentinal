@@ -1,4 +1,5 @@
 """Database connection utilities for anomaly results storage."""
+
 from __future__ import annotations
 
 import os
@@ -45,6 +46,7 @@ def _build_engine(database_url: str):
 
 def _migrate_results_schema(engine) -> None:
     if engine.dialect.name == "sqlite":
+
         def _table_exists(conn, table: str) -> bool:
             row = conn.execute(
                 text("SELECT name FROM sqlite_master WHERE type='table' AND name=:table"),
@@ -80,26 +82,42 @@ def _migrate_results_schema(engine) -> None:
         with engine.begin() as conn:
             if _table_exists(conn, "anomaly_results"):
                 _ensure_column(conn, "anomaly_results", "tenant_id", "TEXT", "'default'")
-                conn.execute(text("UPDATE anomaly_results SET tenant_id = 'default' WHERE tenant_id IS NULL"))
+                conn.execute(
+                    text("UPDATE anomaly_results SET tenant_id = 'default' WHERE tenant_id IS NULL")
+                )
                 _ensure_index(conn, "idx_anomaly_results_tenant_id", "anomaly_results(tenant_id)")
 
             if _table_exists(conn, "device_metadata"):
                 _ensure_column(conn, "device_metadata", "tenant_id", "TEXT", "'default'")
                 _ensure_column(conn, "device_metadata", "os_version", "TEXT")
                 _ensure_column(conn, "device_metadata", "agent_version", "TEXT")
-                conn.execute(text("UPDATE device_metadata SET tenant_id = 'default' WHERE tenant_id IS NULL"))
+                conn.execute(
+                    text("UPDATE device_metadata SET tenant_id = 'default' WHERE tenant_id IS NULL")
+                )
                 _ensure_index(conn, "idx_device_metadata_tenant_id", "device_metadata(tenant_id)")
 
             if _table_exists(conn, "investigation_notes"):
                 _ensure_column(conn, "investigation_notes", "tenant_id", "TEXT", "'default'")
-                conn.execute(text("UPDATE investigation_notes SET tenant_id = 'default' WHERE tenant_id IS NULL"))
-                _ensure_index(conn, "idx_investigation_notes_tenant_id", "investigation_notes(tenant_id)")
+                conn.execute(
+                    text(
+                        "UPDATE investigation_notes SET tenant_id = 'default' WHERE tenant_id IS NULL"
+                    )
+                )
+                _ensure_index(
+                    conn, "idx_investigation_notes_tenant_id", "investigation_notes(tenant_id)"
+                )
 
             if _table_exists(conn, "troubleshooting_cache"):
                 _ensure_column(conn, "troubleshooting_cache", "tenant_id", "TEXT", "'default'")
-                conn.execute(text("UPDATE troubleshooting_cache SET tenant_id = 'default' WHERE tenant_id IS NULL"))
+                conn.execute(
+                    text(
+                        "UPDATE troubleshooting_cache SET tenant_id = 'default' WHERE tenant_id IS NULL"
+                    )
+                )
 
-                index_rows = conn.execute(text("PRAGMA index_list(troubleshooting_cache)")).fetchall()
+                index_rows = conn.execute(
+                    text("PRAGMA index_list(troubleshooting_cache)")
+                ).fetchall()
                 needs_rebuild = False
                 for _, index_name, is_unique, *_ in index_rows:
                     if not is_unique:
@@ -111,7 +129,11 @@ def _migrate_results_schema(engine) -> None:
                         break
 
                 if needs_rebuild:
-                    conn.execute(text("ALTER TABLE troubleshooting_cache RENAME TO troubleshooting_cache_old"))
+                    conn.execute(
+                        text(
+                            "ALTER TABLE troubleshooting_cache RENAME TO troubleshooting_cache_old"
+                        )
+                    )
                     conn.execute(
                         text(
                             """
@@ -160,7 +182,9 @@ def _migrate_results_schema(engine) -> None:
                     )
                     conn.execute(text("DROP TABLE troubleshooting_cache_old"))
 
-                _ensure_index(conn, "idx_troubleshooting_cache_tenant_id", "troubleshooting_cache(tenant_id)")
+                _ensure_index(
+                    conn, "idx_troubleshooting_cache_tenant_id", "troubleshooting_cache(tenant_id)"
+                )
                 _ensure_unique_index(
                     conn,
                     "idx_tc_tenant_signature",
@@ -226,7 +250,9 @@ def _migrate_results_schema(engine) -> None:
             ddl += f" DEFAULT {default_sql}"
         conn.execute(text(ddl))
         if default_sql is not None:
-            conn.execute(text(f"UPDATE {table} SET {column} = {default_sql} WHERE {column} IS NULL"))
+            conn.execute(
+                text(f"UPDATE {table} SET {column} = {default_sql} WHERE {column} IS NULL")
+            )
 
     with engine.begin() as conn:
         if _table_exists(conn, "anomaly_results"):

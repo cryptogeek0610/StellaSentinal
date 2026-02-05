@@ -6,10 +6,11 @@ These tests verify that:
 2. Temporal features don't drift when re-scoring static data
 3. Data freshness checks prevent unnecessary scoring
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
+from datetime import UTC, datetime
+from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
@@ -23,19 +24,21 @@ class TestTemporalFeatureStability:
         from device_anomaly.data_access.unified_loader import _add_temporal_features
 
         # Create test data with fixed timestamps
-        df = pd.DataFrame({
-            "DeviceId": [1, 2, 3],
-            "Timestamp": [
-                datetime(2025, 1, 1),
-                datetime(2025, 1, 2),
-                datetime(2025, 1, 3),
-            ],
-            "LastCheckInTime": [
-                datetime(2024, 12, 31),  # 1 day before Timestamp
-                datetime(2024, 12, 31),  # 2 days before Timestamp
-                datetime(2024, 12, 31),  # 3 days before Timestamp
-            ],
-        })
+        df = pd.DataFrame(
+            {
+                "DeviceId": [1, 2, 3],
+                "Timestamp": [
+                    datetime(2025, 1, 1),
+                    datetime(2025, 1, 2),
+                    datetime(2025, 1, 3),
+                ],
+                "LastCheckInTime": [
+                    datetime(2024, 12, 31),  # 1 day before Timestamp
+                    datetime(2024, 12, 31),  # 2 days before Timestamp
+                    datetime(2024, 12, 31),  # 3 days before Timestamp
+                ],
+            }
+        )
 
         # Compute features with different end_dates (simulating different scoring runs)
         result1 = _add_temporal_features(df.copy(), "2025-01-10")  # 10 days after data
@@ -53,11 +56,13 @@ class TestTemporalFeatureStability:
         """Verify DaysSinceLastCheckin is computed correctly."""
         from device_anomaly.data_access.unified_loader import _add_temporal_features
 
-        df = pd.DataFrame({
-            "DeviceId": [1],
-            "Timestamp": [datetime(2025, 1, 10)],
-            "LastCheckInTime": [datetime(2025, 1, 5)],  # 5 days before
-        })
+        df = pd.DataFrame(
+            {
+                "DeviceId": [1],
+                "Timestamp": [datetime(2025, 1, 10)],
+                "LastCheckInTime": [datetime(2025, 1, 5)],  # 5 days before
+            }
+        )
 
         result = _add_temporal_features(df.copy(), "2025-01-20")
 
@@ -68,11 +73,13 @@ class TestTemporalFeatureStability:
         """Verify DaysSinceLastCheckin is capped to prevent extreme values."""
         from device_anomaly.data_access.unified_loader import _add_temporal_features
 
-        df = pd.DataFrame({
-            "DeviceId": [1],
-            "Timestamp": [datetime(2025, 1, 1)],
-            "LastCheckInTime": [datetime(2020, 1, 1)],  # 5 years ago
-        })
+        df = pd.DataFrame(
+            {
+                "DeviceId": [1],
+                "Timestamp": [datetime(2025, 1, 1)],
+                "LastCheckInTime": [datetime(2020, 1, 1)],  # 5 years ago
+            }
+        )
 
         result = _add_temporal_features(df.copy(), "2025-01-01")
 
@@ -83,11 +90,13 @@ class TestTemporalFeatureStability:
         """DisconnectRecencyHours should be computed relative to LastCheckInTime."""
         from device_anomaly.data_access.unified_loader import _add_disconnect_flags
 
-        df = pd.DataFrame({
-            "DeviceId": [1],
-            "LastCheckInTime": [datetime(2025, 1, 10, 12, 0)],
-            "LastDisconnTime": [datetime(2025, 1, 10, 10, 0)],  # 2 hours before check-in
-        })
+        df = pd.DataFrame(
+            {
+                "DeviceId": [1],
+                "LastCheckInTime": [datetime(2025, 1, 10, 12, 0)],
+                "LastDisconnTime": [datetime(2025, 1, 10, 10, 0)],  # 2 hours before check-in
+            }
+        )
 
         # Different end dates should produce the same result
         result1 = _add_disconnect_flags(df.copy(), "2025-01-15")
@@ -119,8 +128,8 @@ class TestDataFreshnessCheck:
         """Should skip scoring when source data hasn't changed."""
         from device_anomaly.data_access.watermark_store import WatermarkStore
 
-        last_scoring_time = datetime(2025, 1, 10, 12, 0, tzinfo=timezone.utc)
-        source_watermark = datetime(2025, 1, 10, 10, 0, tzinfo=timezone.utc)  # Before scoring
+        last_scoring_time = datetime(2025, 1, 10, 12, 0, tzinfo=UTC)
+        source_watermark = datetime(2025, 1, 10, 10, 0, tzinfo=UTC)  # Before scoring
 
         store = WatermarkStore(postgres_url=None, enable_file_fallback=False)
 
@@ -140,8 +149,8 @@ class TestDataFreshnessCheck:
         """Should proceed with scoring when new source data exists."""
         from device_anomaly.data_access.watermark_store import WatermarkStore
 
-        last_scoring_time = datetime(2025, 1, 10, 12, 0, tzinfo=timezone.utc)
-        source_watermark = datetime(2025, 1, 10, 14, 0, tzinfo=timezone.utc)  # After scoring
+        last_scoring_time = datetime(2025, 1, 10, 12, 0, tzinfo=UTC)
+        source_watermark = datetime(2025, 1, 10, 14, 0, tzinfo=UTC)  # After scoring
 
         store = WatermarkStore(postgres_url=None, enable_file_fallback=False)
 
@@ -165,6 +174,7 @@ class TestUpsertPersistence:
         """Verify that persist_anomaly_results uses PostgreSQL upsert."""
         # This test verifies the code structure - actual DB testing requires integration tests
         import inspect
+
         from device_anomaly.data_access.anomaly_persistence import persist_anomaly_results
 
         source = inspect.getsource(persist_anomaly_results)
@@ -202,10 +212,8 @@ class TestSchemaConstraint:
 
         # Find the unique index
         from sqlalchemy import Index
-        unique_indexes = [
-            arg for arg in table_args
-            if isinstance(arg, Index) and arg.unique
-        ]
+
+        unique_indexes = [arg for arg in table_args if isinstance(arg, Index) and arg.unique]
 
         assert len(unique_indexes) > 0, "Should have at least one unique index"
 

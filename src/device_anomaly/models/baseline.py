@@ -99,10 +99,14 @@ def apply_baselines(
             continue
 
         out["__group_key__"] = key
-        merged = out[["__group_key__"]].drop_duplicates().merge(
-            level_stats,
-            on="__group_key__",
-            how="left",
+        merged = (
+            out[["__group_key__"]]
+            .drop_duplicates()
+            .merge(
+                level_stats,
+                on="__group_key__",
+                how="left",
+            )
         )
 
         for _, row in merged.iterrows():
@@ -121,10 +125,7 @@ def apply_baselines(
 
 
 def save_baselines(baselines: dict[str, pd.DataFrame], path: Path) -> None:
-    payload = {
-        level: df.to_dict(orient="records")
-        for level, df in baselines.items()
-    }
+    payload = {level: df.to_dict(orient="records") for level, df in baselines.items()}
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, default=float))
 
@@ -178,7 +179,9 @@ def apply_feedback(
             mask = (df_level["__group_key__"] == gkey) & (df_level["feature"] == fb.feature)
             if not mask.any():
                 continue
-            df_level.loc[mask, "median"] = df_level.loc[mask, "median"] + learning_rate * fb.adjustment
+            df_level.loc[mask, "median"] = (
+                df_level.loc[mask, "median"] + learning_rate * fb.adjustment
+            )
         updated[level_name] = df_level
     return updated
 
@@ -217,7 +220,9 @@ def suggest_baseline_adjustments(
             if not mask.any() or feature not in anomalies_df.columns:
                 continue
 
-            current_median = pd.to_numeric(anomalies_df.loc[mask, feature], errors="coerce").median()
+            current_median = pd.to_numeric(
+                anomalies_df.loc[mask, feature], errors="coerce"
+            ).median()
             z = abs(current_median - baseline_median) / mad
             if z >= z_threshold:
                 suggestions.append(
@@ -227,7 +232,9 @@ def suggest_baseline_adjustments(
                         "feature": feature,
                         "baseline_median": baseline_median,
                         "observed_median": current_median,
-                        "proposed_new_median": float(baseline_median + 0.5 * (current_median - baseline_median)),
+                        "proposed_new_median": float(
+                            baseline_median + 0.5 * (current_median - baseline_median)
+                        ),
                         "rationale": f"Median drifted {z:.1f} MADs above baseline; consider lifting baseline.",
                     }
                 )
@@ -301,12 +308,8 @@ class TemporalBaseline:
     def to_dict(self) -> dict[str, Any]:
         return {
             "metric_name": self.metric_name,
-            "hourly_stats": {
-                str(h): stats.to_dict() for h, stats in self.hourly_stats.items()
-            },
-            "daily_stats": {
-                str(d): stats.to_dict() for d, stats in self.daily_stats.items()
-            },
+            "hourly_stats": {str(h): stats.to_dict() for h, stats in self.hourly_stats.items()},
+            "daily_stats": {str(d): stats.to_dict() for d, stats in self.daily_stats.items()},
         }
 
 

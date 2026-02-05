@@ -3,6 +3,7 @@
 This module provides data access methods for device records,
 supporting multi-source devices (XSight, MobiControl, etc.).
 """
+
 from __future__ import annotations
 
 import json

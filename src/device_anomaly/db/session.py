@@ -4,6 +4,7 @@ This module provides session management for the backend PostgreSQL database.
 It handles connection pooling, session lifecycle, and provides both
 context managers and dependency injection patterns for FastAPI.
 """
+
 from __future__ import annotations
 
 import os

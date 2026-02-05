@@ -460,8 +460,7 @@ class MLBaselineService:
     def _classify_anomaly(self, metrics: dict[str, dict]) -> str:
         """Classify the type of anomaly based on affected metrics."""
         anomalous_metrics = [
-            m for m, data in metrics.items()
-            if data.get("severity") in ("critical", "warning")
+            m for m, data in metrics.items() if data.get("severity") in ("critical", "warning")
         ]
 
         if not anomalous_metrics:
@@ -539,17 +538,18 @@ class MLBaselineService:
         drift_report = self.engine.check_drift(df)
 
         # Track drift
-        self._drift_history.append({
-            "timestamp": datetime.now(UTC).isoformat(),
-            "drift_rate": drift_report.get("drift_rate", 0),
-            "metrics_drifted": drift_report.get("metrics_drifted", 0),
-        })
+        self._drift_history.append(
+            {
+                "timestamp": datetime.now(UTC).isoformat(),
+                "drift_rate": drift_report.get("drift_rate", 0),
+                "metrics_drifted": drift_report.get("metrics_drifted", 0),
+            }
+        )
 
         self._last_drift_check = datetime.now(UTC)
 
         # Auto-retrain if significant drift
-        if (self.config.auto_retrain_on_drift and
-            drift_report.get("drift_rate", 0) > 0.3):
+        if self.config.auto_retrain_on_drift and drift_report.get("drift_rate", 0) > 0.3:
             logger.warning("Significant drift detected, triggering retraining")
             retrain_result = await self.train(tenant_id=tenant_id, lookback_days=lookback_days)
             drift_report["auto_retrained"] = retrain_result.get("success", False)
@@ -688,7 +688,9 @@ class MLBaselineService:
         return {
             "initialized": self._is_initialized,
             "last_train_time": self._last_train_time.isoformat() if self._last_train_time else None,
-            "last_drift_check": self._last_drift_check.isoformat() if self._last_drift_check else None,
+            "last_drift_check": self._last_drift_check.isoformat()
+            if self._last_drift_check
+            else None,
             "feature_count": len(self.engine._feature_cols) if self._is_initialized else 0,
             "metric_count": len(self.engine._metric_cols) if self._is_initialized else 0,
             "training_history_count": len(self._training_history),

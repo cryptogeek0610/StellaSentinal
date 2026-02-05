@@ -5,6 +5,7 @@ This module provides common utilities for all data loaders:
 - get_valid_columns: Validate which columns exist in a table
 - BaseLoader: Abstract base class for SQL Server loaders
 """
+
 from __future__ import annotations
 
 import logging
@@ -17,7 +18,7 @@ from sqlalchemy.engine import Engine
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 def table_exists(engine: Engine, table_name: str, base_table_only: bool = False) -> bool:
@@ -83,6 +84,7 @@ def get_valid_columns(engine: Engine, table_name: str, requested_columns: list[s
 @dataclass
 class LoaderConfig:
     """Configuration for a data loader."""
+
     table_name: str
     timestamp_col: str
     device_col: str | None = None
@@ -128,20 +130,14 @@ class BaseLoader(ABC, Generic[T]):
     def table_exists(self) -> bool:
         """Check if the configured table exists."""
         return table_exists(
-            self.engine,
-            self.config.table_name,
-            base_table_only=self.config.base_table_only
+            self.engine, self.config.table_name, base_table_only=self.config.base_table_only
         )
 
     def get_valid_columns(self) -> list[str]:
         """Get the list of valid columns for the configured table."""
         if not self.config.columns:
             return []
-        return get_valid_columns(
-            self.engine,
-            self.config.table_name,
-            self.config.columns
-        )
+        return get_valid_columns(self.engine, self.config.table_name, self.config.columns)
 
     def load(self, **kwargs) -> T | None:
         """Load data with standard error handling.

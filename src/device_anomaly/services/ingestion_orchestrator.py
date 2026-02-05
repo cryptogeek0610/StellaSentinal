@@ -10,6 +10,7 @@ Table Weight Assignment:
 - MobiControl time-series tables: weight 2
 - Small tables (Alert, Events, Devices): weight 1
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -64,6 +65,7 @@ SMALL_TABLES: set[str] = {
 
 class TableCategory(Enum):
     """Table category for weight assignment."""
+
     XSIGHT_HOURLY_HUGE = "xsight_hourly_huge"
     XSIGHT_EXTENDED = "xsight_extended"
     MC_TIMESERIES = "mc_timeseries"
@@ -141,8 +143,7 @@ class WeightedSemaphore:
         """
         if weight > self.max_weight:
             logger.warning(
-                f"Requested weight {weight} exceeds max {self.max_weight}, "
-                f"clamping to max"
+                f"Requested weight {weight} exceeds max {self.max_weight}, clamping to max"
             )
             weight = self.max_weight
 
@@ -154,8 +155,9 @@ class WeightedSemaphore:
                 # Wait until we have enough capacity AND we're first in queue
                 # (or our weight is small enough to squeeze in)
                 while True:
-                    if (self._current_weight + weight <= self.max_weight and
-                            (not self._waiters or self._waiters[0] == weight)):
+                    if self._current_weight + weight <= self.max_weight and (
+                        not self._waiters or self._waiters[0] == weight
+                    ):
                         break
                     await self._condition.wait()
 
@@ -203,6 +205,7 @@ class WeightedSemaphoreContext:
 @dataclass
 class IngestionTask:
     """Represents a single table ingestion task."""
+
     table_name: str
     source_db: str  # "xsight" or "mobicontrol"
     weight: int = field(default=1)
@@ -238,6 +241,7 @@ class IngestionTask:
 @dataclass
 class IngestionBatchResult:
     """Result of an ingestion batch run."""
+
     started_at: datetime
     completed_at: datetime
     tasks: list[IngestionTask]
@@ -468,16 +472,10 @@ def create_table_list_for_ingestion(
     tables = []
 
     if xsight_tables:
-        tables.extend([
-            {"table_name": t, "source_db": "xsight"}
-            for t in xsight_tables
-        ])
+        tables.extend([{"table_name": t, "source_db": "xsight"} for t in xsight_tables])
 
     if mc_tables:
-        tables.extend([
-            {"table_name": t, "source_db": "mobicontrol"}
-            for t in mc_tables
-        ])
+        tables.extend([{"table_name": t, "source_db": "mobicontrol"} for t in mc_tables])
 
     return tables
 

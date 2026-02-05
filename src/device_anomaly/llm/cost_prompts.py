@@ -6,6 +6,7 @@ are pre-computed and injected into these templates.
 
 Design principle: Inject exact figures, instruct LLM to use them verbatim.
 """
+
 from __future__ import annotations
 
 from decimal import Decimal
@@ -217,6 +218,7 @@ Keep response under 150 words.
 # =============================================================================
 # TEMPLATE FUNCTIONS
 # =============================================================================
+
 
 def build_financial_context(financial_data: InsightFinancialData | None) -> str:
     """Build the financial context section for prompts.

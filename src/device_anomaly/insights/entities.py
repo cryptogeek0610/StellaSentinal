@@ -185,12 +185,18 @@ class EntityAggregator:
             if loc_devices.empty:
                 continue
 
-            device_ids = set(loc_devices["device_id"].tolist()) if "device_id" in loc_devices.columns else set()
+            device_ids = (
+                set(loc_devices["device_id"].tolist())
+                if "device_id" in loc_devices.columns
+                else set()
+            )
 
             # Filter insights for this location's devices
             loc_insights = [
-                i for i in insights
-                if i.affected_entity_id in device_ids or str(i.metadata.get("device_id")) in map(str, device_ids)
+                i
+                for i in insights
+                if i.affected_entity_id in device_ids
+                or str(i.metadata.get("device_id")) in map(str, device_ids)
             ]
 
             # Count issues by category
@@ -231,7 +237,11 @@ class EntityAggregator:
 
         for rank, loc_insight in enumerate(sorted_locations, 1):
             loc_insight.rank_among_locations = rank
-            loc_insight.better_than_percent = (len(sorted_locations) - rank) / len(sorted_locations) * 100 if sorted_locations else 0
+            loc_insight.better_than_percent = (
+                (len(sorted_locations) - rank) / len(sorted_locations) * 100
+                if sorted_locations
+                else 0
+            )
 
         return location_insights
 
@@ -311,7 +321,9 @@ class EntityAggregator:
 
         # Calculate vs peer comparison
         if user_insights:
-            avg_drop_rate = sum(u.drop_rate_per_device for u in user_insights.values()) / len(user_insights)
+            avg_drop_rate = sum(u.drop_rate_per_device for u in user_insights.values()) / len(
+                user_insights
+            )
             for user_insight in user_insights.values():
                 if avg_drop_rate > 0:
                     user_insight.vs_peer_percent = (
@@ -353,10 +365,13 @@ class EntityAggregator:
 
         # Build device_id -> cohort_id mapping
         device_id_col = "DeviceId" if "DeviceId" in device_metadata.columns else "device_id"
-        device_cohort_map = dict(zip(
-            device_metadata[device_id_col].astype(str),
-            device_metadata["cohort_id"], strict=False
-        ))
+        device_cohort_map = dict(
+            zip(
+                device_metadata[device_id_col].astype(str),
+                device_metadata["cohort_id"],
+                strict=False,
+            )
+        )
 
         # Group insights by cohort
         cohort_device_insights: dict[str, list[ClassifiedInsight]] = {}
@@ -377,7 +392,9 @@ class EntityAggregator:
             cohort_devices[cohort_id].add(device_id)
 
         # Get cohort metadata
-        cohort_metadata = device_metadata.drop_duplicates(subset=["cohort_id"]).set_index("cohort_id")
+        cohort_metadata = device_metadata.drop_duplicates(subset=["cohort_id"]).set_index(
+            "cohort_id"
+        )
 
         # Calculate cohort-level metrics
         for cohort_id, cohort_insight_list in cohort_device_insights.items():
@@ -422,7 +439,9 @@ class EntityAggregator:
 
         # Calculate fleet comparison and identify problem cohorts
         if cohort_insights:
-            avg_issue_rate = sum(c.issue_rate for c in cohort_insights.values()) / len(cohort_insights)
+            avg_issue_rate = sum(c.issue_rate for c in cohort_insights.values()) / len(
+                cohort_insights
+            )
             for cohort_insight in cohort_insights.values():
                 if avg_issue_rate > 0:
                     cohort_insight.vs_fleet_percent = (

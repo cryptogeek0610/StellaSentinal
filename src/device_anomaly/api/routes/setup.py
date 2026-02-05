@@ -174,9 +174,7 @@ def _test_postgres_connection(config: dict[str, Any]) -> TestConnectionResponse:
         )
 
 
-def _test_sqlserver_connection(
-    config: dict[str, Any], prefix: str
-) -> TestConnectionResponse:
+def _test_sqlserver_connection(config: dict[str, Any], prefix: str) -> TestConnectionResponse:
     """Test SQL Server connection."""
     import time
 

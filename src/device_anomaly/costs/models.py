@@ -4,6 +4,7 @@ These models are used internally for cost calculations and passing
 financial data to the LLM pipeline. They are designed for easy
 serialization and integration with the insight generation system.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -99,7 +100,9 @@ class FinancialImpactSummary:
             "impact_level": self.impact_level.value,
             "breakdown": [item.to_dict() for item in self.breakdown],
             "recommendations": self.recommendations,
-            "investment_required_usd": float(self.investment_required_usd) if self.investment_required_usd else None,
+            "investment_required_usd": float(self.investment_required_usd)
+            if self.investment_required_usd
+            else None,
             "payback_months": self.payback_months,
             "confidence_score": self.confidence_score,
             "confidence_explanation": self.confidence_explanation,
@@ -144,8 +147,12 @@ class DeviceCostContext:
             "device_name": self.device_name,
             "location": self.location,
             "purchase_cost_usd": float(self.purchase_cost_usd) if self.purchase_cost_usd else None,
-            "replacement_cost_usd": float(self.replacement_cost_usd) if self.replacement_cost_usd else None,
-            "repair_cost_avg_usd": float(self.repair_cost_avg_usd) if self.repair_cost_avg_usd else None,
+            "replacement_cost_usd": float(self.replacement_cost_usd)
+            if self.replacement_cost_usd
+            else None,
+            "repair_cost_avg_usd": float(self.repair_cost_avg_usd)
+            if self.repair_cost_avg_usd
+            else None,
             "age_months": self.age_months,
             "current_value_usd": float(self.current_value_usd) if self.current_value_usd else None,
             "is_under_warranty": self.is_under_warranty,
@@ -271,12 +278,14 @@ class InsightFinancialData:
         ]
 
         if self.investment_required_usd and self.payback_months:
-            lines.extend([
-                "",
-                "ROI Analysis:",
-                f"- Investment Required: ${float(self.investment_required_usd):,.0f}",
-                f"- Payback Period: {self.payback_months:.1f} months",
-            ])
+            lines.extend(
+                [
+                    "",
+                    "ROI Analysis:",
+                    f"- Investment Required: ${float(self.investment_required_usd):,.0f}",
+                    f"- Payback Period: {self.payback_months:.1f} months",
+                ]
+            )
 
         return "\n".join(lines)
 
@@ -292,7 +301,9 @@ class InsightFinancialData:
             "labor_impact_usd": float(self.labor_impact_usd),
             "downtime_impact_usd": float(self.downtime_impact_usd),
             "opportunity_cost_usd": float(self.opportunity_cost_usd),
-            "investment_required_usd": float(self.investment_required_usd) if self.investment_required_usd else None,
+            "investment_required_usd": float(self.investment_required_usd)
+            if self.investment_required_usd
+            else None,
             "payback_months": self.payback_months,
         }
 

@@ -4,6 +4,7 @@ This module provides a complete VAE-based anomaly detector that implements
 the same interface as AnomalyDetectorIsolationForest, allowing seamless
 integration with the existing training and inference pipelines.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -31,7 +32,7 @@ class VAEDetectorConfig(DLDetectorConfig):
         self,
         name: str = "vae_detector",
         model_type: str = "vae",  # 'vae' or 'autoencoder'
-        **kwargs
+        **kwargs,
     ):
         """Initialize VAE detector config.
 
@@ -143,7 +144,10 @@ class VAEDetector(BaseDLDetector):
         if isinstance(self.model, VAE):
             recon, mu, log_var = model_output
             total_loss, _, _ = self.model.loss_function(
-                x, recon, mu, log_var,
+                x,
+                recon,
+                mu,
+                log_var,
                 kl_weight=self.config.kl_weight,
                 reduction="mean",
             )
@@ -257,11 +261,7 @@ class VAEDetector(BaseDLDetector):
         error_data = np.concatenate(all_errors, axis=0)
         return pd.DataFrame(error_data, columns=self._feature_cols, index=df.index)
 
-    def explain_anomaly(
-        self,
-        df: pd.DataFrame,
-        top_k: int = 5
-    ) -> dict[int, dict[str, float]]:
+    def explain_anomaly(self, df: pd.DataFrame, top_k: int = 5) -> dict[int, dict[str, float]]:
         """Explain which features contribute most to each anomaly.
 
         Args:
@@ -283,11 +283,7 @@ class VAEDetector(BaseDLDetector):
 
         return contributions
 
-    def save_model(
-        self,
-        output_path: str | Path,
-        export_onnx: bool = False
-    ) -> dict[str, Path]:
+    def save_model(self, output_path: str | Path, export_onnx: bool = False) -> dict[str, Path]:
         """Save trained model to disk.
 
         Extends parent method to save VAE-specific state.
@@ -315,7 +311,9 @@ class VAEDetector(BaseDLDetector):
             "model_type": self.config.model_type,
             "input_dim": len(self._feature_cols),
             "feature_cols": self._feature_cols,
-            "impute_values": self.impute_values.to_dict() if self.impute_values is not None else None,
+            "impute_values": self.impute_values.to_dict()
+            if self.impute_values is not None
+            else None,
             "scaler": self.scaler,
             "config": self.config,
             "threshold": self._threshold,
@@ -369,7 +367,7 @@ class VAEDetector(BaseDLDetector):
 
         # Recreate config
         config = state.get("config", VAEDetectorConfig())
-        if hasattr(config, 'model_type'):
+        if hasattr(config, "model_type"):
             pass  # Already has model_type
         else:
             config.model_type = state.get("model_type", "vae")
@@ -412,6 +410,7 @@ class VAEDetector(BaseDLDetector):
 
         if state.get("fit_timestamp"):
             from datetime import datetime
+
             instance._fit_timestamp = datetime.fromisoformat(state["fit_timestamp"])
 
         logger.info(
@@ -450,7 +449,7 @@ def create_vae_detector(
     contamination: float = 0.05,
     use_gpu: bool = False,
     model_type: str = "vae",
-    **kwargs
+    **kwargs,
 ) -> VAEDetector:
     """Create a VAE detector with common configuration.
 
@@ -477,6 +476,6 @@ def create_vae_detector(
         contamination=contamination,
         use_gpu=use_gpu,
         model_type=model_type,
-        **kwargs
+        **kwargs,
     )
     return VAEDetector(config)

@@ -37,9 +37,7 @@ def group_anomalies_to_events(
     for (device_id, _event_id), group in df.groupby(["DeviceId", "event_id"]):
         event_start = group["Timestamp"].min()
         event_end = group["Timestamp"].max()
-        duration_minutes = max(
-            1, int((event_end - event_start).total_seconds() / 60)
-        )
+        duration_minutes = max(1, int((event_end - event_start).total_seconds() / 60))
 
         score_min = float(group["anomaly_score"].min())
         score_max = float(group["anomaly_score"].max())
@@ -82,9 +80,7 @@ def build_event_results(
     records = []
     for _, row in events_df.iterrows():
         metrics = {
-            col: row[col]
-            for col in FeatureConfig.genericFeatures
-            if col in events_df.columns
+            col: row[col] for col in FeatureConfig.genericFeatures if col in events_df.columns
         }
 
         records.append(
@@ -128,26 +124,18 @@ def select_top_anomalous_devices(
         return []
 
     total_per_device = df_scored.groupby("DeviceId").size()
-    anomalies_per_device = (
-        df_scored[df_scored["anomaly_label"] == -1]
-        .groupby("DeviceId")
-        .size()
-    )
+    anomalies_per_device = df_scored[df_scored["anomaly_label"] == -1].groupby("DeviceId").size()
 
-    stats = (
-        pd.DataFrame({
+    stats = pd.DataFrame(
+        {
             "total": total_per_device,
             "anomalies": anomalies_per_device,
-        })
-        .fillna(0)
-    )
+        }
+    ).fillna(0)
     stats["anomaly_rate"] = stats["anomalies"] / stats["total"].clip(lower=1)
 
     # apply minimum filters
-    stats = stats[
-        (stats["total"] >= min_total_points)
-        & (stats["anomalies"] >= min_anomalies)
-    ]
+    stats = stats[(stats["total"] >= min_total_points) & (stats["anomalies"] >= min_anomalies)]
 
     if stats.empty:
         return []

@@ -142,10 +142,7 @@ class InsightClassifier:
         insights.extend(app_insights)
 
         # Filter by minimum confidence
-        insights = [
-            i for i in insights
-            if i.confidence >= self.config.min_confidence_for_insight
-        ]
+        insights = [i for i in insights if i.confidence >= self.config.min_confidence_for_insight]
 
         # Sort by confidence (descending)
         insights.sort(key=lambda x: x.confidence, reverse=True)
@@ -190,19 +187,21 @@ class InsightClassifier:
                         contribution_weight=0.7,
                     ),
                 ]
-                insights.append(ClassifiedInsight(
-                    category=InsightCategory.BATTERY_SHIFT_FAILURE,
-                    severity=InsightSeverity.CRITICAL,
-                    confidence=confidence,
-                    evidence=evidence,
-                    primary_metric="BatteryDrainPerHour",
-                    primary_value=drain_rate,
-                    metadata={
-                        "projected_battery_at_shift_end": projected_end,
-                        "shift_hours": shift_hours,
-                        "current_battery": battery_level,
-                    },
-                ))
+                insights.append(
+                    ClassifiedInsight(
+                        category=InsightCategory.BATTERY_SHIFT_FAILURE,
+                        severity=InsightSeverity.CRITICAL,
+                        confidence=confidence,
+                        evidence=evidence,
+                        primary_metric="BatteryDrainPerHour",
+                        primary_value=drain_rate,
+                        metadata={
+                            "projected_battery_at_shift_end": projected_end,
+                            "shift_hours": shift_hours,
+                            "current_battery": battery_level,
+                        },
+                    )
+                )
 
         # 2. Battery Rapid Drain
         baseline_drain = context.get("baseline_battery_drain_per_hour", 5)
@@ -218,18 +217,20 @@ class InsightClassifier:
                     contribution_weight=0.9,
                 ),
             ]
-            insights.append(ClassifiedInsight(
-                category=InsightCategory.BATTERY_RAPID_DRAIN,
-                severity=InsightSeverity.HIGH,
-                confidence=confidence,
-                evidence=evidence,
-                primary_metric="BatteryDrainPerHour",
-                primary_value=drain_rate,
-                metadata={
-                    "baseline_drain_rate": baseline_drain,
-                    "drain_multiplier": multiplier,
-                },
-            ))
+            insights.append(
+                ClassifiedInsight(
+                    category=InsightCategory.BATTERY_RAPID_DRAIN,
+                    severity=InsightSeverity.HIGH,
+                    confidence=confidence,
+                    evidence=evidence,
+                    primary_metric="BatteryDrainPerHour",
+                    primary_value=drain_rate,
+                    metadata={
+                        "baseline_drain_rate": baseline_drain,
+                        "drain_multiplier": multiplier,
+                    },
+                )
+            )
 
         # 3. Battery Charge Incomplete
         if battery_level < self.config.battery_incomplete_charge_threshold:
@@ -246,15 +247,17 @@ class InsightClassifier:
                         contribution_weight=0.8,
                     ),
                 ]
-                insights.append(ClassifiedInsight(
-                    category=InsightCategory.BATTERY_CHARGE_INCOMPLETE,
-                    severity=InsightSeverity.MEDIUM,
-                    confidence=min(1.0, confidence),
-                    evidence=evidence,
-                    primary_metric="BatteryLevel",
-                    primary_value=battery_level,
-                    metadata={"hour_of_day": hour},
-                ))
+                insights.append(
+                    ClassifiedInsight(
+                        category=InsightCategory.BATTERY_CHARGE_INCOMPLETE,
+                        severity=InsightSeverity.MEDIUM,
+                        confidence=min(1.0, confidence),
+                        evidence=evidence,
+                        primary_metric="BatteryLevel",
+                        primary_value=battery_level,
+                        metadata={"hour_of_day": hour},
+                    )
+                )
 
         # 4. Battery Charge Pattern Issues
         if charge_bad > 0 and charge_bad >= charge_good:
@@ -273,15 +276,17 @@ class InsightClassifier:
                     contribution_weight=0.3,
                 ),
             ]
-            insights.append(ClassifiedInsight(
-                category=InsightCategory.BATTERY_CHARGE_PATTERN,
-                severity=InsightSeverity.MEDIUM,
-                confidence=min(1.0, confidence),
-                evidence=evidence,
-                primary_metric="ChargePatternBadCount",
-                primary_value=charge_bad,
-                metadata={"bad_charge_ratio": bad_ratio},
-            ))
+            insights.append(
+                ClassifiedInsight(
+                    category=InsightCategory.BATTERY_CHARGE_PATTERN,
+                    severity=InsightSeverity.MEDIUM,
+                    confidence=min(1.0, confidence),
+                    evidence=evidence,
+                    primary_metric="ChargePatternBadCount",
+                    primary_value=charge_bad,
+                    metadata={"bad_charge_ratio": bad_ratio},
+                )
+            )
 
         # 5. Battery Health Degraded
         if battery_health < self.config.battery_health_threshold:
@@ -295,14 +300,16 @@ class InsightClassifier:
                     contribution_weight=0.9,
                 ),
             ]
-            insights.append(ClassifiedInsight(
-                category=InsightCategory.BATTERY_HEALTH_DEGRADED,
-                severity=InsightSeverity.HIGH,
-                confidence=min(1.0, confidence),
-                evidence=evidence,
-                primary_metric="BatteryHealth",
-                primary_value=battery_health,
-            ))
+            insights.append(
+                ClassifiedInsight(
+                    category=InsightCategory.BATTERY_HEALTH_DEGRADED,
+                    severity=InsightSeverity.HIGH,
+                    confidence=min(1.0, confidence),
+                    evidence=evidence,
+                    primary_metric="BatteryHealth",
+                    primary_value=battery_health,
+                )
+            )
 
         return insights
 
@@ -329,14 +336,16 @@ class InsightClassifier:
                     contribution_weight=0.9,
                 ),
             ]
-            insights.append(ClassifiedInsight(
-                category=InsightCategory.EXCESSIVE_DROPS,
-                severity=InsightSeverity.HIGH if drop_count > 10 else InsightSeverity.MEDIUM,
-                confidence=confidence,
-                evidence=evidence,
-                primary_metric="TotalDropCnt",
-                primary_value=drop_count,
-            ))
+            insights.append(
+                ClassifiedInsight(
+                    category=InsightCategory.EXCESSIVE_DROPS,
+                    severity=InsightSeverity.HIGH if drop_count > 10 else InsightSeverity.MEDIUM,
+                    confidence=confidence,
+                    evidence=evidence,
+                    primary_metric="TotalDropCnt",
+                    primary_value=drop_count,
+                )
+            )
 
         # 2. Excessive Reboots
         if reboot_count >= self.config.excessive_reboots_daily:
@@ -350,14 +359,16 @@ class InsightClassifier:
                     contribution_weight=0.9,
                 ),
             ]
-            insights.append(ClassifiedInsight(
-                category=InsightCategory.EXCESSIVE_REBOOTS,
-                severity=InsightSeverity.HIGH,
-                confidence=confidence,
-                evidence=evidence,
-                primary_metric="RebootCount",
-                primary_value=reboot_count,
-            ))
+            insights.append(
+                ClassifiedInsight(
+                    category=InsightCategory.EXCESSIVE_REBOOTS,
+                    severity=InsightSeverity.HIGH,
+                    confidence=confidence,
+                    evidence=evidence,
+                    primary_metric="RebootCount",
+                    primary_value=reboot_count,
+                )
+            )
 
         # 3. Device Abuse Pattern (combined drops + reboots)
         if drop_count >= 3 and reboot_count >= 2:
@@ -374,14 +385,16 @@ class InsightClassifier:
                     contribution_weight=0.5,
                 ),
             ]
-            insights.append(ClassifiedInsight(
-                category=InsightCategory.DEVICE_ABUSE_PATTERN,
-                severity=InsightSeverity.HIGH,
-                confidence=confidence,
-                evidence=evidence,
-                primary_metric="CombinedAbuseScore",
-                primary_value=drop_count + reboot_count,
-            ))
+            insights.append(
+                ClassifiedInsight(
+                    category=InsightCategory.DEVICE_ABUSE_PATTERN,
+                    severity=InsightSeverity.HIGH,
+                    confidence=confidence,
+                    evidence=evidence,
+                    primary_metric="CombinedAbuseScore",
+                    primary_value=drop_count + reboot_count,
+                )
+            )
 
         return insights
 
@@ -418,14 +431,16 @@ class InsightClassifier:
                     contribution_weight=0.8,
                 ),
             ]
-            insights.append(ClassifiedInsight(
-                category=InsightCategory.WIFI_AP_HOPPING,
-                severity=InsightSeverity.MEDIUM,
-                confidence=confidence,
-                evidence=evidence,
-                primary_metric="UniqueAPsConnected",
-                primary_value=unique_aps,
-            ))
+            insights.append(
+                ClassifiedInsight(
+                    category=InsightCategory.WIFI_AP_HOPPING,
+                    severity=InsightSeverity.MEDIUM,
+                    confidence=confidence,
+                    evidence=evidence,
+                    primary_metric="UniqueAPsConnected",
+                    primary_value=unique_aps,
+                )
+            )
 
         # 2. Cellular Tower Hopping
         if cell_towers >= self.config.cell_tower_hopping_threshold:
@@ -439,14 +454,16 @@ class InsightClassifier:
                     contribution_weight=0.8,
                 ),
             ]
-            insights.append(ClassifiedInsight(
-                category=InsightCategory.CELLULAR_TOWER_HOPPING,
-                severity=InsightSeverity.MEDIUM,
-                confidence=confidence,
-                evidence=evidence,
-                primary_metric="CellTowerChanges",
-                primary_value=cell_towers,
-            ))
+            insights.append(
+                ClassifiedInsight(
+                    category=InsightCategory.CELLULAR_TOWER_HOPPING,
+                    severity=InsightSeverity.MEDIUM,
+                    confidence=confidence,
+                    evidence=evidence,
+                    primary_metric="CellTowerChanges",
+                    primary_value=cell_towers,
+                )
+            )
 
         # 3. Network Disconnect Pattern
         if total_disconnects >= self.config.network_disconnect_threshold:
@@ -460,14 +477,16 @@ class InsightClassifier:
                     contribution_weight=0.8,
                 ),
             ]
-            insights.append(ClassifiedInsight(
-                category=InsightCategory.NETWORK_DISCONNECT_PATTERN,
-                severity=InsightSeverity.HIGH,
-                confidence=confidence,
-                evidence=evidence,
-                primary_metric="DisconnectCount",
-                primary_value=total_disconnects,
-            ))
+            insights.append(
+                ClassifiedInsight(
+                    category=InsightCategory.NETWORK_DISCONNECT_PATTERN,
+                    severity=InsightSeverity.HIGH,
+                    confidence=confidence,
+                    evidence=evidence,
+                    primary_metric="DisconnectCount",
+                    primary_value=total_disconnects,
+                )
+            )
 
         # 4. Network Type Degradation (5G -> 4G -> 3G pattern)
         if network_type_count >= self.config.network_type_degradation_threshold:
@@ -493,18 +512,20 @@ class InsightClassifier:
                         contribution_weight=0.3,
                     ),
                 ]
-                insights.append(ClassifiedInsight(
-                    category=InsightCategory.CELLULAR_TECH_DEGRADATION,
-                    severity=InsightSeverity.LOW,
-                    confidence=min(1.0, confidence),
-                    evidence=evidence,
-                    primary_metric="NetworkTypeCount",
-                    primary_value=network_type_count,
-                    metadata={
-                        "time_on_old_tech": old_time,
-                        "time_on_new_tech": new_time,
-                    },
-                ))
+                insights.append(
+                    ClassifiedInsight(
+                        category=InsightCategory.CELLULAR_TECH_DEGRADATION,
+                        severity=InsightSeverity.LOW,
+                        confidence=min(1.0, confidence),
+                        evidence=evidence,
+                        primary_metric="NetworkTypeCount",
+                        primary_value=network_type_count,
+                        metadata={
+                            "time_on_old_tech": old_time,
+                            "time_on_new_tech": new_time,
+                        },
+                    )
+                )
 
         # 5. Device Hidden Pattern (extended offline)
         # Check for suspicious offline patterns
@@ -520,15 +541,17 @@ class InsightClassifier:
                         contribution_weight=0.9,
                     ),
                 ]
-                insights.append(ClassifiedInsight(
-                    category=InsightCategory.DEVICE_HIDDEN_PATTERN,
-                    severity=InsightSeverity.HIGH,
-                    confidence=min(0.9, confidence),  # Cap at 0.9 - needs investigation
-                    evidence=evidence,
-                    primary_metric="TimeOnNoNetwork",
-                    primary_value=time_no_network / 3600,
-                    metadata={"hour_of_day": hour},
-                ))
+                insights.append(
+                    ClassifiedInsight(
+                        category=InsightCategory.DEVICE_HIDDEN_PATTERN,
+                        severity=InsightSeverity.HIGH,
+                        confidence=min(0.9, confidence),  # Cap at 0.9 - needs investigation
+                        evidence=evidence,
+                        primary_metric="TimeOnNoNetwork",
+                        primary_value=time_no_network / 3600,
+                        metadata={"hour_of_day": hour},
+                    )
+                )
 
         return insights
 
@@ -558,14 +581,16 @@ class InsightClassifier:
                     contribution_weight=0.9,
                 ),
             ]
-            insights.append(ClassifiedInsight(
-                category=InsightCategory.APP_CRASH_PATTERN,
-                severity=InsightSeverity.HIGH,
-                confidence=confidence,
-                evidence=evidence,
-                primary_metric="CrashCount",
-                primary_value=crash_count,
-            ))
+            insights.append(
+                ClassifiedInsight(
+                    category=InsightCategory.APP_CRASH_PATTERN,
+                    severity=InsightSeverity.HIGH,
+                    confidence=confidence,
+                    evidence=evidence,
+                    primary_metric="CrashCount",
+                    primary_value=crash_count,
+                )
+            )
 
         # 2. App ANR Pattern
         if anr_count >= self.config.app_anr_threshold:
@@ -579,23 +604,29 @@ class InsightClassifier:
                     contribution_weight=0.9,
                 ),
             ]
-            insights.append(ClassifiedInsight(
-                category=InsightCategory.APP_ANR_PATTERN,
-                severity=InsightSeverity.MEDIUM,
-                confidence=confidence,
-                evidence=evidence,
-                primary_metric="ANRCount",
-                primary_value=anr_count,
-            ))
+            insights.append(
+                ClassifiedInsight(
+                    category=InsightCategory.APP_ANR_PATTERN,
+                    severity=InsightSeverity.MEDIUM,
+                    confidence=confidence,
+                    evidence=evidence,
+                    primary_metric="ANRCount",
+                    primary_value=anr_count,
+                )
+            )
 
         # 3. App Power Drain (disproportionate battery usage)
         if app_foreground_time > 0 and app_battery_drain > 0:
             # Calculate drain per hour of foreground time
-            drain_per_hour = (app_battery_drain / (app_foreground_time / 3600)) if app_foreground_time > 0 else 0
+            drain_per_hour = (
+                (app_battery_drain / (app_foreground_time / 3600)) if app_foreground_time > 0 else 0
+            )
             baseline_drain_per_hour = context.get("baseline_app_drain_per_hour", 5)
 
             if drain_per_hour > baseline_drain_per_hour * self.config.app_power_drain_multiplier:
-                multiplier = drain_per_hour / baseline_drain_per_hour if baseline_drain_per_hour > 0 else 2.0
+                multiplier = (
+                    drain_per_hour / baseline_drain_per_hour if baseline_drain_per_hour > 0 else 2.0
+                )
                 confidence = min(1.0, 0.5 + (multiplier - 2) * 0.2)
                 evidence = [
                     ClassificationEvidence(
@@ -611,18 +642,20 @@ class InsightClassifier:
                         contribution_weight=0.3,
                     ),
                 ]
-                insights.append(ClassifiedInsight(
-                    category=InsightCategory.APP_POWER_DRAIN,
-                    severity=InsightSeverity.MEDIUM,
-                    confidence=confidence,
-                    evidence=evidence,
-                    primary_metric="DrainPerForegroundHour",
-                    primary_value=drain_per_hour,
-                    metadata={
-                        "drain_multiplier": multiplier,
-                        "baseline_drain_per_hour": baseline_drain_per_hour,
-                    },
-                ))
+                insights.append(
+                    ClassifiedInsight(
+                        category=InsightCategory.APP_POWER_DRAIN,
+                        severity=InsightSeverity.MEDIUM,
+                        confidence=confidence,
+                        evidence=evidence,
+                        primary_metric="DrainPerForegroundHour",
+                        primary_value=drain_per_hour,
+                        metadata={
+                            "drain_multiplier": multiplier,
+                            "baseline_drain_per_hour": baseline_drain_per_hour,
+                        },
+                    )
+                )
 
         return insights
 
@@ -672,21 +705,23 @@ class InsightClassifier:
                         contribution_weight=0.5,
                     ),
                 ]
-                location_insights.append(ClassifiedInsight(
-                    category=InsightCategory.LOCATION_ANOMALY_CLUSTER,
-                    severity=InsightSeverity.HIGH if count >= 5 else InsightSeverity.MEDIUM,
-                    confidence=confidence,
-                    evidence=evidence,
-                    primary_metric="DeviceCountWithIssue",
-                    primary_value=count,
-                    affected_entity_type=EntityType.LOCATION,
-                    affected_entity_id=location_id,
-                    metadata={
-                        "clustered_category": category.value,
-                        "devices_affected": count,
-                        "total_devices": total_devices,
-                        "percentage_affected": count / total_devices * 100,
-                    },
-                ))
+                location_insights.append(
+                    ClassifiedInsight(
+                        category=InsightCategory.LOCATION_ANOMALY_CLUSTER,
+                        severity=InsightSeverity.HIGH if count >= 5 else InsightSeverity.MEDIUM,
+                        confidence=confidence,
+                        evidence=evidence,
+                        primary_metric="DeviceCountWithIssue",
+                        primary_value=count,
+                        affected_entity_type=EntityType.LOCATION,
+                        affected_entity_id=location_id,
+                        metadata={
+                            "clustered_category": category.value,
+                            "devices_affected": count,
+                            "total_devices": total_devices,
+                            "percentage_affected": count / total_devices * 100,
+                        },
+                    )
+                )
 
         return location_insights

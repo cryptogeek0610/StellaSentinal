@@ -72,7 +72,7 @@ class FleetComparison:
     def to_text(self) -> str:
         """Generate human-readable comparison text."""
         if self.direction == "above":
-            return f"{self.percent_from_mean:.0f}% higher than fleet average (top {100-self.percentile}%)"
+            return f"{self.percent_from_mean:.0f}% higher than fleet average (top {100 - self.percentile}%)"
         elif self.direction == "below":
             return f"{abs(self.percent_from_mean):.0f}% lower than fleet average (bottom {self.percentile}%)"
         return "in line with fleet average"
@@ -167,8 +167,10 @@ class LocationComparison:
 
     def to_text(self) -> str:
         """Generate human-readable comparison summary."""
-        lines = [f"Comparing {self.location_a_name} ({self.device_count_a} devices) "
-                 f"vs {self.location_b_name} ({self.device_count_b} devices):"]
+        lines = [
+            f"Comparing {self.location_a_name} ({self.device_count_a} devices) "
+            f"vs {self.location_b_name} ({self.device_count_b} devices):"
+        ]
 
         for metric, (val_a, val_b, diff_pct) in self.metric_comparisons.items():
             if abs(diff_pct) < 5:
@@ -257,11 +259,14 @@ class ComparisonEngine:
 
         # Calculate statistics
         z_score = (value - stats["mean"]) / stats["std"] if stats["std"] > 0 else 0
-        percent_from_mean = ((value - stats["mean"]) / stats["mean"] * 100) if stats["mean"] != 0 else 0
+        percent_from_mean = (
+            ((value - stats["mean"]) / stats["mean"] * 100) if stats["mean"] != 0 else 0
+        )
 
         # Estimate percentile (simplified - could use actual distribution)
         # Using normal distribution approximation
         from scipy import stats as scipy_stats
+
         try:
             percentile = int(scipy_stats.norm.cdf(z_score) * 100)
         except Exception:
@@ -314,7 +319,9 @@ class ComparisonEngine:
 
         manufacturer = device_metadata.get("Manufacturer", "Unknown")
         model = device_metadata.get("Model", "Unknown")
-        os_version = device_metadata.get("OSVersion", device_metadata.get("OsVersionName", "Unknown"))
+        os_version = device_metadata.get(
+            "OSVersion", device_metadata.get("OsVersionName", "Unknown")
+        )
 
         cohort_id = f"{manufacturer}_{model}_{os_version}"
         cohort_name = f"{manufacturer} {model}, {os_version}"
@@ -327,9 +334,12 @@ class ComparisonEngine:
             return None
 
         z_score = (value - stats["mean"]) / stats["std"] if stats["std"] > 0 else 0
-        percent_from_mean = ((value - stats["mean"]) / stats["mean"] * 100) if stats["mean"] != 0 else 0
+        percent_from_mean = (
+            ((value - stats["mean"]) / stats["mean"] * 100) if stats["mean"] != 0 else 0
+        )
 
         from scipy import stats as scipy_stats
+
         try:
             percentile = int(scipy_stats.norm.cdf(z_score) * 100)
         except Exception:
@@ -403,19 +413,27 @@ class ComparisonEngine:
             return None
 
         baseline_value = np.mean(historical_values)
-        percent_change = ((current_value - baseline_value) / baseline_value * 100) if baseline_value != 0 else 0
+        percent_change = (
+            ((current_value - baseline_value) / baseline_value * 100) if baseline_value != 0 else 0
+        )
 
         # Determine trend direction
         # For metrics where lower is better (drain, crashes), increase = worsening
         is_lower_better = metric in {
-            "BatteryDrainPerHour", "TotalDropCnt", "CrashCount",
-            "ANRCount", "RebootCount", "WifiDisconnectCount",
+            "BatteryDrainPerHour",
+            "TotalDropCnt",
+            "CrashCount",
+            "ANRCount",
+            "RebootCount",
+            "WifiDisconnectCount",
         }
 
         if abs(percent_change) < 10:
             trend_direction = "stable"
             is_significant = False
-        elif (is_lower_better and percent_change > 0) or (not is_lower_better and percent_change < 0):
+        elif (is_lower_better and percent_change > 0) or (
+            not is_lower_better and percent_change < 0
+        ):
             trend_direction = "worsening"
             is_significant = True
         else:
@@ -471,15 +489,23 @@ class ComparisonEngine:
         ]
 
         # Get location metadata
-        loc_a = self.db.query(LocationMetadata).filter(
-            LocationMetadata.tenant_id == self.tenant_id,
-            LocationMetadata.location_id == location_a_id,
-        ).first()
+        loc_a = (
+            self.db.query(LocationMetadata)
+            .filter(
+                LocationMetadata.tenant_id == self.tenant_id,
+                LocationMetadata.location_id == location_a_id,
+            )
+            .first()
+        )
 
-        loc_b = self.db.query(LocationMetadata).filter(
-            LocationMetadata.tenant_id == self.tenant_id,
-            LocationMetadata.location_id == location_b_id,
-        ).first()
+        loc_b = (
+            self.db.query(LocationMetadata)
+            .filter(
+                LocationMetadata.tenant_id == self.tenant_id,
+                LocationMetadata.location_id == location_b_id,
+            )
+            .first()
+        )
 
         if not loc_a or not loc_b:
             return None
@@ -717,15 +743,26 @@ class ComparisonEngine:
         values = []
         for features_json, metadata_json in query:
             try:
-                metadata = json.loads(metadata_json) if isinstance(metadata_json, str) else (metadata_json or {})
+                metadata = (
+                    json.loads(metadata_json)
+                    if isinstance(metadata_json, str)
+                    else (metadata_json or {})
+                )
 
                 # Check if device matches cohort
                 if (
                     metadata.get("Manufacturer") == manufacturer
                     and metadata.get("Model") == model
-                    and (metadata.get("OSVersion") == os_version or metadata.get("OsVersionName") == os_version)
+                    and (
+                        metadata.get("OSVersion") == os_version
+                        or metadata.get("OsVersionName") == os_version
+                    )
                 ):
-                    features = json.loads(features_json) if isinstance(features_json, str) else features_json
+                    features = (
+                        json.loads(features_json)
+                        if isinstance(features_json, str)
+                        else features_json
+                    )
                     if metric in features:
                         val = float(features[metric])
                         if not np.isnan(val):
@@ -785,12 +822,20 @@ class ComparisonEngine:
 
         for features_json, metadata_json in query:
             try:
-                metadata = json.loads(metadata_json) if isinstance(metadata_json, str) else (metadata_json or {})
+                metadata = (
+                    json.loads(metadata_json)
+                    if isinstance(metadata_json, str)
+                    else (metadata_json or {})
+                )
 
                 # Check if device is at this location
                 if metadata.get("location_id") == location_id:
                     device_ids.add(metadata.get("device_id"))
-                    features = json.loads(features_json) if isinstance(features_json, str) else features_json
+                    features = (
+                        json.loads(features_json)
+                        if isinstance(features_json, str)
+                        else features_json
+                    )
 
                     for metric in metrics:
                         if metric in features:

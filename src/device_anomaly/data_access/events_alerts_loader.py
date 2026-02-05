@@ -8,6 +8,7 @@ Data Sources:
 - MainLog (MobiControl): ~1M rows of device events
 - Alert (MobiControl): ~1.3K system alerts
 """
+
 from __future__ import annotations
 
 import logging
@@ -28,6 +29,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class EventEntry:
     """Single event from MainLog."""
+
     log_id: int
     timestamp: datetime
     event_id: int
@@ -41,6 +43,7 @@ class EventEntry:
 @dataclass
 class AlertEntry:
     """Single alert from Alert table."""
+
     alert_id: int
     alert_key: str
     alert_name: str
@@ -54,6 +57,7 @@ class AlertEntry:
 @dataclass
 class EventTimelineData:
     """Event timeline response data."""
+
     events: list[EventEntry] = field(default_factory=list)
     total: int = 0
     page: int = 1
@@ -65,6 +69,7 @@ class EventTimelineData:
 @dataclass
 class AlertSummaryData:
     """Alert summary data."""
+
     total_active: int = 0
     total_acknowledged: int = 0
     total_resolved: int = 0
@@ -78,6 +83,7 @@ class AlertSummaryData:
 @dataclass
 class AlertTrendPoint:
     """Single point in alert trend."""
+
     timestamp: datetime
     count: int
     severity: str
@@ -86,6 +92,7 @@ class AlertTrendPoint:
 @dataclass
 class CorrelatedEvent:
     """Event that occurred before an anomaly."""
+
     event: EventEntry
     time_before_minutes: float
     frequency_score: float
@@ -232,21 +239,23 @@ def load_event_timeline(
         ts = row["DateTime"]
         if isinstance(ts, str):
             ts = datetime.fromisoformat(ts)
-        elif hasattr(ts, 'to_pydatetime'):
+        elif hasattr(ts, "to_pydatetime"):
             ts = ts.to_pydatetime()
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=UTC)
 
-        events.append(EventEntry(
-            log_id=int(row["ILogId"]),
-            timestamp=ts,
-            event_id=int(row["EventId"]) if pd.notna(row["EventId"]) else 0,
-            severity=_parse_severity(row["Severity"]),
-            event_class=str(row["EventClass"]) if pd.notna(row["EventClass"]) else "Unknown",
-            message=str(row["ResTxt"]) if pd.notna(row["ResTxt"]) else "",
-            device_id=int(row["DeviceId"]) if pd.notna(row["DeviceId"]) else None,
-            login_id=str(row["LoginId"]) if pd.notna(row["LoginId"]) else None,
-        ))
+        events.append(
+            EventEntry(
+                log_id=int(row["ILogId"]),
+                timestamp=ts,
+                event_id=int(row["EventId"]) if pd.notna(row["EventId"]) else 0,
+                severity=_parse_severity(row["Severity"]),
+                event_class=str(row["EventClass"]) if pd.notna(row["EventClass"]) else "Unknown",
+                message=str(row["ResTxt"]) if pd.notna(row["ResTxt"]) else "",
+                device_id=int(row["DeviceId"]) if pd.notna(row["DeviceId"]) else None,
+                login_id=str(row["LoginId"]) if pd.notna(row["LoginId"]) else None,
+            )
+        )
 
     # Build distributions
     severity_dist = {}
@@ -402,10 +411,12 @@ def load_alert_summary(
     # Parse alert names
     by_name = []
     for _, row in names_df.iterrows():
-        by_name.append({
-            "name": str(row["AlertName"]) if pd.notna(row["AlertName"]) else "Unknown",
-            "count": int(row["cnt"]),
-        })
+        by_name.append(
+            {
+                "name": str(row["AlertName"]) if pd.notna(row["AlertName"]) else "Unknown",
+                "count": int(row["cnt"]),
+            }
+        )
 
     # Parse recent alerts
     recent_alerts = []
@@ -413,7 +424,7 @@ def load_alert_summary(
         set_dt = row["SetDateTime"]
         if isinstance(set_dt, str):
             set_dt = datetime.fromisoformat(set_dt)
-        elif hasattr(set_dt, 'to_pydatetime'):
+        elif hasattr(set_dt, "to_pydatetime"):
             set_dt = set_dt.to_pydatetime()
         if set_dt and set_dt.tzinfo is None:
             set_dt = set_dt.replace(tzinfo=UTC)
@@ -421,21 +432,23 @@ def load_alert_summary(
         ack_dt = row["AckDateTime"]
         if isinstance(ack_dt, str):
             ack_dt = datetime.fromisoformat(ack_dt)
-        elif hasattr(ack_dt, 'to_pydatetime'):
+        elif hasattr(ack_dt, "to_pydatetime"):
             ack_dt = ack_dt.to_pydatetime()
         if ack_dt and ack_dt.tzinfo is None:
             ack_dt = ack_dt.replace(tzinfo=UTC)
 
-        recent_alerts.append(AlertEntry(
-            alert_id=int(row["AlertId"]),
-            alert_key=str(row["AlertKey"]) if pd.notna(row["AlertKey"]) else "",
-            alert_name=str(row["AlertName"]) if pd.notna(row["AlertName"]) else "",
-            severity=str(row["AlertSeverity"]) if pd.notna(row["AlertSeverity"]) else "Unknown",
-            device_id=str(row["DevId"]) if pd.notna(row["DevId"]) else None,
-            status=str(row["Status"]) if pd.notna(row["Status"]) else "Unknown",
-            set_datetime=set_dt,
-            ack_datetime=ack_dt,
-        ))
+        recent_alerts.append(
+            AlertEntry(
+                alert_id=int(row["AlertId"]),
+                alert_key=str(row["AlertKey"]) if pd.notna(row["AlertKey"]) else "",
+                alert_name=str(row["AlertName"]) if pd.notna(row["AlertName"]) else "",
+                severity=str(row["AlertSeverity"]) if pd.notna(row["AlertSeverity"]) else "Unknown",
+                device_id=str(row["DevId"]) if pd.notna(row["DevId"]) else None,
+                status=str(row["Status"]) if pd.notna(row["Status"]) else "Unknown",
+                set_datetime=set_dt,
+                ack_datetime=ack_dt,
+            )
+        )
 
     return AlertSummaryData(
         total_active=total_active,
@@ -500,16 +513,18 @@ def load_alert_trends(
         ts = row["time_bucket"]
         if isinstance(ts, str):
             ts = datetime.fromisoformat(ts)
-        elif hasattr(ts, 'to_pydatetime'):
+        elif hasattr(ts, "to_pydatetime"):
             ts = ts.to_pydatetime()
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=UTC)
 
-        trends.append(AlertTrendPoint(
-            timestamp=ts,
-            count=int(row["cnt"]),
-            severity=str(row["AlertSeverity"]) if pd.notna(row["AlertSeverity"]) else "Unknown",
-        ))
+        trends.append(
+            AlertTrendPoint(
+                timestamp=ts,
+                count=int(row["cnt"]),
+                severity=str(row["AlertSeverity"]) if pd.notna(row["AlertSeverity"]) else "Unknown",
+            )
+        )
 
     return trends
 
@@ -562,11 +577,15 @@ def find_correlated_events(
 
     try:
         with engine.connect() as conn:
-            df = pd.read_sql(query, conn, params={
-                "device_id": device_id,
-                "start_time": start_time,
-                "anomaly_time": anomaly_timestamp,
-            })
+            df = pd.read_sql(
+                query,
+                conn,
+                params={
+                    "device_id": device_id,
+                    "start_time": start_time,
+                    "anomaly_time": anomaly_timestamp,
+                },
+            )
     except Exception as e:
         logger.error(f"Failed to find correlated events: {e}")
         return []
@@ -576,7 +595,7 @@ def find_correlated_events(
         ts = row["DateTime"]
         if isinstance(ts, str):
             ts = datetime.fromisoformat(ts)
-        elif hasattr(ts, 'to_pydatetime'):
+        elif hasattr(ts, "to_pydatetime"):
             ts = ts.to_pydatetime()
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=UTC)
@@ -597,11 +616,13 @@ def find_correlated_events(
         # Higher score for events closer to the anomaly
         frequency_score = 1.0 - (time_before / window_minutes)
 
-        correlated.append(CorrelatedEvent(
-            event=event,
-            time_before_minutes=time_before,
-            frequency_score=frequency_score,
-        ))
+        correlated.append(
+            CorrelatedEvent(
+                event=event,
+                time_before_minutes=time_before,
+                frequency_score=frequency_score,
+            )
+        )
 
     return correlated
 
@@ -653,17 +674,24 @@ def get_event_statistics(
             classes_df = pd.read_sql(top_classes_query, conn, params={"start_time": start_time})
     except Exception as e:
         logger.error(f"Failed to get event statistics: {e}")
-        return {"total_events": 0, "events_per_day": 0, "unique_devices": 0, "top_event_classes": []}
+        return {
+            "total_events": 0,
+            "events_per_day": 0,
+            "unique_devices": 0,
+            "top_event_classes": [],
+        }
 
     total = stats[0] if stats else 0
     unique_devices = stats[1] if stats else 0
 
     top_classes = []
     for _, row in classes_df.iterrows():
-        top_classes.append({
-            "class": str(row["EventClass"]) if pd.notna(row["EventClass"]) else "Unknown",
-            "count": int(row["cnt"]),
-        })
+        top_classes.append(
+            {
+                "class": str(row["EventClass"]) if pd.notna(row["EventClass"]) else "Unknown",
+                "count": int(row["cnt"]),
+            }
+        )
 
     return {
         "total_events": int(total),

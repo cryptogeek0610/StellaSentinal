@@ -83,9 +83,7 @@ class DeviceGrouper:
             for label, devs in sorted(groups.items(), key=lambda x: -len(x[1]))
         ]
 
-    def group_by_model(
-        self, devices: list[ImpactedDeviceResponse]
-    ) -> list[DeviceGroupingResponse]:
+    def group_by_model(self, devices: list[ImpactedDeviceResponse]) -> list[DeviceGroupingResponse]:
         """
         Group devices by their device model.
 
@@ -199,7 +197,9 @@ Focus on actionable groupings based on:
             else:
                 # Parsing failed, use fallback
                 logger.warning("Failed to parse LLM response, using fallback grouping")
-                return self._fallback_grouping(devices), "Pattern analysis parsing failed. Using fallback grouping."
+                return self._fallback_grouping(
+                    devices
+                ), "Pattern analysis parsing failed. Using fallback grouping."
 
         except Exception as e:
             logger.error(f"LLM call failed: {e}")
@@ -228,31 +228,33 @@ Focus on actionable groupings based on:
             name = (d.device_name or f"Device-{d.device_id}").lower().strip()
             device_by_name[name] = d
             # Also add without common prefixes/suffixes for fuzzy matching
-            clean_name = re.sub(r'^(device[-_]?|dev[-_]?)', '', name, flags=re.IGNORECASE)
+            clean_name = re.sub(r"^(device[-_]?|dev[-_]?)", "", name, flags=re.IGNORECASE)
             if clean_name:
                 device_by_name[clean_name] = d
 
         # Parse PATTERN/DEVICES/REASON blocks
-        pattern_blocks = re.split(r'\n(?=PATTERN:)', response, flags=re.IGNORECASE)
+        pattern_blocks = re.split(r"\n(?=PATTERN:)", response, flags=re.IGNORECASE)
 
         for block in pattern_blocks:
             if not block.strip():
                 continue
 
             # Extract pattern name
-            pattern_match = re.search(r'PATTERN:\s*(.+?)(?:\n|$)', block, re.IGNORECASE)
+            pattern_match = re.search(r"PATTERN:\s*(.+?)(?:\n|$)", block, re.IGNORECASE)
             if not pattern_match:
                 continue
             pattern_name = pattern_match.group(1).strip()
 
             # Extract device list
-            devices_match = re.search(r'DEVICES:\s*(.+?)(?:\nREASON:|$)', block, re.IGNORECASE | re.DOTALL)
+            devices_match = re.search(
+                r"DEVICES:\s*(.+?)(?:\nREASON:|$)", block, re.IGNORECASE | re.DOTALL
+            )
             if not devices_match:
                 continue
 
             device_names_str = devices_match.group(1).strip()
             # Split by comma, handling various formats
-            device_names = [n.strip() for n in re.split(r',\s*|\n', device_names_str) if n.strip()]
+            device_names = [n.strip() for n in re.split(r",\s*|\n", device_names_str) if n.strip()]
 
             # Map names to actual devices
             matched_devices: list[ImpactedDeviceResponse] = []
@@ -284,10 +286,10 @@ Focus on actionable groupings based on:
     def _extract_analysis_summary(self, analysis: str, total_devices: int) -> str:
         """Extract a summary from the LLM analysis."""
         # Count patterns found
-        pattern_count = len(re.findall(r'PATTERN:', analysis, re.IGNORECASE))
+        pattern_count = len(re.findall(r"PATTERN:", analysis, re.IGNORECASE))
 
         # Extract reasons for a brief summary
-        reasons = re.findall(r'REASON:\s*(.+?)(?:\n|$)', analysis, re.IGNORECASE)
+        reasons = re.findall(r"REASON:\s*(.+?)(?:\n|$)", analysis, re.IGNORECASE)
         reason_summary = " ".join(reasons[:2]) if reasons else ""
 
         if pattern_count > 0:
@@ -329,4 +331,4 @@ Focus on actionable groupings based on:
 
     def _normalize_key(self, label: str) -> str:
         """Normalize a label into a URL-safe key."""
-        return re.sub(r'[^a-z0-9]+', '_', label.lower()).strip('_')
+        return re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_")

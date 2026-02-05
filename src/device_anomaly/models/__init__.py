@@ -19,6 +19,7 @@ Example:
     detector.fit(training_df)
     anomalies = detector.detect(new_df)
 """
+
 from device_anomaly.models.anomaly_detector import (
     AnomalyDetectorConfig,
     AnomalyDetectorIsolationForest,

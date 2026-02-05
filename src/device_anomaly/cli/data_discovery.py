@@ -4,6 +4,7 @@ CLI command for data discovery and profiling.
 Analyzes SQL Server telemetry tables to understand data distributions,
 patterns, and baselines for ML model training.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -79,7 +80,9 @@ def run_data_discovery(
 
         # Extract available metrics
         results["available_metrics"] = get_available_metrics(dw_profiles)
-        logger.info(f"Found {len(results['available_metrics'])} numeric metrics across {len(dw_profiles)} tables")
+        logger.info(
+            f"Found {len(results['available_metrics'])} numeric metrics across {len(dw_profiles)} tables"
+        )
 
     except Exception as e:
         logger.error(f"Failed to profile DW tables: {e}")
@@ -115,15 +118,14 @@ def run_data_discovery(
             if not df.empty:
                 # Identify numeric metric columns
                 metric_cols = [
-                    col for col in df.columns
+                    col
+                    for col in df.columns
                     if df[col].dtype in ["float64", "int64", "float32", "int32"]
                     and col not in ["DeviceId", "ModelId", "ManufacturerId", "OsVersionId"]
                 ]
 
                 patterns = analyze_temporal_patterns(df, metric_cols)
-                results["temporal_patterns"] = {
-                    name: p.to_dict() for name, p in patterns.items()
-                }
+                results["temporal_patterns"] = {name: p.to_dict() for name, p in patterns.items()}
 
                 # Save patterns separately
                 patterns_path = output_path / "temporal_patterns.json"
@@ -139,14 +141,11 @@ def run_data_discovery(
     results["discovery_completed"] = datetime.utcnow().isoformat()
 
     summary = {
-        "total_tables_profiled": len(results.get("dw_profiles", {})) + len(results.get("mc_profiles", {})),
-        "total_rows": sum(
-            p.get("row_count", 0)
-            for p in results.get("dw_profiles", {}).values()
-        ),
+        "total_tables_profiled": len(results.get("dw_profiles", {}))
+        + len(results.get("mc_profiles", {})),
+        "total_rows": sum(p.get("row_count", 0) for p in results.get("dw_profiles", {}).values()),
         "total_devices": max(
-            (p.get("device_count", 0) for p in results.get("dw_profiles", {}).values()),
-            default=0
+            (p.get("device_count", 0) for p in results.get("dw_profiles", {}).values()), default=0
         ),
         "metrics_discovered": len(results.get("available_metrics", [])),
         "patterns_analyzed": len(results.get("temporal_patterns", {})),
@@ -178,17 +177,20 @@ def main() -> None:
         description="Run data discovery on SQL Server telemetry databases."
     )
     parser.add_argument(
-        "-s", "--start-date",
+        "-s",
+        "--start-date",
         help="Start date (YYYY-MM-DD). Defaults to 30 days ago.",
         default=(datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d"),
     )
     parser.add_argument(
-        "-e", "--end-date",
+        "-e",
+        "--end-date",
         help="End date (YYYY-MM-DD). Defaults to today.",
         default=datetime.now().strftime("%Y-%m-%d"),
     )
     parser.add_argument(
-        "-o", "--output-dir",
+        "-o",
+        "--output-dir",
         help="Output directory for reports",
         default="artifacts/data_discovery",
     )

@@ -27,7 +27,8 @@ st.set_page_config(
 )
 
 # Custom CSS for dark theme matching the React frontend
-st.markdown("""
+st.markdown(
+    """
 <style>
     /* Dark theme base */
     .stApp {
@@ -71,7 +72,9 @@ st.markdown("""
         border-bottom: 1px solid rgba(148, 163, 184, 0.2);
     }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 
 def api_get(endpoint: str, params: dict = None) -> dict | list | None:
@@ -219,22 +222,26 @@ def render_score_distribution(if_stats: dict):
     fig = go.Figure()
 
     if normal_bins:
-        fig.add_trace(go.Bar(
-            x=[(b["bin_start"] + b["bin_end"]) / 2 for b in normal_bins],
-            y=[b["count"] for b in normal_bins],
-            name="Normal",
-            marker_color="rgba(34, 197, 94, 0.7)",
-            width=[(b["bin_end"] - b["bin_start"]) * 0.9 for b in normal_bins],
-        ))
+        fig.add_trace(
+            go.Bar(
+                x=[(b["bin_start"] + b["bin_end"]) / 2 for b in normal_bins],
+                y=[b["count"] for b in normal_bins],
+                name="Normal",
+                marker_color="rgba(34, 197, 94, 0.7)",
+                width=[(b["bin_end"] - b["bin_start"]) * 0.9 for b in normal_bins],
+            )
+        )
 
     if anomaly_bins:
-        fig.add_trace(go.Bar(
-            x=[(b["bin_start"] + b["bin_end"]) / 2 for b in anomaly_bins],
-            y=[b["count"] for b in anomaly_bins],
-            name="Anomaly",
-            marker_color="rgba(239, 68, 68, 0.7)",
-            width=[(b["bin_end"] - b["bin_start"]) * 0.9 for b in anomaly_bins],
-        ))
+        fig.add_trace(
+            go.Bar(
+                x=[(b["bin_start"] + b["bin_end"]) / 2 for b in anomaly_bins],
+                y=[b["count"] for b in anomaly_bins],
+                name="Anomaly",
+                marker_color="rgba(239, 68, 68, 0.7)",
+                width=[(b["bin_end"] - b["bin_start"]) * 0.9 for b in anomaly_bins],
+            )
+        )
 
     fig.update_layout(
         title="Anomaly Score Distribution",
@@ -441,7 +448,10 @@ def render_model_stats_page():
             with col3:
                 st.metric("Confirmed Anomalies", feedback_stats.get("confirmed_anomalies", 0))
             with col4:
-                st.metric("Projected Accuracy Gain", f"+{feedback_stats.get('projected_accuracy_gain', 0)}%")
+                st.metric(
+                    "Projected Accuracy Gain",
+                    f"+{feedback_stats.get('projected_accuracy_gain', 0)}%",
+                )
 
             last_retrain = feedback_stats.get("last_retrain")
             if last_retrain:

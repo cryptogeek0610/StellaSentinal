@@ -9,6 +9,7 @@ Provides correlation analysis including:
 - Cohort correlation patterns
 - Time-lagged correlations
 """
+
 from __future__ import annotations
 
 import logging
@@ -127,12 +128,18 @@ def _raise_database_error(error: Exception, database: str = "telemetry") -> None
 
 @router.get("/matrix", response_model=CorrelationMatrixResponse)
 def get_correlation_matrix(
-    domain: str | None = Query(None, description="Filter by domain (battery, rf, throughput, usage, storage, system)"),
+    domain: str | None = Query(
+        None, description="Filter by domain (battery, rf, throughput, usage, storage, system)"
+    ),
     method: str = Query("pearson", description="Correlation method: pearson or spearman"),
     threshold: float = Query(0.6, description="Minimum |r| for strong correlations"),
     max_metrics: int = Query(50, description="Maximum metrics to include"),
-    min_variance: float = Query(0.001, description="Minimum variance to include a metric (filters constant columns)"),
-    min_unique_values: int = Query(3, description="Minimum unique values required (filters binary/low-cardinality columns)"),
+    min_variance: float = Query(
+        0.001, description="Minimum variance to include a metric (filters constant columns)"
+    ),
+    min_unique_values: int = Query(
+        3, description="Minimum unique values required (filters binary/low-cardinality columns)"
+    ),
     min_non_null_ratio: float = Query(0.1, description="Minimum ratio of non-null values required"),
     mock_mode: bool = Depends(get_mock_mode),
 ) -> CorrelationMatrixResponse:
@@ -231,7 +238,17 @@ def get_correlation_matrix(
         error_str = str(e).lower()
         if any(
             keyword in error_str
-            for keyword in ["connection", "timeout", "refused", "network", "login", "authentication", "odbc", "pyodbc", "sqlalchemy"]
+            for keyword in [
+                "connection",
+                "timeout",
+                "refused",
+                "network",
+                "login",
+                "authentication",
+                "odbc",
+                "pyodbc",
+                "sqlalchemy",
+            ]
         ):
             _raise_database_error(e, "telemetry")
         _raise_computation_error(e, "correlation matrix")
@@ -278,7 +295,10 @@ def get_scatter_data(
                 missing.append(metric_x)
             if metric_y not in df.columns:
                 missing.append(metric_y)
-            _raise_insufficient_data_error("scatter plot", f"Metrics not found in data: {', '.join(missing)}. Available metrics may differ from selection.")
+            _raise_insufficient_data_error(
+                "scatter plot",
+                f"Metrics not found in data: {', '.join(missing)}. Available metrics may differ from selection.",
+            )
 
         # Build columns list for scatter data
         cols_needed = [metric_x, metric_y]
@@ -294,7 +314,8 @@ def get_scatter_data(
         if len(valid_df) < 10:
             logger.warning(f"Insufficient data points for scatter plot: {len(valid_df)} points")
             _raise_insufficient_data_error(
-                "scatter plot", f"Only {len(valid_df)} valid data points found (minimum 10 required). The selected metrics may have too many missing values."
+                "scatter plot",
+                f"Only {len(valid_df)} valid data points found (minimum 10 required). The selected metrics may have too many missing values.",
             )
 
         # Sample if too many points
@@ -314,7 +335,9 @@ def get_scatter_data(
 
         # Compute regression (handle edge cases)
         try:
-            slope, intercept, r_value, _, _ = scipy_stats.linregress(valid_df[metric_x], valid_df[metric_y])
+            slope, intercept, r_value, _, _ = scipy_stats.linregress(
+                valid_df[metric_x], valid_df[metric_y]
+            )
             # Handle NaN values
             if np.isnan(slope):
                 slope = 0.0
@@ -760,7 +783,9 @@ def explain_scatter_anomaly(
                 f"Unusual {request.metric_y} value: {request.y_value:.2f}",
             ]
         if not likely_explanation:
-            likely_explanation = "Unable to determine specific cause. Review device logs for more context."
+            likely_explanation = (
+                "Unable to determine specific cause. Review device logs for more context."
+            )
         if not suggested_action:
             suggested_action = "Investigate device activity and compare with similar devices."
 

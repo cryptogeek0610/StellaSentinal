@@ -3,6 +3,7 @@ CLI entrypoint for batch ingestion.
 
 Supports dry-run mode with mock data for safe verification.
 """
+
 from __future__ import annotations
 
 import argparse

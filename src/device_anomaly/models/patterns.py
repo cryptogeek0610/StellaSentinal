@@ -91,6 +91,7 @@ def _build_device_pattern_payload(
 
 def _build_pattern_prompt(payload: dict) -> str:
     """Build prompt for summarizing device health patterns over a time period."""
+
     def _default(o):
         try:
             return float(o)
@@ -169,6 +170,7 @@ Reference for assessment:
 6. If device is healthy, say so clearly - don't manufacture concerns
 </instructions>"""
     return prompt.strip()
+
 
 def build_device_pattern_results(
     df_scored: pd.DataFrame,

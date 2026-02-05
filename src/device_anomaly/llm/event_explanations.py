@@ -116,25 +116,26 @@ Multi-day events suggest persistent issues:
 </instructions>"""
     return prompt.strip()
 
+
 def generate_and_save_event_explanation(
     engine: Engine,
     event_id: int,
-    ) -> str:
+) -> str:
     """
     Load a single event by Id, generate an explanation via LLM,
     store it back in dbo.ml_AnomalyEvents.Explanation, and return it.
     """
     with engine.begin() as conn:
         df = pd.read_sql(
-        text(
-        """
+            text(
+                """
         SELECT *
         FROM dbo.ml_AnomalyEvents
         WHERE Id = :event_id
         """
-        ),
-        conn,
-        params={"event_id": event_id},
+            ),
+            conn,
+            params={"event_id": event_id},
         )
 
         if df.empty:

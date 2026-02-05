@@ -10,6 +10,7 @@ Features:
 - Cohort-specific correlation patterns
 - Result caching for performance
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -475,14 +476,18 @@ class CorrelationService:
                     y = df[metrics[j]].dropna()
                     common_idx = x.index.intersection(y.index)
 
-                    strong.append({
-                        "metric_x": metrics[i],
-                        "metric_y": metrics[j],
-                        "correlation": round(float(corr), 3),
-                        "p_value": round(float(p_val), 4) if not np.isnan(p_val) else None,
-                        "sample_count": len(common_idx),
-                        "is_significant": p_val < self.significance_level if not np.isnan(p_val) else False,
-                    })
+                    strong.append(
+                        {
+                            "metric_x": metrics[i],
+                            "metric_y": metrics[j],
+                            "correlation": round(float(corr), 3),
+                            "p_value": round(float(p_val), 4) if not np.isnan(p_val) else None,
+                            "sample_count": len(common_idx),
+                            "is_significant": p_val < self.significance_level
+                            if not np.isnan(p_val)
+                            else False,
+                        }
+                    )
 
         # Sort by absolute correlation
         strong.sort(key=lambda x: abs(x["correlation"]), reverse=True)
@@ -664,6 +669,7 @@ class CorrelationService:
             return []
 
         import warnings
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             try:
@@ -714,17 +720,19 @@ class CorrelationService:
                     f"between {metric_a} and {metric_b} than fleet average."
                 )
 
-            patterns.append(CohortCorrelationPattern(
-                cohort_id=str(cohort_id),
-                cohort_name=str(cohort_id),  # Would ideally look up human-readable name
-                metric_pair=[metric_a, metric_b],
-                cohort_correlation=round(cohort_corr, 3),
-                fleet_correlation=round(fleet_corr, 3),
-                deviation=round(deviation, 3),
-                device_count=len(grp),
-                is_anomalous=is_anomalous,
-                insight=insight,
-            ))
+            patterns.append(
+                CohortCorrelationPattern(
+                    cohort_id=str(cohort_id),
+                    cohort_name=str(cohort_id),  # Would ideally look up human-readable name
+                    metric_pair=[metric_a, metric_b],
+                    cohort_correlation=round(cohort_corr, 3),
+                    fleet_correlation=round(fleet_corr, 3),
+                    deviation=round(deviation, 3),
+                    device_count=len(grp),
+                    is_anomalous=is_anomalous,
+                    insight=insight,
+                )
+            )
 
         # Sort by deviation magnitude
         patterns.sort(key=lambda x: abs(x.deviation), reverse=True)

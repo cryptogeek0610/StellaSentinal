@@ -4,6 +4,7 @@ This module defines the abstract base class for all anomaly detectors.
 It ensures a consistent API across different detection methods
 (Isolation Forest, Z-score, seasonal decomposition, ensemble, etc.).
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -30,12 +31,14 @@ class DetectorConfig:
     name: str
     enabled: bool = True
     contamination: float = 0.03
-    severity_thresholds: dict[str, float] = field(default_factory=lambda: {
-        "critical": -0.5,  # Most extreme anomalies
-        "high": -0.3,
-        "medium": -0.1,
-        "low": 0.0,  # Threshold for any anomaly
-    })
+    severity_thresholds: dict[str, float] = field(
+        default_factory=lambda: {
+            "critical": -0.5,  # Most extreme anomalies
+            "high": -0.3,
+            "medium": -0.1,
+            "low": 0.0,  # Threshold for any anomaly
+        }
+    )
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -219,19 +222,17 @@ class BaseAnomalyDetector(ABC):
 
         # Simple approach: features with highest deviation from training mean
         for i in range(len(df)):
-            if not hasattr(self, '_training_mean'):
+            if not hasattr(self, "_training_mean"):
                 break
 
             row_contributions = {}
             for col in self._feature_cols[:top_k]:
                 if col in df.columns:
                     val = df.iloc[i][col]
-                    mean = getattr(self, '_training_mean', {}).get(col, 0)
+                    mean = getattr(self, "_training_mean", {}).get(col, 0)
                     row_contributions[col] = abs(val - mean)
 
-            contributions[i] = dict(
-                sorted(row_contributions.items(), key=lambda x: -x[1])[:top_k]
-            )
+            contributions[i] = dict(sorted(row_contributions.items(), key=lambda x: -x[1])[:top_k])
 
         return contributions
 

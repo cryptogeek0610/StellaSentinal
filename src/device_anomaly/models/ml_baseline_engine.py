@@ -68,11 +68,13 @@ class MLBaselineConfig:
     concept_drift_lookback_days: int = 30
 
     # Multi-source fusion
-    source_weights: dict[str, float] = field(default_factory=lambda: {
-        "xsight": 1.0,
-        "mobicontrol": 0.9,
-        "custom_telemetry": 0.8,
-    })
+    source_weights: dict[str, float] = field(
+        default_factory=lambda: {
+            "xsight": 1.0,
+            "mobicontrol": 0.9,
+            "custom_telemetry": 0.8,
+        }
+    )
 
     # Causal discovery
     enable_causal_discovery: bool = True
@@ -105,7 +107,7 @@ class BayesianMetricStats:
     prior_mean: float = 0.0
     prior_std: float = 1.0
     prior_alpha: float = 2.0  # Shape parameter for inverse-gamma
-    prior_beta: float = 1.0   # Scale parameter
+    prior_beta: float = 1.0  # Scale parameter
 
     # Posterior parameters (updated with new data)
     posterior_mean: float = 0.0
@@ -251,7 +253,10 @@ class BayesianBaselineAdapter:
             self._observation_buffer[metric_name].append(o)
 
         # Batch update when buffer is large enough
-        if batch_update and len(self._observation_buffer[metric_name]) >= self.config.online_batch_size:
+        if (
+            batch_update
+            and len(self._observation_buffer[metric_name]) >= self.config.online_batch_size
+        ):
             buffer_data = np.array(self._observation_buffer[metric_name])
             self._perform_bayesian_update(stats_obj, buffer_data)
             self._observation_buffer[metric_name].clear()
@@ -275,7 +280,7 @@ class BayesianBaselineAdapter:
 
         # Prior parameters
         mu_0 = stats_obj.prior_mean
-        kappa_0 = 1.0 / (stats_obj.prior_std ** 2 + 1e-10)
+        kappa_0 = 1.0 / (stats_obj.prior_std**2 + 1e-10)
         alpha_0 = stats_obj.prior_alpha
         beta_0 = stats_obj.prior_beta
 
@@ -294,7 +299,7 @@ class BayesianBaselineAdapter:
         posterior_std = float(np.sqrt(posterior_var)) if posterior_var > 0 else 1e-6
 
         # Uncertainty: ratio of posterior to prior variance
-        prior_var = stats_obj.prior_std ** 2
+        prior_var = stats_obj.prior_std**2
         uncertainty = posterior_var / (prior_var + 1e-10)
 
         # Credible interval (using Student's t approximation)
@@ -475,6 +480,7 @@ class EnsembleAnomalyDetector:
         if self.config.enable_dbscan_clustering:
             # Use eps based on data density
             from sklearn.neighbors import NearestNeighbors
+
             nn = NearestNeighbors(n_neighbors=5)
             nn.fit(X_scaled)
             distances, _ = nn.kneighbors(X_scaled)
@@ -507,29 +513,36 @@ class EnsembleAnomalyDetector:
             from tensorflow import keras
 
             # Disable TF logging
-            tf.get_logger().setLevel('ERROR')
+            tf.get_logger().setLevel("ERROR")
 
             input_dim = X.shape[1]
             encoding_dim = max(2, input_dim // 3)
 
             # Build autoencoder
-            encoder = keras.Sequential([
-                keras.layers.Dense(input_dim, activation='relu', input_shape=(input_dim,)),
-                keras.layers.Dense(encoding_dim * 2, activation='relu'),
-                keras.layers.Dense(encoding_dim, activation='relu'),
-            ])
+            encoder = keras.Sequential(
+                [
+                    keras.layers.Dense(input_dim, activation="relu", input_shape=(input_dim,)),
+                    keras.layers.Dense(encoding_dim * 2, activation="relu"),
+                    keras.layers.Dense(encoding_dim, activation="relu"),
+                ]
+            )
 
-            decoder = keras.Sequential([
-                keras.layers.Dense(encoding_dim * 2, activation='relu', input_shape=(encoding_dim,)),
-                keras.layers.Dense(input_dim, activation='linear'),
-            ])
+            decoder = keras.Sequential(
+                [
+                    keras.layers.Dense(
+                        encoding_dim * 2, activation="relu", input_shape=(encoding_dim,)
+                    ),
+                    keras.layers.Dense(input_dim, activation="linear"),
+                ]
+            )
 
             autoencoder = keras.Sequential([encoder, decoder])
-            autoencoder.compile(optimizer='adam', loss='mse')
+            autoencoder.compile(optimizer="adam", loss="mse")
 
             # Train
             autoencoder.fit(
-                X, X,
+                X,
+                X,
                 epochs=50,
                 batch_size=32,
                 validation_split=0.1,
@@ -550,9 +563,17 @@ class EnsembleAnomalyDetector:
     def _auto_select_features(self, df: pd.DataFrame) -> list[str]:
         """Automatically select numeric features for training."""
         exclude = {
-            "DeviceId", "ModelId", "ManufacturerId", "OsVersionId",
-            "is_injected_anomaly", "anomaly_score", "anomaly_label",
-            "Timestamp", "CollectedDate", "tenant_id", "cohort_id",
+            "DeviceId",
+            "ModelId",
+            "ManufacturerId",
+            "OsVersionId",
+            "is_injected_anomaly",
+            "anomaly_score",
+            "anomaly_label",
+            "Timestamp",
+            "CollectedDate",
+            "tenant_id",
+            "cohort_id",
         }
 
         numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
@@ -709,10 +730,7 @@ class CausalCorrelationEngine:
             metrics = [m for m in target_metrics if m in df.columns]
         else:
             exclude = {"DeviceId", "Timestamp", "CollectedDate", "tenant_id"}
-            metrics = [
-                c for c in df.select_dtypes(include=[np.number]).columns
-                if c not in exclude
-            ]
+            metrics = [c for c in df.select_dtypes(include=[np.number]).columns if c not in exclude]
 
         if len(metrics) < 2:
             logger.warning("Insufficient metrics for causal discovery")
@@ -726,7 +744,7 @@ class CausalCorrelationEngine:
 
         # Test all pairs
         for i, metric_a in enumerate(metrics):
-            for metric_b in metrics[i + 1:]:
+            for metric_b in metrics[i + 1 :]:
                 relationship = self._test_causality(df, metric_a, metric_b)
                 if relationship is not None:
                     relationships.append(relationship)
@@ -817,8 +835,12 @@ class CausalCorrelationEngine:
             return 1.0  # Not enough data
 
         # Create lagged features
-        y_lagged = np.column_stack([y[max_lag - i:-i if i > 0 else None] for i in range(1, max_lag + 1)])
-        x_lagged = np.column_stack([x[max_lag - i:-i if i > 0 else None] for i in range(1, max_lag + 1)])
+        y_lagged = np.column_stack(
+            [y[max_lag - i : -i if i > 0 else None] for i in range(1, max_lag + 1)]
+        )
+        x_lagged = np.column_stack(
+            [x[max_lag - i : -i if i > 0 else None] for i in range(1, max_lag + 1)]
+        )
         y_target = y[max_lag:]
 
         # Restricted model (y only)
@@ -1001,7 +1023,10 @@ class MultiSourceDataFuser:
             weight = self.config.source_weights.get(source_name, 0.5)
 
             # Find overlapping columns (excluding join keys)
-            overlap_cols = set(result.columns) & set(df.columns) - set(join_keys) - {timestamp_col, "_primary_source"}
+            overlap_cols = set(result.columns) & set(df.columns) - set(join_keys) - {
+                timestamp_col,
+                "_primary_source",
+            }
 
             # For overlapping columns, use weighted average
             if overlap_cols:
@@ -1027,8 +1052,8 @@ class MultiSourceDataFuser:
                         total_weight = primary_weight + weight
 
                         result[col] = (
-                            result[col].fillna(0) * primary_weight +
-                            result[col_alt].fillna(0) * weight
+                            result[col].fillna(0) * primary_weight
+                            + result[col_alt].fillna(0) * weight
                         ) / total_weight
 
                         result = result.drop(columns=[col_alt])
@@ -1082,6 +1107,7 @@ class MultiSourceDataFuser:
         elif method == "knn":
             try:
                 from sklearn.impute import KNNImputer
+
                 imputer = KNNImputer(n_neighbors=n_neighbors)
                 result[numeric_cols] = imputer.fit_transform(result[numeric_cols])
             except Exception as e:
@@ -1092,6 +1118,7 @@ class MultiSourceDataFuser:
         elif method == "iterative":
             try:
                 from sklearn.impute import IterativeImputer
+
                 imputer = IterativeImputer(random_state=42, max_iter=10)
                 result[numeric_cols] = imputer.fit_transform(result[numeric_cols])
             except Exception as e:
@@ -1139,9 +1166,7 @@ class OnlineLearningBaseline:
             timestamp = datetime.now(UTC)
 
         if metric_name not in self._stats:
-            self._stats[metric_name] = _OnlineStats(
-                learning_rate=self.config.online_learning_rate
-            )
+            self._stats[metric_name] = _OnlineStats(learning_rate=self.config.online_learning_rate)
             self._change_points[metric_name] = []
 
         stats = self._stats[metric_name]
@@ -1217,10 +1242,7 @@ class OnlineLearningBaseline:
             return False
 
         cutoff = datetime.now(UTC) - timedelta(hours=lookback_hours)
-        recent_changes = [
-            cp for cp in self._change_points[metric_name]
-            if cp > cutoff
-        ]
+        recent_changes = [cp for cp in self._change_points[metric_name] if cp > cutoff]
 
         # Trigger retraining if more than 3 change points in lookback period
         return len(recent_changes) >= 3
@@ -1235,8 +1257,8 @@ class _OnlineStats:
         self.M2 = 0.0
         self.ewma = 0.0
         self.learning_rate = learning_rate
-        self.min_val = float('inf')
-        self.max_val = float('-inf')
+        self.min_val = float("inf")
+        self.max_val = float("-inf")
 
     def update(self, value: float) -> None:
         if not np.isfinite(value):
@@ -1294,9 +1316,7 @@ class AdvancedDriftDetector:
     def set_reference(self, metric_name: str, values: np.ndarray) -> None:
         """Set reference distribution for a metric."""
         self._reference_distributions[metric_name] = values
-        self._page_hinkley[metric_name] = _PageHinkley(
-            threshold=self.config.drift_threshold_psi
-        )
+        self._page_hinkley[metric_name] = _PageHinkley(threshold=self.config.drift_threshold_psi)
 
     def detect_drift(
         self,
@@ -1520,8 +1540,16 @@ class MLBaselineEngine:
 
         # Auto-select columns if not provided
         numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-        exclude = {"DeviceId", "Timestamp", "CollectedDate", "tenant_id", "cohort_id",
-                   "is_injected_anomaly", "anomaly_score", "anomaly_label"}
+        exclude = {
+            "DeviceId",
+            "Timestamp",
+            "CollectedDate",
+            "tenant_id",
+            "cohort_id",
+            "is_injected_anomaly",
+            "anomaly_score",
+            "anomaly_label",
+        }
 
         self._feature_cols = feature_cols or [c for c in numeric_cols if c not in exclude]
         self._metric_cols = metric_cols or self._feature_cols[:20]  # Limit for performance
@@ -1602,9 +1630,7 @@ class MLBaselineEngine:
         Returns update statistics and any detected changes.
         """
         # Update online statistics
-        update_results = self.online_baseline.batch_update(
-            df, self._metric_cols, timestamp_col
-        )
+        update_results = self.online_baseline.batch_update(df, self._metric_cols, timestamp_col)
 
         # Update Bayesian posteriors
         for col in self._metric_cols:
@@ -1657,8 +1683,8 @@ class MLBaselineEngine:
 
             drift_report["details"][col] = drift_result
 
-        drift_report["drift_rate"] = (
-            drift_report["metrics_drifted"] / max(1, drift_report["metrics_checked"])
+        drift_report["drift_rate"] = drift_report["metrics_drifted"] / max(
+            1, drift_report["metrics_checked"]
         )
 
         return drift_report

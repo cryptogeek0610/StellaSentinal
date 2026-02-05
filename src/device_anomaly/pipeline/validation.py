@@ -69,7 +69,9 @@ def drop_all_nan_columns(df: pd.DataFrame, name: str) -> pd.DataFrame:
         return df
     nan_cols = [c for c in df.columns if df[c].isna().all()]
     if nan_cols:
-        logger.warning("%s has %d all-NaN columns; dropping: %s", name, len(nan_cols), nan_cols[:20])
+        logger.warning(
+            "%s has %d all-NaN columns; dropping: %s", name, len(nan_cols), nan_cols[:20]
+        )
         return df.drop(columns=nan_cols)
     return df
 

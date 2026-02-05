@@ -34,7 +34,11 @@ class AnomalyDetectorIsolationForest:
         df_scored = detector.score_dataframe(df_features)
     """
 
-    def __init__(self, config: AnomalyDetectorConfig | None = None, feature_overrides: list[str] | None = None):
+    def __init__(
+        self,
+        config: AnomalyDetectorConfig | None = None,
+        feature_overrides: list[str] | None = None,
+    ):
         self.config = config or AnomalyDetectorConfig()
         self.model = IsolationForest(
             n_estimators=self.config.n_estimators,
@@ -65,10 +69,7 @@ class AnomalyDetectorIsolationForest:
                 raise ValueError(
                     f"None of the specified feature overrides exist in dataframe: {self.feature_overrides}"
                 )
-            numeric_overrides = [
-                c for c in overrides
-                if np.issubdtype(df[c].dtype, np.number)
-            ]
+            numeric_overrides = [c for c in overrides if np.issubdtype(df[c].dtype, np.number)]
             missing_numeric = sorted(set(overrides) - set(numeric_overrides))
             if missing_numeric:
                 raise ValueError(
@@ -79,11 +80,7 @@ class AnomalyDetectorIsolationForest:
         # 1) All numeric columns (use pandas.api.types for robust dtype checking)
         import pandas.api.types as ptypes
 
-        numeric_cols: list[str] = [
-            c
-            for c in df.columns
-            if ptypes.is_numeric_dtype(df[c])
-        ]
+        numeric_cols: list[str] = [c for c in df.columns if ptypes.is_numeric_dtype(df[c])]
 
         # 2) Exclude IDs / labels / targets
         exclude = {
@@ -96,10 +93,7 @@ class AnomalyDetectorIsolationForest:
             "anomaly_label",
         }
 
-        candidates = [
-            c for c in numeric_cols
-            if c not in exclude
-        ]
+        candidates = [c for c in numeric_cols if c not in exclude]
 
         # 3) Prefer baseline/cohort normalized columns if present (DW with cohorts)
         baseline_cols = [c for c in candidates if "_z_" in c]
@@ -158,9 +152,7 @@ class AnomalyDetectorIsolationForest:
 
         missing = [c for c in self.feature_cols if c not in df.columns]
         if missing:
-            raise ValueError(
-                f"Input dataframe is missing required feature columns: {missing}"
-            )
+            raise ValueError(f"Input dataframe is missing required feature columns: {missing}")
 
         feature_df = df[self.feature_cols].copy()
         feature_df.replace([np.inf, -np.inf], np.nan, inplace=True)
@@ -214,7 +206,9 @@ class AnomalyDetectorIsolationForest:
         detector_state = {
             "model": self.model,
             "feature_cols": self.feature_cols,
-            "impute_values": self.impute_values.to_dict() if self.impute_values is not None else None,
+            "impute_values": self.impute_values.to_dict()
+            if self.impute_values is not None
+            else None,
             "scaler": self.scaler,
             "config": self.config,
             "feature_weights": self.feature_weights,
@@ -257,7 +251,9 @@ class AnomalyDetectorIsolationForest:
                 if onnx_config.export.export_quantized:
                     from device_anomaly.models.onnx_exporter import ONNXQuantizer
 
-                    quantized_path = output_path.with_name(output_path.stem + "_int8").with_suffix(".onnx")
+                    quantized_path = output_path.with_name(output_path.stem + "_int8").with_suffix(
+                        ".onnx"
+                    )
                     ONNXQuantizer.quantize_dynamic(onnx_path, quantized_path)
                     saved_paths["onnx_quantized"] = quantized_path
                     logger.info("Created quantized ONNX model at %s", quantized_path)
@@ -303,7 +299,9 @@ class AnomalyDetectorIsolationForest:
         model_anomaly_count = int((model_labels == -1).sum())
 
         # Determine if we should use adaptive thresholding
-        should_use_adaptive = use_adaptive if use_adaptive is not None else self.config.use_adaptive_threshold
+        should_use_adaptive = (
+            use_adaptive if use_adaptive is not None else self.config.use_adaptive_threshold
+        )
 
         # Check if model threshold is producing reasonable results
         # If ALL scores are above threshold (no anomalies), the model may have distribution drift
@@ -329,8 +327,8 @@ class AnomalyDetectorIsolationForest:
             if model_anomaly_count > 0:
                 logger.info(f"Model-based detection: {model_anomaly_count}/{len(scores)} anomalies")
 
-        df_scored["anomaly_score"] = scores     # lower is more anomalous
-        df_scored["anomaly_label"] = labels     # 1 normal, -1 anomaly
+        df_scored["anomaly_score"] = scores  # lower is more anomalous
+        df_scored["anomaly_label"] = labels  # 1 normal, -1 anomaly
         return df_scored
 
     def _resolve_onnx_path(self) -> Path | None:
@@ -384,7 +382,9 @@ class AnomalyDetectorIsolationForest:
             )
             self.onnx_engine = ONNXInferenceEngine(onnx_path, config=engine_config)
         except Exception as exc:
-            logging.getLogger(__name__).warning("ONNX engine unavailable, falling back to sklearn: %s", exc)
+            logging.getLogger(__name__).warning(
+                "ONNX engine unavailable, falling back to sklearn: %s", exc
+            )
             self.onnx_engine = None
         return self.onnx_engine
 
@@ -478,17 +478,21 @@ class AnomalyDetectorIsolationForest:
                 old_config = loaded["config"]
                 # Merge old config with new defaults (for adaptive thresholding)
                 instance.config = AnomalyDetectorConfig(
-                    contamination=getattr(old_config, 'contamination', 0.05),
-                    n_estimators=getattr(old_config, 'n_estimators', 300),
-                    random_state=getattr(old_config, 'random_state', 42),
-                    min_variance=getattr(old_config, 'min_variance', 1e-6),
-                    scale_features=getattr(old_config, 'scale_features', True),
-                    feature_domain_weights=getattr(old_config, 'feature_domain_weights', None),
-                    use_adaptive_threshold=getattr(old_config, 'use_adaptive_threshold', True),
-                    adaptive_percentile=getattr(old_config, 'adaptive_percentile', 5.0),
+                    contamination=getattr(old_config, "contamination", 0.05),
+                    n_estimators=getattr(old_config, "n_estimators", 300),
+                    random_state=getattr(old_config, "random_state", 42),
+                    min_variance=getattr(old_config, "min_variance", 1e-6),
+                    scale_features=getattr(old_config, "scale_features", True),
+                    feature_domain_weights=getattr(old_config, "feature_domain_weights", None),
+                    use_adaptive_threshold=getattr(old_config, "use_adaptive_threshold", True),
+                    adaptive_percentile=getattr(old_config, "adaptive_percentile", 5.0),
                 )
             instance.feature_weights = loaded.get("feature_weights", {})
-            logger.info("Loaded full detector state from %s with %d features", model_path, len(instance.feature_cols))
+            logger.info(
+                "Loaded full detector state from %s with %d features",
+                model_path,
+                len(instance.feature_cols),
+            )
         else:
             # Old format: just the sklearn model
             instance.model = loaded
@@ -497,6 +501,7 @@ class AnomalyDetectorIsolationForest:
             metadata_path = model_path.with_name("training_metadata.json")
             if metadata_path.exists():
                 import json
+
                 with open(metadata_path) as f:
                     metadata = json.load(f)
                     # Check both possible keys for feature columns
@@ -512,12 +517,18 @@ class AnomalyDetectorIsolationForest:
                             contamination=config_data.get("contamination", 0.03),
                             n_estimators=config_data.get("n_estimators", 300),
                         )
-            logger.info("Loaded legacy model from %s with %d features", model_path, len(instance.feature_cols))
+            logger.info(
+                "Loaded legacy model from %s with %d features",
+                model_path,
+                len(instance.feature_cols),
+            )
 
         return instance
 
     @classmethod
-    def load_latest(cls, models_dir: str | Path | None = None) -> AnomalyDetectorIsolationForest | None:
+    def load_latest(
+        cls, models_dir: str | Path | None = None
+    ) -> AnomalyDetectorIsolationForest | None:
         """
         Load the most recently trained production model.
 

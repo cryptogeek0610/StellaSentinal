@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 @dataclass
 class DetectionConfig:
     """Config for the anomaly detector itself."""
+
     window: int = 12
     contamination: float = 0.03
     feature_overrides: list[str] | None = None
@@ -17,12 +18,12 @@ class EventConfig:
     Config for grouping anomalies into events
     and picking which devices to send to the LLM.
     """
+
     max_gap_hours: int = 2
 
     top_n_devices: int = 5
     min_total_points: int = 50
     min_anomalies: int = 3
-
 
 
 @dataclass

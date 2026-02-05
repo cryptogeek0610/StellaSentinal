@@ -3,6 +3,7 @@
 Provides WiFi AP quality, carrier performance, per-app data usage,
 and network health analytics with DeviceGroup hierarchy filtering.
 """
+
 from __future__ import annotations
 
 import logging
@@ -287,9 +288,7 @@ def _get_mock_group_info(device_group_id: int | None) -> dict[str, Any]:
             "device_count": 180,
         },
     }
-    return mock_groups.get(
-        device_group_id, {"name": None, "path": None, "device_count": 1250}
-    )
+    return mock_groups.get(device_group_id, {"name": None, "path": None, "device_count": 1250})
 
 
 def _generate_mock_aps(
@@ -550,9 +549,7 @@ async def get_device_group_hierarchy(
                 )
 
             response_groups = [convert_to_node(g) for g in tree]
-            return DeviceGroupHierarchyResponse(
-                groups=response_groups, total_groups=len(groups)
-            )
+            return DeviceGroupHierarchyResponse(groups=response_groups, total_groups=len(groups))
 
         # Fallback to network_data module (uses conf_DeviceGroup from XSight DW)
         logger.info("device_group_service returned empty, trying network_data fallback")
@@ -577,9 +574,7 @@ async def get_device_group_hierarchy(
 
         response_groups = [convert_dict_to_node(g) for g in tree]
         logger.info("Hierarchy loaded from network_data: %d groups", len(groups))
-        return DeviceGroupHierarchyResponse(
-            groups=response_groups, total_groups=len(groups)
-        )
+        return DeviceGroupHierarchyResponse(groups=response_groups, total_groups=len(groups))
 
     except Exception as e:
         logger.error(f"Failed to load device group hierarchy: {e}")
@@ -590,9 +585,7 @@ async def get_device_group_hierarchy(
 async def get_network_summary(
     tenant_id: str = Depends(get_tenant_id),
     mock_mode: bool = Depends(get_mock_mode),
-    device_group_id: int | None = Query(
-        default=None, description="Filter by DeviceGroup ID"
-    ),
+    device_group_id: int | None = Query(default=None, description="Filter by DeviceGroup ID"),
 ):
     """Get fleet network intelligence summary, optionally filtered by device group."""
     if mock_mode:
@@ -627,17 +620,25 @@ async def get_network_summary(
         # Generate recommendations based on actual metrics
         recommendations = []
         if avg_signal < -75:
-            recommendations.append(f"Average signal strength ({avg_signal:.0f} dBm) is below optimal - consider adding access points")
+            recommendations.append(
+                f"Average signal strength ({avg_signal:.0f} dBm) is below optimal - consider adding access points"
+            )
         if avg_drop_rate > 0.05:
-            recommendations.append(f"High disconnect rate detected ({avg_drop_rate*100:.1f}%) - investigate network stability")
+            recommendations.append(
+                f"High disconnect rate detected ({avg_drop_rate * 100:.1f}%) - investigate network stability"
+            )
         if problematic_aps > 0:
-            recommendations.append(f"{problematic_aps} access points have below-average performance")
+            recommendations.append(
+                f"{problematic_aps} access points have below-average performance"
+            )
         if not recommendations:
             recommendations.append("Network performance is within acceptable parameters")
 
         logger.info(
             "Network summary: %d devices, %d APs, avg signal %.1f dBm",
-            total_devices, total_aps, avg_signal
+            total_devices,
+            total_aps,
+            avg_signal,
         )
 
         return NetworkSummaryResponse(
@@ -681,9 +682,7 @@ async def get_ap_quality(
     mock_mode: bool = Depends(get_mock_mode),
     limit: int = Query(default=50, le=500),
     min_device_count: int = Query(default=1, ge=0),
-    device_group_id: int | None = Query(
-        default=None, description="Filter by DeviceGroup ID"
-    ),
+    device_group_id: int | None = Query(default=None, description="Filter by DeviceGroup ID"),
 ):
     """Get WiFi access point quality metrics."""
     if mock_mode:
@@ -695,10 +694,7 @@ async def get_ap_quality(
         from device_anomaly.data_access.network_data import get_ap_quality_metrics
 
         ap_data = get_ap_quality_metrics(
-            days=7,
-            limit=limit,
-            min_device_count=min_device_count,
-            device_group_id=device_group_id
+            days=7, limit=limit, min_device_count=min_device_count, device_group_id=device_group_id
         )
 
         aps = [
@@ -727,9 +723,7 @@ async def get_per_app_usage(
     tenant_id: str = Depends(get_tenant_id),
     mock_mode: bool = Depends(get_mock_mode),
     period_days: int = Query(default=7, ge=1, le=90),
-    device_group_id: int | None = Query(
-        default=None, description="Filter by DeviceGroup ID"
-    ),
+    device_group_id: int | None = Query(default=None, description="Filter by DeviceGroup ID"),
 ):
     """Get per-application network usage statistics."""
     if mock_mode:
@@ -763,7 +757,9 @@ async def get_per_app_usage(
 
         logger.info(
             "App usage: %d apps, %.1f MB download, %.1f MB upload",
-            len(apps), total_download, total_upload
+            len(apps),
+            total_download,
+            total_upload,
         )
 
         return AppUsageListResponse(
@@ -785,9 +781,7 @@ async def get_per_app_usage(
 async def get_carrier_stats(
     tenant_id: str = Depends(get_tenant_id),
     mock_mode: bool = Depends(get_mock_mode),
-    device_group_id: int | None = Query(
-        default=None, description="Filter by DeviceGroup ID"
-    ),
+    device_group_id: int | None = Query(default=None, description="Filter by DeviceGroup ID"),
 ):
     """Get carrier performance statistics."""
     if mock_mode:
@@ -825,9 +819,7 @@ async def get_dead_zones(
     signal_threshold_dbm: int = Query(
         default=-85, description="Signal below this is considered dead zone"
     ),
-    device_group_id: int | None = Query(
-        default=None, description="Filter by DeviceGroup ID"
-    ),
+    device_group_id: int | None = Query(default=None, description="Filter by DeviceGroup ID"),
 ):
     """Get geographic dead zones based on signal quality."""
     if mock_mode:
@@ -851,9 +843,7 @@ async def get_dead_zones(
             "device_group_id": device_group_id,
         }
 
-    logger.info(
-        "Dead zones requested for tenant %s, group %s", tenant_id, device_group_id
-    )
+    logger.info("Dead zones requested for tenant %s, group %s", tenant_id, device_group_id)
     return {
         "dead_zones": [],
         "total_count": 0,

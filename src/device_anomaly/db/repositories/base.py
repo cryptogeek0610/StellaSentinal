@@ -4,6 +4,7 @@ This module provides a generic repository pattern that can be extended
 for specific entities. It implements common CRUD operations with
 tenant isolation support.
 """
+
 from __future__ import annotations
 
 from typing import Any, Generic, TypeVar

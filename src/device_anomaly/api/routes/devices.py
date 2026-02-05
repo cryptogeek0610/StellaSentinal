@@ -1,4 +1,5 @@
 """API routes for device endpoints."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -18,6 +19,7 @@ def escape_like_pattern(value: str) -> str:
     """Escape special characters in LIKE patterns to prevent pattern injection."""
     # Escape backslash first, then % and _
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
 
 router = APIRouter(prefix="/devices", tags=["devices"])
 
@@ -41,7 +43,8 @@ def list_devices(
         if search:
             search_lower = search.lower()
             mock_devices = [
-                d for d in mock_devices
+                d
+                for d in mock_devices
                 if search_lower in d.get("device_name", "").lower()
                 or search_lower in str(d.get("device_id", "")).lower()
             ]
@@ -49,7 +52,8 @@ def list_devices(
         # Apply group filter
         if group_by and group_value:
             mock_devices = [
-                d for d in mock_devices
+                d
+                for d in mock_devices
                 if d.get("custom_attributes", {}).get(group_by) == group_value
                 or d.get("store_id") == group_value
             ]
@@ -78,7 +82,7 @@ def list_devices(
         query = query.filter(
             or_(
                 DeviceMetadata.device_name.ilike(f"%{search_escaped}%", escape="\\"),
-                cast(DeviceMetadata.device_id, String).ilike(f"%{search_escaped}%", escape="\\")
+                cast(DeviceMetadata.device_id, String).ilike(f"%{search_escaped}%", escape="\\"),
             )
         )
 

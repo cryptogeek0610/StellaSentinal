@@ -1,4 +1,5 @@
 """API routes for location intelligence."""
+
 from __future__ import annotations
 
 import logging
@@ -18,8 +19,10 @@ router = APIRouter(prefix="/insights/location", tags=["location-intelligence"])
 # Response Models
 # ============================================================================
 
+
 class GeoBoundsResponse(BaseModel):
     """Geographic bounding box."""
+
     min_lat: float
     max_lat: float
     min_long: float
@@ -28,6 +31,7 @@ class GeoBoundsResponse(BaseModel):
 
 class HeatmapCellResponse(BaseModel):
     """Single cell in a WiFi heatmap grid."""
+
     lat: float
     long: float
     signal_strength: float
@@ -38,6 +42,7 @@ class HeatmapCellResponse(BaseModel):
 
 class WiFiHeatmapResponse(BaseModel):
     """Complete WiFi heatmap response."""
+
     tenant_id: str
     grid_cells: list[HeatmapCellResponse]
     bounds: GeoBoundsResponse | None
@@ -49,6 +54,7 @@ class WiFiHeatmapResponse(BaseModel):
 
 class DeadZoneResponse(BaseModel):
     """Dead zone location data."""
+
     zone_id: str
     lat: float
     long: float
@@ -61,6 +67,7 @@ class DeadZoneResponse(BaseModel):
 
 class DeadZonesResponse(BaseModel):
     """List of dead zones."""
+
     tenant_id: str
     dead_zones: list[DeadZoneResponse]
     total_count: int
@@ -70,6 +77,7 @@ class DeadZonesResponse(BaseModel):
 
 class MovementPointResponse(BaseModel):
     """Single point in device movement history."""
+
     timestamp: datetime
     lat: float
     long: float
@@ -79,6 +87,7 @@ class MovementPointResponse(BaseModel):
 
 class DeviceMovementResponse(BaseModel):
     """Device movement summary."""
+
     device_id: int
     movements: list[MovementPointResponse]
     total_distance_km: float
@@ -89,6 +98,7 @@ class DeviceMovementResponse(BaseModel):
 
 class DwellZoneResponse(BaseModel):
     """Location where devices spend significant time."""
+
     zone_id: str
     lat: float
     long: float
@@ -100,6 +110,7 @@ class DwellZoneResponse(BaseModel):
 
 class DwellTimeResponse(BaseModel):
     """Dwell time analysis response."""
+
     tenant_id: str
     dwell_zones: list[DwellZoneResponse]
     total_zones: int
@@ -109,6 +120,7 @@ class DwellTimeResponse(BaseModel):
 
 class CoverageSummaryResponse(BaseModel):
     """WiFi coverage summary."""
+
     tenant_id: str
     total_readings: int
     avg_signal: float
@@ -122,9 +134,11 @@ class CoverageSummaryResponse(BaseModel):
 # Mock Data Functions
 # ============================================================================
 
+
 def get_mock_wifi_heatmap(period_days: int) -> WiFiHeatmapResponse:
     """Generate mock WiFi heatmap data."""
     import random
+
     random.seed(42)
 
     # Generate a grid of cells around a central location
@@ -145,14 +159,16 @@ def get_mock_wifi_heatmap(period_days: int) -> WiFiHeatmapResponse:
             if is_dead:
                 base_signal = -88 + random.uniform(-3, 3)
 
-            cells.append(HeatmapCellResponse(
-                lat=lat,
-                long=long,
-                signal_strength=base_signal,
-                reading_count=random.randint(10, 100),
-                is_dead_zone=base_signal < -85,
-                access_point_id=f"AP_{(i + 10) % 5}_{(j + 10) % 5}" if not is_dead else None,
-            ))
+            cells.append(
+                HeatmapCellResponse(
+                    lat=lat,
+                    long=long,
+                    signal_strength=base_signal,
+                    reading_count=random.randint(10, 100),
+                    is_dead_zone=base_signal < -85,
+                    access_point_id=f"AP_{(i + 10) % 5}_{(j + 10) % 5}" if not is_dead else None,
+                )
+            )
 
     dead_count = sum(1 for c in cells if c.is_dead_zone)
 
@@ -212,6 +228,7 @@ def get_mock_dead_zones() -> DeadZonesResponse:
 def get_mock_device_movements(device_id: int) -> DeviceMovementResponse:
     """Generate mock device movement data."""
     import random
+
     random.seed(device_id)
 
     now = datetime.now(UTC)
@@ -224,13 +241,15 @@ def get_mock_device_movements(device_id: int) -> DeviceMovementResponse:
         long = base_long + random.uniform(-0.005, 0.005)
         speed = random.uniform(0, 15) if random.random() > 0.3 else 0
 
-        movements.append(MovementPointResponse(
-            timestamp=ts,
-            lat=lat,
-            long=long,
-            speed=speed,
-            heading=random.uniform(0, 360),
-        ))
+        movements.append(
+            MovementPointResponse(
+                timestamp=ts,
+                lat=lat,
+                long=long,
+                speed=speed,
+                heading=random.uniform(0, 360),
+            )
+        )
 
     return DeviceMovementResponse(
         device_id=device_id,
@@ -311,11 +330,14 @@ def get_mock_coverage_summary() -> CoverageSummaryResponse:
 # API Endpoints
 # ============================================================================
 
+
 @router.get("/wifi-heatmap", response_model=WiFiHeatmapResponse)
 def get_wifi_heatmap(
     period_days: int = Query(7, ge=1, le=30, description="Analysis period in days"),
     grid_size: float = Query(0.001, ge=0.0001, le=0.01, description="Grid cell size in degrees"),
-    min_signal: int = Query(-100, ge=-120, le=-40, description="Minimum signal strength to include"),
+    min_signal: int = Query(
+        -100, ge=-120, le=-40, description="Minimum signal strength to include"
+    ),
     mock_mode: bool = Depends(get_mock_mode),
 ):
     """
@@ -383,7 +405,9 @@ def get_wifi_heatmap(
 @router.get("/dead-zones", response_model=DeadZonesResponse)
 def get_dead_zones(
     period_days: int = Query(7, ge=1, le=30, description="Analysis period in days"),
-    signal_threshold: int = Query(-75, ge=-100, le=-50, description="Signal threshold for dead zone"),
+    signal_threshold: int = Query(
+        -75, ge=-100, le=-50, description="Signal threshold for dead zone"
+    ),
     mock_mode: bool = Depends(get_mock_mode),
 ):
     """
@@ -545,7 +569,9 @@ def get_dwell_time(
             tenant_id=tenant_id,
             dwell_zones=zones,
             total_zones=len(zones),
-            recommendations=recommendations if recommendations else ["Dwell patterns appear normal"],
+            recommendations=recommendations
+            if recommendations
+            else ["Dwell patterns appear normal"],
         )
 
     except Exception as e:
@@ -589,7 +615,9 @@ def get_coverage_summary(
         if coverage_pct >= 95:
             recommendations.append(f"Overall coverage is excellent at {coverage_pct:.1f}%")
         elif coverage_pct >= 80:
-            recommendations.append(f"Coverage is good at {coverage_pct:.1f}% - minor improvements possible")
+            recommendations.append(
+                f"Coverage is good at {coverage_pct:.1f}% - minor improvements possible"
+            )
         else:
             recommendations.append(f"Coverage at {coverage_pct:.1f}% needs improvement")
 

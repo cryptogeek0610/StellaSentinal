@@ -4,6 +4,7 @@ These tests ensure that DL models (VAE) produce results that correlate
 with sklearn models (IsolationForest) and can be used interchangeably
 in the pipeline.
 """
+
 import tempfile
 from pathlib import Path
 
@@ -50,7 +51,9 @@ def sample_device_telemetry():
     df = pd.DataFrame(data)
 
     # Add derived features
-    df["BatteryDrainPerHour"] = df["TotalBatteryLevelDrop"] / (df["TotalDischargeTime_Sec"] / 3600 + 1)
+    df["BatteryDrainPerHour"] = df["TotalBatteryLevelDrop"] / (
+        df["TotalDischargeTime_Sec"] / 3600 + 1
+    )
     df["DropRate"] = df["TotalDropCnt"] / (df["TotalSignalReadings"] + 1)
     df["CrashRate"] = df["CrashCount"] / (df["AppVisitCount"] + 1)
     df["StorageUtilization"] = 1 - (df["AvailableStorage"] / df["TotalStorage"])
@@ -86,7 +89,10 @@ class TestScoreCorrelation:
 
     def test_vae_if_score_correlation(self, sample_data_with_anomalies_for_parity):
         """Test that VAE and IsolationForest scores correlate."""
-        from device_anomaly.models.anomaly_detector import AnomalyDetectorIsolationForest, AnomalyDetectorConfig
+        from device_anomaly.models.anomaly_detector import (
+            AnomalyDetectorConfig,
+            AnomalyDetectorIsolationForest,
+        )
         from device_anomaly.models.vae_detector import VAEDetector, VAEDetectorConfig
 
         df, true_labels = sample_data_with_anomalies_for_parity
@@ -114,12 +120,14 @@ class TestScoreCorrelation:
         correlation, p_value = stats.spearmanr(-if_scores, vae_scores)
 
         # Should have meaningful correlation
-        assert abs(correlation) > 0.3, \
-            f"Expected correlation > 0.3, got {correlation:.3f}"
+        assert abs(correlation) > 0.3, f"Expected correlation > 0.3, got {correlation:.3f}"
 
     def test_both_detect_clear_anomalies(self, sample_data_with_anomalies_for_parity):
         """Test that both methods detect clear anomalies."""
-        from device_anomaly.models.anomaly_detector import AnomalyDetectorIsolationForest, AnomalyDetectorConfig
+        from device_anomaly.models.anomaly_detector import (
+            AnomalyDetectorConfig,
+            AnomalyDetectorIsolationForest,
+        )
         from device_anomaly.models.vae_detector import VAEDetector, VAEDetectorConfig
 
         df, true_labels = sample_data_with_anomalies_for_parity
@@ -146,11 +154,13 @@ class TestScoreCorrelation:
         vae_anomaly_rate_anomaly = (vae_preds[n_normal:] == -1).mean()
 
         # Both should detect more anomalies in the anomaly region
-        assert if_anomaly_rate_anomaly > if_anomaly_rate_normal, \
+        assert if_anomaly_rate_anomaly > if_anomaly_rate_normal, (
             f"IF should detect more anomalies in anomaly region: {if_anomaly_rate_anomaly:.3f} vs {if_anomaly_rate_normal:.3f}"
+        )
 
-        assert vae_anomaly_rate_anomaly > vae_anomaly_rate_normal, \
+        assert vae_anomaly_rate_anomaly > vae_anomaly_rate_normal, (
             f"VAE should detect more anomalies in anomaly region: {vae_anomaly_rate_anomaly:.3f} vs {vae_anomaly_rate_normal:.3f}"
+        )
 
 
 class TestInterfaceCompatibility:
@@ -247,9 +257,13 @@ class TestAnomalyDetectionQuality:
 
     def test_vae_vs_if_on_synthetic_anomalies(self):
         """Compare VAE and IF on synthetic anomalies."""
-        from device_anomaly.models.anomaly_detector import AnomalyDetectorIsolationForest, AnomalyDetectorConfig
-        from device_anomaly.models.vae_detector import VAEDetector, VAEDetectorConfig
         from sklearn.metrics import roc_auc_score
+
+        from device_anomaly.models.anomaly_detector import (
+            AnomalyDetectorConfig,
+            AnomalyDetectorIsolationForest,
+        )
+        from device_anomaly.models.vae_detector import VAEDetector, VAEDetectorConfig
 
         np.random.seed(42)
 
@@ -288,8 +302,9 @@ class TestAnomalyDetectionQuality:
         assert vae_auc > 0.7, f"VAE AUC should be > 0.7, got {vae_auc:.3f}"
 
         # VAE should be competitive (within 0.15 of IF)
-        assert abs(if_auc - vae_auc) < 0.15, \
+        assert abs(if_auc - vae_auc) < 0.15, (
             f"VAE AUC ({vae_auc:.3f}) should be within 0.15 of IF AUC ({if_auc:.3f})"
+        )
 
 
 class TestStreamingCompatibility:

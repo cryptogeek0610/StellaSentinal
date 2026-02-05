@@ -11,6 +11,7 @@ This module transforms hourly telemetry data into ML features including:
 Data Sources:
 - XSight: cs_DataUsageByHour (104M rows), cs_BatteryLevelDrop (14.8M rows), cs_WifiHour (755K rows)
 """
+
 from __future__ import annotations
 
 import logging
@@ -131,11 +132,20 @@ class HourlyFeatureBuilder:
     def _get_default_metric_columns(self, df: pd.DataFrame) -> list[str]:
         """Get default metric columns for hourly analysis."""
         candidates = [
-            "BatteryDrop", "BatteryLevelDrop", "TotalBatteryLevelDrop",
-            "Download", "Upload", "TotalDownload", "TotalUpload",
-            "ConnectionTime", "DisconnectCount", "TotalDropCnt",
-            "AppForegroundTime", "ScreenOnTime",
-            "WifiSignalStrength", "AvgSignalStrength",
+            "BatteryDrop",
+            "BatteryLevelDrop",
+            "TotalBatteryLevelDrop",
+            "Download",
+            "Upload",
+            "TotalDownload",
+            "TotalUpload",
+            "ConnectionTime",
+            "DisconnectCount",
+            "TotalDropCnt",
+            "AppForegroundTime",
+            "ScreenOnTime",
+            "WifiSignalStrength",
+            "AvgSignalStrength",
         ]
         return [c for c in candidates if c in df.columns]
 
@@ -179,9 +189,9 @@ class HourlyFeatureBuilder:
                 continue
 
             peak_hours = df.groupby(["DeviceId", "Hour"])[col].sum().reset_index()
-            peak_hour_per_device = peak_hours.loc[
-                peak_hours.groupby("DeviceId")[col].idxmax()
-            ][["DeviceId", "Hour"]]
+            peak_hour_per_device = peak_hours.loc[peak_hours.groupby("DeviceId")[col].idxmax()][
+                ["DeviceId", "Hour"]
+            ]
             peak_hour_per_device.columns = ["DeviceId", f"{col}_peak_hour"]
 
             df = df.merge(peak_hour_per_device, on="DeviceId", how="left")
@@ -365,7 +375,8 @@ def aggregate_hourly_to_daily(
     # Get metric columns
     if metric_columns is None:
         metric_columns = [
-            c for c in df.columns
+            c
+            for c in df.columns
             if df[c].dtype in ["float64", "int64", "float32", "int32"]
             and c not in ["DeviceId", "Hour"]
         ]

@@ -220,15 +220,22 @@ class AppPowerAnalyzer:
             return self._empty_power_report(period_days)
 
         # Sort for different views
-        top_consumers = sorted(app_profiles, key=lambda x: x.battery_drain_percent, reverse=True)[:10]
-        most_inefficient = sorted(app_profiles, key=lambda x: x.drain_per_foreground_hour, reverse=True)[:10]
-        background_offenders = sorted(app_profiles, key=lambda x: x.background_drain_percent, reverse=True)[:10]
+        top_consumers = sorted(app_profiles, key=lambda x: x.battery_drain_percent, reverse=True)[
+            :10
+        ]
+        most_inefficient = sorted(
+            app_profiles, key=lambda x: x.drain_per_foreground_hour, reverse=True
+        )[:10]
+        background_offenders = sorted(
+            app_profiles, key=lambda x: x.background_drain_percent, reverse=True
+        )[:10]
 
         # Count apps with issues
         apps_with_issues = sum(
-            1 for p in app_profiles
-            if p.drain_per_foreground_hour > self.HIGH_DRAIN_PER_HOUR or
-            p.background_drain_percent > self.HIGH_BACKGROUND_DRAIN
+            1
+            for p in app_profiles
+            if p.drain_per_foreground_hour > self.HIGH_DRAIN_PER_HOUR
+            or p.background_drain_percent > self.HIGH_BACKGROUND_DRAIN
         )
 
         # Total drain from apps
@@ -249,7 +256,9 @@ class AppPowerAnalyzer:
             total_battery_drain_from_apps=total_drain,
             top_power_consumers=top_consumers,
             most_inefficient=most_inefficient[:5],
-            background_drain_offenders=[p for p in background_offenders if p.background_drain_percent > 10][:5],
+            background_drain_offenders=[
+                p for p in background_offenders if p.background_drain_percent > 10
+            ][:5],
             drain_by_category=drain_by_category,
             recommendations=recommendations,
         )
@@ -279,7 +288,9 @@ class AppPowerAnalyzer:
 
         # Sort for different views
         top_crashers = sorted(crash_profiles, key=lambda x: x.total_incidents, reverse=True)[:10]
-        most_impactful = sorted(crash_profiles, key=lambda x: x.device_impact_rate, reverse=True)[:10]
+        most_impactful = sorted(crash_profiles, key=lambda x: x.device_impact_rate, reverse=True)[
+            :10
+        ]
         anr_offenders = sorted(crash_profiles, key=lambda x: x.anr_count, reverse=True)[:10]
 
         # Totals
@@ -337,7 +348,9 @@ class AppPowerAnalyzer:
             return None
 
         # Total battery drain
-        device_data["total_battery_drain"].sum() if "total_battery_drain" in device_data.columns else 100
+        device_data[
+            "total_battery_drain"
+        ].sum() if "total_battery_drain" in device_data.columns else 100
 
         # Top apps by drain
         top_apps = sorted(app_drains.items(), key=lambda x: x[1], reverse=True)[:5]
@@ -352,10 +365,14 @@ class AppPowerAnalyzer:
         recommendations = []
         if has_rogue:
             rogue_app = top_apps[0][0]
-            recommendations.append(f"'{rogue_app}' is consuming excessive battery. Consider uninstalling or restricting.")
+            recommendations.append(
+                f"'{rogue_app}' is consuming excessive battery. Consider uninstalling or restricting."
+            )
 
         if unexplained_percent > 30:
-            recommendations.append("Significant unexplained battery drain. Check for system issues or hidden processes.")
+            recommendations.append(
+                "Significant unexplained battery drain. Check for system issues or hidden processes."
+            )
 
         return AppBatteryCorrelation(
             device_id=device_id,
@@ -388,8 +405,16 @@ class AppPowerAnalyzer:
             return {"package_name": package_name, "impact_score": 0, "status": "no_data"}
 
         # Filter to this app
-        power_data = app_data[app_data["package_name"] == package_name] if not app_data.empty else pd.DataFrame()
-        crash_app_data = crash_data[crash_data["package_name"] == package_name] if not crash_data.empty else pd.DataFrame()
+        power_data = (
+            app_data[app_data["package_name"] == package_name]
+            if not app_data.empty
+            else pd.DataFrame()
+        )
+        crash_app_data = (
+            crash_data[crash_data["package_name"] == package_name]
+            if not crash_data.empty
+            else pd.DataFrame()
+        )
 
         total_drain = power_data["battery_drain"].sum() if not power_data.empty else 0
         total_crashes = crash_app_data["crash_count"].sum() if not crash_app_data.empty else 0
@@ -439,7 +464,9 @@ class AppPowerAnalyzer:
         records = []
         for feature in query:
             try:
-                features = json.loads(feature.feature_values_json) if feature.feature_values_json else {}
+                features = (
+                    json.loads(feature.feature_values_json) if feature.feature_values_json else {}
+                )
 
                 # Get app-level battery data if available
                 # This is simplified - actual implementation would parse app-level metrics
@@ -447,15 +474,17 @@ class AppPowerAnalyzer:
                 app_foreground = features.get("AppForegroundTime", 0)
                 total_drain = features.get("TotalBatteryLevelDrop", 0)
 
-                records.append({
-                    "device_id": feature.device_id,
-                    "computed_at": feature.computed_at,
-                    "package_name": "system_apps",  # Simplified - would have per-app data
-                    "battery_drain": total_app_drain,
-                    "foreground_time": app_foreground,
-                    "background_time": 0,  # Would need per-app data
-                    "total_battery_drain": total_drain,
-                })
+                records.append(
+                    {
+                        "device_id": feature.device_id,
+                        "computed_at": feature.computed_at,
+                        "package_name": "system_apps",  # Simplified - would have per-app data
+                        "battery_drain": total_app_drain,
+                        "foreground_time": app_foreground,
+                        "background_time": 0,  # Would need per-app data
+                        "total_battery_drain": total_drain,
+                    }
+                )
             except (json.JSONDecodeError, TypeError):
                 continue
 
@@ -484,20 +513,24 @@ class AppPowerAnalyzer:
         records = []
         for feature in query:
             try:
-                features = json.loads(feature.feature_values_json) if feature.feature_values_json else {}
+                features = (
+                    json.loads(feature.feature_values_json) if feature.feature_values_json else {}
+                )
 
                 # Simplified - would have per-app crash data
                 crash_count = features.get("CrashCount", 0)
                 anr_count = features.get("ANRCount", 0)
 
                 if crash_count > 0 or anr_count > 0:
-                    records.append({
-                        "device_id": feature.device_id,
-                        "computed_at": feature.computed_at,
-                        "package_name": "apps",  # Simplified
-                        "crash_count": crash_count,
-                        "anr_count": anr_count,
-                    })
+                    records.append(
+                        {
+                            "device_id": feature.device_id,
+                            "computed_at": feature.computed_at,
+                            "package_name": "apps",  # Simplified
+                            "crash_count": crash_count,
+                            "anr_count": anr_count,
+                        }
+                    )
             except (json.JSONDecodeError, TypeError):
                 continue
 
@@ -527,15 +560,19 @@ class AppPowerAnalyzer:
         records = []
         for feature in query:
             try:
-                features = json.loads(feature.feature_values_json) if feature.feature_values_json else {}
+                features = (
+                    json.loads(feature.feature_values_json) if feature.feature_values_json else {}
+                )
 
-                records.append({
-                    "device_id": feature.device_id,
-                    "computed_at": feature.computed_at,
-                    "total_battery_drain": features.get("TotalBatteryLevelDrop", 0),
-                    "app_drain": features.get("TotalBatteryAppDrain", 0),
-                    "foreground_time": features.get("AppForegroundTime", 0),
-                })
+                records.append(
+                    {
+                        "device_id": feature.device_id,
+                        "computed_at": feature.computed_at,
+                        "total_battery_drain": features.get("TotalBatteryLevelDrop", 0),
+                        "app_drain": features.get("TotalBatteryAppDrain", 0),
+                        "foreground_time": features.get("AppForegroundTime", 0),
+                    }
+                )
             except (json.JSONDecodeError, TypeError):
                 continue
 
@@ -549,12 +586,18 @@ class AppPowerAnalyzer:
         profiles = []
 
         # Aggregate by package name
-        agg = app_data.groupby("package_name").agg({
-            "battery_drain": "sum",
-            "foreground_time": "sum",
-            "background_time": "sum",
-            "device_id": "nunique",
-        }).reset_index()
+        agg = (
+            app_data.groupby("package_name")
+            .agg(
+                {
+                    "battery_drain": "sum",
+                    "foreground_time": "sum",
+                    "background_time": "sum",
+                    "device_id": "nunique",
+                }
+            )
+            .reset_index()
+        )
 
         for _, row in agg.iterrows():
             foreground_hours = row["foreground_time"] / 60 if row["foreground_time"] > 0 else 0.01
@@ -570,20 +613,22 @@ class AppPowerAnalyzer:
             # Efficiency score (higher = worse)
             efficiency = min(100, drain_per_fg * 10)
 
-            profiles.append(AppPowerProfile(
-                package_name=row["package_name"],
-                app_name=row["package_name"],  # Would need mapping
-                foreground_time_hours=foreground_hours,
-                background_time_hours=background_hours,
-                total_time_hours=total_hours,
-                battery_drain_percent=row["battery_drain"],
-                drain_per_foreground_hour=drain_per_fg,
-                drain_per_total_hour=drain_per_total,
-                background_drain_percent=bg_drain_pct,
-                efficiency_score=efficiency,
-                vs_app_category_average=1.0,  # Would need category data
-                devices_with_app=int(row["device_id"]),
-            ))
+            profiles.append(
+                AppPowerProfile(
+                    package_name=row["package_name"],
+                    app_name=row["package_name"],  # Would need mapping
+                    foreground_time_hours=foreground_hours,
+                    background_time_hours=background_hours,
+                    total_time_hours=total_hours,
+                    battery_drain_percent=row["battery_drain"],
+                    drain_per_foreground_hour=drain_per_fg,
+                    drain_per_total_hour=drain_per_total,
+                    background_drain_percent=bg_drain_pct,
+                    efficiency_score=efficiency,
+                    vs_app_category_average=1.0,  # Would need category data
+                    devices_with_app=int(row["device_id"]),
+                )
+            )
 
         return profiles
 
@@ -598,11 +643,17 @@ class AppPowerAnalyzer:
 
         profiles = []
 
-        agg = crash_data.groupby("package_name").agg({
-            "crash_count": "sum",
-            "anr_count": "sum",
-            "device_id": "nunique",
-        }).reset_index()
+        agg = (
+            crash_data.groupby("package_name")
+            .agg(
+                {
+                    "crash_count": "sum",
+                    "anr_count": "sum",
+                    "device_id": "nunique",
+                }
+            )
+            .reset_index()
+        )
 
         total_devices = len(crash_data["device_id"].unique())
         total_hours = period_days * 24
@@ -626,20 +677,22 @@ class AppPowerAnalyzer:
             else:
                 severity = InsightSeverity.LOW
 
-            profiles.append(AppCrashProfile(
-                package_name=row["package_name"],
-                app_name=row["package_name"],
-                crash_count=crash_count,
-                anr_count=anr_count,
-                total_incidents=total_incidents,
-                crash_rate_per_hour=crash_rate,
-                devices_affected=devices_affected,
-                devices_with_app=devices_affected,  # Simplified
-                device_impact_rate=impact_rate,
-                trend_direction="stable",
-                vs_last_period=0,
-                severity=severity,
-            ))
+            profiles.append(
+                AppCrashProfile(
+                    package_name=row["package_name"],
+                    app_name=row["package_name"],
+                    crash_count=crash_count,
+                    anr_count=anr_count,
+                    total_incidents=total_incidents,
+                    crash_rate_per_hour=crash_rate,
+                    devices_affected=devices_affected,
+                    devices_with_app=devices_affected,  # Simplified
+                    device_impact_rate=impact_rate,
+                    trend_direction="stable",
+                    vs_last_period=0,
+                    severity=severity,
+                )
+            )
 
         return profiles
 
@@ -720,7 +773,9 @@ class AppPowerAnalyzer:
                 )
 
         if background:
-            bg_offenders = [p for p in background if p.background_drain_percent > self.HIGH_BACKGROUND_DRAIN]
+            bg_offenders = [
+                p for p in background if p.background_drain_percent > self.HIGH_BACKGROUND_DRAIN
+            ]
             if bg_offenders:
                 recommendations.append(
                     f"{len(bg_offenders)} app(s) have high background drain. "
@@ -749,8 +804,7 @@ class AppPowerAnalyzer:
             critical = [p for p in impactful if p.severity == InsightSeverity.CRITICAL]
             if critical:
                 recommendations.append(
-                    f"{len(critical)} app(s) are affecting >20% of devices. "
-                    "Priority fix required."
+                    f"{len(critical)} app(s) are affecting >20% of devices. Priority fix required."
                 )
 
         if anr_offenders:

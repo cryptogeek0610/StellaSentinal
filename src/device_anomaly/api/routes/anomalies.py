@@ -1,4 +1,5 @@
 """API routes for anomaly endpoints."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -70,7 +71,9 @@ def list_anomalies(
 
     # Apply pagination
     offset = (page - 1) * page_size
-    results = query.order_by(AnomalyResult.anomaly_score.asc()).offset(offset).limit(page_size).all()
+    results = (
+        query.order_by(AnomalyResult.anomaly_score.asc()).offset(offset).limit(page_size).all()
+    )
 
     total_pages = (total + page_size - 1) // page_size
 
@@ -93,7 +96,9 @@ def list_anomalies(
 @router.get("/grouped", response_model=GroupedAnomaliesResponse)
 def list_grouped_anomalies(
     status: str | None = Query(None, description="Filter by status: open, investigating, resolved"),
-    min_severity: str | None = Query(None, description="Minimum severity: critical, high, medium, low"),
+    min_severity: str | None = Query(
+        None, description="Minimum severity: critical, high, medium, low"
+    ),
     min_group_size: int = Query(2, ge=1, description="Minimum anomalies to form a group"),
     temporal_window_hours: int = Query(24, ge=1, description="Time window for temporal grouping"),
     db: Session = Depends(get_db),

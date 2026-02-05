@@ -20,6 +20,7 @@ PRODUCTION-HARDENED:
 - Respects table allowlist from settings
 - Graceful handling of missing tables/columns
 """
+
 from __future__ import annotations
 
 import logging
@@ -54,11 +55,18 @@ XSIGHT_EXTENDED_TABLES = {
         "timestamp_col": "CollectedDate",
         "device_col": "DeviceId",
         "columns": [
-            "CollectedDate", "DeviceId",
-            "TotalBatteryLevelDrop", "TotalDischargeTime_Sec",
-            "ChargePatternBadCount", "ChargePatternGoodCount", "ChargePatternMediumCount",
-            "AcChargeCount", "UsbChargeCount", "WirelessChargeCount",
-            "CalculatedBatteryCapacity", "TotalFreeStorageKb",
+            "CollectedDate",
+            "DeviceId",
+            "TotalBatteryLevelDrop",
+            "TotalDischargeTime_Sec",
+            "ChargePatternBadCount",
+            "ChargePatternGoodCount",
+            "ChargePatternMediumCount",
+            "AcChargeCount",
+            "UsbChargeCount",
+            "WirelessChargeCount",
+            "CalculatedBatteryCapacity",
+            "TotalFreeStorageKb",
         ],
         "priority": 1,
     },
@@ -66,8 +74,11 @@ XSIGHT_EXTENDED_TABLES = {
         "timestamp_col": "CollectedDate",
         "device_col": "DeviceId",
         "columns": [
-            "CollectedDate", "DeviceId", "AppId",
-            "VisitCount", "TotalForegroundTime",
+            "CollectedDate",
+            "DeviceId",
+            "AppId",
+            "VisitCount",
+            "TotalForegroundTime",
         ],
         "dimensions": ["AppId"],
         "priority": 1,
@@ -76,8 +87,12 @@ XSIGHT_EXTENDED_TABLES = {
         "timestamp_col": "CollectedDate",
         "device_col": "DeviceId",
         "columns": [
-            "CollectedDate", "DeviceId", "AppId", "ConnectionTypeId",
-            "Download", "Upload",
+            "CollectedDate",
+            "DeviceId",
+            "AppId",
+            "ConnectionTypeId",
+            "Download",
+            "Upload",
         ],
         "dimensions": ["AppId", "ConnectionTypeId"],
         "priority": 1,
@@ -86,7 +101,10 @@ XSIGHT_EXTENDED_TABLES = {
         "timestamp_col": "CollectedDate",
         "device_col": "DeviceId",
         "columns": [
-            "CollectedDate", "DeviceId", "AppId", "BatteryDrain",
+            "CollectedDate",
+            "DeviceId",
+            "AppId",
+            "BatteryDrain",
         ],
         "dimensions": ["AppId"],
         "priority": 1,
@@ -95,20 +113,28 @@ XSIGHT_EXTENDED_TABLES = {
         "timestamp_col": "CollectedDate",
         "device_col": "DeviceId",
         "columns": [
-            "CollectedDate", "DeviceId", "NetworkTypeId",
-            "SignalStrengthBucketId", "ReadingCount", "DropCnt",
+            "CollectedDate",
+            "DeviceId",
+            "NetworkTypeId",
+            "SignalStrengthBucketId",
+            "ReadingCount",
+            "DropCnt",
         ],
         "dimensions": ["NetworkTypeId", "SignalStrengthBucketId"],
         "priority": 1,
     },
-
     # NEW: High-volume hourly tables
     "cs_DataUsageByHour": {
         "timestamp_col": "CollectedDate",
         "device_col": "DeviceId",
         "columns": [
-            "CollectedDate", "Hour", "DeviceId", "AppId",
-            "ConnectionTypeId", "Download", "Upload",
+            "CollectedDate",
+            "Hour",
+            "DeviceId",
+            "AppId",
+            "ConnectionTypeId",
+            "Download",
+            "Upload",
         ],
         "dimensions": ["Hour", "AppId", "ConnectionTypeId"],
         "priority": 2,
@@ -118,7 +144,10 @@ XSIGHT_EXTENDED_TABLES = {
         "timestamp_col": "CollectedDate",
         "device_col": "DeviceId",
         "columns": [
-            "CollectedDate", "Hour", "DeviceId", "BatteryLevel",
+            "CollectedDate",
+            "Hour",
+            "DeviceId",
+            "BatteryLevel",
         ],
         "dimensions": ["Hour"],
         "priority": 2,
@@ -128,8 +157,12 @@ XSIGHT_EXTENDED_TABLES = {
         "timestamp_col": "CollectedDate",
         "device_col": "DeviceId",
         "columns": [
-            "CollectedDate", "Hour", "DeviceId", "AppId",
-            "VisitCount", "TotalForegroundTime",
+            "CollectedDate",
+            "Hour",
+            "DeviceId",
+            "AppId",
+            "VisitCount",
+            "TotalForegroundTime",
         ],
         "dimensions": ["Hour", "AppId"],
         "priority": 2,
@@ -139,21 +172,30 @@ XSIGHT_EXTENDED_TABLES = {
         "timestamp_col": "CollectedDate",
         "device_col": "DeviceId",
         "columns": [
-            "CollectedDate", "Hour", "PresetAppId", "DeviceId",
-            "ConnectionTime", "Download", "Upload",
+            "CollectedDate",
+            "Hour",
+            "PresetAppId",
+            "DeviceId",
+            "ConnectionTime",
+            "Download",
+            "Upload",
         ],
         "dimensions": ["Hour", "PresetAppId"],
         "priority": 3,
         "large_table": True,
     },
-
     # NEW: WiFi and location tables
     "cs_WifiHour": {
         "timestamp_col": "CollectedDate",
         "device_col": "Deviceid",  # Note: lowercase 'id'
         "columns": [
-            "CollectedDate", "Hour", "Deviceid", "AccessPointId",
-            "WiFiSignalStrength", "ConnectionTime", "DisconnectCount",
+            "CollectedDate",
+            "Hour",
+            "Deviceid",
+            "AccessPointId",
+            "WiFiSignalStrength",
+            "ConnectionTime",
+            "DisconnectCount",
         ],
         "dimensions": ["Hour", "AccessPointId"],
         "priority": 2,
@@ -162,8 +204,14 @@ XSIGHT_EXTENDED_TABLES = {
         "timestamp_col": "CollectedDate",
         "device_col": "Deviceid",
         "columns": [
-            "CollectedDate", "Hour", "Deviceid", "AccessPointId",
-            "ReadingTime", "WiFiSignalStrength", "Latitude", "Longitude",
+            "CollectedDate",
+            "Hour",
+            "Deviceid",
+            "AccessPointId",
+            "ReadingTime",
+            "WiFiSignalStrength",
+            "Latitude",
+            "Longitude",
         ],
         "dimensions": ["Hour", "AccessPointId"],
         "priority": 2,
@@ -172,31 +220,43 @@ XSIGHT_EXTENDED_TABLES = {
         "timestamp_col": "CollectedDate",
         "device_col": "DeviceId",
         "columns": [
-            "CollectedDate", "DeviceId", "CollectedTime",
-            "Latitude", "Longitude", "NetworkTypeId", "SignalStrengthBucketId",
+            "CollectedDate",
+            "DeviceId",
+            "CollectedTime",
+            "Latitude",
+            "Longitude",
+            "NetworkTypeId",
+            "SignalStrengthBucketId",
         ],
         "dimensions": ["NetworkTypeId", "SignalStrengthBucketId"],
         "priority": 2,
     },
-
     # NEW: App inventory
     "cs_DeviceInstalledApp": {
         "timestamp_col": "EventTime",
         "device_col": "DeviceId",
         "columns": [
-            "DeviceId", "AppId", "AppVersionId", "EventTime", "EventType",
+            "DeviceId",
+            "AppId",
+            "AppVersionId",
+            "EventTime",
+            "EventType",
         ],
         "dimensions": ["AppId", "EventType"],
         "priority": 2,
     },
-
     # NEW: Crash logs for app stability analysis
     "cs_CrashLogs": {
         "timestamp_col": "CollectedDate",
         "device_col": "DeviceId",
         "columns": [
-            "CollectedDate", "DeviceId", "AppId", "CrashCount",
-            "AppNotResponding", "ExceptionType", "ProcessName",
+            "CollectedDate",
+            "DeviceId",
+            "AppId",
+            "CrashCount",
+            "AppNotResponding",
+            "ExceptionType",
+            "ProcessName",
         ],
         "dimensions": ["AppId"],
         "priority": 2,
@@ -299,8 +359,8 @@ def load_xsight_table_incremental(
         end_date = datetime.now(UTC)
 
     # For date-only columns (CollectedDate), convert to date
-    start_val = start_date.date() if hasattr(start_date, 'date') else start_date
-    end_val = end_date.date() if hasattr(end_date, 'date') else end_date
+    start_val = start_date.date() if hasattr(start_date, "date") else start_date
+    end_val = end_date.date() if hasattr(end_date, "date") else end_date
 
     # Build query with KEYSET PAGINATION
     columns_str = ", ".join(valid_columns)
@@ -316,7 +376,7 @@ def load_xsight_table_incremental(
         # Composite keyset for hourly tables
         where_parts = [
             f"(({ts_col} > :start_date) OR ({ts_col} = :start_date AND Hour > :start_hour))",
-            f"{ts_col} <= :end_date"
+            f"{ts_col} <= :end_date",
         ]
         params["start_date"] = start_val
         params["start_hour"] = start_hour
@@ -360,7 +420,7 @@ def load_xsight_table_incremental(
             if pd.notna(max_ts):
                 if isinstance(max_ts, (datetime, pd.Timestamp)):
                     new_watermark = max_ts
-                    if hasattr(new_watermark, 'to_pydatetime'):
+                    if hasattr(new_watermark, "to_pydatetime"):
                         new_watermark = new_watermark.to_pydatetime()
                 else:
                     # It's a date, convert to datetime
@@ -453,7 +513,8 @@ def load_all_xsight_tables(
 
     if priority_filter is not None:
         tables_to_load = [
-            t for t in tables_to_load
+            t
+            for t in tables_to_load
             if XSIGHT_EXTENDED_TABLES.get(t, {}).get("priority", 99) <= priority_filter
         ]
 
@@ -587,19 +648,23 @@ def get_xsight_table_stats(
         try:
             with engine.connect() as conn:
                 # Approximate row count using sys.partitions (fast)
-                result = conn.execute(text(f"""
+                result = conn.execute(
+                    text(f"""
                     SELECT SUM(p.rows)
                     FROM sys.tables t
                     INNER JOIN sys.partitions p ON t.object_id = p.object_id
                     WHERE t.name = '{table_name}' AND p.index_id IN (0, 1)
-                """)).fetchone()
+                """)
+                ).fetchone()
                 table_stats["row_count"] = int(result[0]) if result and result[0] else 0
 
                 # Date range (may be slow for very large tables)
                 if not config.get("large_table"):
-                    result = conn.execute(text(f"""
+                    result = conn.execute(
+                        text(f"""
                         SELECT MIN({ts_col}), MAX({ts_col}) FROM dbo.{table_name}
-                    """)).fetchone()
+                    """)
+                    ).fetchone()
                     if result:
                         table_stats["min_date"] = str(result[0]) if result[0] else None
                         table_stats["max_date"] = str(result[1]) if result[1] else None

@@ -1,18 +1,25 @@
-from pathlib import Path
 import subprocess
 import sys
+from datetime import UTC
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
+from device_anomaly.features.cohort_stats import (
+    CohortStatsStore,
+    apply_cohort_stats,
+    compute_cohort_stats,
+)
 from device_anomaly.features.device_features import DeviceFeatureBuilder, compute_feature_norms
-from device_anomaly.features.cohort_stats import compute_cohort_stats, CohortStatsStore, apply_cohort_stats
-from device_anomaly.models.anomaly_detector import AnomalyDetectorIsolationForest, AnomalyDetectorConfig
+from device_anomaly.models.anomaly_detector import (
+    AnomalyDetectorConfig,
+    AnomalyDetectorIsolationForest,
+)
 from device_anomaly.streaming.anomaly_processor import AnomalyStreamProcessor
 from device_anomaly.streaming.feature_computer import StreamingFeatureComputer
-from device_anomaly.streaming.telemetry_stream import DeviceBuffer, TelemetryEvent, TelemetryBuffer
-
+from device_anomaly.streaming.telemetry_stream import DeviceBuffer, TelemetryBuffer, TelemetryEvent
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "streaming_parity_events.csv"
 BUFFER_MAX_AGE_HOURS = 24 * 365 * 10
@@ -43,7 +50,9 @@ def build_event(row: pd.Series, metric_cols: list[str]) -> TelemetryEvent:
         manufacturer_id=int(row["ManufacturerId"]),
         model_id=int(row["ModelId"]),
         os_version_id=int(row["OsVersionId"]),
-        firmware_version=None if pd.isna(row.get("FirmwareVersion")) else str(row.get("FirmwareVersion")),
+        firmware_version=None
+        if pd.isna(row.get("FirmwareVersion"))
+        else str(row.get("FirmwareVersion")),
         tenant_id="default",
     )
 
@@ -72,8 +81,17 @@ def test_feature_parity_batch_vs_streaming():
     processor._model = detector
 
     metric_cols = [
-        col for col in df_raw.columns
-        if col not in {"DeviceId", "Timestamp", "ManufacturerId", "ModelId", "OsVersionId", "FirmwareVersion"}
+        col
+        for col in df_raw.columns
+        if col
+        not in {
+            "DeviceId",
+            "Timestamp",
+            "ManufacturerId",
+            "ModelId",
+            "OsVersionId",
+            "FirmwareVersion",
+        }
     ]
 
     feature_spec = builder.get_feature_spec()
@@ -134,8 +152,17 @@ def test_streaming_state_rehydration():
     )
 
     metric_cols = [
-        col for col in df_device.columns
-        if col not in {"DeviceId", "Timestamp", "ManufacturerId", "ModelId", "OsVersionId", "FirmwareVersion"}
+        col
+        for col in df_device.columns
+        if col
+        not in {
+            "DeviceId",
+            "Timestamp",
+            "ManufacturerId",
+            "ModelId",
+            "OsVersionId",
+            "FirmwareVersion",
+        }
     ]
 
     buffer = TelemetryBuffer()
@@ -208,8 +235,17 @@ def test_parity_single_event_missing_rollups():
         feature_mode="canonical",
     )
     metric_cols = [
-        col for col in df_raw.columns
-        if col not in {"DeviceId", "Timestamp", "ManufacturerId", "ModelId", "OsVersionId", "FirmwareVersion"}
+        col
+        for col in df_raw.columns
+        if col
+        not in {
+            "DeviceId",
+            "Timestamp",
+            "ManufacturerId",
+            "ModelId",
+            "OsVersionId",
+            "FirmwareVersion",
+        }
     ]
     event = build_event(df_raw.iloc[0], metric_cols)
     buffer = make_buffer(device_id=event.device_id)
@@ -237,8 +273,17 @@ def test_parity_below_window_missing_rollups():
         feature_mode="canonical",
     )
     metric_cols = [
-        col for col in df_raw.columns
-        if col not in {"DeviceId", "Timestamp", "ManufacturerId", "ModelId", "OsVersionId", "FirmwareVersion"}
+        col
+        for col in df_raw.columns
+        if col
+        not in {
+            "DeviceId",
+            "Timestamp",
+            "ManufacturerId",
+            "ModelId",
+            "OsVersionId",
+            "FirmwareVersion",
+        }
     ]
     buffer = make_buffer(device_id=int(df_raw.iloc[0]["DeviceId"]))
     for _, row in df_raw.iterrows():
@@ -269,8 +314,17 @@ def test_parity_exact_window_rollups():
         feature_mode="canonical",
     )
     metric_cols = [
-        col for col in df_raw.columns
-        if col not in {"DeviceId", "Timestamp", "ManufacturerId", "ModelId", "OsVersionId", "FirmwareVersion"}
+        col
+        for col in df_raw.columns
+        if col
+        not in {
+            "DeviceId",
+            "Timestamp",
+            "ManufacturerId",
+            "ModelId",
+            "OsVersionId",
+            "FirmwareVersion",
+        }
     ]
     buffer = make_buffer(device_id=int(df_raw.iloc[0]["DeviceId"]))
     for _, row in df_raw.iterrows():
@@ -299,8 +353,17 @@ def test_parity_over_window_rollups():
         feature_mode="canonical",
     )
     metric_cols = [
-        col for col in df_raw.columns
-        if col not in {"DeviceId", "Timestamp", "ManufacturerId", "ModelId", "OsVersionId", "FirmwareVersion"}
+        col
+        for col in df_raw.columns
+        if col
+        not in {
+            "DeviceId",
+            "Timestamp",
+            "ManufacturerId",
+            "ModelId",
+            "OsVersionId",
+            "FirmwareVersion",
+        }
     ]
     buffer = make_buffer(device_id=int(df_raw.iloc[0]["DeviceId"]))
     for _, row in df_raw.iterrows():
@@ -327,8 +390,17 @@ def test_parity_handles_nan_and_inf():
         feature_mode="canonical",
     )
     metric_cols = [
-        col for col in df_raw.columns
-        if col not in {"DeviceId", "Timestamp", "ManufacturerId", "ModelId", "OsVersionId", "FirmwareVersion"}
+        col
+        for col in df_raw.columns
+        if col
+        not in {
+            "DeviceId",
+            "Timestamp",
+            "ManufacturerId",
+            "ModelId",
+            "OsVersionId",
+            "FirmwareVersion",
+        }
     ]
     buffer = make_buffer(device_id=int(df_raw.iloc[0]["DeviceId"]))
     for _, row in df_raw.iterrows():
@@ -352,8 +424,17 @@ def test_parity_out_of_order_timestamps():
         feature_mode="canonical",
     )
     metric_cols = [
-        col for col in df_raw.columns
-        if col not in {"DeviceId", "Timestamp", "ManufacturerId", "ModelId", "OsVersionId", "FirmwareVersion"}
+        col
+        for col in df_raw.columns
+        if col
+        not in {
+            "DeviceId",
+            "Timestamp",
+            "ManufacturerId",
+            "ModelId",
+            "OsVersionId",
+            "FirmwareVersion",
+        }
     ]
     buffer = make_buffer(device_id=int(df_raw.iloc[0]["DeviceId"]))
     for _, row in shuffled.iterrows():
@@ -425,8 +506,9 @@ def test_parity_ignores_non_numeric_metrics():
 
 def test_buffer_running_stats_exclude_inf():
     """Ensure inf values don't contaminate buffer running statistics."""
-    from datetime import datetime, timezone, timedelta
-    now = datetime.now(timezone.utc)
+    from datetime import datetime, timedelta
+
+    now = datetime.now(UTC)
     buffer = make_buffer(device_id=1)
 
     # Add normal event (recent timestamp to avoid pruning)
@@ -460,8 +542,9 @@ def test_buffer_running_stats_exclude_inf():
 
 def test_buffer_running_stats_exclude_negative_inf():
     """Ensure -inf values don't contaminate buffer running statistics."""
-    from datetime import datetime, timezone, timedelta
-    now = datetime.now(timezone.utc)
+    from datetime import datetime, timedelta
+
+    now = datetime.now(UTC)
     buffer = make_buffer(device_id=1)
 
     event_normal = TelemetryEvent(
@@ -498,8 +581,17 @@ def test_parity_out_of_order_produces_same_features():
     feature_spec = builder.get_feature_spec()
 
     metric_cols = [
-        col for col in df_raw.columns
-        if col not in {"DeviceId", "Timestamp", "ManufacturerId", "ModelId", "OsVersionId", "FirmwareVersion"}
+        col
+        for col in df_raw.columns
+        if col
+        not in {
+            "DeviceId",
+            "Timestamp",
+            "ManufacturerId",
+            "ModelId",
+            "OsVersionId",
+            "FirmwareVersion",
+        }
     ]
 
     # Sorted order
@@ -534,5 +626,6 @@ def test_parity_out_of_order_produces_same_features():
     # Features should match for the same event
     for name, value in features_sorted.items():
         if name in features_ooo:
-            assert value == pytest.approx(features_ooo[name], abs=1e-6), \
+            assert value == pytest.approx(features_ooo[name], abs=1e-6), (
                 f"Feature {name} differs: sorted={value} vs ooo={features_ooo[name]}"
+            )

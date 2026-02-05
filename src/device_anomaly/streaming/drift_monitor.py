@@ -110,7 +110,10 @@ class StreamingDriftMonitor:
             self._current_counts[name][idx] += 1
 
         now = time.time()
-        if self._current_events < self.config.window_size and (now - self._last_emit) < self.config.log_interval_sec:
+        if (
+            self._current_events < self.config.window_size
+            and (now - self._last_emit) < self.config.log_interval_sec
+        ):
             return None
 
         metrics = self._emit_metrics()
@@ -148,7 +151,9 @@ class StreamingDriftMonitor:
         self._last_emit = time.time()
 
         if not active_features:
-            logger.warning("Streaming drift monitor could not initialize baseline (no usable features).")
+            logger.warning(
+                "Streaming drift monitor could not initialize baseline (no usable features)."
+            )
             return None
 
         return {
@@ -193,8 +198,12 @@ class StreamingDriftMonitor:
             "warn_features": warn_features,
         }
 
-        self._baseline_counts = {name: counts.copy() for name, counts in self._current_counts.items()}
-        self._current_counts = {name: np.zeros_like(counts) for name, counts in self._baseline_counts.items()}
+        self._baseline_counts = {
+            name: counts.copy() for name, counts in self._current_counts.items()
+        }
+        self._current_counts = {
+            name: np.zeros_like(counts) for name, counts in self._baseline_counts.items()
+        }
         self._current_events = 0
         self._short_history_events = 0
         self._missing_norms_events = 0
@@ -239,7 +248,12 @@ class StreamingDriftMonitor:
         expected_pct = expected / expected_total
         actual_pct = actual / actual_total
         epsilon = 1e-6
-        return float(np.sum((actual_pct - expected_pct) * np.log((actual_pct + epsilon) / (expected_pct + epsilon))))
+        return float(
+            np.sum(
+                (actual_pct - expected_pct)
+                * np.log((actual_pct + epsilon) / (expected_pct + epsilon))
+            )
+        )
 
     def get_stats(self) -> dict[str, Any]:
         return {

@@ -1,6 +1,7 @@
 """
 Hardware costs endpoints.
 """
+
 from __future__ import annotations
 
 import math
@@ -84,8 +85,12 @@ def list_hardware_costs(
                     tenant_id=cost.tenant_id,
                     device_model=cost.device_model,
                     purchase_cost=cents_to_dollars(cost.purchase_cost),
-                    replacement_cost=cents_to_dollars(cost.replacement_cost) if cost.replacement_cost else None,
-                    repair_cost_avg=cents_to_dollars(cost.repair_cost_avg) if cost.repair_cost_avg else None,
+                    replacement_cost=cents_to_dollars(cost.replacement_cost)
+                    if cost.replacement_cost
+                    else None,
+                    repair_cost_avg=cents_to_dollars(cost.repair_cost_avg)
+                    if cost.repair_cost_avg
+                    else None,
                     depreciation_months=cost.depreciation_months,
                     residual_value_percent=cost.residual_value_percent,
                     warranty_months=cost.warranty_months,
@@ -209,8 +214,12 @@ def create_hardware_cost(
         device_model=request.device_model,
         currency_code=request.currency_code,
         purchase_cost=dollars_to_cents(request.purchase_cost),
-        replacement_cost=dollars_to_cents(request.replacement_cost) if request.replacement_cost else None,
-        repair_cost_avg=dollars_to_cents(request.repair_cost_avg) if request.repair_cost_avg else None,
+        replacement_cost=dollars_to_cents(request.replacement_cost)
+        if request.replacement_cost
+        else None,
+        repair_cost_avg=dollars_to_cents(request.repair_cost_avg)
+        if request.repair_cost_avg
+        else None,
         depreciation_months=request.depreciation_months,
         residual_value_percent=request.residual_value_percent,
         warranty_months=request.warranty_months,
@@ -294,8 +303,12 @@ def update_hardware_cost(
     old_values = {
         "device_model": cost.device_model,
         "purchase_cost": float(cents_to_dollars(cost.purchase_cost)),
-        "replacement_cost": float(cents_to_dollars(cost.replacement_cost)) if cost.replacement_cost else None,
-        "repair_cost_avg": float(cents_to_dollars(cost.repair_cost_avg)) if cost.repair_cost_avg else None,
+        "replacement_cost": float(cents_to_dollars(cost.replacement_cost))
+        if cost.replacement_cost
+        else None,
+        "repair_cost_avg": float(cents_to_dollars(cost.repair_cost_avg))
+        if cost.repair_cost_avg
+        else None,
         "depreciation_months": cost.depreciation_months,
         "residual_value_percent": cost.residual_value_percent,
         "warranty_months": cost.warranty_months,
@@ -308,11 +321,15 @@ def update_hardware_cost(
         cost.purchase_cost = dollars_to_cents(update_data["purchase_cost"])
     if "replacement_cost" in update_data:
         cost.replacement_cost = (
-            dollars_to_cents(update_data["replacement_cost"]) if update_data["replacement_cost"] is not None else None
+            dollars_to_cents(update_data["replacement_cost"])
+            if update_data["replacement_cost"] is not None
+            else None
         )
     if "repair_cost_avg" in update_data:
         cost.repair_cost_avg = (
-            dollars_to_cents(update_data["repair_cost_avg"]) if update_data["repair_cost_avg"] is not None else None
+            dollars_to_cents(update_data["repair_cost_avg"])
+            if update_data["repair_cost_avg"] is not None
+            else None
         )
     if "depreciation_months" in update_data:
         cost.depreciation_months = update_data["depreciation_months"]

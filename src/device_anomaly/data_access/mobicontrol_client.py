@@ -231,7 +231,9 @@ class MobiControlClient:
             raise MobiControlAPIError(
                 error_msg,
                 status_code=response.status_code,
-                response=response.json() if response.headers.get("content-type", "").startswith("application/json") else None,
+                response=response.json()
+                if response.headers.get("content-type", "").startswith("application/json")
+                else None,
             )
 
         # Return JSON response
@@ -379,7 +381,9 @@ class MobiControlClient:
                     {
                         "endpoint": endpoint,
                         "status": "success",
-                        "response_keys": list(response.keys()) if isinstance(response, dict) else "non-dict",
+                        "response_keys": list(response.keys())
+                        if isinstance(response, dict)
+                        else "non-dict",
                     }
                 )
             except Exception as e:
@@ -685,15 +689,19 @@ class MobiControlClient:
                 self.set_custom_attributes(device_id, attributes)
                 results["success"].append(device_id)
             except MobiControlAPIError as e:
-                results["failed"].append({
-                    "device_id": device_id,
-                    "error": str(e),
-                    "status_code": e.status_code,
-                })
+                results["failed"].append(
+                    {
+                        "device_id": device_id,
+                        "error": str(e),
+                        "status_code": e.status_code,
+                    }
+                )
             except Exception as e:
-                results["failed"].append({
-                    "device_id": device_id,
-                    "error": str(e),
-                })
+                results["failed"].append(
+                    {
+                        "device_id": device_id,
+                        "error": str(e),
+                    }
+                )
 
         return results

@@ -10,6 +10,7 @@ This module provides a complete ML training pipeline that:
 6. Evaluates model on validation data
 7. Exports artifacts (model, ONNX, baselines, metadata)
 """
+
 from __future__ import annotations
 
 import json
@@ -94,9 +95,9 @@ class TrainingConfig:
     include_wifi_features: bool = True
     # Hourly granularity
     include_hourly_data: bool = False
-    hourly_tables: list[str] = field(default_factory=lambda: [
-        "cs_DataUsageByHour", "cs_BatteryLevelDrop", "cs_WifiHour"
-    ])
+    hourly_tables: list[str] = field(
+        default_factory=lambda: ["cs_DataUsageByHour", "cs_BatteryLevelDrop", "cs_WifiHour"]
+    )
     hourly_aggregation: str = "device_day"  # "hourly", "device_day", "device_hour"
     hourly_windows: list[int] = field(default_factory=lambda: [6, 12, 24, 48])
     hourly_max_days: int = 7  # Limit hourly data to recent N days
@@ -235,8 +236,10 @@ class RealDataTrainingPipeline:
         """
         logger.info("Loading training data from DW...")
         logger.info(f"Date range: {self.config.start_date} to {self.config.end_date}")
-        logger.info(f"Mode: extended={self.config.use_extended_features}, hourly={self.config.include_hourly_data}, "
-                   f"discovery={self.config.use_auto_discovery}, multi_source={self.config.use_multi_source}")
+        logger.info(
+            f"Mode: extended={self.config.use_extended_features}, hourly={self.config.include_hourly_data}, "
+            f"discovery={self.config.use_auto_discovery}, multi_source={self.config.use_multi_source}"
+        )
 
         # Multi-source takes precedence (combines data from multiple databases)
         if self.config.use_multi_source:
@@ -360,7 +363,9 @@ class RealDataTrainingPipeline:
                     # Normalize timestamp to date for merge
                     df["_merge_date"] = pd.to_datetime(df["Timestamp"]).dt.date
                     if "CollectedDate" in df_hourly.columns:
-                        df_hourly["_merge_date"] = pd.to_datetime(df_hourly["CollectedDate"]).dt.date
+                        df_hourly["_merge_date"] = pd.to_datetime(
+                            df_hourly["CollectedDate"]
+                        ).dt.date
                     merge_cols = ["DeviceId", "_merge_date"]
 
                 df = df.merge(df_hourly, on=merge_cols, how="left", suffixes=("", "_hourly"))
@@ -397,8 +402,10 @@ class RealDataTrainingPipeline:
             DataFrame with engineered features
         """
         logger.info("Applying feature engineering...")
-        logger.info(f"Mode: extended={self.config.use_extended_features}, "
-                   f"hourly_windows={self.config.hourly_windows if self.config.include_hourly_data else 'disabled'}")
+        logger.info(
+            f"Mode: extended={self.config.use_extended_features}, "
+            f"hourly_windows={self.config.hourly_windows if self.config.include_hourly_data else 'disabled'}"
+        )
 
         from device_anomaly.features.device_features import (
             DeviceFeatureBuilder,
@@ -420,7 +427,9 @@ class RealDataTrainingPipeline:
             # Create builder for feature spec (even though we used build_extended_features)
             builder = DeviceFeatureBuilder(
                 compute_cohort=False,
-                hourly_windows=self.config.hourly_windows if self.config.include_hourly_data else None,
+                hourly_windows=self.config.hourly_windows
+                if self.config.include_hourly_data
+                else None,
             )
             self._feature_spec = builder.get_feature_spec()
             self._feature_spec["extended"] = True
@@ -433,7 +442,9 @@ class RealDataTrainingPipeline:
             # Standard features: core device features only
             builder = DeviceFeatureBuilder(
                 compute_cohort=False,
-                hourly_windows=self.config.hourly_windows if self.config.include_hourly_data else None,
+                hourly_windows=self.config.hourly_windows
+                if self.config.include_hourly_data
+                else None,
             )
             self._feature_spec = builder.get_feature_spec()
             df_features = builder.build_features(df)
@@ -464,14 +475,18 @@ class RealDataTrainingPipeline:
         if not self.config.enable_feature_selection:
             # Return all numeric features as selected
             exclude = {"DeviceId", "Timestamp", "CollectedDate"}
-            selected = [c for c in df.columns if c not in exclude and np.issubdtype(df[c].dtype, np.number)]
+            selected = [
+                c for c in df.columns if c not in exclude and np.issubdtype(df[c].dtype, np.number)
+            ]
             return df, selected
 
         from device_anomaly.features.device_features import select_features_for_training
 
-        logger.info(f"Applying feature selection (max={self.config.max_features}, "
-                   f"var_threshold={self.config.variance_threshold}, "
-                   f"corr_threshold={self.config.correlation_threshold})")
+        logger.info(
+            f"Applying feature selection (max={self.config.max_features}, "
+            f"var_threshold={self.config.variance_threshold}, "
+            f"corr_threshold={self.config.correlation_threshold})"
+        )
 
         df_selected, selected_features = select_features_for_training(
             df,
@@ -506,11 +521,17 @@ class RealDataTrainingPipeline:
 
         # Identify numeric feature columns (exclude IDs)
         exclude_cols = {
-            "DeviceId", "ModelId", "ManufacturerId", "OsVersionId",
-            "CollectedDate", "Timestamp", "is_injected_anomaly",
+            "DeviceId",
+            "ModelId",
+            "ManufacturerId",
+            "OsVersionId",
+            "CollectedDate",
+            "Timestamp",
+            "is_injected_anomaly",
         }
         feature_cols = [
-            col for col in df.columns
+            col
+            for col in df.columns
             if df[col].dtype in [np.float64, np.int64, np.float32, np.int32]
             and col not in exclude_cols
         ]
@@ -530,9 +551,7 @@ class RealDataTrainingPipeline:
         self.tracker.advance(PipelineStage.BASELINES)
         return baselines
 
-    def train_validation_split(
-        self, df: pd.DataFrame
-    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    def train_validation_split(self, df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
         """
         Perform time-based train/validation split.
 
@@ -612,7 +631,9 @@ class RealDataTrainingPipeline:
         else:
             return self._train_isolation_forest_model(train_df)
 
-    def _train_isolation_forest_model(self, train_df: pd.DataFrame) -> AnomalyDetectorIsolationForest:
+    def _train_isolation_forest_model(
+        self, train_df: pd.DataFrame
+    ) -> AnomalyDetectorIsolationForest:
         """Train IsolationForest anomaly detector."""
         logger.info("Training IsolationForest model...")
 
@@ -659,7 +680,9 @@ class RealDataTrainingPipeline:
             detector.fit(train_df)
 
             logger.info(f"Ensemble model trained on {len(detector.feature_cols)} features")
-            logger.info(f"Ensemble algorithms: IF={config.enable_if}, LOF={config.enable_lof}, OCSVM={config.enable_ocsvm}")
+            logger.info(
+                f"Ensemble algorithms: IF={config.enable_if}, LOF={config.enable_lof}, OCSVM={config.enable_ocsvm}"
+            )
             self.tracker.advance(PipelineStage.TRAINING)
             return detector
 
@@ -698,9 +721,7 @@ class RealDataTrainingPipeline:
         val_anomaly_rate = (val_scored[label_col] == -1).mean()
 
         # Calculate feature importance
-        feature_importance = self._estimate_feature_importance(
-            detector, self._df_train
-        )
+        feature_importance = self._estimate_feature_importance(detector, self._df_train)
 
         metrics = TrainingMetrics(
             train_rows=len(self._df_train),
@@ -793,7 +814,11 @@ class RealDataTrainingPipeline:
                 sample_df = val_df.iloc[sample_idx]
                 sample_scored = detector.score_dataframe(sample_df)
 
-                label_col = "ensemble_label" if "ensemble_label" in sample_scored.columns else "anomaly_label"
+                label_col = (
+                    "ensemble_label"
+                    if "ensemble_label" in sample_scored.columns
+                    else "anomaly_label"
+                )
                 rate = (sample_scored[label_col] == -1).mean()
                 bootstrap_rates.append(rate)
 
@@ -818,6 +843,7 @@ class RealDataTrainingPipeline:
         """
         try:
             from device_anomaly.features.cohort_stats import compute_cohort_fairness
+
             return compute_cohort_fairness(scored_df, anomaly_col=label_col)
         except Exception as e:
             logger.warning(f"Could not compute cohort fairness: {e}")
@@ -840,9 +866,7 @@ class RealDataTrainingPipeline:
 
             # Group by date and compute daily anomaly rate
             scored_df["_date"] = scored_df[ts_col].dt.date
-            daily_rates = scored_df.groupby("_date").apply(
-                lambda x: (x[label_col] == -1).mean()
-            )
+            daily_rates = scored_df.groupby("_date").apply(lambda x: (x[label_col] == -1).mean())
 
             if len(daily_rates) < 2:
                 return {}
@@ -1053,10 +1077,12 @@ class RealDataTrainingPipeline:
         """
         started_at = datetime.now(UTC).isoformat()
         logger.info(f"=== Starting Training Pipeline (run_id: {self.run_id}) ===")
-        logger.info(f"Config: extended={self.config.use_extended_features}, "
-                   f"hourly={self.config.include_hourly_data}, "
-                   f"discovery={self.config.use_auto_discovery}, "
-                   f"feature_selection={self.config.enable_feature_selection}")
+        logger.info(
+            f"Config: extended={self.config.use_extended_features}, "
+            f"hourly={self.config.include_hourly_data}, "
+            f"discovery={self.config.use_auto_discovery}, "
+            f"feature_selection={self.config.enable_feature_selection}"
+        )
 
         try:
             model_version = self.get_model_version()
@@ -1068,15 +1094,23 @@ class RealDataTrainingPipeline:
 
             # 2.5 Feature selection (for expanded feature sets)
             selected_features: list[str] = []
-            if self.config.enable_feature_selection and len(df_features.columns) > self.config.max_features:
-                logger.info(f"Applying feature selection: {len(df_features.columns)} cols -> max {self.config.max_features}")
+            if (
+                self.config.enable_feature_selection
+                and len(df_features.columns) > self.config.max_features
+            ):
+                logger.info(
+                    f"Applying feature selection: {len(df_features.columns)} cols -> max {self.config.max_features}"
+                )
                 df_features, selected_features = self.apply_feature_selection(df_features)
                 logger.info(f"Selected {len(selected_features)} features after selection")
             else:
                 # Track all numeric features as selected
                 exclude = {"DeviceId", "Timestamp", "CollectedDate"}
-                selected_features = [c for c in df_features.columns if c not in exclude
-                                    and np.issubdtype(df_features[c].dtype, np.number)]
+                selected_features = [
+                    c
+                    for c in df_features.columns
+                    if c not in exclude and np.issubdtype(df_features[c].dtype, np.number)
+                ]
 
             # Store selected features in spec
             self._feature_spec["selected_features"] = selected_features
@@ -1103,7 +1137,9 @@ class RealDataTrainingPipeline:
             metrics = self.evaluate_model(detector, df_val)
 
             # 8. Export artifacts
-            artifacts = self.export_artifacts(detector, metrics, output_dir, model_version=model_version)
+            artifacts = self.export_artifacts(
+                detector, metrics, output_dir, model_version=model_version
+            )
 
             completed_at = datetime.now(UTC).isoformat()
             result = TrainingResult(

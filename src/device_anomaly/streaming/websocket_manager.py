@@ -34,7 +34,9 @@ class ClientConnection:
     client_id: str
     tenant_id: str | None = None
     subscribed_devices: set[int] = field(default_factory=set)
-    subscribed_severity: set[str] = field(default_factory=lambda: {"low", "medium", "high", "critical"})
+    subscribed_severity: set[str] = field(
+        default_factory=lambda: {"low", "medium", "high", "critical"}
+    )
     connected_at: datetime = field(default_factory=datetime.utcnow)
     messages_sent: int = 0
 
@@ -126,11 +128,14 @@ class WebSocketManager:
         logger.info("Client connected: %s (tenant: %s)", client_id, tenant_id)
 
         # Send welcome message
-        await self._send_to_client(connection, {
-            "type": "connected",
-            "client_id": client_id,
-            "message": "Connected to anomaly stream",
-        })
+        await self._send_to_client(
+            connection,
+            {
+                "type": "connected",
+                "client_id": client_id,
+                "message": "Connected to anomaly stream",
+            },
+        )
 
         return client_id
 
@@ -176,53 +181,74 @@ class WebSocketManager:
                 device_id = data.get("device_id")
                 if device_id:
                     connection.subscribed_devices.add(int(device_id))
-                    await self._send_to_client(connection, {
-                        "type": "subscribed",
-                        "device_id": device_id,
-                    })
+                    await self._send_to_client(
+                        connection,
+                        {
+                            "type": "subscribed",
+                            "device_id": device_id,
+                        },
+                    )
 
             elif command == "unsubscribe_device":
                 device_id = data.get("device_id")
                 if device_id:
                     connection.subscribed_devices.discard(int(device_id))
-                    await self._send_to_client(connection, {
-                        "type": "unsubscribed",
-                        "device_id": device_id,
-                    })
+                    await self._send_to_client(
+                        connection,
+                        {
+                            "type": "unsubscribed",
+                            "device_id": device_id,
+                        },
+                    )
 
             elif command == "set_severity_filter":
                 severities = data.get("severities", [])
                 connection.subscribed_severity = set(severities)
-                await self._send_to_client(connection, {
-                    "type": "filter_updated",
-                    "severities": list(connection.subscribed_severity),
-                })
+                await self._send_to_client(
+                    connection,
+                    {
+                        "type": "filter_updated",
+                        "severities": list(connection.subscribed_severity),
+                    },
+                )
 
             elif command == "ping":
-                await self._send_to_client(connection, {
-                    "type": "pong",
-                    "timestamp": datetime.utcnow().isoformat(),
-                })
+                await self._send_to_client(
+                    connection,
+                    {
+                        "type": "pong",
+                        "timestamp": datetime.utcnow().isoformat(),
+                    },
+                )
 
             elif command == "get_stats":
-                await self._send_to_client(connection, {
-                    "type": "stats",
-                    "connected_at": connection.connected_at.isoformat(),
-                    "messages_sent": connection.messages_sent,
-                    "subscribed_devices": list(connection.subscribed_devices),
-                    "subscribed_severity": list(connection.subscribed_severity),
-                })
+                await self._send_to_client(
+                    connection,
+                    {
+                        "type": "stats",
+                        "connected_at": connection.connected_at.isoformat(),
+                        "messages_sent": connection.messages_sent,
+                        "subscribed_devices": list(connection.subscribed_devices),
+                        "subscribed_severity": list(connection.subscribed_severity),
+                    },
+                )
 
         except json.JSONDecodeError:
-            await self._send_to_client(connection, {
-                "type": "error",
-                "message": "Invalid JSON",
-            })
+            await self._send_to_client(
+                connection,
+                {
+                    "type": "error",
+                    "message": "Invalid JSON",
+                },
+            )
         except Exception as e:
-            await self._send_to_client(connection, {
-                "type": "error",
-                "message": str(e),
-            })
+            await self._send_to_client(
+                connection,
+                {
+                    "type": "error",
+                    "message": str(e),
+                },
+            )
 
     async def _handle_anomaly(self, message: StreamMessage) -> None:
         """Handle incoming anomaly alert and broadcast to clients."""
@@ -235,10 +261,13 @@ class WebSocketManager:
         async with self._lock:
             for connection in list(self._connections.values()):
                 if self._should_send_to_client(connection, device_id, severity, tenant_id):
-                    await self._send_to_client(connection, {
-                        "type": "anomaly",
-                        **anomaly,
-                    })
+                    await self._send_to_client(
+                        connection,
+                        {
+                            "type": "anomaly",
+                            **anomaly,
+                        },
+                    )
 
     def _should_send_to_client(
         self,
@@ -257,7 +286,9 @@ class WebSocketManager:
             return False
 
         # Device filter (empty = all devices)
-        return not (connection.subscribed_devices and device_id not in connection.subscribed_devices)
+        return not (
+            connection.subscribed_devices and device_id not in connection.subscribed_devices
+        )
 
     async def _send_to_client(
         self,

@@ -4,6 +4,7 @@ Ingestion pipeline entrypoint.
 Wires schema discovery, allowlists, orchestrator throttling, and metrics
 into a single batch ingestion flow.
 """
+
 from __future__ import annotations
 
 import json
@@ -163,7 +164,12 @@ def _mock_dataframe(table_name: str, source_db: str, rows: int = 3) -> pd.DataFr
     for i in range(rows):
         row = {}
         for col in columns:
-            if col == timestamp_col or col in {"TimeStamp", "DateTime", "SetDateTime", "LastChangedDate"}:
+            if col == timestamp_col or col in {
+                "TimeStamp",
+                "DateTime",
+                "SetDateTime",
+                "LastChangedDate",
+            }:
                 row[col] = now - timedelta(minutes=rows - i)
             elif col == "Hour":
                 row[col] = (i + 8) % 24
@@ -367,7 +373,9 @@ def _ingest_table(
 
             if not dry_run and settings.enable_canonical_event_storage:
                 engine = DatabaseSession().engine
-                if _ensure_canonical_events_table(engine, settings.auto_create_canonical_events_tables):
+                if _ensure_canonical_events_table(
+                    engine, settings.auto_create_canonical_events_tables
+                ):
                     write_start = time.perf_counter()
                     rows_inserted = _insert_canonical_events(engine, deduped)
                     write_time_ms = (time.perf_counter() - write_start) * 1000.0
@@ -441,7 +449,9 @@ def _ingest_table(
 
             if not dry_run and settings.enable_canonical_event_storage:
                 engine = DatabaseSession().engine
-                if _ensure_canonical_events_table(engine, settings.auto_create_canonical_events_tables):
+                if _ensure_canonical_events_table(
+                    engine, settings.auto_create_canonical_events_tables
+                ):
                     write_start = time.perf_counter()
                     rows_inserted = _insert_canonical_events(engine, deduped)
                     write_time_ms = (time.perf_counter() - write_start) * 1000.0

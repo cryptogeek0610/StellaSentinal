@@ -127,13 +127,25 @@ def _get_severity_rank(severity: str) -> int:
 def _find_primary_metric(anomaly: AnomalyResult) -> str | None:
     """Find the primary contributing metric for an anomaly."""
     metrics = {
-        "total_battery_level_drop": (anomaly.total_battery_level_drop, 30, True),  # threshold, above_is_bad
-        "total_free_storage_kb": (anomaly.total_free_storage_kb, 500000, False),  # below threshold is bad
+        "total_battery_level_drop": (
+            anomaly.total_battery_level_drop,
+            30,
+            True,
+        ),  # threshold, above_is_bad
+        "total_free_storage_kb": (
+            anomaly.total_free_storage_kb,
+            500000,
+            False,
+        ),  # below threshold is bad
         "download": (anomaly.download, 500, True),
         "upload": (anomaly.upload, 200, True),
         "offline_time": (anomaly.offline_time, 30, True),
         "disconnect_count": (anomaly.disconnect_count, 5, True),
-        "wifi_signal_strength": (anomaly.wifi_signal_strength, -70, False),  # below threshold is bad
+        "wifi_signal_strength": (
+            anomaly.wifi_signal_strength,
+            -70,
+            False,
+        ),  # below threshold is bad
         "connection_time": (anomaly.connection_time, 5, True),
     }
 
@@ -317,8 +329,7 @@ class AnomalyGrouper:
         # Calculate group metrics
         device_ids = {c.anomaly.device_id for c in classified_anomalies}
         open_count = sum(
-            1 for c in classified_anomalies
-            if c.anomaly.status in ("open", "investigating")
+            1 for c in classified_anomalies if c.anomaly.status in ("open", "investigating")
         )
 
         # Get worst severity
@@ -332,7 +343,9 @@ class AnomalyGrouper:
 
         # Common location
         locations = [c.location for c in classified_anomalies if c.location]
-        common_location = locations[0] if locations and all(l == locations[0] for l in locations) else None
+        common_location = (
+            locations[0] if locations and all(l == locations[0] for l in locations) else None
+        )
 
         # Common device model
         models = [c.device_model for c in classified_anomalies if c.device_model]
@@ -384,15 +397,17 @@ class AnomalyGrouper:
             device_count = len({c.anomaly.device_id for c in anomalies})
             group_name = f"{title} ({device_count} devices)"
 
-            groups.append(self._build_group(
-                group_id=group_id,
-                group_type="remediation_match",
-                group_category=REMEDIATION_TITLES.get(title, "remediation"),
-                group_name=group_name,
-                classified_anomalies=anomalies,
-                grouping_factors=[f"Same suggested fix: {title}"],
-                suggested_remediation=self._create_remediation_suggestion(title),
-            ))
+            groups.append(
+                self._build_group(
+                    group_id=group_id,
+                    group_type="remediation_match",
+                    group_category=REMEDIATION_TITLES.get(title, "remediation"),
+                    group_name=group_name,
+                    classified_anomalies=anomalies,
+                    grouping_factors=[f"Same suggested fix: {title}"],
+                    suggested_remediation=self._create_remediation_suggestion(title),
+                )
+            )
 
         return groups
 
@@ -433,14 +448,16 @@ class AnomalyGrouper:
                 group_name = f"{category_name} ({device_count} devices)"
                 grouping_factors = [f"Same category: {category_name}"]
 
-            groups.append(self._build_group(
-                group_id=group_id,
-                group_type="category_match",
-                group_category=category.value,
-                group_name=group_name,
-                classified_anomalies=anomalies,
-                grouping_factors=grouping_factors,
-            ))
+            groups.append(
+                self._build_group(
+                    group_id=group_id,
+                    group_type="category_match",
+                    group_category=category.value,
+                    group_name=group_name,
+                    classified_anomalies=anomalies,
+                    grouping_factors=grouping_factors,
+                )
+            )
 
         return groups
 
@@ -471,23 +488,27 @@ class AnomalyGrouper:
             time_range = max(timestamps) - min(timestamps)
 
             if time_range <= timedelta(hours=window_hours):
-                anomalies.sort(key=lambda c: (_get_severity_rank(c.severity), c.anomaly.anomaly_score))
+                anomalies.sort(
+                    key=lambda c: (_get_severity_rank(c.severity), c.anomaly.anomaly_score)
+                )
 
                 group_id = hashlib.md5(f"cohort:{model}".encode()).hexdigest()[:12]
                 device_count = len({c.anomaly.device_id for c in anomalies})
                 group_name = f"Issues on {model} ({device_count} devices)"
 
-                groups.append(self._build_group(
-                    group_id=group_id,
-                    group_type="temporal_cluster",
-                    group_category="cohort_performance_issue",
-                    group_name=group_name,
-                    classified_anomalies=anomalies,
-                    grouping_factors=[
-                        f"Same device model: {model}",
-                        f"Within {window_hours}h time window",
-                    ],
-                ))
+                groups.append(
+                    self._build_group(
+                        group_id=group_id,
+                        group_type="temporal_cluster",
+                        group_category="cohort_performance_issue",
+                        group_name=group_name,
+                        classified_anomalies=anomalies,
+                        grouping_factors=[
+                            f"Same device model: {model}",
+                            f"Within {window_hours}h time window",
+                        ],
+                    )
+                )
 
         return groups
 
@@ -518,14 +539,16 @@ class AnomalyGrouper:
             device_count = len({c.anomaly.device_id for c in anomalies})
             group_name = f"Multiple Issues at {location} ({device_count} devices)"
 
-            groups.append(self._build_group(
-                group_id=group_id,
-                group_type="location_cluster",
-                group_category="location_anomaly_cluster",
-                group_name=group_name,
-                classified_anomalies=anomalies,
-                grouping_factors=[f"Same location: {location}"],
-            ))
+            groups.append(
+                self._build_group(
+                    group_id=group_id,
+                    group_type="location_cluster",
+                    group_category="location_anomaly_cluster",
+                    group_name=group_name,
+                    classified_anomalies=anomalies,
+                    grouping_factors=[f"Same location: {location}"],
+                )
+            )
 
         return groups
 

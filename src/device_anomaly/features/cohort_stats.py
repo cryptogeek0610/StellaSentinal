@@ -269,6 +269,7 @@ def load_latest_cohort_stats(models_dir: Path | None = None) -> CohortStatsStore
 # EXTENDED COHORT FUNCTIONS
 # =============================================================================
 
+
 def get_available_cohort_columns(df: pd.DataFrame) -> list[str]:
     """
     Get list of cohort columns that are available in the dataframe.
@@ -498,7 +499,9 @@ def compute_extended_cohort_stats(
         "cohort_sizes": cohort_counts,
         "min_cohort_size": min(cohort_counts.values()) if cohort_counts else 0,
         "max_cohort_size": max(cohort_counts.values()) if cohort_counts else 0,
-        "median_cohort_size": float(np.median(list(cohort_counts.values()))) if cohort_counts else 0,
+        "median_cohort_size": float(np.median(list(cohort_counts.values())))
+        if cohort_counts
+        else 0,
     }
 
     return payload
@@ -526,7 +529,11 @@ def compute_cohort_fairness(
     if anomaly_col not in df.columns:
         return {"error": f"Column {anomaly_col} not found"}
 
-    cohort_id = build_extended_cohort_id(df) if cohort_columns is None else build_cohort_id(df, cohort_columns)
+    cohort_id = (
+        build_extended_cohort_id(df)
+        if cohort_columns is None
+        else build_cohort_id(df, cohort_columns)
+    )
     if cohort_id is None:
         return {"error": "Could not build cohort ID"}
 
@@ -692,18 +699,20 @@ def compute_cohort_fleet_comparison(
             # Track systemic issues
             if abs(z_score) > z_threshold:
                 direction = "elevated" if z_score > 0 else "reduced"
-                systemic_issues.append({
-                    "cohort_id": cohort_str,
-                    "device_count": len(grp),
-                    "fleet_percentage": cohort_stats["fleet_percentage"],
-                    "metric": col,
-                    "cohort_mean": round(cohort_mean, 2),
-                    "fleet_mean": round(fleet_mean, 2),
-                    "z_score": round(z_score, 2),
-                    "vs_fleet_multiplier": round(multiplier, 2),
-                    "direction": direction,
-                    "severity": _compute_issue_severity(z_score),
-                })
+                systemic_issues.append(
+                    {
+                        "cohort_id": cohort_str,
+                        "device_count": len(grp),
+                        "fleet_percentage": cohort_stats["fleet_percentage"],
+                        "metric": col,
+                        "cohort_mean": round(cohort_mean, 2),
+                        "fleet_mean": round(fleet_mean, 2),
+                        "z_score": round(z_score, 2),
+                        "vs_fleet_multiplier": round(multiplier, 2),
+                        "direction": direction,
+                        "severity": _compute_issue_severity(z_score),
+                    }
+                )
 
         if cohort_stats["metrics"]:
             cohort_deviations[cohort_str] = cohort_stats

@@ -273,10 +273,14 @@ class NetworkPatternAnalyzer:
 
         # Get entity name
         if location_id:
-            loc = self.db.query(LocationMetadata).filter(
-                LocationMetadata.tenant_id == self.tenant_id,
-                LocationMetadata.location_id == location_id,
-            ).first()
+            loc = (
+                self.db.query(LocationMetadata)
+                .filter(
+                    LocationMetadata.tenant_id == self.tenant_id,
+                    LocationMetadata.location_id == location_id,
+                )
+                .first()
+            )
             entity_name = loc.location_name if loc else location_id
         else:
             entity_name = self.tenant_id
@@ -323,7 +327,9 @@ class NetworkPatternAnalyzer:
 
         # Calculate fleet metrics
         avg_aps = network_data["unique_aps"].mean() if "unique_aps" in network_data.columns else 0
-        avg_signal = network_data["wifi_signal"].mean() if "wifi_signal" in network_data.columns else 0
+        avg_signal = (
+            network_data["wifi_signal"].mean() if "wifi_signal" in network_data.columns else 0
+        )
 
         # Detect potential dead zones
         dead_zones = self._detect_dead_zones(network_data)
@@ -405,7 +411,9 @@ class NetworkPatternAnalyzer:
         best_carrier = None
         worst_carrier = None
         if carrier_stats:
-            by_signal = sorted(carrier_stats.items(), key=lambda x: x[1].get("avg_signal", 0), reverse=True)
+            by_signal = sorted(
+                carrier_stats.items(), key=lambda x: x[1].get("avg_signal", 0), reverse=True
+            )
             best_carrier = by_signal[0][0] if by_signal else None
             worst_carrier = by_signal[-1][0] if len(by_signal) > 1 else None
 
@@ -474,7 +482,11 @@ class NetworkPatternAnalyzer:
         device_ids = network_data["device_id"].unique()
 
         # Get disconnect counts per device
-        disconnect_col = "disconnect_count" if "disconnect_count" in network_data.columns else "wifi_disconnect_count"
+        disconnect_col = (
+            "disconnect_count"
+            if "disconnect_count" in network_data.columns
+            else "wifi_disconnect_count"
+        )
         if disconnect_col not in network_data.columns:
             network_data[disconnect_col] = 0
 
@@ -569,7 +581,9 @@ class NetworkPatternAnalyzer:
         locations_missing: dict[str, int] = {}
         for device in flagged:
             if device.assigned_location:
-                locations_missing[device.assigned_location] = locations_missing.get(device.assigned_location, 0) + 1
+                locations_missing[device.assigned_location] = (
+                    locations_missing.get(device.assigned_location, 0) + 1
+                )
 
         recommendations = self._generate_hidden_recommendations(flagged, highly_suspicious)
 
@@ -619,30 +633,34 @@ class NetworkPatternAnalyzer:
                 if location_id and metadata.get("location_id") != location_id:
                     continue
 
-                features = json.loads(feature.feature_values_json) if feature.feature_values_json else {}
+                features = (
+                    json.loads(feature.feature_values_json) if feature.feature_values_json else {}
+                )
 
-                records.append({
-                    "device_id": feature.device_id,
-                    "computed_at": feature.computed_at,
-                    "location_id": metadata.get("location_id"),
-                    "carrier": metadata.get("carrier"),
-                    # WiFi metrics
-                    "unique_aps": features.get("UniqueAPsConnected", 0),
-                    "unique_ssids": features.get("UniqueSSIDsConnected", 0),
-                    "wifi_signal": features.get("WifiSignalStrength", 0),
-                    "wifi_disconnect_count": features.get("WifiDisconnectCount", 0),
-                    # Cellular metrics
-                    "unique_cells": features.get("UniqueCellIds", 0),
-                    "unique_lacs": features.get("UniqueLACs", 0),
-                    "cell_signal": features.get("CellSignalStrength", 0),
-                    "network_type_count": features.get("NetworkTypeCount", 0),
-                    # General
-                    "time_no_network": features.get("TimeOnNoNetwork", 0),
-                    "time_on_wifi": features.get("TimeOnWifi", 0),
-                    "time_on_5g": features.get("TimeOn5G", 0),
-                    "time_on_4g": features.get("TimeOn4G", 0),
-                    "time_on_3g": features.get("TimeOn3G", 0),
-                })
+                records.append(
+                    {
+                        "device_id": feature.device_id,
+                        "computed_at": feature.computed_at,
+                        "location_id": metadata.get("location_id"),
+                        "carrier": metadata.get("carrier"),
+                        # WiFi metrics
+                        "unique_aps": features.get("UniqueAPsConnected", 0),
+                        "unique_ssids": features.get("UniqueSSIDsConnected", 0),
+                        "wifi_signal": features.get("WifiSignalStrength", 0),
+                        "wifi_disconnect_count": features.get("WifiDisconnectCount", 0),
+                        # Cellular metrics
+                        "unique_cells": features.get("UniqueCellIds", 0),
+                        "unique_lacs": features.get("UniqueLACs", 0),
+                        "cell_signal": features.get("CellSignalStrength", 0),
+                        "network_type_count": features.get("NetworkTypeCount", 0),
+                        # General
+                        "time_no_network": features.get("TimeOnNoNetwork", 0),
+                        "time_on_wifi": features.get("TimeOnWifi", 0),
+                        "time_on_5g": features.get("TimeOn5G", 0),
+                        "time_on_4g": features.get("TimeOn4G", 0),
+                        "time_on_3g": features.get("TimeOn3G", 0),
+                    }
+                )
             except (json.JSONDecodeError, TypeError):
                 continue
 
@@ -660,40 +678,48 @@ class NetworkPatternAnalyzer:
             return issues
 
         avg_aps = device_data["unique_aps"].mean() if "unique_aps" in device_data.columns else 0
-        avg_signal = device_data["wifi_signal"].mean() if "wifi_signal" in device_data.columns else 0
+        avg_signal = (
+            device_data["wifi_signal"].mean() if "wifi_signal" in device_data.columns else 0
+        )
 
         # Check for AP hopping
         if avg_aps > self.AP_HOPPING_THRESHOLD:
-            severity = InsightSeverity.HIGH if avg_aps > self.AP_CHANGES_HIGH else InsightSeverity.MEDIUM
-            issues.append(WifiRoamingIssue(
-                device_id=device_id,
-                device_name=None,
-                issue_type=NetworkIssueType.AP_HOPPING,
-                unique_aps_connected=int(avg_aps),
-                ap_changes_per_hour=float(avg_aps),  # Simplified
-                avg_signal_strength=float(avg_signal),
-                weak_signal_percentage=0,
-                description=f"Device connects to {avg_aps:.0f} APs on average (excessive roaming)",
-                severity=severity,
-                affected_location=None,
-                recommendation="Check for overlapping AP coverage; consider adjusting roaming thresholds",
-            ))
+            severity = (
+                InsightSeverity.HIGH if avg_aps > self.AP_CHANGES_HIGH else InsightSeverity.MEDIUM
+            )
+            issues.append(
+                WifiRoamingIssue(
+                    device_id=device_id,
+                    device_name=None,
+                    issue_type=NetworkIssueType.AP_HOPPING,
+                    unique_aps_connected=int(avg_aps),
+                    ap_changes_per_hour=float(avg_aps),  # Simplified
+                    avg_signal_strength=float(avg_signal),
+                    weak_signal_percentage=0,
+                    description=f"Device connects to {avg_aps:.0f} APs on average (excessive roaming)",
+                    severity=severity,
+                    affected_location=None,
+                    recommendation="Check for overlapping AP coverage; consider adjusting roaming thresholds",
+                )
+            )
 
         # Check for stickiness (low APs + weak signal)
         elif avg_aps <= 1 and avg_signal < self.WEAK_SIGNAL_DBM:
-            issues.append(WifiRoamingIssue(
-                device_id=device_id,
-                device_name=None,
-                issue_type=NetworkIssueType.AP_STICKINESS,
-                unique_aps_connected=int(avg_aps),
-                ap_changes_per_hour=0,
-                avg_signal_strength=float(avg_signal),
-                weak_signal_percentage=100,  # Simplified
-                description=f"Device stuck on weak AP (signal: {avg_signal:.0f} dBm)",
-                severity=InsightSeverity.MEDIUM,
-                affected_location=None,
-                recommendation="Check roaming sensitivity; device may need to be configured to roam more aggressively",
-            ))
+            issues.append(
+                WifiRoamingIssue(
+                    device_id=device_id,
+                    device_name=None,
+                    issue_type=NetworkIssueType.AP_STICKINESS,
+                    unique_aps_connected=int(avg_aps),
+                    ap_changes_per_hour=0,
+                    avg_signal_strength=float(avg_signal),
+                    weak_signal_percentage=100,  # Simplified
+                    description=f"Device stuck on weak AP (signal: {avg_signal:.0f} dBm)",
+                    severity=InsightSeverity.MEDIUM,
+                    affected_location=None,
+                    recommendation="Check roaming sensitivity; device may need to be configured to roam more aggressively",
+                )
+            )
 
         return issues
 
@@ -708,23 +734,29 @@ class NetworkPatternAnalyzer:
         if device_data.empty:
             return issues
 
-        avg_cells = device_data["unique_cells"].mean() if "unique_cells" in device_data.columns else 0
+        avg_cells = (
+            device_data["unique_cells"].mean() if "unique_cells" in device_data.columns else 0
+        )
         device_data["cell_signal"].mean() if "cell_signal" in device_data.columns else 0
 
         # Check for tower hopping
         if avg_cells > self.TOWER_HOPPING_THRESHOLD:
-            issues.append(CellularIssue(
-                device_id=device_id,
-                device_name=None,
-                issue_type=NetworkIssueType.TOWER_HOPPING,
-                carrier=device_data["carrier"].iloc[0] if "carrier" in device_data.columns else None,
-                primary_network_type="LTE",  # Would need actual data
-                tower_changes_per_hour=float(avg_cells),
-                tech_fallback_rate=0,
-                description=f"Device connects to {avg_cells:.0f} cell towers on average (excessive hopping)",
-                severity=InsightSeverity.MEDIUM,
-                recommendation="May indicate poor cellular coverage in work area",
-            ))
+            issues.append(
+                CellularIssue(
+                    device_id=device_id,
+                    device_name=None,
+                    issue_type=NetworkIssueType.TOWER_HOPPING,
+                    carrier=device_data["carrier"].iloc[0]
+                    if "carrier" in device_data.columns
+                    else None,
+                    primary_network_type="LTE",  # Would need actual data
+                    tower_changes_per_hour=float(avg_cells),
+                    tech_fallback_rate=0,
+                    description=f"Device connects to {avg_cells:.0f} cell towers on average (excessive hopping)",
+                    severity=InsightSeverity.MEDIUM,
+                    recommendation="May indicate poor cellular coverage in work area",
+                )
+            )
 
         # Check for tech fallback
         time_5g = device_data["time_on_5g"].sum() if "time_on_5g" in device_data.columns else 0
@@ -735,18 +767,22 @@ class NetworkPatternAnalyzer:
         if total_time > 0:
             fallback_rate = (time_3g + time_4g * 0.5) / total_time  # Weighted fallback
             if fallback_rate > 0.5:  # More than 50% on lower tech
-                issues.append(CellularIssue(
-                    device_id=device_id,
-                    device_name=None,
-                    issue_type=NetworkIssueType.TECH_FALLBACK,
-                    carrier=device_data["carrier"].iloc[0] if "carrier" in device_data.columns else None,
-                    primary_network_type="3G/4G",
-                    tower_changes_per_hour=0,
-                    tech_fallback_rate=float(fallback_rate),
-                    description=f"Device spends {fallback_rate*100:.0f}% of time on lower network technologies",
-                    severity=InsightSeverity.LOW,
-                    recommendation="Check carrier coverage; device may need 5G-capable SIM or plan",
-                ))
+                issues.append(
+                    CellularIssue(
+                        device_id=device_id,
+                        device_name=None,
+                        issue_type=NetworkIssueType.TECH_FALLBACK,
+                        carrier=device_data["carrier"].iloc[0]
+                        if "carrier" in device_data.columns
+                        else None,
+                        primary_network_type="3G/4G",
+                        tower_changes_per_hour=0,
+                        tech_fallback_rate=float(fallback_rate),
+                        description=f"Device spends {fallback_rate * 100:.0f}% of time on lower network technologies",
+                        severity=InsightSeverity.LOW,
+                        recommendation="Check carrier coverage; device may need 5G-capable SIM or plan",
+                    )
+                )
 
         return issues
 
@@ -759,7 +795,9 @@ class NetworkPatternAnalyzer:
 
         # Group by location and find locations with consistently weak signal
         if "location_id" in network_data.columns:
-            location_signal = network_data.groupby("location_id")["wifi_signal"].agg(["mean", "min"])
+            location_signal = network_data.groupby("location_id")["wifi_signal"].agg(
+                ["mean", "min"]
+            )
             for loc_id, row in location_signal.iterrows():
                 if row["mean"] < self.WEAK_SIGNAL_DBM or row["min"] < -85:
                     dead_zones.append(str(loc_id))
@@ -780,8 +818,12 @@ class NetworkPatternAnalyzer:
             carrier_data = network_data[network_data["carrier"] == carrier]
             stats[carrier] = {
                 "devices": len(carrier_data["device_id"].unique()),
-                "avg_signal": float(carrier_data["cell_signal"].mean()) if "cell_signal" in carrier_data.columns else 0,
-                "avg_cells": float(carrier_data["unique_cells"].mean()) if "unique_cells" in carrier_data.columns else 0,
+                "avg_signal": float(carrier_data["cell_signal"].mean())
+                if "cell_signal" in carrier_data.columns
+                else 0,
+                "avg_cells": float(carrier_data["unique_cells"].mean())
+                if "unique_cells" in carrier_data.columns
+                else 0,
             }
 
         return stats
@@ -797,7 +839,9 @@ class NetworkPatternAnalyzer:
         total_5g = network_data["time_on_5g"].sum() if "time_on_5g" in network_data.columns else 0
         total_4g = network_data["time_on_4g"].sum() if "time_on_4g" in network_data.columns else 0
         total_3g = network_data["time_on_3g"].sum() if "time_on_3g" in network_data.columns else 0
-        total_wifi = network_data["time_on_wifi"].sum() if "time_on_wifi" in network_data.columns else 0
+        total_wifi = (
+            network_data["time_on_wifi"].sum() if "time_on_wifi" in network_data.columns else 0
+        )
 
         total = total_5g + total_4g + total_3g + total_wifi
         if total == 0:
@@ -847,7 +891,9 @@ class NetworkPatternAnalyzer:
             return None
 
         # Calculate offline hours
-        offline_time = device_data["time_no_network"].sum() if "time_no_network" in device_data.columns else 0
+        offline_time = (
+            device_data["time_no_network"].sum() if "time_no_network" in device_data.columns else 0
+        )
         offline_hours = offline_time / 60  # Assuming minutes
 
         # Expected hours (8 hrs/day work)
@@ -859,7 +905,9 @@ class NetworkPatternAnalyzer:
         # Check if significantly more offline than expected
         if offline_hours > expected_offline * 1.2:
             hidden_score += 0.3
-            indicators.append(f"High offline time ({offline_hours:.0f}h vs {expected_offline:.0f}h expected)")
+            indicators.append(
+                f"High offline time ({offline_hours:.0f}h vs {expected_offline:.0f}h expected)"
+            )
 
         # Check for complete absence
         if offline_hours > period_days * 23:  # Basically always offline
@@ -872,7 +920,9 @@ class NetworkPatternAnalyzer:
         return HiddenDeviceIndicator(
             device_id=device_id,
             device_name=None,
-            assigned_location=device_data["location_id"].iloc[0] if "location_id" in device_data.columns else None,
+            assigned_location=device_data["location_id"].iloc[0]
+            if "location_id" in device_data.columns
+            else None,
             offline_hours_last_week=float(offline_hours),
             unusual_offline_periods=0,
             last_seen_location=None,
@@ -895,7 +945,7 @@ class NetworkPatternAnalyzer:
 
         if hopping_count > total_devices * 0.1:
             recommendations.append(
-                f"{hopping_count} devices ({hopping_count/total_devices*100:.0f}%) show excessive AP roaming. "
+                f"{hopping_count} devices ({hopping_count / total_devices * 100:.0f}%) show excessive AP roaming. "
                 "Review AP placement and roaming thresholds."
             )
 
@@ -931,7 +981,9 @@ class NetworkPatternAnalyzer:
 
         # Carrier comparison
         if len(carrier_stats) > 1:
-            by_signal = sorted(carrier_stats.items(), key=lambda x: x[1].get("avg_signal", 0), reverse=True)
+            by_signal = sorted(
+                carrier_stats.items(), key=lambda x: x[1].get("avg_signal", 0), reverse=True
+            )
             best = by_signal[0]
             worst = by_signal[-1]
             if best[1].get("avg_signal", 0) - worst[1].get("avg_signal", 0) > 10:
@@ -981,8 +1033,6 @@ class NetworkPatternAnalyzer:
             )
 
         if flagged:
-            recommendations.append(
-                "Review check-in/check-out procedures for flagged devices."
-            )
+            recommendations.append("Review check-in/check-out procedures for flagged devices.")
 
         return recommendations

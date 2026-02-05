@@ -76,7 +76,7 @@ def apply_heuristics(df: pd.DataFrame, rules: Iterable[HeuristicRule]) -> pd.Dat
                 .sum()
                 .reset_index(level=0, drop=True)
             )
-            mask = (rolling >= rule.min_consecutive)
+            mask = rolling >= rule.min_consecutive
             mask.index = df_sorted.index
             mask = mask.reindex(df.index).fillna(False)
 

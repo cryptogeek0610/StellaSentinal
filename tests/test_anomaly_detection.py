@@ -1,9 +1,9 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 
-from device_anomaly.models.hybrid import HybridAnomalyDetector, HybridAnomalyDetectorConfig
 from device_anomaly.models.anomaly_detector import AnomalyDetectorConfig
-from device_anomaly.models.heuristics import build_rules_from_dicts, apply_heuristics
+from device_anomaly.models.heuristics import apply_heuristics, build_rules_from_dicts
+from device_anomaly.models.hybrid import HybridAnomalyDetector, HybridAnomalyDetectorConfig
 
 
 def _make_timestamped(n: int) -> pd.Series:
@@ -88,4 +88,4 @@ def test_heuristics_push_bad_device_over_threshold():
 
     assert flagged["heuristic_score"] > 0
     assert flagged["anomaly_label"] == -1  # penalized by heuristic
-    assert control["anomaly_label"] == 1   # stays normal
+    assert control["anomaly_label"] == 1  # stays normal

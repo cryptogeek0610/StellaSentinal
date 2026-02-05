@@ -6,6 +6,7 @@ Elon Musk principle: "The best interface is no interface."
 This replaces multiple dashboards with a single "what needs fixing" view.
 Users don't browse data - they see problems ranked by $ impact and fix them.
 """
+
 from __future__ import annotations
 
 import logging
@@ -25,8 +26,10 @@ router = APIRouter(prefix="/action-center", tags=["action-center"])
 # Response Models - Keep it simple
 # ============================================================================
 
+
 class IssueImpact(BaseModel):
     """Business impact in terms that matter."""
+
     affected_devices: int
     affected_users: int
     hourly_cost: float = Field(description="$ per hour this problem continues")
@@ -35,6 +38,7 @@ class IssueImpact(BaseModel):
 
 class Remediation(BaseModel):
     """What to do about it."""
+
     action_type: str
     description: str
     automated: bool = Field(description="Can be fixed with one click?")
@@ -44,6 +48,7 @@ class Remediation(BaseModel):
 
 class Issue(BaseModel):
     """A problem that needs fixing."""
+
     id: str
     category: str  # productivity_loss, security_risk, cost_waste, impending_failure
     title: str
@@ -57,6 +62,7 @@ class Issue(BaseModel):
 
 class ActionCenterSummary(BaseModel):
     """Executive dashboard - understand everything in 5 seconds."""
+
     tenant_id: str
     total_issues: int
     total_hourly_cost: float
@@ -72,6 +78,7 @@ class ActionCenterSummary(BaseModel):
 
 class IssueListResponse(BaseModel):
     """All issues, sorted by priority."""
+
     issues: list[Issue]
     total_count: int
     can_auto_fix: int
@@ -79,6 +86,7 @@ class IssueListResponse(BaseModel):
 
 class FixResult(BaseModel):
     """Result of attempting a fix."""
+
     issue_id: str
     success: bool
     message: str
@@ -89,6 +97,7 @@ class FixResult(BaseModel):
 # ============================================================================
 # Mock Data for Demo
 # ============================================================================
+
 
 def _generate_mock_issues() -> list[Issue]:
     """Generate realistic demo issues."""
@@ -255,7 +264,8 @@ def _generate_mock_summary(issues: list[Issue]) -> ActionCenterSummary:
         top_3_issues=[i.one_liner for i in sorted_issues[:3]],
         recommended_action=(
             f"Auto-fix {len(automatable)} issues to save ${sum(i.impact.hourly_cost for i in automatable):.0f}/hr"
-            if automatable else "Review and approve manual fixes"
+            if automatable
+            else "Review and approve manual fixes"
         ),
         generated_at=datetime.now(UTC),
     )
@@ -264,6 +274,7 @@ def _generate_mock_summary(issues: list[Issue]) -> ActionCenterSummary:
 # ============================================================================
 # API Endpoints
 # ============================================================================
+
 
 @router.get("/summary", response_model=ActionCenterSummary)
 async def get_action_summary(
@@ -285,6 +296,7 @@ async def get_action_summary(
     # Real implementation using ProactiveResolver
     try:
         from device_anomaly.services.proactive_resolver import get_resolver
+
         resolver = get_resolver()
         issues = resolver.scan_fleet(tenant_id)
         summary_dict = resolver.get_executive_summary(issues)
@@ -335,6 +347,7 @@ async def get_issues(
         # Real implementation: try to get issues from ProactiveResolver
         try:
             from device_anomaly.services.proactive_resolver import get_resolver
+
             resolver = get_resolver()
             issues = resolver.scan_fleet(tenant_id)
         except Exception as e:
@@ -396,18 +409,21 @@ async def fix_all_automated(
 
         results = []
         for issue in automatable:
-            results.append(FixResult(
-                issue_id=issue.id,
-                success=True,
-                message=f"Initiated: {issue.remediation.description}",
-                devices_fixed=issue.impact.affected_devices,
-                devices_failed=0,
-            ))
+            results.append(
+                FixResult(
+                    issue_id=issue.id,
+                    success=True,
+                    message=f"Initiated: {issue.remediation.description}",
+                    devices_fixed=issue.impact.affected_devices,
+                    devices_failed=0,
+                )
+            )
         return results
 
     # Real implementation: get issues from ProactiveResolver and execute fixes
     try:
         from device_anomaly.services.proactive_resolver import get_resolver
+
         resolver = get_resolver()
         issues = resolver.scan_fleet(tenant_id)
         automatable = [i for i in issues if i.remediation.automated]
@@ -415,13 +431,15 @@ async def fix_all_automated(
         results = []
         for issue in automatable:
             # TODO: Actually execute the fix via resolver
-            results.append(FixResult(
-                issue_id=issue.id,
-                success=True,
-                message=f"Initiated: {issue.remediation.description}",
-                devices_fixed=issue.impact.affected_devices,
-                devices_failed=0,
-            ))
+            results.append(
+                FixResult(
+                    issue_id=issue.id,
+                    success=True,
+                    message=f"Initiated: {issue.remediation.description}",
+                    devices_fixed=issue.impact.affected_devices,
+                    devices_failed=0,
+                )
+            )
         return results
     except Exception as e:
         logger.warning(f"ProactiveResolver failed: {e}, returning empty list in live mode")

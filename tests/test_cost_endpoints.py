@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,7 +9,8 @@ from device_anomaly.api.dependencies import get_backend_db
 from device_anomaly.api.main import app
 from device_anomaly.database import connection as results_connection
 from device_anomaly.database.schema import AnomalyResult, DeviceMetadata
-from device_anomaly.db.models import Base as BackendBase, Tenant
+from device_anomaly.db.models import Base as BackendBase
+from device_anomaly.db.models import Tenant
 from device_anomaly.db.models_cost import DeviceTypeCost
 
 
@@ -72,7 +73,7 @@ def _seed_results_data():
                 AnomalyResult(
                     tenant_id="default",
                     device_id=1,
-                    timestamp=datetime(2024, 1, 1, tzinfo=timezone.utc),
+                    timestamp=datetime(2024, 1, 1, tzinfo=UTC),
                     anomaly_score=-0.8,
                     anomaly_label=-1,
                     status="false_positive",

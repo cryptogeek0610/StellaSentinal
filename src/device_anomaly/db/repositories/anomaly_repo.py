@@ -3,6 +3,7 @@
 This module provides data access methods for anomaly records,
 including filtering by severity, status, time range, and device.
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -78,12 +79,7 @@ class AnomalyRepository(BaseRepository[Anomaly]):
         if detector_name:
             query = query.filter(Anomaly.detector_name == detector_name)
 
-        return (
-            query.order_by(desc(Anomaly.timestamp))
-            .offset(offset)
-            .limit(limit)
-            .all()
-        )
+        return query.order_by(desc(Anomaly.timestamp)).offset(offset).limit(limit).all()
 
     def get_by_device(
         self,
@@ -329,10 +325,7 @@ class AnomalyRepository(BaseRepository[Anomaly]):
             query = query.filter(Anomaly.timestamp <= end_date)
 
         results = (
-            query.group_by(Anomaly.device_id)
-            .order_by(desc("anomaly_count"))
-            .limit(limit)
-            .all()
+            query.group_by(Anomaly.device_id).order_by(desc("anomaly_count")).limit(limit).all()
         )
 
         return [{"device_id": device_id, "anomaly_count": count} for device_id, count in results]
@@ -351,13 +344,10 @@ class AnomalyRepository(BaseRepository[Anomaly]):
         Returns:
             Dict with feedback counts
         """
-        query = (
-            self.session.query(Anomaly.user_feedback, func.count(Anomaly.anomaly_id))
-            .filter(
-                and_(
-                    Anomaly.tenant_id == tenant_id,
-                    Anomaly.user_feedback.isnot(None),
-                )
+        query = self.session.query(Anomaly.user_feedback, func.count(Anomaly.anomaly_id)).filter(
+            and_(
+                Anomaly.tenant_id == tenant_id,
+                Anomaly.user_feedback.isnot(None),
             )
         )
 

@@ -101,7 +101,9 @@ class ONNXConfig:
 
         # Inference settings
         engine_str = os.getenv("ONNX_ENGINE", "sklearn").lower()
-        config.inference.engine_type = EngineType.ONNX if engine_str == "onnx" else EngineType.SKLEARN
+        config.inference.engine_type = (
+            EngineType.ONNX if engine_str == "onnx" else EngineType.SKLEARN
+        )
 
         provider_str = os.getenv("ONNX_PROVIDER", "cpu").lower()
         provider_map = {

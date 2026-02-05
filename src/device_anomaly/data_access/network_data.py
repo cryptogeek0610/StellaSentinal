@@ -8,6 +8,7 @@ Fetches real network telemetry from XSight database tables:
 - CellularCarrier: Carrier name lookup
 - app_App: Application name lookup
 """
+
 from __future__ import annotations
 
 import logging
@@ -24,6 +25,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class APMetrics:
     """Aggregated metrics for a WiFi access point."""
+
     ssid: str
     ssid_id: int
     avg_signal_dbm: float
@@ -35,6 +37,7 @@ class APMetrics:
 @dataclass
 class AppUsageMetrics:
     """Aggregated per-app data usage."""
+
     app_id: int
     app_name: str
     download_bytes: int
@@ -45,6 +48,7 @@ class AppUsageMetrics:
 @dataclass
 class CarrierMetrics:
     """Carrier performance metrics."""
+
     carrier_id: int
     carrier_name: str
     device_count: int
@@ -53,6 +57,7 @@ class CarrierMetrics:
 @dataclass
 class DeviceGroup:
     """Device group from hierarchy."""
+
     device_group_id: int
     name: str
     parent_id: str | None
@@ -72,11 +77,14 @@ def get_device_ids_for_group(device_group_id: int | None) -> list[int] | None:
         engine = create_dw_engine()
         with engine.connect() as conn:
             # Get the group's ReferenceId
-            result = conn.execute(text("""
+            result = conn.execute(
+                text("""
                 SELECT ReferenceId, GroupPath
                 FROM conf_DeviceGroup
                 WHERE DeviceGroupId = :group_id
-            """), {"group_id": device_group_id}).fetchone()
+            """),
+                {"group_id": device_group_id},
+            ).fetchone()
 
             if not result:
                 logger.warning(f"Device group {device_group_id} not found")
@@ -85,11 +93,14 @@ def get_device_ids_for_group(device_group_id: int | None) -> list[int] | None:
             group_path = result[1]
 
             # Get all groups under this path (descendants)
-            descendant_refs = conn.execute(text("""
+            descendant_refs = conn.execute(
+                text("""
                 SELECT ReferenceId
                 FROM conf_DeviceGroup
                 WHERE GroupPath LIKE :path_prefix AND IsActive = 1
-            """), {"path_prefix": f"{group_path}%"}).fetchall()
+            """),
+                {"path_prefix": f"{group_path}%"},
+            ).fetchall()
 
             ref_ids = [r[0] for r in descendant_refs]
             if not ref_ids:
@@ -101,9 +112,11 @@ def get_device_ids_for_group(device_group_id: int | None) -> list[int] | None:
 
             # First, let's check if there's a simpler device-to-group mapping
             # Query cs_WifiHour to get device IDs that have data
-            result = conn.execute(text("""
+            result = conn.execute(
+                text("""
                 SELECT DISTINCT Deviceid FROM cs_WifiHour
-            """)).fetchall()
+            """)
+            ).fetchall()
 
             # For now, return all device IDs (we'll filter by group path in queries)
             return [r[0] for r in result]
@@ -122,14 +135,17 @@ def get_wifi_summary(days: int = 7, device_group_id: int | None = None) -> dict:
         engine = create_dw_engine()
         with engine.connect() as conn:
             # Get the most recent date in the data (handles historical datasets)
-            max_date_result = conn.execute(text(
-                "SELECT MAX(CollectedDate) FROM cs_WifiHour"
-            )).fetchone()
+            max_date_result = conn.execute(
+                text("SELECT MAX(CollectedDate) FROM cs_WifiHour")
+            ).fetchone()
             max_date = max_date_result[0] if max_date_result else date.today()
-            start_date = max_date - timedelta(days=days) if max_date else date.today() - timedelta(days=days)
+            start_date = (
+                max_date - timedelta(days=days) if max_date else date.today() - timedelta(days=days)
+            )
 
             # Get summary metrics from cs_WifiHour
-            result = conn.execute(text("""
+            result = conn.execute(
+                text("""
                 SELECT
                     COUNT(DISTINCT Deviceid) as total_devices,
                     COUNT(DISTINCT AccessPointId) as total_aps,
@@ -138,7 +154,9 @@ def get_wifi_summary(days: int = 7, device_group_id: int | None = None) -> dict:
                     SUM(ConnectionTime) as total_connection_time
                 FROM cs_WifiHour
                 WHERE CollectedDate >= :start_date
-            """), {"start_date": start_date}).fetchone()
+            """),
+                {"start_date": start_date},
+            ).fetchone()
 
             if not result:
                 return {
@@ -158,7 +176,11 @@ def get_wifi_summary(days: int = 7, device_group_id: int | None = None) -> dict:
             total_connection_time = result[4] or 1  # Avoid division by zero
 
             # Calculate drop rate (disconnects per hour of connection)
-            avg_drop_rate = total_disconnects / max(1, total_connection_time / 3600) if total_connection_time > 0 else 0
+            avg_drop_rate = (
+                total_disconnects / max(1, total_connection_time / 3600)
+                if total_connection_time > 0
+                else 0
+            )
 
             return {
                 "total_devices": total_devices,
@@ -180,10 +202,7 @@ def get_wifi_summary(days: int = 7, device_group_id: int | None = None) -> dict:
 
 
 def get_ap_quality_metrics(
-    days: int = 7,
-    limit: int = 50,
-    min_device_count: int = 1,
-    device_group_id: int | None = None
+    days: int = 7, limit: int = 50, min_device_count: int = 1, device_group_id: int | None = None
 ) -> list[dict]:
     """Get per-AP quality metrics.
 
@@ -193,14 +212,17 @@ def get_ap_quality_metrics(
         engine = create_dw_engine()
         with engine.connect() as conn:
             # Get the most recent date in the data (handles historical datasets)
-            max_date_result = conn.execute(text(
-                "SELECT MAX(CollectedDate) FROM cs_WifiHour"
-            )).fetchone()
+            max_date_result = conn.execute(
+                text("SELECT MAX(CollectedDate) FROM cs_WifiHour")
+            ).fetchone()
             max_date = max_date_result[0] if max_date_result else date.today()
-            start_date = max_date - timedelta(days=days) if max_date else date.today() - timedelta(days=days)
+            start_date = (
+                max_date - timedelta(days=days) if max_date else date.today() - timedelta(days=days)
+            )
 
             # Join cs_WifiHour with conf_SSID to get SSID names
-            result = conn.execute(text("""
+            result = conn.execute(
+                text("""
                 SELECT
                     s.SSID as ssid,
                     w.AccessPointId,
@@ -215,11 +237,9 @@ def get_ap_quality_metrics(
                 HAVING COUNT(DISTINCT w.Deviceid) >= :min_devices
                 ORDER BY device_count DESC
                 OFFSET 0 ROWS FETCH NEXT :limit ROWS ONLY
-            """), {
-                "start_date": start_date,
-                "limit": limit,
-                "min_devices": min_device_count
-            }).fetchall()
+            """),
+                {"start_date": start_date, "limit": limit, "min_devices": min_device_count},
+            ).fetchall()
 
             aps = []
             for row in result:
@@ -231,24 +251,30 @@ def get_ap_quality_metrics(
                 device_count = row[5] or 0
 
                 # Calculate drop rate and quality score
-                drop_rate = total_disconnects / max(1, total_connection_time / 3600) if total_connection_time > 0 else 0
+                drop_rate = (
+                    total_disconnects / max(1, total_connection_time / 3600)
+                    if total_connection_time > 0
+                    else 0
+                )
                 drop_rate_normalized = min(1.0, drop_rate / 10)
 
                 # Quality score: based on signal strength and drop rate
                 # Signal: -30 dBm = 100, -90 dBm = 0
                 signal_score = max(0, min(100, (avg_signal_dbm + 90) / 60 * 100))
                 drop_score = (1 - drop_rate_normalized) * 100
-                quality_score = (signal_score * 0.7 + drop_score * 0.3)
+                quality_score = signal_score * 0.7 + drop_score * 0.3
 
-                aps.append({
-                    "ssid": ssid,
-                    "bssid": None,  # BSSID not easily available in aggregated data
-                    "avg_signal_dbm": round(avg_signal_dbm, 1),
-                    "drop_rate": round(drop_rate_normalized, 4),
-                    "device_count": device_count,
-                    "quality_score": round(quality_score, 1),
-                    "location": None,  # Location not in this schema
-                })
+                aps.append(
+                    {
+                        "ssid": ssid,
+                        "bssid": None,  # BSSID not easily available in aggregated data
+                        "avg_signal_dbm": round(avg_signal_dbm, 1),
+                        "drop_rate": round(drop_rate_normalized, 4),
+                        "device_count": device_count,
+                        "quality_score": round(quality_score, 1),
+                        "location": None,  # Location not in this schema
+                    }
+                )
 
             return aps
 
@@ -257,10 +283,7 @@ def get_ap_quality_metrics(
         return []
 
 
-def get_app_usage_metrics(
-    days: int = 7,
-    device_group_id: int | None = None
-) -> list[dict]:
+def get_app_usage_metrics(days: int = 7, device_group_id: int | None = None) -> list[dict]:
     """Get per-application data usage metrics.
 
     Returns list of apps with download/upload totals.
@@ -269,16 +292,19 @@ def get_app_usage_metrics(
         engine = create_dw_engine()
         with engine.connect() as conn:
             # Get the most recent date in the data (handles historical datasets)
-            max_date_result = conn.execute(text(
-                "SELECT MAX(CollectedDate) FROM cs_DataUsage"
-            )).fetchone()
+            max_date_result = conn.execute(
+                text("SELECT MAX(CollectedDate) FROM cs_DataUsage")
+            ).fetchone()
             max_date = max_date_result[0] if max_date_result else date.today()
 
             # Use relative date from max available data
-            start_date = max_date - timedelta(days=days) if max_date else date.today() - timedelta(days=days)
+            start_date = (
+                max_date - timedelta(days=days) if max_date else date.today() - timedelta(days=days)
+            )
 
             # Join cs_DataUsage with app_App to get app names
-            result = conn.execute(text("""
+            result = conn.execute(
+                text("""
                 SELECT
                     a.AppId,
                     a.AppName,
@@ -291,7 +317,9 @@ def get_app_usage_metrics(
                 GROUP BY a.AppId, a.AppName
                 ORDER BY (SUM(d.Download) + SUM(d.Upload)) DESC
                 OFFSET 0 ROWS FETCH NEXT 50 ROWS ONLY
-            """), {"start_date": start_date}).fetchall()
+            """),
+                {"start_date": start_date},
+            ).fetchall()
 
             apps = []
             for row in result:
@@ -301,14 +329,16 @@ def get_app_usage_metrics(
                 upload_bytes = row[3] or 0
                 device_count = row[4] or 0
 
-                apps.append({
-                    "app_id": app_id,
-                    "app_name": app_name,
-                    "data_download_mb": round(download_bytes / (1024 * 1024), 2),
-                    "data_upload_mb": round(upload_bytes / (1024 * 1024), 2),
-                    "device_count": device_count,
-                    "is_background": False,  # Not available in this schema
-                })
+                apps.append(
+                    {
+                        "app_id": app_id,
+                        "app_name": app_name,
+                        "data_download_mb": round(download_bytes / (1024 * 1024), 2),
+                        "data_upload_mb": round(upload_bytes / (1024 * 1024), 2),
+                        "device_count": device_count,
+                        "is_background": False,  # Not available in this schema
+                    }
+                )
 
             return apps
 
@@ -328,28 +358,32 @@ def get_carrier_metrics(device_group_id: int | None = None) -> list[dict]:
         with engine.connect() as conn:
             # Get carriers from reference table
             # Note: Real implementation would join with device telemetry
-            result = conn.execute(text("""
+            result = conn.execute(
+                text("""
                 SELECT
                     CellularCarrierId,
                     CellularCarrierName
                 FROM CellularCarrier
                 WHERE CellularCarrierId > 1  -- Skip "Default Carrier"
                 ORDER BY CellularCarrierName
-            """)).fetchall()
+            """)
+            ).fetchall()
 
             carriers = []
             for row in result:
                 carrier_id = row[0]
                 carrier_name = row[1]
 
-                carriers.append({
-                    "carrier_id": carrier_id,
-                    "carrier_name": carrier_name,
-                    "device_count": 0,  # Would need join with device data
-                    "avg_signal": -75.0,  # Placeholder
-                    "avg_latency_ms": None,
-                    "reliability_score": 80.0,  # Placeholder
-                })
+                carriers.append(
+                    {
+                        "carrier_id": carrier_id,
+                        "carrier_name": carrier_name,
+                        "device_count": 0,  # Would need join with device data
+                        "avg_signal": -75.0,  # Placeholder
+                        "avg_latency_ms": None,
+                        "reliability_score": 80.0,  # Placeholder
+                    }
+                )
 
             return carriers[:10]  # Limit to top 10
 
@@ -363,7 +397,8 @@ def get_device_groups() -> list[dict]:
     try:
         engine = create_dw_engine()
         with engine.connect() as conn:
-            result = conn.execute(text("""
+            result = conn.execute(
+                text("""
                 SELECT
                     DeviceGroupId,
                     Name,
@@ -373,17 +408,20 @@ def get_device_groups() -> list[dict]:
                 FROM conf_DeviceGroup
                 WHERE IsActive = 1
                 ORDER BY GroupPath
-            """)).fetchall()
+            """)
+            ).fetchall()
 
             groups = []
             for row in result:
-                groups.append({
-                    "device_group_id": row[0],
-                    "name": row[1],
-                    "parent_id": row[2],
-                    "group_path": row[3],
-                    "is_active": row[4],
-                })
+                groups.append(
+                    {
+                        "device_group_id": row[0],
+                        "name": row[1],
+                        "parent_id": row[2],
+                        "group_path": row[3],
+                        "is_active": row[4],
+                    }
+                )
 
             return groups
 
@@ -408,28 +446,32 @@ def build_group_hierarchy(groups: list[dict]) -> list[dict]:
 
         if depth == 1:
             # Root level
-            root_groups.append({
-                "device_group_id": g["device_group_id"],
-                "group_name": g["name"],
-                "parent_device_group_id": None,
-                "device_count": 0,  # Would need to count devices
-                "full_path": g["name"],
-                "children": [],
-            })
+            root_groups.append(
+                {
+                    "device_group_id": g["device_group_id"],
+                    "group_name": g["name"],
+                    "parent_device_group_id": None,
+                    "device_count": 0,  # Would need to count devices
+                    "full_path": g["name"],
+                    "children": [],
+                }
+            )
         else:
             # Store for later attachment
             parent_path = "\\".join(path_parts[:-1])
             if parent_path not in child_map:
                 child_map[parent_path] = []
-            child_map[parent_path].append({
-                "device_group_id": g["device_group_id"],
-                "group_name": g["name"],
-                "parent_device_group_id": None,
-                "device_count": 0,
-                "full_path": " > ".join(path_parts),
-                "children": [],
-                "_path": path.strip("\\"),
-            })
+            child_map[parent_path].append(
+                {
+                    "device_group_id": g["device_group_id"],
+                    "group_name": g["name"],
+                    "parent_device_group_id": None,
+                    "device_count": 0,
+                    "full_path": " > ".join(path_parts),
+                    "children": [],
+                    "_path": path.strip("\\"),
+                }
+            )
 
     # Recursively attach children
     def attach_children(node, node_path):

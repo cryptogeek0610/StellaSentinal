@@ -1,4 +1,5 @@
 """API routes for ML model training and monitoring."""
+
 from __future__ import annotations
 
 import json
@@ -128,6 +129,7 @@ def get_redis():
     if _redis_client is None and USE_REDIS:
         try:
             import redis
+
             _redis_client = redis.from_url(REDIS_URL, decode_responses=True)
             _redis_client.ping()  # Test connection
             logger.info("Connected to Redis for training job queue")
@@ -206,7 +208,9 @@ def _build_stages_from_status(status: dict[str, Any]) -> list[TrainingStageInfo]
     status.get("completed_at")
 
     # Map current stage to display name
-    current_stage_name = STAGE_NAME_MAP.get(current_stage, current_stage.replace("_", " ").title() if current_stage else "")
+    current_stage_name = STAGE_NAME_MAP.get(
+        current_stage, current_stage.replace("_", " ").title() if current_stage else ""
+    )
 
     stages = []
     found_current = False
@@ -214,48 +218,62 @@ def _build_stages_from_status(status: dict[str, Any]) -> list[TrainingStageInfo]
     for stage_name in TRAINING_STAGE_NAMES:
         if job_status == "completed":
             # All stages completed
-            stages.append(TrainingStageInfo(
-                name=stage_name,
-                status="completed",
-            ))
+            stages.append(
+                TrainingStageInfo(
+                    name=stage_name,
+                    status="completed",
+                )
+            )
         elif job_status == "failed":
             # Mark stages up to current as completed, current as failed
             if stage_name == current_stage_name:
-                stages.append(TrainingStageInfo(
-                    name=stage_name,
-                    status="failed",
-                    message=status.get("error"),
-                ))
+                stages.append(
+                    TrainingStageInfo(
+                        name=stage_name,
+                        status="failed",
+                        message=status.get("error"),
+                    )
+                )
                 found_current = True
             elif not found_current:
-                stages.append(TrainingStageInfo(
-                    name=stage_name,
-                    status="completed",
-                ))
+                stages.append(
+                    TrainingStageInfo(
+                        name=stage_name,
+                        status="completed",
+                    )
+                )
             else:
-                stages.append(TrainingStageInfo(
-                    name=stage_name,
-                    status="pending",
-                ))
+                stages.append(
+                    TrainingStageInfo(
+                        name=stage_name,
+                        status="pending",
+                    )
+                )
         else:  # running or pending
             if stage_name == current_stage_name:
-                stages.append(TrainingStageInfo(
-                    name=stage_name,
-                    status="running",
-                    started_at=started_at,
-                    message=status.get("message"),
-                ))
+                stages.append(
+                    TrainingStageInfo(
+                        name=stage_name,
+                        status="running",
+                        started_at=started_at,
+                        message=status.get("message"),
+                    )
+                )
                 found_current = True
             elif not found_current:
-                stages.append(TrainingStageInfo(
-                    name=stage_name,
-                    status="completed",
-                ))
+                stages.append(
+                    TrainingStageInfo(
+                        name=stage_name,
+                        status="completed",
+                    )
+                )
             else:
-                stages.append(TrainingStageInfo(
-                    name=stage_name,
-                    status="pending",
-                ))
+                stages.append(
+                    TrainingStageInfo(
+                        name=stage_name,
+                        status="pending",
+                    )
+                )
 
     return stages
 
@@ -479,12 +497,14 @@ def _run_training_job_background(config: TrainingConfigRequest, tenant_id: str):
     set_tenant_id(tenant_id)
 
     try:
-        _update_training_state({
-            "status": "running",
-            "progress": 5.0,
-            "stage": "initialize",
-            "message": "Initializing training pipeline...",
-        })
+        _update_training_state(
+            {
+                "status": "running",
+                "progress": 5.0,
+                "stage": "initialize",
+                "message": "Initializing training pipeline...",
+            }
+        )
 
         from device_anomaly.pipeline.training import RealDataTrainingPipeline, TrainingConfig
 
@@ -500,11 +520,13 @@ def _run_training_job_background(config: TrainingConfigRequest, tenant_id: str):
         pipeline = RealDataTrainingPipeline(training_config)
 
         # Stage: Load data
-        _update_training_state({
-            "progress": 10.0,
-            "stage": "load_data",
-            "message": "Loading training data...",
-        })
+        _update_training_state(
+            {
+                "progress": 10.0,
+                "stage": "load_data",
+                "message": "Loading training data...",
+            }
+        )
 
         # Run the pipeline
         result = pipeline.run(output_dir="models/production")
@@ -514,7 +536,9 @@ def _run_training_job_background(config: TrainingConfigRequest, tenant_id: str):
             _training_state["status"] = result.status
             _training_state["progress"] = 100.0
             _training_state["stage"] = "complete"
-            _training_state["message"] = "Training completed" if result.status == "completed" else result.error
+            _training_state["message"] = (
+                "Training completed" if result.status == "completed" else result.error
+            )
             _training_state["completed_at"] = result.completed_at
             _training_state["current_run"] = result.to_dict()
             # Add to history
@@ -523,12 +547,14 @@ def _run_training_job_background(config: TrainingConfigRequest, tenant_id: str):
 
     except Exception as e:
         logger.error(f"Training job failed: {e}", exc_info=True)
-        _update_training_state({
-            "status": "failed",
-            "stage": "error",
-            "message": "Training failed. Check server logs for details.",
-            "completed_at": datetime.now(UTC).isoformat(),
-        })
+        _update_training_state(
+            {
+                "status": "failed",
+                "stage": "error",
+                "message": "Training failed. Check server logs for details.",
+                "completed_at": datetime.now(UTC).isoformat(),
+            }
+        )
     finally:
         set_tenant_id(None)
 
@@ -583,13 +609,15 @@ def _submit_job_to_redis(config: TrainingConfigRequest, tenant_id: str) -> str:
     # Update status
     redis_client.set(
         STATUS_KEY,
-        json.dumps({
-            "run_id": job_id,
-            "status": "pending",
-            "progress": 0,
-            "message": "Job queued, waiting for ML worker...",
-            "submitted_at": job["submitted_at"],
-        }),
+        json.dumps(
+            {
+                "run_id": job_id,
+                "status": "pending",
+                "progress": 0,
+                "message": "Job queued, waiting for ML worker...",
+                "submitted_at": job["submitted_at"],
+            }
+        ),
     )
 
     return job_id
@@ -631,7 +659,7 @@ def start_training(
         if status and status.get("status") == "running":
             raise HTTPException(
                 status_code=409,
-                detail="A training job is already running. Wait for it to complete."
+                detail="A training job is already running. Wait for it to complete.",
             )
 
         # Submit to Redis queue
@@ -652,21 +680,22 @@ def start_training(
     current_state = _get_training_state_copy()
     if current_state.get("status") == "running":
         raise HTTPException(
-            status_code=409,
-            detail="A training job is already running. Wait for it to complete."
+            status_code=409, detail="A training job is already running. Wait for it to complete."
         )
 
     started_at = datetime.now(UTC).isoformat()
     with _training_state_lock:
-        _training_state.update({
-            "status": "running",
-            "progress": 0.0,
-            "message": "Starting training job...",
-            "stage": "initialize",
-            "started_at": started_at,
-            "completed_at": None,
-            "current_run": None,
-        })
+        _training_state.update(
+            {
+                "status": "running",
+                "progress": 0.0,
+                "message": "Starting training job...",
+                "stage": "initialize",
+                "started_at": started_at,
+                "completed_at": None,
+                "current_run": None,
+            }
+        )
         # Preserve history
 
     background_tasks.add_task(_run_training_job_background, config, tenant_id)
@@ -690,6 +719,7 @@ def get_training_status(
     if mock_mode:
         # Randomly return running or completed for demo
         import random
+
         if random.random() < 0.3:
             return get_mock_running_training()
         return get_mock_training_run()
@@ -709,8 +739,12 @@ def get_training_status(
                 started_at=status.get("started_at") or status.get("submitted_at"),
                 completed_at=status.get("completed_at"),
                 config=status.get("config"),
-                metrics=TrainingMetricsResponse(**status["metrics"]) if status.get("metrics") else None,
-                artifacts=TrainingArtifactsResponse(**status["artifacts"]) if status.get("artifacts") else None,
+                metrics=TrainingMetricsResponse(**status["metrics"])
+                if status.get("metrics")
+                else None,
+                artifacts=TrainingArtifactsResponse(**status["artifacts"])
+                if status.get("artifacts")
+                else None,
                 model_version=status.get("model_version"),
                 error=status.get("error"),
                 stages=stages,
@@ -731,7 +765,9 @@ def get_training_status(
             completed_at=run.get("completed_at", state.get("completed_at")),
             config=run.get("config"),
             metrics=TrainingMetricsResponse(**run["metrics"]) if run.get("metrics") else None,
-            artifacts=TrainingArtifactsResponse(**run["artifacts"]) if run.get("artifacts") else None,
+            artifacts=TrainingArtifactsResponse(**run["artifacts"])
+            if run.get("artifacts")
+            else None,
             model_version=run.get("model_version"),
             error=run.get("error"),
             stages=stages,
@@ -784,17 +820,19 @@ def get_training_history(
                         feature_importance=metrics_data.get("feature_importance", {}),
                     )
 
-                runs.append(TrainingRunResponse(
-                    run_id=run.get("run_id", "unknown"),
-                    status=run.get("status", "unknown"),
-                    progress=100.0 if run.get("status") == "completed" else 0.0,
-                    message=run.get("message"),
-                    started_at=run.get("started_at") or run.get("submitted_at"),
-                    completed_at=run.get("completed_at"),
-                    model_version=run.get("model_version"),
-                    metrics=metrics,
-                    error=run.get("error"),
-                ))
+                runs.append(
+                    TrainingRunResponse(
+                        run_id=run.get("run_id", "unknown"),
+                        status=run.get("status", "unknown"),
+                        progress=100.0 if run.get("status") == "completed" else 0.0,
+                        message=run.get("message"),
+                        started_at=run.get("started_at") or run.get("submitted_at"),
+                        completed_at=run.get("completed_at"),
+                        model_version=run.get("model_version"),
+                        metrics=metrics,
+                        error=run.get("error"),
+                    )
+                )
             return TrainingHistoryResponse(runs=runs, total=len(history))
 
     # Fallback to in-memory history (thread-safe access)
@@ -802,16 +840,18 @@ def get_training_history(
     history = state.get("history", [])
     runs = []
     for run in history[:limit]:
-        runs.append(TrainingRunResponse(
-            run_id=run.get("run_id", "unknown"),
-            status=run.get("status", "unknown"),
-            progress=100.0 if run.get("status") == "completed" else 0.0,
-            started_at=run.get("started_at"),
-            completed_at=run.get("completed_at"),
-            model_version=run.get("model_version"),
-            metrics=TrainingMetricsResponse(**run["metrics"]) if run.get("metrics") else None,
-            error=run.get("error"),
-        ))
+        runs.append(
+            TrainingRunResponse(
+                run_id=run.get("run_id", "unknown"),
+                status=run.get("status", "unknown"),
+                progress=100.0 if run.get("status") == "completed" else 0.0,
+                started_at=run.get("started_at"),
+                completed_at=run.get("completed_at"),
+                model_version=run.get("model_version"),
+                metrics=TrainingMetricsResponse(**run["metrics"]) if run.get("metrics") else None,
+                error=run.get("error"),
+            )
+        )
 
     return TrainingHistoryResponse(
         runs=runs,
@@ -847,7 +887,9 @@ def get_queue_status(
                     next_scheduled = scheduler_status.get("next_training_time")
                     # Get last completed from training history
                     if scheduler_status.get("last_training_result"):
-                        last_completed = scheduler_status["last_training_result"].get("completed_at")
+                        last_completed = scheduler_status["last_training_result"].get(
+                            "completed_at"
+                        )
             except Exception as e:
                 logger.debug(f"Could not get scheduler status: {e}")
 

@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -15,7 +15,7 @@ def _write_data_driven_baselines(path: Path) -> dict:
     payload = {
         "schema_version": "data_driven_v1",
         "baseline_type": "data_driven",
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "baselines": {
             "BatteryDrop_roll_mean": {
                 "global": {"median": 10.0, "mad": 1.0},
@@ -100,7 +100,7 @@ def test_baseline_suggestions_use_production_baselines(tmp_path, monkeypatch):
             AnomalyResult(
                 tenant_id="default",
                 device_id=1,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 anomaly_score=-1.5,
                 anomaly_label=-1,
                 feature_values_json=json.dumps({"BatteryDrop_roll_mean": 25.0}),

@@ -6,6 +6,7 @@ here BEFORE passing data to the LLM - the LLM never calculates costs.
 
 Design principle: Pre-compute all financial figures, inject into prompts.
 """
+
 from __future__ import annotations
 
 import logging
@@ -112,7 +113,9 @@ class CostCalculator:
             # Recommendations
             recommendations = []
             if device_count >= 5:
-                recommendations.append(f"Consider reallocating {device_count} unused devices to active workers")
+                recommendations.append(
+                    f"Consider reallocating {device_count} unused devices to active workers"
+                )
             if days_unused >= 14:
                 recommendations.append("Investigate why these devices are not in use")
             if total_impact > self.config.high_impact_threshold_usd:
@@ -320,8 +323,8 @@ class CostCalculator:
                     description=f"Device downtime cost ({total_downtime_hours:.1f} hours)",
                     amount_usd=downtime_cost.quantize(Decimal("0.01")),
                     confidence=0.75,
-                    calculation_method=f"{total_downtime_hours:.1f} hours * ${hourly_rate}/hr" +
-                                       (" (critical multiplier applied)" if is_critical else ""),
+                    calculation_method=f"{total_downtime_hours:.1f} hours * ${hourly_rate}/hr"
+                    + (" (critical multiplier applied)" if is_critical else ""),
                 ),
                 CostBreakdownItem(
                     type=CostComponentType.LABOR,
@@ -351,12 +354,16 @@ class CostCalculator:
             if avg_duration_minutes > 60:
                 recommendations.append("Long resolution times - review troubleshooting procedures")
             if is_critical:
-                recommendations.append("Critical devices affected - prioritize reliability improvements")
+                recommendations.append(
+                    "Critical devices affected - prioritize reliability improvements"
+                )
 
             impact = FinancialImpactSummary(
                 total_impact_usd=total_impact.quantize(Decimal("0.01")),
                 monthly_recurring_usd=monthly_impact.quantize(Decimal("0.01")),
-                potential_savings_usd=(total_impact * Decimal("0.5")).quantize(Decimal("0.01")),  # 50% reduction target
+                potential_savings_usd=(total_impact * Decimal("0.5")).quantize(
+                    Decimal("0.01")
+                ),  # 50% reduction target
                 impact_level=ImpactLevel(self.config.get_impact_level(total_impact)),
                 breakdown=breakdown,
                 recommendations=recommendations,
@@ -503,7 +510,9 @@ class CostCalculator:
                 potential_savings_usd=potential_savings.quantize(Decimal("0.01")),
                 affected_devices=affected_devices,
                 total_fleet_value_usd=(device_value * affected_devices).quantize(Decimal("0.01")),
-                hardware_impact_usd=(screen_repair_total + replacement_total + minor_repair_total).quantize(Decimal("0.01")),
+                hardware_impact_usd=(
+                    screen_repair_total + replacement_total + minor_repair_total
+                ).quantize(Decimal("0.01")),
                 labor_impact_usd=it_cost.quantize(Decimal("0.01")),
             )
 
@@ -561,14 +570,16 @@ class CostCalculator:
                 hardware_risk = at_risk_value * severity_risk
                 total_impact += hardware_risk
 
-                breakdown.append(CostBreakdownItem(
-                    type=CostComponentType.HARDWARE,
-                    category="device_at_risk",
-                    description=f"Device value at risk ({context.affected_device_count} devices)",
-                    amount_usd=hardware_risk.quantize(Decimal("0.01")),
-                    confidence=0.6,
-                    calculation_method=f"Device value ${device_value} * {context.affected_device_count} * {severity_risk:.0%} risk",
-                ))
+                breakdown.append(
+                    CostBreakdownItem(
+                        type=CostComponentType.HARDWARE,
+                        category="device_at_risk",
+                        description=f"Device value at risk ({context.affected_device_count} devices)",
+                        amount_usd=hardware_risk.quantize(Decimal("0.01")),
+                        confidence=0.6,
+                        calculation_method=f"Device value ${device_value} * {context.affected_device_count} * {severity_risk:.0%} risk",
+                    )
+                )
 
             # Downtime impact
             if context.duration_hours:
@@ -576,47 +587,61 @@ class CostCalculator:
                 if context.is_critical:
                     downtime_rate = downtime_rate * self.config.critical_downtime_multiplier
 
-                downtime_cost = Decimal(context.duration_hours) * downtime_rate * context.affected_device_count
+                downtime_cost = (
+                    Decimal(context.duration_hours) * downtime_rate * context.affected_device_count
+                )
                 total_impact += downtime_cost
 
-                breakdown.append(CostBreakdownItem(
-                    type=CostComponentType.DOWNTIME,
-                    category="downtime",
-                    description=f"Downtime cost ({context.duration_hours:.1f} hours)",
-                    amount_usd=downtime_cost.quantize(Decimal("0.01")),
-                    is_recurring=True,
-                    period="one_time",
-                    confidence=0.7,
-                    calculation_method=f"{context.duration_hours:.1f} hrs * ${downtime_rate}/hr * {context.affected_device_count} devices",
-                ))
+                breakdown.append(
+                    CostBreakdownItem(
+                        type=CostComponentType.DOWNTIME,
+                        category="downtime",
+                        description=f"Downtime cost ({context.duration_hours:.1f} hours)",
+                        amount_usd=downtime_cost.quantize(Decimal("0.01")),
+                        is_recurring=True,
+                        period="one_time",
+                        confidence=0.7,
+                        calculation_method=f"{context.duration_hours:.1f} hrs * ${downtime_rate}/hr * {context.affected_device_count} devices",
+                    )
+                )
 
             # IT support cost
             if context.estimated_resolution_hours:
-                support_cost = Decimal(context.estimated_resolution_hours) * context.it_support_hourly_rate_usd
+                support_cost = (
+                    Decimal(context.estimated_resolution_hours) * context.it_support_hourly_rate_usd
+                )
                 total_impact += support_cost
 
-                breakdown.append(CostBreakdownItem(
-                    type=CostComponentType.SUPPORT,
-                    category="it_support",
-                    description="IT investigation and resolution",
-                    amount_usd=support_cost.quantize(Decimal("0.01")),
-                    confidence=0.75,
-                    calculation_method=f"{context.estimated_resolution_hours:.1f} hrs * ${context.it_support_hourly_rate_usd}/hr",
-                ))
+                breakdown.append(
+                    CostBreakdownItem(
+                        type=CostComponentType.SUPPORT,
+                        category="it_support",
+                        description="IT investigation and resolution",
+                        amount_usd=support_cost.quantize(Decimal("0.01")),
+                        confidence=0.75,
+                        calculation_method=f"{context.estimated_resolution_hours:.1f} hrs * ${context.it_support_hourly_rate_usd}/hr",
+                    )
+                )
 
             # Worker productivity impact
             if context.duration_hours and context.affected_device_count > 0:
-                worker_cost = Decimal(context.duration_hours) * context.worker_hourly_rate_usd * context.affected_device_count
+                worker_cost = (
+                    Decimal(context.duration_hours)
+                    * context.worker_hourly_rate_usd
+                    * context.affected_device_count
+                )
                 total_impact += worker_cost
 
-                breakdown.append(CostBreakdownItem(
-                    type=CostComponentType.LABOR,
-                    category="productivity_loss",
-                    description="Worker productivity loss",
-                    amount_usd=worker_cost.quantize(Decimal("0.01")),
-                    confidence=0.65,
-                    calculation_method=f"{context.duration_hours:.1f} hrs * ${context.worker_hourly_rate_usd}/hr * {context.affected_device_count}",
-                ))
+                breakdown.append(
+                    CostBreakdownItem(
+                        type=CostComponentType.LABOR,
+                        category="productivity_loss",
+                        description="Worker productivity loss",
+                        amount_usd=worker_cost.quantize(Decimal("0.01")),
+                        confidence=0.65,
+                        calculation_method=f"{context.duration_hours:.1f} hrs * ${context.worker_hourly_rate_usd}/hr * {context.affected_device_count}",
+                    )
+                )
 
             # Use similar incidents for better estimates
             if context.similar_incidents_count > 5 and context.similar_incidents_avg_cost_usd:
@@ -632,9 +657,13 @@ class CostCalculator:
             if impact_level == ImpactLevel.HIGH:
                 recommendations.append("High financial impact - prioritize immediate resolution")
             if context.incident_count > 3:
-                recommendations.append("Recurring issue - investigate root cause to prevent future incidents")
+                recommendations.append(
+                    "Recurring issue - investigate root cause to prevent future incidents"
+                )
             if context.is_critical:
-                recommendations.append("Critical device affected - ensure backup resources available")
+                recommendations.append(
+                    "Critical device affected - ensure backup resources available"
+                )
 
             # Potential savings (25% reduction through proactive measures)
             potential_savings = total_impact * Decimal("0.25")

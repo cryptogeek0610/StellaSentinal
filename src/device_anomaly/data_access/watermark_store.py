@@ -16,6 +16,7 @@ Features:
 - Backfill support via explicit reset_watermark() call
 - Metrics: total rows extracted per table
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -37,6 +38,7 @@ Base = declarative_base()
 
 class WatermarkRecord(Base):
     """SQLAlchemy model for watermark storage."""
+
     __tablename__ = "ingestion_watermarks"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -93,6 +95,7 @@ class WatermarkStore:
         # Get settings
         try:
             from device_anomaly.config.settings import get_settings
+
             settings = get_settings()
             self._enable_file_fallback = (
                 enable_file_fallback
@@ -127,6 +130,7 @@ class WatermarkStore:
         if not self._postgres_url:
             try:
                 from device_anomaly.config.settings import get_settings
+
                 settings = get_settings()
                 self._postgres_url = settings.backend_db.url
             except Exception as e:
@@ -138,7 +142,8 @@ class WatermarkStore:
 
             # Create table if not exists with index on (source_db, table_name)
             with self._pg_engine.connect() as conn:
-                conn.execute(text("""
+                conn.execute(
+                    text("""
                     CREATE TABLE IF NOT EXISTS ingestion_watermarks (
                         id SERIAL PRIMARY KEY,
                         source_db VARCHAR(50) NOT NULL,
@@ -150,7 +155,8 @@ class WatermarkStore:
                         metadata_json TEXT,
                         UNIQUE(source_db, table_name)
                     )
-                """))
+                """)
+                )
                 conn.commit()
 
             Session = sessionmaker(bind=self._pg_engine)
@@ -171,6 +177,7 @@ class WatermarkStore:
 
         try:
             import redis
+
             self._redis_client = redis.from_url(
                 self._redis_url,
                 decode_responses=True,
@@ -238,7 +245,7 @@ class WatermarkStore:
                         FROM ingestion_watermarks
                         WHERE source_db = :source_db AND table_name = :table_name
                     """),
-                    {"source_db": source_db, "table_name": table_name}
+                    {"source_db": source_db, "table_name": table_name},
                 ).fetchone()
                 session.close()
 
@@ -432,12 +439,14 @@ class WatermarkStore:
                         "watermark_value": watermark_value,
                         "rows_extracted": rows_extracted,
                         "metadata_json": json.dumps(metadata) if metadata else None,
-                    }
+                    },
                 )
                 session.commit()
                 session.close()
                 pg_success = True
-                logger.debug(f"PostgreSQL watermark (monotonic): {source_db}.{table_name} = {watermark_value}")
+                logger.debug(
+                    f"PostgreSQL watermark (monotonic): {source_db}.{table_name} = {watermark_value}"
+                )
             except Exception as e:
                 logger.error(f"PostgreSQL watermark write FAILED: {e}")
                 return (False, f"PostgreSQL write failed: {e}")
@@ -580,12 +589,14 @@ class WatermarkStore:
                         "source_db": source_db,
                         "table_name": table_name,
                         "watermark_value": new_watermark,
-                        "metadata_json": json.dumps({
-                            "reset": True,
-                            "reset_at": datetime.now(UTC).isoformat(),
-                            "lookback_hours": lookback_hours,
-                        }),
-                    }
+                        "metadata_json": json.dumps(
+                            {
+                                "reset": True,
+                                "reset_at": datetime.now(UTC).isoformat(),
+                                "lookback_hours": lookback_hours,
+                            }
+                        ),
+                    },
                 )
                 session.commit()
                 session.close()
@@ -608,11 +619,13 @@ class WatermarkStore:
                     "watermark_value": new_watermark.isoformat(),
                     "last_updated": datetime.now(UTC).isoformat(),
                     "rows_extracted": 0,
-                    "metadata_json": json.dumps({
-                        "reset": True,
-                        "reset_at": datetime.now(UTC).isoformat(),
-                        "lookback_hours": lookback_hours,
-                    }),
+                    "metadata_json": json.dumps(
+                        {
+                            "reset": True,
+                            "reset_at": datetime.now(UTC).isoformat(),
+                            "lookback_hours": lookback_hours,
+                        }
+                    ),
                 }
                 self._save_file_cache()
 
@@ -623,7 +636,6 @@ class WatermarkStore:
             logger.error(f"FAILED to reset watermark for {source_db}.{table_name}")
 
         return (new_watermark, success)
-
 
     def get_last_scoring_watermark(self) -> datetime | None:
         """

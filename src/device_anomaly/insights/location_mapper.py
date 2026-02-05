@@ -173,7 +173,9 @@ class LocationMapper:
             self._location_cache[loc.location_id] = config
 
         self._cache_loaded = True
-        logger.info(f"Loaded {len(self._location_cache)} location configurations for tenant {self.tenant_id}")
+        logger.info(
+            f"Loaded {len(self._location_cache)} location configurations for tenant {self.tenant_id}"
+        )
 
     def _ensure_cache_loaded(self) -> None:
         """Ensure location cache is loaded."""
@@ -485,9 +487,7 @@ class LocationMapper:
                 return shift
         return None
 
-    def get_shift_by_name(
-        self, location_id: str, shift_name: str
-    ) -> ShiftSchedule | None:
+    def get_shift_by_name(self, location_id: str, shift_name: str) -> ShiftSchedule | None:
         """Get a specific shift by name for a location.
 
         Args:

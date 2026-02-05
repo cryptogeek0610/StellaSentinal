@@ -1,4 +1,5 @@
 """LLM Settings API routes for configuring and managing LLM services."""
+
 from __future__ import annotations
 
 import ipaddress
@@ -18,14 +19,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/llm", tags=["llm"])
 _app_env = os.getenv("APP_ENV", "local")
 _llm_base_url_allowlist = [
-    entry.strip()
-    for entry in os.getenv("LLM_BASE_URL_ALLOWLIST", "").split(",")
-    if entry.strip()
+    entry.strip() for entry in os.getenv("LLM_BASE_URL_ALLOWLIST", "").split(",") if entry.strip()
 ]
 
 
 class LLMConfig(BaseModel):
     """Current LLM configuration."""
+
     base_url: str
     model_name: str | None
     api_key_set: bool
@@ -38,6 +38,7 @@ class LLMConfig(BaseModel):
 
 class LLMConfigUpdate(BaseModel):
     """Request to update LLM configuration."""
+
     base_url: str | None = None
     model_name: str | None = None
     api_key: str | None = None
@@ -45,6 +46,7 @@ class LLMConfigUpdate(BaseModel):
 
 class LLMModel(BaseModel):
     """LLM model information."""
+
     id: str
     name: str
     size: str | None = None
@@ -53,12 +55,14 @@ class LLMModel(BaseModel):
 
 class LLMModelsResponse(BaseModel):
     """Response with available models."""
+
     models: list[LLMModel]
     active_model: str | None
 
 
 class LLMTestResult(BaseModel):
     """Result of testing LLM connection."""
+
     success: bool
     message: str
     response_time_ms: float | None = None
@@ -67,11 +71,13 @@ class LLMTestResult(BaseModel):
 
 class OllamaPullRequest(BaseModel):
     """Request to pull an Ollama model."""
+
     model_name: str
 
 
 class OllamaPullResponse(BaseModel):
     """Response from pulling an Ollama model."""
+
     success: bool
     message: str
     model_name: str
@@ -263,15 +269,17 @@ async def list_models():
                     size_bytes = model.get("size", 0)
                     size_str = None
                     if size_bytes:
-                        size_gb = size_bytes / (1024 ** 3)
+                        size_gb = size_bytes / (1024**3)
                         size_str = f"{size_gb:.1f} GB"
 
-                    models_list.append(LLMModel(
-                        id=model.get("name", ""),
-                        name=model.get("name", "").split(":")[0],
-                        size=size_str,
-                        modified_at=model.get("modified_at"),
-                    ))
+                    models_list.append(
+                        LLMModel(
+                            id=model.get("name", ""),
+                            name=model.get("name", "").split(":")[0],
+                            size=size_str,
+                            modified_at=model.get("modified_at"),
+                        )
+                    )
         else:
             # OpenAI-compatible
             api_url = _normalize_openai_base_url(base_url)
@@ -279,14 +287,15 @@ async def list_models():
             if resp.status_code == 200:
                 data = resp.json()
                 for model in data.get("data", []):
-                    models_list.append(LLMModel(
-                        id=model.get("id", ""),
-                        name=model.get("id", ""),
-                    ))
+                    models_list.append(
+                        LLMModel(
+                            id=model.get("id", ""),
+                            name=model.get("id", ""),
+                        )
+                    )
     except requests.exceptions.ConnectionError:
         raise HTTPException(
-            status_code=503,
-            detail=f"Cannot connect to LLM service at {base_url}. Is it running?"
+            status_code=503, detail=f"Cannot connect to LLM service at {base_url}. Is it running?"
         )
     except Exception as e:
         logger.exception("Failed to list models")
@@ -385,7 +394,7 @@ async def pull_ollama_model(
     if provider != "ollama":
         raise HTTPException(
             status_code=400,
-            detail="Model pulling is only supported for Ollama. Current provider: " + provider
+            detail="Model pulling is only supported for Ollama. Current provider: " + provider,
         )
 
     try:
@@ -426,8 +435,18 @@ async def pull_ollama_model(
 # Pre-defined popular models for quick selection
 POPULAR_MODELS = [
     {"id": "llama3.2", "name": "Llama 3.2", "size": "3B", "description": "Fast, general-purpose"},
-    {"id": "llama3.2:1b", "name": "Llama 3.2 1B", "size": "1B", "description": "Fastest, lightweight"},
-    {"id": "deepseek-r1:8b", "name": "DeepSeek R1", "size": "8B", "description": "Advanced reasoning"},
+    {
+        "id": "llama3.2:1b",
+        "name": "Llama 3.2 1B",
+        "size": "1B",
+        "description": "Fastest, lightweight",
+    },
+    {
+        "id": "deepseek-r1:8b",
+        "name": "DeepSeek R1",
+        "size": "8B",
+        "description": "Advanced reasoning",
+    },
     {"id": "qwen2.5:7b", "name": "Qwen 2.5", "size": "7B", "description": "Multilingual, coding"},
     {"id": "mistral", "name": "Mistral", "size": "7B", "description": "Balanced performance"},
     {"id": "codellama", "name": "Code Llama", "size": "7B", "description": "Code generation"},

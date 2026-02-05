@@ -10,6 +10,7 @@ This package contains all cost-related endpoints organized by domain:
 - alerts: Cost alert configuration
 - forecasts: Battery replacement and NFF forecasts
 """
+
 from fastapi import APIRouter
 
 from .alerts import router as alerts_router

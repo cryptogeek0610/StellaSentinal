@@ -1,4 +1,5 @@
 """Database schema for storing anomaly detection results."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -168,7 +169,9 @@ class TrainingRun(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Training data versioning
-    dataset_version_id = Column(Integer, nullable=True, index=True)  # FK to training_dataset_versions
+    dataset_version_id = Column(
+        Integer, nullable=True, index=True
+    )  # FK to training_dataset_versions
 
     def __repr__(self) -> str:
         return f"<TrainingRun(run_id={self.run_id}, status={self.status})>"
@@ -232,7 +235,9 @@ class ModelRegistry(Base):
 
     # Associations
     training_run_id = Column(String(50), nullable=True, index=True)  # FK to training_runs.run_id
-    dataset_version_id = Column(Integer, nullable=True, index=True)  # FK to training_dataset_versions
+    dataset_version_id = Column(
+        Integer, nullable=True, index=True
+    )  # FK to training_dataset_versions
 
     # Model info
     model_type = Column(String(50), nullable=False)  # e.g., "isolation_forest", "autoencoder"
@@ -252,7 +257,9 @@ class ModelRegistry(Base):
     train_rows = Column(Integer, nullable=True)
 
     # Deployment status
-    stage = Column(String(20), default="development", nullable=False)  # development, staging, production, archived
+    stage = Column(
+        String(20), default="development", nullable=False
+    )  # development, staging, production, archived
     is_active = Column(Boolean, default=False, nullable=False)  # Currently deployed model
     deployed_at = Column(DateTime, nullable=True)
     deployed_by = Column(String(100), nullable=True)
@@ -264,7 +271,13 @@ class ModelRegistry(Base):
     archive_reason = Column(Text, nullable=True)
 
     __table_args__ = (
-        Index("idx_model_registry_name_version", "tenant_id", "model_name", "model_version", unique=True),
+        Index(
+            "idx_model_registry_name_version",
+            "tenant_id",
+            "model_name",
+            "model_version",
+            unique=True,
+        ),
         Index("idx_model_registry_active", "tenant_id", "is_active"),
         Index("idx_model_registry_stage", "tenant_id", "stage"),
     )
@@ -356,9 +369,7 @@ class LearnedRemediation(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-    __table_args__ = (
-        Index("idx_learned_pattern_hash", "tenant_id", "pattern_hash"),
-    )
+    __table_args__ = (Index("idx_learned_pattern_hash", "tenant_id", "pattern_hash"),)
 
     def __repr__(self) -> str:
         return f"<LearnedRemediation(id={self.id}, pattern={self.pattern_name})>"
@@ -374,7 +385,9 @@ class DeviceActionLog(Base):
     device_id = Column(Integer, nullable=False, index=True)
 
     # Action details
-    action_type = Column(String(50), nullable=False, index=True)  # lock, restart, wipe, message, locate, sync
+    action_type = Column(
+        String(50), nullable=False, index=True
+    )  # lock, restart, wipe, message, locate, sync
     initiated_by = Column(String(100), nullable=False, default="system")
     reason = Column(Text, nullable=True)
 
@@ -404,7 +417,9 @@ class RemediationOutcome(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     tenant_id = Column(String(50), nullable=False, index=True)
     anomaly_id = Column(Integer, nullable=False, index=True)
-    learned_remediation_id = Column(Integer, nullable=True, index=True)  # FK to learned_remediations
+    learned_remediation_id = Column(
+        Integer, nullable=True, index=True
+    )  # FK to learned_remediations
 
     # What was applied
     remediation_title = Column(String(255), nullable=False)
@@ -413,7 +428,9 @@ class RemediationOutcome(Base):
     # Outcome tracking
     applied_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     applied_by = Column(String(100), nullable=True)
-    outcome = Column(String(50), nullable=True)  # resolved, partially_resolved, no_effect, made_worse
+    outcome = Column(
+        String(50), nullable=True
+    )  # resolved, partially_resolved, no_effect, made_worse
     outcome_recorded_at = Column(DateTime, nullable=True)
     outcome_notes = Column(Text, nullable=True)
 
@@ -477,7 +494,9 @@ class LocationMetadata(Base):
     mapping_attribute = Column(String(100), nullable=True)  # e.g., "Store", "Warehouse"
     mapping_value = Column(String(255), nullable=True)  # e.g., "A101", "WH-North"
     device_group_id = Column(Integer, nullable=True)  # For device_group mapping
-    geo_fence_json = Column(Text, nullable=True)  # For geo_fence: {"lat": 0, "lon": 0, "radius_m": 100}
+    geo_fence_json = Column(
+        Text, nullable=True
+    )  # For geo_fence: {"lat": 0, "lon": 0, "radius_m": 100}
 
     # Shift schedules (JSON array)
     # Example: [{"name": "Morning", "start": "06:00", "end": "14:00"}, {"name": "Afternoon", ...}]
@@ -516,7 +535,9 @@ class AggregatedInsight(Base):
     tenant_id = Column(String(50), nullable=False, index=True)
 
     # Entity identification (what/who is this insight about)
-    entity_type = Column(String(50), nullable=False)  # "location", "user", "cohort", "device_model", "app"
+    entity_type = Column(
+        String(50), nullable=False
+    )  # "location", "user", "cohort", "device_model", "app"
     entity_id = Column(String(100), nullable=False)
     entity_name = Column(String(255), nullable=True)
 
@@ -525,8 +546,12 @@ class AggregatedInsight(Base):
     severity = Column(String(20), nullable=False)  # InsightSeverity value
 
     # Insight content (customer-facing)
-    headline = Column(Text, nullable=False)  # e.g., "5 devices in Warehouse 1 won't last a full shift"
-    impact_statement = Column(Text, nullable=True)  # e.g., "Workers may experience 2 hours of downtime"
+    headline = Column(
+        Text, nullable=False
+    )  # e.g., "5 devices in Warehouse 1 won't last a full shift"
+    impact_statement = Column(
+        Text, nullable=True
+    )  # e.g., "Workers may experience 2 hours of downtime"
     comparison_context = Column(Text, nullable=True)  # e.g., "30% worse than Warehouse 2"
     recommended_actions_json = Column(Text, nullable=True)  # JSON array of action strings
 
@@ -582,7 +607,9 @@ class DeviceFeature(Base):
 
     # Feature data
     feature_values_json = Column(Text, nullable=True)  # JSON of computed features
-    metadata_json = Column(Text, nullable=True)  # JSON of device metadata (location_id, device_name, etc.)
+    metadata_json = Column(
+        Text, nullable=True
+    )  # JSON of device metadata (location_id, device_name, etc.)
 
     # Timestamps
     computed_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)

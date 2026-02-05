@@ -1,4 +1,5 @@
 """API routes for data discovery and profiling endpoints."""
+
 from __future__ import annotations
 
 import logging
@@ -149,7 +150,14 @@ def get_mock_table_profiles() -> list[TableProfileResponse]:
                     max_val=86400,
                     mean=28800,
                     std=12000,
-                    percentiles={"p5": 3600, "p25": 18000, "p50": 28800, "p75": 39600, "p95": 57600, "p99": 72000},
+                    percentiles={
+                        "p5": 3600,
+                        "p25": 18000,
+                        "p50": 28800,
+                        "p75": 39600,
+                        "p95": 57600,
+                        "p99": 72000,
+                    },
                 ),
             },
             profiled_at=datetime.now(UTC).isoformat(),
@@ -187,7 +195,14 @@ def get_mock_table_profiles() -> list[TableProfileResponse]:
                     max_val=10_000_000_000,
                     mean=150_000_000,
                     std=250_000_000,
-                    percentiles={"p5": 1000, "p25": 10_000_000, "p50": 80_000_000, "p75": 200_000_000, "p95": 600_000_000, "p99": 1_500_000_000},
+                    percentiles={
+                        "p5": 1000,
+                        "p25": 10_000_000,
+                        "p50": 80_000_000,
+                        "p75": 200_000_000,
+                        "p95": 600_000_000,
+                        "p99": 1_500_000_000,
+                    },
                 ),
             },
             profiled_at=datetime.now(UTC).isoformat(),
@@ -206,7 +221,14 @@ def get_mock_table_profiles() -> list[TableProfileResponse]:
                     max_val=-40,
                     mean=-72,
                     std=15,
-                    percentiles={"p5": -98, "p25": -82, "p50": -72, "p75": -62, "p95": -50, "p99": -44},
+                    percentiles={
+                        "p5": -98,
+                        "p25": -82,
+                        "p50": -72,
+                        "p75": -62,
+                        "p95": -50,
+                        "p99": -44,
+                    },
                 ),
             },
             profiled_at=datetime.now(UTC).isoformat(),
@@ -219,75 +241,143 @@ def get_mock_available_metrics() -> list[AvailableMetricResponse]:
     metrics = [
         # Raw database metrics
         AvailableMetricResponse(
-            table="cs_BatteryStat", column="TotalBatteryLevelDrop", dtype="int",
-            mean=35.2, std=18.5, min=0, max=100,
-            category="raw", domain="battery"
+            table="cs_BatteryStat",
+            column="TotalBatteryLevelDrop",
+            dtype="int",
+            mean=35.2,
+            std=18.5,
+            min=0,
+            max=100,
+            category="raw",
+            domain="battery",
         ),
         AvailableMetricResponse(
-            table="cs_BatteryStat", column="TotalDischargeTime_Sec", dtype="int",
-            mean=28800, std=12000, min=0, max=86400,
-            category="raw", domain="battery"
+            table="cs_BatteryStat",
+            column="TotalDischargeTime_Sec",
+            dtype="int",
+            mean=28800,
+            std=12000,
+            min=0,
+            max=86400,
+            category="raw",
+            domain="battery",
         ),
         AvailableMetricResponse(
-            table="cs_BatteryStat", column="TotalFreeStorageKb", dtype="bigint",
-            mean=2_000_000, std=1_500_000, min=0, max=16_000_000,
-            category="raw", domain="storage"
+            table="cs_BatteryStat",
+            column="TotalFreeStorageKb",
+            dtype="bigint",
+            mean=2_000_000,
+            std=1_500_000,
+            min=0,
+            max=16_000_000,
+            category="raw",
+            domain="storage",
         ),
         AvailableMetricResponse(
-            table="cs_AppUsage", column="VisitCount", dtype="int",
-            mean=45, std=32, min=0, max=1000,
-            category="raw", domain="usage"
+            table="cs_AppUsage",
+            column="VisitCount",
+            dtype="int",
+            mean=45,
+            std=32,
+            min=0,
+            max=1000,
+            category="raw",
+            domain="usage",
         ),
         AvailableMetricResponse(
-            table="cs_AppUsage", column="TotalForegroundTime", dtype="int",
-            mean=3600, std=2400, min=0, max=28800,
-            category="raw", domain="usage"
+            table="cs_AppUsage",
+            column="TotalForegroundTime",
+            dtype="int",
+            mean=3600,
+            std=2400,
+            min=0,
+            max=28800,
+            category="raw",
+            domain="usage",
         ),
         AvailableMetricResponse(
-            table="cs_DataUsage", column="Download", dtype="bigint",
-            mean=150_000_000, std=250_000_000, min=0, max=10_000_000_000,
-            category="raw", domain="throughput"
+            table="cs_DataUsage",
+            column="Download",
+            dtype="bigint",
+            mean=150_000_000,
+            std=250_000_000,
+            min=0,
+            max=10_000_000_000,
+            category="raw",
+            domain="throughput",
         ),
         AvailableMetricResponse(
-            table="cs_DataUsage", column="Upload", dtype="bigint",
-            mean=25_000_000, std=50_000_000, min=0, max=2_000_000_000,
-            category="raw", domain="throughput"
+            table="cs_DataUsage",
+            column="Upload",
+            dtype="bigint",
+            mean=25_000_000,
+            std=50_000_000,
+            min=0,
+            max=2_000_000_000,
+            category="raw",
+            domain="throughput",
         ),
         AvailableMetricResponse(
-            table="cs_Heatmap", column="SignalStrength", dtype="int",
-            mean=-72, std=15, min=-120, max=-40,
-            category="raw", domain="rf"
+            table="cs_Heatmap",
+            column="SignalStrength",
+            dtype="int",
+            mean=-72,
+            std=15,
+            min=-120,
+            max=-40,
+            category="raw",
+            domain="rf",
         ),
         AvailableMetricResponse(
-            table="cs_Heatmap", column="DropCnt", dtype="int",
-            mean=2.5, std=5.2, min=0, max=100,
-            category="raw", domain="rf"
+            table="cs_Heatmap",
+            column="DropCnt",
+            dtype="int",
+            mean=2.5,
+            std=5.2,
+            min=0,
+            max=100,
+            category="raw",
+            domain="rf",
         ),
     ]
 
     # Add some engineered features as examples
-    metrics.extend([
-        AvailableMetricResponse(
-            table="feature_engineered", column="TotalBatteryLevelDrop_roll_mean",
-            dtype="float", category="rolling", domain="battery",
-            description="Mean of TotalBatteryLevelDrop over 14 days"
-        ),
-        AvailableMetricResponse(
-            table="feature_engineered", column="BatteryDrainPerHour",
-            dtype="float", category="derived", domain="battery",
-            description="Derived: TotalBatteryLevelDrop / (TotalDischargeTime_Sec / 3600 + 1)"
-        ),
-        AvailableMetricResponse(
-            table="feature_engineered", column="Download_delta",
-            dtype="float", category="delta", domain="throughput",
-            description="Day-over-day change for Download"
-        ),
-        AvailableMetricResponse(
-            table="feature_engineered", column="hour_of_day",
-            dtype="int", category="temporal", domain="temporal",
-            description="Temporal feature: hour of day"
-        ),
-    ])
+    metrics.extend(
+        [
+            AvailableMetricResponse(
+                table="feature_engineered",
+                column="TotalBatteryLevelDrop_roll_mean",
+                dtype="float",
+                category="rolling",
+                domain="battery",
+                description="Mean of TotalBatteryLevelDrop over 14 days",
+            ),
+            AvailableMetricResponse(
+                table="feature_engineered",
+                column="BatteryDrainPerHour",
+                dtype="float",
+                category="derived",
+                domain="battery",
+                description="Derived: TotalBatteryLevelDrop / (TotalDischargeTime_Sec / 3600 + 1)",
+            ),
+            AvailableMetricResponse(
+                table="feature_engineered",
+                column="Download_delta",
+                dtype="float",
+                category="delta",
+                domain="throughput",
+                description="Day-over-day change for Download",
+            ),
+            AvailableMetricResponse(
+                table="feature_engineered",
+                column="hour_of_day",
+                dtype="int",
+                category="temporal",
+                domain="temporal",
+                description="Temporal feature: hour of day",
+            ),
+        ]
+    )
 
     return metrics
 
@@ -318,11 +408,13 @@ def get_mock_temporal_patterns() -> list[TemporalPatternResponse]:
                 "count": random.randint(5000, 20000),
             }
 
-        patterns.append(TemporalPatternResponse(
-            metric_name=metric,
-            hourly_stats=hourly,
-            daily_stats=daily,
-        ))
+        patterns.append(
+            TemporalPatternResponse(
+                metric_name=metric,
+                hourly_stats=hourly,
+                daily_stats=daily,
+            )
+        )
 
     return patterns
 
@@ -369,7 +461,9 @@ class AvailableTableResponse(BaseModel):
 @router.get("/available-tables", response_model=list[AvailableTableResponse])
 def get_available_tables(
     pattern: str = Query(default="cs_%", description="SQL LIKE pattern to filter tables"),
-    exclude_time_slices: bool = Query(default=True, description="Exclude time-sliced views like _Last7, _LastMonth"),
+    exclude_time_slices: bool = Query(
+        default=True, description="Exclude time-sliced views like _Last7, _LastMonth"
+    ),
     include_mc: bool = Query(default=True, description="Include MobiControl database tables"),
     mock_mode: bool = Depends(get_mock_mode),
 ):
@@ -398,10 +492,9 @@ def get_available_tables(
         from device_anomaly.data_access.data_profiler import discover_dw_tables
 
         tables = discover_dw_tables(pattern=pattern, exclude_time_slices=exclude_time_slices)
-        results.extend([
-            AvailableTableResponse(table_name=name, source_db="xsight")
-            for name in tables
-        ])
+        results.extend(
+            [AvailableTableResponse(table_name=name, source_db="xsight") for name in tables]
+        )
     except Exception as e:
         logger.warning(f"Failed to discover XSight tables: {e}")
 
@@ -414,11 +507,13 @@ def get_available_tables(
 
             mc_schema = discover_mobicontrol_schema(use_cache=True)
             for table_name, table_info in mc_schema.tables.items():
-                results.append(AvailableTableResponse(
-                    table_name=table_name,
-                    source_db="mobicontrol",
-                    row_count=table_info.row_count,
-                ))
+                results.append(
+                    AvailableTableResponse(
+                        table_name=table_name,
+                        source_db="mobicontrol",
+                        row_count=table_info.row_count,
+                    )
+                )
         except Exception as e:
             logger.warning(f"Failed to discover MobiControl tables: {e}")
 
@@ -450,34 +545,38 @@ def get_table_profiles(
         # Add XSight profiles from cache
         if cache.get("dw_profiles"):
             for name, p in cache["dw_profiles"].items():
-                results.append(TableProfileResponse(
-                    table_name=name,
-                    row_count=p.get("row_count", 0),
-                    date_range=tuple(p.get("date_range", (None, None))),
-                    device_count=p.get("device_count", 0),
-                    column_stats={
-                        col_name: ColumnStatsResponse(**col_data)
-                        for col_name, col_data in p.get("column_stats", {}).items()
-                    },
-                    profiled_at=p.get("profiled_at"),
-                    source_db="xsight",
-                ))
+                results.append(
+                    TableProfileResponse(
+                        table_name=name,
+                        row_count=p.get("row_count", 0),
+                        date_range=tuple(p.get("date_range", (None, None))),
+                        device_count=p.get("device_count", 0),
+                        column_stats={
+                            col_name: ColumnStatsResponse(**col_data)
+                            for col_name, col_data in p.get("column_stats", {}).items()
+                        },
+                        profiled_at=p.get("profiled_at"),
+                        source_db="xsight",
+                    )
+                )
 
         # Add MobiControl profiles from cache
         if include_mc and cache.get("mc_profiles"):
             for name, p in cache["mc_profiles"].items():
-                results.append(TableProfileResponse(
-                    table_name=name,
-                    row_count=p.get("row_count", 0),
-                    date_range=tuple(p.get("date_range", (None, None))),
-                    device_count=p.get("device_count", 0),
-                    column_stats={
-                        col_name: ColumnStatsResponse(**col_data)
-                        for col_name, col_data in p.get("column_stats", {}).items()
-                    },
-                    profiled_at=p.get("profiled_at"),
-                    source_db="mobicontrol",
-                ))
+                results.append(
+                    TableProfileResponse(
+                        table_name=name,
+                        row_count=p.get("row_count", 0),
+                        date_range=tuple(p.get("date_range", (None, None))),
+                        device_count=p.get("device_count", 0),
+                        column_stats={
+                            col_name: ColumnStatsResponse(**col_data)
+                            for col_name, col_data in p.get("column_stats", {}).items()
+                        },
+                        profiled_at=p.get("profiled_at"),
+                        source_db="mobicontrol",
+                    )
+                )
 
         if results:
             return results
@@ -489,18 +588,20 @@ def get_table_profiles(
 
         dw_profiles = profile_dw_tables(sample_limit=50_000)
         for name, p in dw_profiles.items():
-            results.append(TableProfileResponse(
-                table_name=name,
-                row_count=p.row_count,
-                date_range=p.date_range,
-                device_count=p.device_count,
-                column_stats={
-                    col_name: ColumnStatsResponse(**col_stats.to_dict())
-                    for col_name, col_stats in p.column_stats.items()
-                },
-                profiled_at=p.profiled_at,
-                source_db="xsight",
-            ))
+            results.append(
+                TableProfileResponse(
+                    table_name=name,
+                    row_count=p.row_count,
+                    date_range=p.date_range,
+                    device_count=p.device_count,
+                    column_stats={
+                        col_name: ColumnStatsResponse(**col_stats.to_dict())
+                        for col_name, col_stats in p.column_stats.items()
+                    },
+                    profiled_at=p.profiled_at,
+                    source_db="xsight",
+                )
+            )
     except Exception as e:
         logger.warning(f"Failed to profile XSight tables: {e}")
 
@@ -515,18 +616,20 @@ def get_table_profiles(
             mc_tables = get_curated_mc_tables(include_discovered=True)
             mc_profiles = profile_mc_tables(tables=mc_tables, sample_limit=50_000)
             for name, p in mc_profiles.items():
-                results.append(TableProfileResponse(
-                    table_name=name,
-                    row_count=p.row_count,
-                    date_range=p.date_range,
-                    device_count=p.device_count,
-                    column_stats={
-                        col_name: ColumnStatsResponse(**col_stats.to_dict())
-                        for col_name, col_stats in p.column_stats.items()
-                    },
-                    profiled_at=p.profiled_at,
-                    source_db="mobicontrol",
-                ))
+                results.append(
+                    TableProfileResponse(
+                        table_name=name,
+                        row_count=p.row_count,
+                        date_range=p.date_range,
+                        device_count=p.device_count,
+                        column_stats={
+                            col_name: ColumnStatsResponse(**col_stats.to_dict())
+                            for col_name, col_stats in p.column_stats.items()
+                        },
+                        profiled_at=p.profiled_at,
+                        source_db="mobicontrol",
+                    )
+                )
         except Exception as e:
             logger.warning(f"Failed to profile MobiControl tables: {e}")
 
@@ -595,7 +698,9 @@ def get_table_stats(
 @router.get("/metrics", response_model=list[AvailableMetricResponse])
 def get_available_metrics(
     mock_mode: bool = Depends(get_mock_mode),
-    include_engineered: bool = Query(True, description="Include engineered features from FeatureConfig"),
+    include_engineered: bool = Query(
+        True, description="Include engineered features from FeatureConfig"
+    ),
 ):
     """Get list of all available numeric metrics across all tables.
 
@@ -612,6 +717,7 @@ def get_available_metrics(
     # Try to import FeatureConfig early for domain inference
     try:
         from device_anomaly.config.feature_config import FeatureConfig
+
         has_feature_config = True
     except Exception as e:
         logger.warning(f"Failed to import FeatureConfig: {e}")
@@ -627,17 +733,17 @@ def get_available_metrics(
                 pass
         # Infer from column name
         col_lower = column_name.lower()
-        if any(x in col_lower for x in ['battery', 'charge', 'discharge', 'drain']):
-            return 'battery'
-        if any(x in col_lower for x in ['signal', 'drop', 'wifi', 'cell', 'rf']):
-            return 'rf'
-        if any(x in col_lower for x in ['download', 'upload', 'data', 'throughput']):
-            return 'throughput'
-        if any(x in col_lower for x in ['app', 'usage', 'visit', 'session', 'crash']):
-            return 'usage'
-        if any(x in col_lower for x in ['storage', 'ram', 'memory', 'disk']):
-            return 'storage'
-        return 'unknown'
+        if any(x in col_lower for x in ["battery", "charge", "discharge", "drain"]):
+            return "battery"
+        if any(x in col_lower for x in ["signal", "drop", "wifi", "cell", "rf"]):
+            return "rf"
+        if any(x in col_lower for x in ["download", "upload", "data", "throughput"]):
+            return "throughput"
+        if any(x in col_lower for x in ["app", "usage", "visit", "session", "crash"]):
+            return "usage"
+        if any(x in col_lower for x in ["storage", "ram", "memory", "disk"]):
+            return "storage"
+        return "unknown"
 
     # 1. First try to get metrics from cached discovery results
     if _discovery_cache.get("results"):
@@ -649,17 +755,19 @@ def get_available_metrics(
                 for col_name, col_stats in profile.get("column_stats", {}).items():
                     # Only include numeric columns (those with mean/std)
                     if col_stats.get("mean") is not None:
-                        metrics.append(AvailableMetricResponse(
-                            table=table_name,
-                            column=col_name,
-                            dtype=col_stats.get("dtype", "float"),
-                            mean=col_stats.get("mean"),
-                            std=col_stats.get("std"),
-                            min=col_stats.get("min_val"),
-                            max=col_stats.get("max_val"),
-                            category="raw",
-                            domain=get_domain(col_name),
-                        ))
+                        metrics.append(
+                            AvailableMetricResponse(
+                                table=table_name,
+                                column=col_name,
+                                dtype=col_stats.get("dtype", "float"),
+                                mean=col_stats.get("mean"),
+                                std=col_stats.get("std"),
+                                min=col_stats.get("min_val"),
+                                max=col_stats.get("max_val"),
+                                category="raw",
+                                domain=get_domain(col_name),
+                            )
+                        )
                         raw_metrics_found = True
 
         # Extract from MobiControl profiles cache
@@ -667,17 +775,19 @@ def get_available_metrics(
             for table_name, profile in cache["mc_profiles"].items():
                 for col_name, col_stats in profile.get("column_stats", {}).items():
                     if col_stats.get("mean") is not None:
-                        metrics.append(AvailableMetricResponse(
-                            table=table_name,
-                            column=col_name,
-                            dtype=col_stats.get("dtype", "float"),
-                            mean=col_stats.get("mean"),
-                            std=col_stats.get("std"),
-                            min=col_stats.get("min_val"),
-                            max=col_stats.get("max_val"),
-                            category="raw",
-                            domain=get_domain(col_name),
-                        ))
+                        metrics.append(
+                            AvailableMetricResponse(
+                                table=table_name,
+                                column=col_name,
+                                dtype=col_stats.get("dtype", "float"),
+                                mean=col_stats.get("mean"),
+                                std=col_stats.get("std"),
+                                min=col_stats.get("min_val"),
+                                max=col_stats.get("max_val"),
+                                category="raw",
+                                domain=get_domain(col_name),
+                            )
+                        )
                         raw_metrics_found = True
 
     # 2. If no cached metrics, try profiling directly
@@ -714,93 +824,111 @@ def get_available_metrics(
                 # Check if this is a potential feature
                 domain = FeatureConfig.get_domain_for_feature(feature_name)
                 if domain != "unknown":
-                    metrics.append(AvailableMetricResponse(
-                        table="feature_config",
-                        column=feature_name,
-                        dtype="float",
-                        category="raw",
-                        domain=domain,
-                        description=f"Raw feature from {domain} domain"
-                    ))
+                    metrics.append(
+                        AvailableMetricResponse(
+                            table="feature_config",
+                            column=feature_name,
+                            dtype="float",
+                            category="raw",
+                            domain=domain,
+                            description=f"Raw feature from {domain} domain",
+                        )
+                    )
 
             # Add rolling window features for key metrics
             for base_feature in FeatureConfig.rolling_feature_candidates:
                 for window in FeatureConfig.rolling_windows:
                     for agg in ["mean", "std", "min", "max", "median"]:
-                        feature_name = f"{base_feature}_roll_{window}d_{agg}" if window != 14 else f"{base_feature}_roll_{agg}"
+                        feature_name = (
+                            f"{base_feature}_roll_{window}d_{agg}"
+                            if window != 14
+                            else f"{base_feature}_roll_{agg}"
+                        )
                         domain = FeatureConfig.get_domain_for_feature(base_feature)
-                        metrics.append(AvailableMetricResponse(
-                            table="feature_engineered",
-                            column=feature_name,
-                            dtype="float",
-                            category="rolling",
-                            domain=domain,
-                            description=f"{agg.title()} of {base_feature} over {window} days"
-                        ))
+                        metrics.append(
+                            AvailableMetricResponse(
+                                table="feature_engineered",
+                                column=feature_name,
+                                dtype="float",
+                                category="rolling",
+                                domain=domain,
+                                description=f"{agg.title()} of {base_feature} over {window} days",
+                            )
+                        )
 
             # Add delta features
             for base_feature in FeatureConfig.rolling_feature_candidates:
                 for delta_type in ["delta", "pct_change", "trend_7d"]:
                     feature_name = f"{base_feature}_{delta_type}"
                     domain = FeatureConfig.get_domain_for_feature(base_feature)
-                    metrics.append(AvailableMetricResponse(
-                        table="feature_engineered",
-                        column=feature_name,
-                        dtype="float",
-                        category="delta",
-                        domain=domain,
-                        description=f"{delta_type.replace('_', ' ').title()} for {base_feature}"
-                    ))
+                    metrics.append(
+                        AvailableMetricResponse(
+                            table="feature_engineered",
+                            column=feature_name,
+                            dtype="float",
+                            category="delta",
+                            domain=domain,
+                            description=f"{delta_type.replace('_', ' ').title()} for {base_feature}",
+                        )
+                    )
 
             # Add derived features
             for feature_name, defn in FeatureConfig.derived_feature_definitions.items():
                 domain = defn.get("domain", "unknown")
                 formula = defn.get("formula", "")
-                metrics.append(AvailableMetricResponse(
-                    table="feature_engineered",
-                    column=feature_name,
-                    dtype="float",
-                    category="derived",
-                    domain=domain,
-                    description=f"Derived: {formula}"
-                ))
+                metrics.append(
+                    AvailableMetricResponse(
+                        table="feature_engineered",
+                        column=feature_name,
+                        dtype="float",
+                        category="derived",
+                        domain=domain,
+                        description=f"Derived: {formula}",
+                    )
+                )
 
             # Add temporal features
             for feature_name in FeatureConfig.temporal_features:
-                metrics.append(AvailableMetricResponse(
-                    table="feature_engineered",
-                    column=feature_name,
-                    dtype="float",
-                    category="temporal",
-                    domain="temporal",
-                    description=f"Temporal feature: {feature_name}"
-                ))
+                metrics.append(
+                    AvailableMetricResponse(
+                        table="feature_engineered",
+                        column=feature_name,
+                        dtype="float",
+                        category="temporal",
+                        domain="temporal",
+                        description=f"Temporal feature: {feature_name}",
+                    )
+                )
 
             # Add cohort z-score features (for all numeric features)
             for base_feature in all_raw_features:
                 feature_name = f"{base_feature}_cohort_z"
                 domain = FeatureConfig.get_domain_for_feature(base_feature)
-                metrics.append(AvailableMetricResponse(
-                    table="feature_engineered",
-                    column=feature_name,
-                    dtype="float",
-                    category="cohort",
-                    domain=domain,
-                    description=f"Cohort-normalized z-score for {base_feature}"
-                ))
+                metrics.append(
+                    AvailableMetricResponse(
+                        table="feature_engineered",
+                        column=feature_name,
+                        dtype="float",
+                        category="cohort",
+                        domain=domain,
+                        description=f"Cohort-normalized z-score for {base_feature}",
+                    )
+                )
 
             # Add volatility (CV) features
             for base_feature in FeatureConfig.rolling_feature_candidates:
                 feature_name = f"{base_feature}_cv"
                 domain = FeatureConfig.get_domain_for_feature(base_feature)
-                metrics.append(AvailableMetricResponse(
-                    table="feature_engineered",
-                    column=feature_name,
-                    dtype="float",
-                    category="volatility",
-                    domain=domain,
-                    description=f"Coefficient of variation (volatility) for {base_feature}"
-                ))
+                metrics.append(
+                    AvailableMetricResponse(
+                        table="feature_engineered",
+                        column=feature_name,
+                        dtype="float",
+                        category="volatility",
+                        domain=domain,
+                        description=f"Coefficient of variation (volatility) for {base_feature}",
+                    )
+                )
         except Exception as e:
             logger.warning(f"Failed to add engineered features: {e}")
 
@@ -873,7 +1001,9 @@ def get_temporal_patterns(
         return get_mock_temporal_patterns()
 
     # Check cache
-    if _discovery_cache.get("results") and _discovery_cache.get("results", {}).get("temporal_patterns"):
+    if _discovery_cache.get("results") and _discovery_cache.get("results", {}).get(
+        "temporal_patterns"
+    ):
         patterns = _discovery_cache["results"]["temporal_patterns"]
         return [
             TemporalPatternResponse(
@@ -886,8 +1016,7 @@ def get_temporal_patterns(
 
     # Need to run discovery to get temporal patterns
     raise HTTPException(
-        status_code=404,
-        detail="Temporal patterns not available. Run a full data discovery first."
+        status_code=404, detail="Temporal patterns not available. Run a full data discovery first."
     )
 
 
@@ -964,6 +1093,7 @@ def get_discovery_summary(
         date_range = None
         try:
             from device_anomaly.data_access.db_connection import create_dw_engine
+
             engine = create_dw_engine()
             with engine.connect() as conn:
                 result = conn.execute(text("SELECT COUNT(DISTINCT DeviceId) FROM cs_BatteryStat"))
@@ -972,14 +1102,18 @@ def get_discovery_summary(
                     total_devices = row[0]
 
                 # Get date range from telemetry data
-                date_result = conn.execute(text(
-                    "SELECT MIN(Timestamp), MAX(Timestamp) FROM cs_BatteryStat"
-                ))
+                date_result = conn.execute(
+                    text("SELECT MIN(Timestamp), MAX(Timestamp) FROM cs_BatteryStat")
+                )
                 date_row = date_result.fetchone()
                 if date_row and date_row[0] and date_row[1]:
                     date_range = {
-                        "start": date_row[0].strftime("%Y-%m-%d") if hasattr(date_row[0], 'strftime') else str(date_row[0])[:10],
-                        "end": date_row[1].strftime("%Y-%m-%d") if hasattr(date_row[1], 'strftime') else str(date_row[1])[:10],
+                        "start": date_row[0].strftime("%Y-%m-%d")
+                        if hasattr(date_row[0], "strftime")
+                        else str(date_row[0])[:10],
+                        "end": date_row[1].strftime("%Y-%m-%d")
+                        if hasattr(date_row[1], "strftime")
+                        else str(date_row[1])[:10],
                     }
         except Exception as e:
             logger.debug(f"Could not get device count or date range: {e}")
@@ -988,10 +1122,10 @@ def get_discovery_summary(
         # For schema-only discovery, we count high-value tables as analyzed patterns
         patterns_analyzed = 0
         try:
-            if 'xsight_schema' in dir() and xsight_schema:
+            if "xsight_schema" in dir() and xsight_schema:
                 patterns_analyzed += len(xsight_schema.high_value_tables)
-            if include_mc and 'mc_schema' in dir() and mc_schema:
-                patterns_analyzed += len(getattr(mc_schema, 'high_value_tables', []))
+            if include_mc and "mc_schema" in dir() and mc_schema:
+                patterns_analyzed += len(getattr(mc_schema, "high_value_tables", []))
         except Exception:
             pass
 
@@ -1141,9 +1275,7 @@ def get_mc_integration_status():
     mc_settings = settings.mc
 
     response = MCIntegrationStatusResponse(
-        credentials_configured=bool(
-            mc_settings.host and mc_settings.user and mc_settings.password
-        ),
+        credentials_configured=bool(mc_settings.host and mc_settings.user and mc_settings.password),
         host=mc_settings.host or None,
         database=mc_settings.database or None,
     )

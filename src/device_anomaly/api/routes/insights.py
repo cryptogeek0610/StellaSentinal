@@ -5,6 +5,7 @@ Aligned with Carl's (CEO) vision:
 - Pre-interpreted, contextualized, and actionable insights
 - Comparisons matter more than absolutes
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -293,10 +294,7 @@ def get_location_insights(
         issue_rate=report.issue_rate,
         shift_readiness=report.shift_readiness,
         insights=[_customer_insight_to_response(i) for i in report.insights],
-        top_issues=[
-            {"category": cat.value, "count": count}
-            for cat, count in report.top_issues
-        ],
+        top_issues=[{"category": cat.value, "count": count} for cat, count in report.top_issues],
         rank_among_locations=report.rank_among_locations,
         better_than_percent=report.better_than_percent,
         recommendations=report.recommendations,
@@ -331,18 +329,20 @@ def get_shift_readiness(
     # Convert device readiness to dict
     device_details = []
     for device in report.device_readiness:
-        device_details.append({
-            "device_id": device.device_id,
-            "device_name": device.device_name,
-            "current_battery": device.current_battery,
-            "drain_rate_per_hour": device.drain_rate_per_hour,
-            "projected_end_battery": device.projected_end_battery,
-            "will_complete_shift": device.will_complete_shift,
-            "estimated_dead_time": device.estimated_dead_time,
-            "was_fully_charged": device.was_fully_charged,
-            "readiness_score": device.readiness_score,
-            "recommendations": device.recommendations,
-        })
+        device_details.append(
+            {
+                "device_id": device.device_id,
+                "device_name": device.device_name,
+                "current_battery": device.current_battery,
+                "drain_rate_per_hour": device.drain_rate_per_hour,
+                "projected_end_battery": device.projected_end_battery,
+                "will_complete_shift": device.will_complete_shift,
+                "estimated_dead_time": device.estimated_dead_time,
+                "was_fully_charged": device.was_fully_charged,
+                "readiness_score": device.readiness_score,
+                "recommendations": device.recommendations,
+            }
+        )
 
     return ShiftReadinessResponse(
         location_id=report.location_id,
@@ -363,7 +363,9 @@ def get_shift_readiness(
             "Ensure all devices are fully charged before shift",
             "Investigate devices with high drain rates",
             "Review charging infrastructure at this location",
-        ] if report.devices_at_risk > 0 else [],
+        ]
+        if report.devices_at_risk > 0
+        else [],
     )
 
 
@@ -465,25 +467,27 @@ def get_cohort_issues(
     # Convert to response
     responses = []
     for insight in insights:
-        responses.append(InsightResponse(
-            insight_id=str(insight.id),
-            category=insight.insight_category,
-            severity=insight.severity,
-            headline=insight.headline or "",
-            impact_statement=insight.impact_statement or "",
-            comparison_context=insight.comparison_context or "",
-            recommended_actions=[],
-            entity_type=insight.entity_type,
-            entity_id=insight.entity_id,
-            entity_name=insight.entity_name or "",
-            affected_device_count=insight.affected_device_count or 0,
-            primary_metric="",
-            primary_value=insight.current_value or 0,
-            trend_direction=insight.trend_direction or "stable",
-            trend_change_percent=None,
-            detected_at=insight.computed_at or datetime.utcnow(),
-            confidence_score=insight.confidence_score or 0.5,
-        ))
+        responses.append(
+            InsightResponse(
+                insight_id=str(insight.id),
+                category=insight.insight_category,
+                severity=insight.severity,
+                headline=insight.headline or "",
+                impact_statement=insight.impact_statement or "",
+                comparison_context=insight.comparison_context or "",
+                recommended_actions=[],
+                entity_type=insight.entity_type,
+                entity_id=insight.entity_id,
+                entity_name=insight.entity_name or "",
+                affected_device_count=insight.affected_device_count or 0,
+                primary_metric="",
+                primary_value=insight.current_value or 0,
+                trend_direction=insight.trend_direction or "stable",
+                trend_change_percent=None,
+                detected_at=insight.computed_at or datetime.utcnow(),
+                confidence_score=insight.confidence_score or 0.5,
+            )
+        )
 
     return responses
 
@@ -579,7 +583,9 @@ def get_network_analysis(
             "best_carrier": cellular_report.best_carrier,
             "worst_carrier": cellular_report.worst_carrier,
             "network_type_distribution": cellular_report.network_type_distribution,
-        } if cellular_report else None,
+        }
+        if cellular_report
+        else None,
         disconnect_summary={
             "total_disconnects": disconnect_report.total_disconnects,
             "avg_disconnects_per_device": disconnect_report.avg_disconnects_per_device,
@@ -589,9 +595,9 @@ def get_network_analysis(
         },
         hidden_devices_count=hidden_report.devices_highly_suspicious if hidden_report else 0,
         recommendations=(
-            wifi_report.recommendations +
-            cellular_report.recommendations +
-            disconnect_report.recommendations
+            wifi_report.recommendations
+            + cellular_report.recommendations
+            + disconnect_report.recommendations
         ),
     )
 
@@ -693,9 +699,9 @@ def get_device_abuse_analysis(
             for combo in combo_report.problem_combinations[:10]
         ],
         recommendations=(
-            drop_report.recommendations +
-            reboot_report.recommendations +
-            combo_report.recommendations
+            drop_report.recommendations
+            + reboot_report.recommendations
+            + combo_report.recommendations
         ),
         financial_impact=financial_impact,
     )
@@ -772,14 +778,11 @@ def get_insights_by_category(
         )
 
     cutoff = datetime.utcnow() - timedelta(days=period_days)
-    query = (
-        db.query(AggregatedInsight)
-        .filter(
-            AggregatedInsight.tenant_id == tenant_id,
-            AggregatedInsight.insight_category == category,
-            AggregatedInsight.computed_at >= cutoff,
-            AggregatedInsight.is_active == True,  # noqa: E712
-        )
+    query = db.query(AggregatedInsight).filter(
+        AggregatedInsight.tenant_id == tenant_id,
+        AggregatedInsight.insight_category == category,
+        AggregatedInsight.computed_at >= cutoff,
+        AggregatedInsight.is_active == True,  # noqa: E712
     )
 
     if severity:

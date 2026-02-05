@@ -6,6 +6,7 @@ This module provides:
 3. Causal correlation discovery
 4. Real-time drift detection
 """
+
 from __future__ import annotations
 
 import json
@@ -80,6 +81,7 @@ class BaselineSuggestionResponse(BaseModel):
 
 class BaselineFeatureResponse(BaseModel):
     """Response model for baseline feature overview."""
+
     feature: str
     baseline: float
     observed: float
@@ -93,6 +95,7 @@ class BaselineFeatureResponse(BaseModel):
 
 class BaselineHistoryEntry(BaseModel):
     """Response model for baseline adjustment history."""
+
     id: int
     date: str
     feature: str
@@ -316,12 +319,26 @@ Rank adjustments by priority (1=highest, 5=lowest):
             # Validate and convert to response format
             enhanced_suggestions = []
             for s in enhanced_suggestions_data:
-                if all(k in s for k in ["level", "feature", "baseline_median", "observed_median", "proposed_new_median", "rationale"]):
+                if all(
+                    k in s
+                    for k in [
+                        "level",
+                        "feature",
+                        "baseline_median",
+                        "observed_median",
+                        "proposed_new_median",
+                        "rationale",
+                    ]
+                ):
                     # Ensure group_key is a string
                     if "group_key" not in s:
                         s["group_key"] = suggestions[0].group_key if suggestions else "unknown"
                     elif not isinstance(s["group_key"], str):
-                        s["group_key"] = json.dumps(s["group_key"]) if isinstance(s["group_key"], dict) else str(s["group_key"])
+                        s["group_key"] = (
+                            json.dumps(s["group_key"])
+                            if isinstance(s["group_key"], dict)
+                            else str(s["group_key"])
+                        )
                     enhanced_suggestions.append(BaselineSuggestionResponse(**s))
 
             if enhanced_suggestions:
@@ -346,6 +363,7 @@ Rank adjustments by priority (1=highest, 5=lowest):
     except Exception as e:
         # Fallback to original suggestions if LLM fails
         import logging
+
         logger = logging.getLogger(__name__)
         logger.warning(f"LLM analysis failed: {e}, using original suggestions")
         return suggestions
@@ -505,17 +523,19 @@ def get_baseline_features(
 
             unit = _FEATURE_UNITS.get(feature_name, "units")
 
-            features.append(BaselineFeatureResponse(
-                feature=feature_name,
-                baseline=round(baseline_median, 2),
-                observed=round(observed, 2),
-                unit=unit,
-                status=status,
-                drift_percent=round(drift_percent, 1),
-                mad=round(mad, 4),
-                sample_count=sample_count,
-                last_updated=None,
-            ))
+            features.append(
+                BaselineFeatureResponse(
+                    feature=feature_name,
+                    baseline=round(baseline_median, 2),
+                    observed=round(observed, 2),
+                    unit=unit,
+                    status=status,
+                    drift_percent=round(drift_percent, 1),
+                    mad=round(mad, 4),
+                    sample_count=sample_count,
+                    last_updated=None,
+                )
+            )
     else:
         # Process each baseline level (prefer 'global' level)
         for level_name in ["global", "hardware", "cohort", "device_type"]:
@@ -563,17 +583,19 @@ def get_baseline_features(
                 # Get unit for display
                 unit = _FEATURE_UNITS.get(feature_name, "units")
 
-                features.append(BaselineFeatureResponse(
-                    feature=feature_name,
-                    baseline=round(baseline_median, 2),
-                    observed=round(observed, 2),
-                    unit=unit,
-                    status=status,
-                    drift_percent=round(drift_percent, 1),
-                    mad=round(mad, 4),
-                    sample_count=sample_count,
-                    last_updated=None,
-                ))
+                features.append(
+                    BaselineFeatureResponse(
+                        feature=feature_name,
+                        baseline=round(baseline_median, 2),
+                        observed=round(observed, 2),
+                        unit=unit,
+                        status=status,
+                        drift_percent=round(drift_percent, 1),
+                        mad=round(mad, 4),
+                        sample_count=sample_count,
+                        last_updated=None,
+                    )
+                )
 
     return features
 
@@ -601,15 +623,17 @@ def get_baseline_history(
         history_data = json.loads(history_path.read_text())
         entries = []
         for idx, entry in enumerate(history_data[-limit:]):
-            entries.append(BaselineHistoryEntry(
-                id=entry.get('id', idx + 1),
-                date=entry.get('date', ''),
-                feature=entry.get('feature', ''),
-                old_value=float(entry.get('old_value', 0)),
-                new_value=float(entry.get('new_value', 0)),
-                type=entry.get('type', 'manual'),
-                reason=entry.get('reason'),
-            ))
+            entries.append(
+                BaselineHistoryEntry(
+                    id=entry.get("id", idx + 1),
+                    date=entry.get("date", ""),
+                    feature=entry.get("feature", ""),
+                    old_value=float(entry.get("old_value", 0)),
+                    new_value=float(entry.get("new_value", 0)),
+                    type=entry.get("type", "manual"),
+                    reason=entry.get("reason"),
+                )
+            )
         return entries
     except (json.JSONDecodeError, TypeError):
         return []
@@ -626,6 +650,7 @@ async def _get_ml_service():
     if _ml_service is None:
         try:
             from device_anomaly.services.ml_baseline_service import MLBaselineService
+
             _ml_service = MLBaselineService()
             # Try to load checkpoint
             await _ml_service.load_checkpoint()
@@ -633,13 +658,14 @@ async def _get_ml_service():
             logger.warning(f"ML baseline service not available: {e}")
             raise HTTPException(
                 status_code=503,
-                detail="ML baseline service not available. Install required dependencies."
+                detail="ML baseline service not available. Install required dependencies.",
             )
     return _ml_service
 
 
 class MLBaselineStatusResponse(BaseModel):
     """Status of the ML baseline engine."""
+
     initialized: bool
     last_train_time: str | None = None
     last_drift_check: str | None = None
@@ -651,6 +677,7 @@ class MLBaselineStatusResponse(BaseModel):
 
 class MLTrainRequest(BaseModel):
     """Request to train the ML baseline engine."""
+
     lookback_days: int = Field(default=90, ge=7, le=365)
     sources: list[str] | None = None
     feature_cols: list[str] | None = None
@@ -659,6 +686,7 @@ class MLTrainRequest(BaseModel):
 
 class MLTrainResponse(BaseModel):
     """Response from ML training."""
+
     success: bool
     samples_trained: int = 0
     feature_count: int = 0
@@ -669,11 +697,13 @@ class MLTrainResponse(BaseModel):
 
 class MLScoreRequest(BaseModel):
     """Request to score device telemetry."""
+
     device_data: dict[str, Any]
 
 
 class MLScoreResponse(BaseModel):
     """Response from ML scoring."""
+
     device_id: str | None = None
     overall_anomaly_score: float
     is_anomaly: bool
@@ -683,6 +713,7 @@ class MLScoreResponse(BaseModel):
 
 class CausalInsightResponse(BaseModel):
     """Causal relationship insight."""
+
     cause: str
     effect: str
     lag_days: int
@@ -694,6 +725,7 @@ class CausalInsightResponse(BaseModel):
 
 class DriftReportResponse(BaseModel):
     """Drift detection report."""
+
     timestamp: str
     metrics_checked: int
     metrics_drifted: int
@@ -704,6 +736,7 @@ class DriftReportResponse(BaseModel):
 
 class MLSuggestionResponse(BaseModel):
     """ML-enhanced baseline suggestion."""
+
     metric: str
     current_baseline_mean: float
     current_baseline_std: float
@@ -808,7 +841,9 @@ async def score_device_with_ml(request: MLScoreRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/ml/causal-insights", response_model=list[CausalInsightResponse], tags=["ml-baselines"])
+@router.get(
+    "/ml/causal-insights", response_model=list[CausalInsightResponse], tags=["ml-baselines"]
+)
 async def get_causal_insights():
     """Get discovered causal relationships between metrics.
 
@@ -946,6 +981,7 @@ async def update_baselines_online(
         service = await _get_ml_service()
 
         import pandas as pd
+
         df = pd.DataFrame([device_data])
 
         result = await service.update_baselines(df)

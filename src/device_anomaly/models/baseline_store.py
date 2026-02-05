@@ -99,7 +99,9 @@ def resolve_baselines(source: str, models_dir: Path | None = None) -> BaselineRe
     return resolve_legacy_baselines(source)
 
 
-def data_driven_to_legacy(payload: dict[str, Any], device_type_col: str | None) -> dict[str, pd.DataFrame]:
+def data_driven_to_legacy(
+    payload: dict[str, Any], device_type_col: str | None
+) -> dict[str, pd.DataFrame]:
     baselines = payload.get("baselines", {})
     rows = []
     for metric, data in baselines.items():

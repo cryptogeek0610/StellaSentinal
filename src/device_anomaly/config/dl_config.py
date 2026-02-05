@@ -4,6 +4,7 @@ This module provides configuration classes and utilities for Deep Learning
 model training and inference. It integrates with the existing configuration
 system while providing DL-specific settings.
 """
+
 from __future__ import annotations
 
 import os
@@ -23,6 +24,7 @@ class DLModelConfig:
         dropout: Dropout rate
         use_batch_norm: Whether to use batch normalization
     """
+
     model_type: str = "vae"
     latent_dim: int = 32
     hidden_dims: list[int] = field(default_factory=lambda: [256, 128, 64])
@@ -46,6 +48,7 @@ class DLTrainingConfig:
         use_gpu: Whether to use GPU if available
         random_state: Random seed
     """
+
     epochs: int = 100
     batch_size: int = 256
     learning_rate: float = 1e-3
@@ -68,6 +71,7 @@ class DLInferenceConfig:
         use_onnx: Use ONNX for inference if available
         warmup_iterations: Warmup iterations for benchmarking
     """
+
     device: str = "cpu"
     batch_size: int | None = None
     use_onnx: bool = True
@@ -87,6 +91,7 @@ class DLConfig:
 
         detector = VAEDetector.from_config(config)
     """
+
     model: DLModelConfig = field(default_factory=DLModelConfig)
     training: DLTrainingConfig = field(default_factory=DLTrainingConfig)
     inference: DLInferenceConfig = field(default_factory=DLInferenceConfig)

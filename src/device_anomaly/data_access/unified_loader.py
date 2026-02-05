@@ -15,6 +15,7 @@ The result is a rich dataset with:
 For multi-tenant training, use `load_multi_source_training_data()` to aggregate
 data from multiple customer databases while keeping runtime isolated.
 """
+
 from __future__ import annotations
 
 import logging
@@ -71,7 +72,9 @@ def _temporal_aware_mc_join(
     mc_time_col = "LastCheckInTime"
 
     if dw_time_col not in dw_df.columns or mc_time_col not in mc_df.columns:
-        LOGGER.warning("Missing timestamp columns for temporal-aware join, falling back to static join")
+        LOGGER.warning(
+            "Missing timestamp columns for temporal-aware join, falling back to static join"
+        )
         return dw_df
 
     dw_df[dw_time_col] = pd.to_datetime(dw_df[dw_time_col], errors="coerce")
@@ -145,7 +148,7 @@ def _temporal_aware_mc_join(
     total_count = len(result)
     LOGGER.info(
         f"Temporal-aware join complete: {stale_count}/{total_count} "
-        f"({100*stale_count/max(1,total_count):.1f}%) rows have stale MC data"
+        f"({100 * stale_count / max(1, total_count):.1f}%) rows have stale MC data"
     )
 
     return result
@@ -228,11 +231,11 @@ def _add_disconnect_flags(mc_df: pd.DataFrame, end_dt: str | None) -> pd.DataFra
 
     mc_df["LastDisconnTime"] = pd.to_datetime(mc_df["LastDisconnTime"], errors="coerce")
     mc_df["DisconnectWithinWindow"] = (
-        (reference_ts - mc_df["LastDisconnTime"]).dt.total_seconds() <= 7 * 24 * 3600
-    )
+        reference_ts - mc_df["LastDisconnTime"]
+    ).dt.total_seconds() <= 7 * 24 * 3600
     mc_df["DisconnectRecencyHours"] = (
-        (reference_ts - mc_df["LastDisconnTime"]).dt.total_seconds() / 3600.0
-    )
+        reference_ts - mc_df["LastDisconnTime"]
+    ).dt.total_seconds() / 3600.0
     # Cap to prevent unbounded values on very old data
     mc_df["DisconnectRecencyHours"] = mc_df["DisconnectRecencyHours"].clip(upper=8760)  # 1 year max
     return mc_df
@@ -271,7 +274,9 @@ def _add_security_features(df: pd.DataFrame) -> pd.DataFrame:
         if col in df.columns:
             val = df[col].fillna(0)
             if val.dtype == "object":
-                val = val.map(lambda x: 1 if str(x).lower() in ("true", "1", "yes", "passed") else 0)
+                val = val.map(
+                    lambda x: 1 if str(x).lower() in ("true", "1", "yes", "passed") else 0
+                )
             else:
                 val = val.astype(float)
             score += val * weight
@@ -282,9 +287,13 @@ def _add_security_features(df: pd.DataFrame) -> pd.DataFrame:
 
     # Binary compliance indicator
     if "ComplianceState" in df.columns:
-        df["IsCompliant"] = df["ComplianceState"].fillna("").str.lower().isin(
-            ["compliant", "true", "1", "yes"]
-        ).astype(int)
+        df["IsCompliant"] = (
+            df["ComplianceState"]
+            .fillna("")
+            .str.lower()
+            .isin(["compliant", "true", "1", "yes"])
+            .astype(int)
+        )
 
     return df
 
@@ -514,8 +523,7 @@ def load_unified_device_dataset(
             )
     except Exception as exc:
         LOGGER.error(
-            "Failed to load MC inventory data - skipping enrichment. "
-            "Error type: %s, Message: %s",
+            "Failed to load MC inventory data - skipping enrichment. Error type: %s, Message: %s",
             type(exc).__name__,
             exc,
             exc_info=True,
@@ -555,8 +563,13 @@ def load_unified_device_dataset(
             continue
         # Skip columns that already exist in DW (except some we want to override)
         if col in dw_df.columns and col not in (
-            "FirmwareVersion", "OsVersionName", "ModelName",
-            "Manufacturer", "FirmwareVersionCode", "OsVersionCode", "ModelCode"
+            "FirmwareVersion",
+            "OsVersionName",
+            "ModelName",
+            "Manufacturer",
+            "FirmwareVersionCode",
+            "OsVersionCode",
+            "ModelCode",
         ):
             continue
         mc_merge_cols.append(col)
@@ -616,6 +629,7 @@ def load_unified_device_dataset(
 # CONVENIENCE FUNCTIONS
 # =============================================================================
 
+
 def load_training_data(
     start_date: str,
     end_date: str,
@@ -671,6 +685,7 @@ def get_dataset_summary(df: pd.DataFrame) -> dict:
 # =============================================================================
 # MULTI-SOURCE TRAINING DATA LOADER
 # =============================================================================
+
 
 def _load_from_source(
     source: TrainingDataSource,
@@ -882,7 +897,9 @@ def get_multi_source_summary(df: pd.DataFrame) -> dict:
         source_df = df[df["_source"] == source_name]
         summary["sources"][source_name] = {
             "rows": len(source_df),
-            "unique_devices": source_df["DeviceId"].nunique() if "DeviceId" in source_df.columns else 0,
+            "unique_devices": source_df["DeviceId"].nunique()
+            if "DeviceId" in source_df.columns
+            else 0,
             "percentage": len(source_df) / len(df) * 100 if len(df) > 0 else 0,
         }
         if "Timestamp" in source_df.columns:
@@ -903,6 +920,7 @@ def get_multi_source_summary(df: pd.DataFrame) -> dict:
 # =============================================================================
 # EXTENDED DATA LOADING (MC Timeseries + XSight Extended)
 # =============================================================================
+
 
 def _load_mc_location_data(
     start_date: str,
@@ -1163,7 +1181,9 @@ def _aggregate_location_features(
         "SignalStrength_min": "CellSignalMin",
         "SignalStrength_max": "CellSignalMax",
     }
-    aggregated = aggregated.rename(columns={k: v for k, v in rename_map.items() if k in aggregated.columns})
+    aggregated = aggregated.rename(
+        columns={k: v for k, v in rename_map.items() if k in aggregated.columns}
+    )
 
     return aggregated
 
@@ -1193,8 +1213,7 @@ def _aggregate_event_features(
             fill_value=0,
         ).reset_index()
         severity_pivot.columns = [
-            f"EventSeverity_{c}" if c != device_col else c
-            for c in severity_pivot.columns
+            f"EventSeverity_{c}" if c != device_col else c for c in severity_pivot.columns
         ]
         event_counts = event_counts.merge(severity_pivot, on=device_col, how="left")
 
@@ -1208,8 +1227,7 @@ def _aggregate_event_features(
             fill_value=0,
         ).reset_index()
         class_pivot.columns = [
-            f"EventClass_{c}" if c != device_col else c
-            for c in class_pivot.columns
+            f"EventClass_{c}" if c != device_col else c for c in class_pivot.columns
         ]
         event_counts = event_counts.merge(class_pivot, on=device_col, how="left")
 
@@ -1241,9 +1259,11 @@ def _aggregate_system_health_features(
 
     # Fallback: aggregate IntValue directly
     if "IntValue" in df_health.columns:
-        return df_health.groupby(device_col).agg({
-            "IntValue": ["mean", "max", "min", "std"]
-        }).reset_index()
+        return (
+            df_health.groupby(device_col)
+            .agg({"IntValue": ["mean", "max", "min", "std"]})
+            .reset_index()
+        )
 
     return pd.DataFrame()
 
@@ -1317,7 +1337,9 @@ def load_extended_device_dataset(
         df_xs_loc_agg = _aggregate_location_features(df_xs_loc)
         if not df_xs_loc_agg.empty:
             df = df.merge(df_xs_loc_agg, on="DeviceId", how="left", suffixes=("", "_xs_loc"))
-            LOGGER.info(f"Merged XSight location features: {len(df_xs_loc_agg.columns) - 1} columns")
+            LOGGER.info(
+                f"Merged XSight location features: {len(df_xs_loc_agg.columns) - 1} columns"
+            )
 
     # Load and merge event data
     if include_events and settings.enable_mc_timeseries:
@@ -1340,11 +1362,19 @@ def load_extended_device_dataset(
         df_wifi = _load_xsight_wifi_data(start_date, end_date, device_id_list)
         if not df_wifi.empty:
             # Aggregate WiFi data to device level
-            wifi_agg = df_wifi.groupby("DeviceId").agg({
-                col: ["mean", "sum"] if col in ["ConnectionTime", "DisconnectCount"] else "mean"
-                for col in df_wifi.columns
-                if col != "DeviceId" and df_wifi[col].dtype in ["float64", "int64"]
-            }).reset_index()
+            wifi_agg = (
+                df_wifi.groupby("DeviceId")
+                .agg(
+                    {
+                        col: ["mean", "sum"]
+                        if col in ["ConnectionTime", "DisconnectCount"]
+                        else "mean"
+                        for col in df_wifi.columns
+                        if col != "DeviceId" and df_wifi[col].dtype in ["float64", "int64"]
+                    }
+                )
+                .reset_index()
+            )
             if len(wifi_agg.columns) > 1:
                 wifi_agg.columns = ["DeviceId"] + [
                     f"WiFi_{col[0]}_{col[1]}" if isinstance(col, tuple) else col
@@ -1364,9 +1394,17 @@ def get_extended_dataset_summary(df: pd.DataFrame) -> dict:
     summary = get_dataset_summary(df)
 
     # Identify columns by source
-    location_cols = [c for c in df.columns if any(x in c.lower() for x in ["location", "latitude", "longitude", "gps"])]
-    event_cols = [c for c in df.columns if any(x in c.lower() for x in ["event", "severity", "eventclass"])]
-    health_cols = [c for c in df.columns if any(x in c.lower() for x in ["health_", "cpu", "ram", "storage"])]
+    location_cols = [
+        c
+        for c in df.columns
+        if any(x in c.lower() for x in ["location", "latitude", "longitude", "gps"])
+    ]
+    event_cols = [
+        c for c in df.columns if any(x in c.lower() for x in ["event", "severity", "eventclass"])
+    ]
+    health_cols = [
+        c for c in df.columns if any(x in c.lower() for x in ["health_", "cpu", "ram", "storage"])
+    ]
     wifi_cols = [c for c in df.columns if any(x in c.lower() for x in ["wifi", "signal"])]
 
     summary["extended_features"] = {
@@ -1382,6 +1420,7 @@ def get_extended_dataset_summary(df: pd.DataFrame) -> dict:
 # =============================================================================
 # HOURLY DATA LOADING
 # =============================================================================
+
 
 def load_hourly_device_dataset(
     start_date: str,
@@ -1418,10 +1457,13 @@ def load_hourly_device_dataset(
     if tables is None:
         tables = ["cs_DataUsageByHour", "cs_BatteryLevelDrop", "cs_WifiHour"]
 
-    LOGGER.info(f"Loading hourly data: {tables}, aggregation={aggregation_level}, max_days={max_days}")
+    LOGGER.info(
+        f"Loading hourly data: {tables}, aggregation={aggregation_level}, max_days={max_days}"
+    )
 
     # Limit date range for hourly tables (high volume)
     from datetime import datetime as dt
+
     end_dt = dt.strptime(end_date, "%Y-%m-%d")
     start_dt = dt.strptime(start_date, "%Y-%m-%d")
     if (end_dt - start_dt).days > max_days:
@@ -1483,7 +1525,9 @@ def load_hourly_device_dataset(
         # Aggregate based on level
         df_hourly = _aggregate_hourly_data(df_hourly, aggregation_level)
 
-        LOGGER.info(f"Final hourly dataset: {len(df_hourly):,} rows, {len(df_hourly.columns)} columns")
+        LOGGER.info(
+            f"Final hourly dataset: {len(df_hourly):,} rows, {len(df_hourly.columns)} columns"
+        )
         return df_hourly
 
     except Exception as e:
@@ -1522,9 +1566,9 @@ def _aggregate_hourly_data(df: pd.DataFrame, aggregation_level: str) -> pd.DataF
     # Identify numeric columns for aggregation
     exclude_cols = {"DeviceId", ts_col, "_hourly_source", "Hour", "CollectedDate"}
     numeric_cols = [
-        col for col in df.columns
-        if df[col].dtype in ["float64", "int64", "float32", "int32"]
-        and col not in exclude_cols
+        col
+        for col in df.columns
+        if df[col].dtype in ["float64", "int64", "float32", "int32"] and col not in exclude_cols
     ]
 
     if aggregation_level == "hourly":
@@ -1535,7 +1579,9 @@ def _aggregate_hourly_data(df: pd.DataFrame, aggregation_level: str) -> pd.DataF
         # Aggregate to device-day
         df["_date"] = df[ts_col].dt.date
 
-        agg_dict = {col: ["mean", "sum", "max", "min"] for col in numeric_cols[:20]}  # Limit columns
+        agg_dict = {
+            col: ["mean", "sum", "max", "min"] for col in numeric_cols[:20]
+        }  # Limit columns
         grouped = df.groupby(["DeviceId", "_date"]).agg(agg_dict)
         grouped.columns = [f"{col}_{agg}_hourly" for col, agg in grouped.columns]
         grouped = grouped.reset_index()

@@ -146,18 +146,22 @@ class StreamingFeatureComputer:
         self.buffer = buffer
         self._cohort_stats: dict[str, CohortStats] = {}
         self._cohort_stats_store = cohort_stats
-        self.feature_spec = resolve_feature_spec({"feature_spec": feature_spec} if feature_spec else None)
+        self.feature_spec = resolve_feature_spec(
+            {"feature_spec": feature_spec} if feature_spec else None
+        )
         self.feature_norms = feature_norms or {}
         self.feature_mode = self._normalize_feature_mode(
             feature_mode or os.getenv("STREAMING_FEATURE_MODE", "canonical")
         )
         # Extended feature flags
-        self.enable_extended_features = enable_extended_features or os.getenv(
-            "STREAMING_EXTENDED_FEATURES", "false"
-        ).lower() == "true"
-        self.enable_hourly_features = enable_hourly_features or os.getenv(
-            "STREAMING_HOURLY_FEATURES", "false"
-        ).lower() == "true"
+        self.enable_extended_features = (
+            enable_extended_features
+            or os.getenv("STREAMING_EXTENDED_FEATURES", "false").lower() == "true"
+        )
+        self.enable_hourly_features = (
+            enable_hourly_features
+            or os.getenv("STREAMING_HOURLY_FEATURES", "false").lower() == "true"
+        )
 
         if self.enable_extended_features:
             logger.info("Extended streaming features ENABLED (location, events, health)")
@@ -216,7 +220,9 @@ class StreamingFeatureComputer:
             return "canonical"
         if raw in {"incremental", "inc", "legacy"}:
             return "incremental"
-        logger.warning("Unrecognized STREAMING_FEATURE_MODE='%s'; defaulting to incremental.", value)
+        logger.warning(
+            "Unrecognized STREAMING_FEATURE_MODE='%s'; defaulting to incremental.", value
+        )
         return "incremental"
 
     def _init_drift_monitor(self) -> StreamingDriftMonitor | None:
@@ -225,25 +231,37 @@ class StreamingFeatureComputer:
             return None
 
         default_features = list(FeatureConfig.rolling_feature_candidates)
-        default_features.extend(["BatteryDrainPerHour", "DropRate", "StorageUtilization", "AnomalyRiskScore"])
+        default_features.extend(
+            ["BatteryDrainPerHour", "DropRate", "StorageUtilization", "AnomalyRiskScore"]
+        )
 
         # Add extended feature names for drift monitoring when enabled
         if self.enable_extended_features:
             # Location features
-            default_features.extend([
-                "mobility_score", "distance_traveled", "location_entropy",
-                "unique_locations", "wifi_signal_strength", "dead_zone_ratio"
-            ])
+            default_features.extend(
+                [
+                    "mobility_score",
+                    "distance_traveled",
+                    "location_entropy",
+                    "unique_locations",
+                    "wifi_signal_strength",
+                    "dead_zone_ratio",
+                ]
+            )
             # Event features
-            default_features.extend([
-                "crash_rate", "error_rate", "alert_severity_score",
-                "event_frequency", "anr_rate"
-            ])
+            default_features.extend(
+                ["crash_rate", "error_rate", "alert_severity_score", "event_frequency", "anr_rate"]
+            )
             # System health features
-            default_features.extend([
-                "cpu_usage_avg", "ram_pressure", "storage_pressure",
-                "thermal_score", "health_score"
-            ])
+            default_features.extend(
+                [
+                    "cpu_usage_avg",
+                    "ram_pressure",
+                    "storage_pressure",
+                    "thermal_score",
+                    "health_score",
+                ]
+            )
             logger.info("Extended features added to drift monitoring")
 
         features = resolve_drift_features(default_features)
@@ -285,18 +303,20 @@ class StreamingFeatureComputer:
             features = self._compute_features(event, device_buffer)
 
             # Publish computed features
-            await self.engine.publish(StreamMessage(
-                message_type=MessageType.FEATURES_COMPUTED,
-                payload={
-                    "device_id": event.device_id,
-                    "timestamp": event.timestamp.isoformat(),
-                    "cohort_id": event.cohort_id,
-                    "features": features,
-                    "raw_metrics": event.metrics,
-                },
-                device_id=event.device_id,
-                tenant_id=event.tenant_id,
-            ))
+            await self.engine.publish(
+                StreamMessage(
+                    message_type=MessageType.FEATURES_COMPUTED,
+                    payload={
+                        "device_id": event.device_id,
+                        "timestamp": event.timestamp.isoformat(),
+                        "cohort_id": event.cohort_id,
+                        "features": features,
+                        "raw_metrics": event.metrics,
+                    },
+                    device_id=event.device_id,
+                    tenant_id=event.tenant_id,
+                )
+            )
 
             logger.debug(
                 "Computed %d features for device %d",
@@ -632,11 +652,15 @@ class StreamingFeatureComputer:
 
         # Battery-Network Stress
         if "BatteryDrainPerHour" in features and "DropRate" in features:
-            features["BatteryNetworkStress"] = features["BatteryDrainPerHour"] * (1 + features["DropRate"])
+            features["BatteryNetworkStress"] = features["BatteryDrainPerHour"] * (
+                1 + features["DropRate"]
+            )
 
         # Usage-Storage Pressure
         if "StorageUtilization" in features and "AppDiversity" in features:
-            features["UsageStoragePressure"] = features["StorageUtilization"] * features["AppDiversity"]
+            features["UsageStoragePressure"] = (
+                features["StorageUtilization"] * features["AppDiversity"]
+            )
 
     def get_stats(self) -> dict[str, Any]:
         """Get feature computer status."""
@@ -647,7 +671,9 @@ class StreamingFeatureComputer:
             "history_required": self._history_required,
             "feature_norms_loaded": bool(self.feature_norms),
             "cohort_stats_loaded": self._cohort_stats_store is not None,
-            "drift_monitor": self._drift_monitor.get_stats() if self._drift_monitor else {"enabled": False},
+            "drift_monitor": self._drift_monitor.get_stats()
+            if self._drift_monitor
+            else {"enabled": False},
         }
 
     def get_cohort_stats(self, cohort_id: str) -> dict | None:
@@ -662,10 +688,7 @@ class StreamingFeatureComputer:
         return {
             "cohort_id": cohort_id,
             "device_count": cohort.device_count,
-            "metrics": {
-                name: stats.to_dict()
-                for name, stats in cohort.metrics.items()
-            },
+            "metrics": {name: stats.to_dict() for name, stats in cohort.metrics.items()},
             "last_update": cohort.last_update.isoformat(),
         }
 

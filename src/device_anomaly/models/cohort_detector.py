@@ -11,6 +11,7 @@ Detects patterns affecting entire device segments:
 This module enables the detection of systemic issues that affect entire cohorts
 of devices, rather than individual device anomalies.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -37,8 +38,12 @@ class CohortPattern:
     """A detected cross-device pattern affecting a cohort."""
 
     pattern_id: str
-    pattern_type: str  # "model_issue", "os_issue", "firmware_issue", "location_issue", "carrier_issue"
-    cohort_definition: dict[str, str]  # {"manufacturer": "Samsung", "model": "SM-G991B", "os": "13"}
+    pattern_type: (
+        str  # "model_issue", "os_issue", "firmware_issue", "location_issue", "carrier_issue"
+    )
+    cohort_definition: dict[
+        str, str
+    ]  # {"manufacturer": "Samsung", "model": "SM-G991B", "os": "13"}
     cohort_name: str  # Human-readable: "Samsung Galaxy S21 (Android 13)"
     affected_devices: int
     fleet_percentage: float
@@ -360,9 +365,7 @@ class CrossDevicePatternDetector:
 
         # Sort by severity and device count
         severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-        issues.sort(
-            key=lambda x: (severity_order.get(x.severity, 4), -x.device_count)
-        )
+        issues.sort(key=lambda x: (severity_order.get(x.severity, 4), -x.device_count))
 
         return issues
 
@@ -504,9 +507,7 @@ class CrossDevicePatternDetector:
                                     )
 
             stats_dict["issues"] = issues_detected
-            stats_dict["status"] = (
-                "warning" if issues_detected else "healthy"
-            )
+            stats_dict["status"] = "warning" if issues_detected else "healthy"
 
             os_stats.append(stats_dict)
 
@@ -542,9 +543,7 @@ class CrossDevicePatternDetector:
                 filtered_df["ManufacturerId"].astype(str) == str(manufacturer)
             ]
         if model and "ModelId" in filtered_df.columns:
-            filtered_df = filtered_df[
-                filtered_df["ModelId"].astype(str) == str(model)
-            ]
+            filtered_df = filtered_df[filtered_df["ModelId"].astype(str) == str(model)]
 
         if filtered_df.empty:
             return []
@@ -601,11 +600,7 @@ class CrossDevicePatternDetector:
 
             stats_dict["health_score"] = round(health_score, 2)
             stats_dict["status"] = (
-                "healthy"
-                if health_score > 0
-                else "warning"
-                if health_score > -1
-                else "critical"
+                "healthy" if health_score > 0 else "warning" if health_score > -1 else "critical"
             )
 
             firmware_stats.append(stats_dict)
@@ -744,9 +739,7 @@ class CrossDevicePatternDetector:
             return None
 
         # Effect size (Cohen's d)
-        pooled_std = np.sqrt(
-            (cohort_std**2 + baseline.std**2) / 2
-        )
+        pooled_std = np.sqrt((cohort_std**2 + baseline.std**2) / 2)
         effect_size = abs(cohort_mean - baseline.mean) / max(pooled_std, 1e-6)
 
         if effect_size < self.min_effect_size:
@@ -791,9 +784,7 @@ class CrossDevicePatternDetector:
         )
 
         # Create pattern ID
-        pattern_id = hashlib.md5(
-            f"{cohort_id}_{metric}".encode()
-        ).hexdigest()[:12]
+        pattern_id = hashlib.md5(f"{cohort_id}_{metric}".encode()).hexdigest()[:12]
 
         return CohortPattern(
             pattern_id=pattern_id,
@@ -938,7 +929,11 @@ class CrossDevicePatternDetector:
             else:
                 existing = seen[key]
                 # Prefer more specific (more dimensions)
-                if len(pattern.cohort_definition) > len(existing.cohort_definition) or pattern.severity in ("critical", "high") and existing.severity not in ("critical", "high"):
+                if (
+                    len(pattern.cohort_definition) > len(existing.cohort_definition)
+                    or pattern.severity in ("critical", "high")
+                    and existing.severity not in ("critical", "high")
+                ):
                     seen[key] = pattern
 
         return list(seen.values())

@@ -390,9 +390,7 @@ class InsightGenerator:
 
         # Battery/shift insights
         shift_readiness = None
-        shift_report = self.battery_analyzer.analyze_shift_readiness(
-            location_id, datetime.utcnow()
-        )
+        shift_report = self.battery_analyzer.analyze_shift_readiness(location_id, datetime.utcnow())
         if shift_report:
             shift_readiness = {
                 "readiness_percentage": shift_report.readiness_percentage,
@@ -493,15 +491,18 @@ class InsightGenerator:
             if insight:
                 change_pct = 0
                 if record.baseline_value and record.current_value:
-                    change_pct = ((record.current_value - record.baseline_value) /
-                                  record.baseline_value * 100)
+                    change_pct = (
+                        (record.current_value - record.baseline_value) / record.baseline_value * 100
+                    )
 
-                trending.append(TrendingInsight(
-                    insight=insight,
-                    trend_period_days=lookback_days,
-                    change_percent=change_pct,
-                    predicted_severity_change=None,
-                ))
+                trending.append(
+                    TrendingInsight(
+                        insight=insight,
+                        trend_period_days=lookback_days,
+                        change_percent=change_pct,
+                        predicted_severity_change=None,
+                    )
+                )
 
         return trending
 
@@ -582,32 +583,35 @@ class InsightGenerator:
         for location in locations[:10]:  # Limit for performance
             # Shift readiness
             report = self.battery_analyzer.analyze_shift_readiness(
-                location.location_id,
-                datetime.combine(insight_date, datetime.min.time())
+                location.location_id, datetime.combine(insight_date, datetime.min.time())
             )
 
             if report and report.devices_at_risk > 0:
-                insights.append(CustomerInsight(
-                    insight_id=f"battery_shift_{location.location_id}_{insight_date}",
-                    category=InsightCategory.BATTERY_SHIFT_FAILURE,
-                    severity=InsightSeverity.HIGH if report.devices_at_risk > 5 else InsightSeverity.MEDIUM,
-                    headline=f"{report.devices_at_risk} devices at {location.location_name} won't last shift",
-                    impact_statement="At current drain rates, these devices will die before shift end",
-                    comparison_context=f"{report.readiness_percentage:.0f}% shift readiness",
-                    recommended_actions=["Charge devices before shift", "Check drain rates"],
-                    entity_type=EntityType.LOCATION,
-                    entity_id=location.location_id,
-                    entity_name=location.location_name,
-                    affected_device_count=report.devices_at_risk,
-                    primary_metric="ShiftReadiness",
-                    primary_value=report.readiness_percentage,
-                    threshold_exceeded=80,
-                    confidence_score=0.8,
-                    trend_direction="stable",
-                    trend_change_percent=report.vs_last_week_readiness,
-                    detected_at=datetime.utcnow(),
-                    last_updated=datetime.utcnow(),
-                ))
+                insights.append(
+                    CustomerInsight(
+                        insight_id=f"battery_shift_{location.location_id}_{insight_date}",
+                        category=InsightCategory.BATTERY_SHIFT_FAILURE,
+                        severity=InsightSeverity.HIGH
+                        if report.devices_at_risk > 5
+                        else InsightSeverity.MEDIUM,
+                        headline=f"{report.devices_at_risk} devices at {location.location_name} won't last shift",
+                        impact_statement="At current drain rates, these devices will die before shift end",
+                        comparison_context=f"{report.readiness_percentage:.0f}% shift readiness",
+                        recommended_actions=["Charge devices before shift", "Check drain rates"],
+                        entity_type=EntityType.LOCATION,
+                        entity_id=location.location_id,
+                        entity_name=location.location_name,
+                        affected_device_count=report.devices_at_risk,
+                        primary_metric="ShiftReadiness",
+                        primary_value=report.readiness_percentage,
+                        threshold_exceeded=80,
+                        confidence_score=0.8,
+                        trend_direction="stable",
+                        trend_change_percent=report.vs_last_week_readiness,
+                        detected_at=datetime.utcnow(),
+                        last_updated=datetime.utcnow(),
+                    )
+                )
 
             # Charging patterns
             charging = self.battery_analyzer.analyze_charging_patterns(
@@ -615,27 +619,29 @@ class InsightGenerator:
             )
 
             if charging and charging.devices_with_issues > 0:
-                insights.append(CustomerInsight(
-                    insight_id=f"battery_charging_{location.location_id}_{insight_date}",
-                    category=InsightCategory.BATTERY_CHARGE_PATTERN,
-                    severity=InsightSeverity.MEDIUM,
-                    headline=f"{charging.devices_with_issues} devices at {location.location_name} have charging issues",
-                    impact_statement="Poor charging patterns lead to devices not ready for shift",
-                    comparison_context=f"{charging.issue_rate*100:.0f}% of devices affected",
-                    recommended_actions=charging.recommendations,
-                    entity_type=EntityType.LOCATION,
-                    entity_id=location.location_id,
-                    entity_name=location.location_name,
-                    affected_device_count=charging.devices_with_issues,
-                    primary_metric="ChargingIssueRate",
-                    primary_value=charging.issue_rate * 100,
-                    threshold_exceeded=10,
-                    confidence_score=0.7,
-                    trend_direction="stable",
-                    trend_change_percent=None,
-                    detected_at=datetime.utcnow(),
-                    last_updated=datetime.utcnow(),
-                ))
+                insights.append(
+                    CustomerInsight(
+                        insight_id=f"battery_charging_{location.location_id}_{insight_date}",
+                        category=InsightCategory.BATTERY_CHARGE_PATTERN,
+                        severity=InsightSeverity.MEDIUM,
+                        headline=f"{charging.devices_with_issues} devices at {location.location_name} have charging issues",
+                        impact_statement="Poor charging patterns lead to devices not ready for shift",
+                        comparison_context=f"{charging.issue_rate * 100:.0f}% of devices affected",
+                        recommended_actions=charging.recommendations,
+                        entity_type=EntityType.LOCATION,
+                        entity_id=location.location_id,
+                        entity_name=location.location_name,
+                        affected_device_count=charging.devices_with_issues,
+                        primary_metric="ChargingIssueRate",
+                        primary_value=charging.issue_rate * 100,
+                        threshold_exceeded=10,
+                        confidence_score=0.7,
+                        trend_direction="stable",
+                        trend_change_percent=None,
+                        detected_at=datetime.utcnow(),
+                        last_updated=datetime.utcnow(),
+                    )
+                )
 
         return insights
 
@@ -647,53 +653,57 @@ class InsightGenerator:
         wifi_report = self.network_analyzer.analyze_wifi_roaming(None, period_days)
 
         if wifi_report and wifi_report.devices_with_roaming_issues > 0:
-            insights.append(CustomerInsight(
-                insight_id=f"wifi_roaming_{self.tenant_id}_{date.today()}",
-                category=InsightCategory.WIFI_AP_HOPPING,
-                severity=InsightSeverity.MEDIUM,
-                headline=f"{wifi_report.devices_with_roaming_issues} devices have WiFi roaming issues",
-                impact_statement="Excessive AP switching causes connectivity interruptions",
-                comparison_context=f"Fleet average: {wifi_report.avg_aps_per_device:.1f} APs per device",
-                recommended_actions=wifi_report.recommendations,
-                entity_type=EntityType.MANUFACTURER,  # Fleet-wide
-                entity_id=self.tenant_id,
-                entity_name="Fleet",
-                affected_device_count=wifi_report.devices_with_roaming_issues,
-                primary_metric="APHoppingRate",
-                primary_value=wifi_report.avg_aps_per_device,
-                threshold_exceeded=5,
-                confidence_score=0.7,
-                trend_direction="stable",
-                trend_change_percent=None,
-                detected_at=datetime.utcnow(),
-                last_updated=datetime.utcnow(),
-            ))
+            insights.append(
+                CustomerInsight(
+                    insight_id=f"wifi_roaming_{self.tenant_id}_{date.today()}",
+                    category=InsightCategory.WIFI_AP_HOPPING,
+                    severity=InsightSeverity.MEDIUM,
+                    headline=f"{wifi_report.devices_with_roaming_issues} devices have WiFi roaming issues",
+                    impact_statement="Excessive AP switching causes connectivity interruptions",
+                    comparison_context=f"Fleet average: {wifi_report.avg_aps_per_device:.1f} APs per device",
+                    recommended_actions=wifi_report.recommendations,
+                    entity_type=EntityType.MANUFACTURER,  # Fleet-wide
+                    entity_id=self.tenant_id,
+                    entity_name="Fleet",
+                    affected_device_count=wifi_report.devices_with_roaming_issues,
+                    primary_metric="APHoppingRate",
+                    primary_value=wifi_report.avg_aps_per_device,
+                    threshold_exceeded=5,
+                    confidence_score=0.7,
+                    trend_direction="stable",
+                    trend_change_percent=None,
+                    detected_at=datetime.utcnow(),
+                    last_updated=datetime.utcnow(),
+                )
+            )
 
         # Hidden devices
         hidden_report = self.network_analyzer.detect_hidden_devices(period_days)
 
         if hidden_report and hidden_report.devices_highly_suspicious > 0:
-            insights.append(CustomerInsight(
-                insight_id=f"hidden_devices_{self.tenant_id}_{date.today()}",
-                category=InsightCategory.DEVICE_HIDDEN_PATTERN,
-                severity=InsightSeverity.HIGH,
-                headline=f"{hidden_report.devices_highly_suspicious} devices may be hidden or off-site",
-                impact_statement="These devices show suspicious offline patterns",
-                comparison_context=f"{hidden_report.devices_flagged} total flagged for review",
-                recommended_actions=hidden_report.recommendations,
-                entity_type=EntityType.DEVICE,
-                entity_id=self.tenant_id,
-                entity_name="Fleet",
-                affected_device_count=hidden_report.devices_highly_suspicious,
-                primary_metric="HiddenScore",
-                primary_value=100,
-                threshold_exceeded=80,
-                confidence_score=0.6,
-                trend_direction="stable",
-                trend_change_percent=None,
-                detected_at=datetime.utcnow(),
-                last_updated=datetime.utcnow(),
-            ))
+            insights.append(
+                CustomerInsight(
+                    insight_id=f"hidden_devices_{self.tenant_id}_{date.today()}",
+                    category=InsightCategory.DEVICE_HIDDEN_PATTERN,
+                    severity=InsightSeverity.HIGH,
+                    headline=f"{hidden_report.devices_highly_suspicious} devices may be hidden or off-site",
+                    impact_statement="These devices show suspicious offline patterns",
+                    comparison_context=f"{hidden_report.devices_flagged} total flagged for review",
+                    recommended_actions=hidden_report.recommendations,
+                    entity_type=EntityType.DEVICE,
+                    entity_id=self.tenant_id,
+                    entity_name="Fleet",
+                    affected_device_count=hidden_report.devices_highly_suspicious,
+                    primary_metric="HiddenScore",
+                    primary_value=100,
+                    threshold_exceeded=80,
+                    confidence_score=0.6,
+                    trend_direction="stable",
+                    trend_change_percent=None,
+                    detected_at=datetime.utcnow(),
+                    last_updated=datetime.utcnow(),
+                )
+            )
 
         return insights
 
@@ -705,79 +715,85 @@ class InsightGenerator:
         drop_report = self.abuse_analyzer.analyze_drops(period_days)
 
         if drop_report and drop_report.devices_with_excessive_drops > 0:
-            insights.append(CustomerInsight(
-                insight_id=f"excessive_drops_{self.tenant_id}_{date.today()}",
-                category=InsightCategory.EXCESSIVE_DROPS,
-                severity=InsightSeverity.HIGH,
-                headline=f"{drop_report.devices_with_excessive_drops} devices have excessive drops",
-                impact_statement=f"Total {drop_report.total_drops} drops in {period_days} days",
-                comparison_context=f"Average {drop_report.avg_drops_per_device:.1f} drops per device",
-                recommended_actions=drop_report.recommendations,
-                entity_type=EntityType.DEVICE,
-                entity_id=self.tenant_id,
-                entity_name="Fleet",
-                affected_device_count=drop_report.devices_with_excessive_drops,
-                primary_metric="DropCount",
-                primary_value=drop_report.total_drops,
-                threshold_exceeded=5,
-                confidence_score=0.8,
-                trend_direction=drop_report.trend_direction,
-                trend_change_percent=drop_report.trend_change_percent,
-                detected_at=datetime.utcnow(),
-                last_updated=datetime.utcnow(),
-            ))
+            insights.append(
+                CustomerInsight(
+                    insight_id=f"excessive_drops_{self.tenant_id}_{date.today()}",
+                    category=InsightCategory.EXCESSIVE_DROPS,
+                    severity=InsightSeverity.HIGH,
+                    headline=f"{drop_report.devices_with_excessive_drops} devices have excessive drops",
+                    impact_statement=f"Total {drop_report.total_drops} drops in {period_days} days",
+                    comparison_context=f"Average {drop_report.avg_drops_per_device:.1f} drops per device",
+                    recommended_actions=drop_report.recommendations,
+                    entity_type=EntityType.DEVICE,
+                    entity_id=self.tenant_id,
+                    entity_name="Fleet",
+                    affected_device_count=drop_report.devices_with_excessive_drops,
+                    primary_metric="DropCount",
+                    primary_value=drop_report.total_drops,
+                    threshold_exceeded=5,
+                    confidence_score=0.8,
+                    trend_direction=drop_report.trend_direction,
+                    trend_change_percent=drop_report.trend_change_percent,
+                    detected_at=datetime.utcnow(),
+                    last_updated=datetime.utcnow(),
+                )
+            )
 
         # Reboot analysis
         reboot_report = self.abuse_analyzer.analyze_reboots(period_days)
 
         if reboot_report and reboot_report.devices_with_excessive_reboots > 0:
-            insights.append(CustomerInsight(
-                insight_id=f"excessive_reboots_{self.tenant_id}_{date.today()}",
-                category=InsightCategory.EXCESSIVE_REBOOTS,
-                severity=InsightSeverity.HIGH,
-                headline=f"{reboot_report.devices_with_excessive_reboots} devices have excessive reboots",
-                impact_statement=f"Total {reboot_report.total_reboots} reboots ({reboot_report.crash_induced_reboots_percent:.0f}% crash-related)",
-                comparison_context=f"Average {reboot_report.avg_reboots_per_device:.1f} reboots per device",
-                recommended_actions=reboot_report.recommendations,
-                entity_type=EntityType.DEVICE,
-                entity_id=self.tenant_id,
-                entity_name="Fleet",
-                affected_device_count=reboot_report.devices_with_excessive_reboots,
-                primary_metric="RebootCount",
-                primary_value=reboot_report.total_reboots,
-                threshold_exceeded=3,
-                confidence_score=0.8,
-                trend_direction="stable",
-                trend_change_percent=None,
-                detected_at=datetime.utcnow(),
-                last_updated=datetime.utcnow(),
-            ))
+            insights.append(
+                CustomerInsight(
+                    insight_id=f"excessive_reboots_{self.tenant_id}_{date.today()}",
+                    category=InsightCategory.EXCESSIVE_REBOOTS,
+                    severity=InsightSeverity.HIGH,
+                    headline=f"{reboot_report.devices_with_excessive_reboots} devices have excessive reboots",
+                    impact_statement=f"Total {reboot_report.total_reboots} reboots ({reboot_report.crash_induced_reboots_percent:.0f}% crash-related)",
+                    comparison_context=f"Average {reboot_report.avg_reboots_per_device:.1f} reboots per device",
+                    recommended_actions=reboot_report.recommendations,
+                    entity_type=EntityType.DEVICE,
+                    entity_id=self.tenant_id,
+                    entity_name="Fleet",
+                    affected_device_count=reboot_report.devices_with_excessive_reboots,
+                    primary_metric="RebootCount",
+                    primary_value=reboot_report.total_reboots,
+                    threshold_exceeded=3,
+                    confidence_score=0.8,
+                    trend_direction="stable",
+                    trend_change_percent=None,
+                    detected_at=datetime.utcnow(),
+                    last_updated=datetime.utcnow(),
+                )
+            )
 
         # Problem combinations
         combo_report = self.abuse_analyzer.identify_problem_combinations(period_days)
 
         for combo in combo_report.problem_combinations[:3]:
-            insights.append(CustomerInsight(
-                insight_id=f"problem_combo_{combo.cohort_id}_{date.today()}",
-                category=InsightCategory.PROBLEM_COMBINATION,
-                severity=combo.severity,
-                headline=combo.description,
-                impact_statement=f"{combo.device_count} devices affected",
-                comparison_context=f"{combo.vs_fleet_issue_rate:.1f}x fleet average issues",
-                recommended_actions=combo.recommendations,
-                entity_type=EntityType.COHORT,
-                entity_id=combo.cohort_id,
-                entity_name=f"{combo.manufacturer} {combo.model}",
-                affected_device_count=combo.device_count,
-                primary_metric="IssueMultiplier",
-                primary_value=combo.vs_fleet_issue_rate,
-                threshold_exceeded=2.0,
-                confidence_score=0.7 if combo.is_statistically_significant else 0.4,
-                trend_direction="stable",
-                trend_change_percent=None,
-                detected_at=datetime.utcnow(),
-                last_updated=datetime.utcnow(),
-            ))
+            insights.append(
+                CustomerInsight(
+                    insight_id=f"problem_combo_{combo.cohort_id}_{date.today()}",
+                    category=InsightCategory.PROBLEM_COMBINATION,
+                    severity=combo.severity,
+                    headline=combo.description,
+                    impact_statement=f"{combo.device_count} devices affected",
+                    comparison_context=f"{combo.vs_fleet_issue_rate:.1f}x fleet average issues",
+                    recommended_actions=combo.recommendations,
+                    entity_type=EntityType.COHORT,
+                    entity_id=combo.cohort_id,
+                    entity_name=f"{combo.manufacturer} {combo.model}",
+                    affected_device_count=combo.device_count,
+                    primary_metric="IssueMultiplier",
+                    primary_value=combo.vs_fleet_issue_rate,
+                    threshold_exceeded=2.0,
+                    confidence_score=0.7 if combo.is_statistically_significant else 0.4,
+                    trend_direction="stable",
+                    trend_change_percent=None,
+                    detected_at=datetime.utcnow(),
+                    last_updated=datetime.utcnow(),
+                )
+            )
 
         return insights
 
@@ -789,53 +805,59 @@ class InsightGenerator:
         crash_report = self.app_analyzer.analyze_app_crashes(period_days)
 
         if crash_report and crash_report.apps_with_crashes > 0:
-            insights.append(CustomerInsight(
-                insight_id=f"app_crashes_{self.tenant_id}_{date.today()}",
-                category=InsightCategory.APP_CRASH_PATTERN,
-                severity=InsightSeverity.MEDIUM if crash_report.total_crashes < 50 else InsightSeverity.HIGH,
-                headline=f"{crash_report.total_crashes} app crashes in {period_days} days",
-                impact_statement=f"Average {crash_report.avg_crashes_per_device:.1f} crashes per device",
-                comparison_context=f"{crash_report.apps_with_crashes} apps affected",
-                recommended_actions=crash_report.recommendations,
-                entity_type=EntityType.APP,
-                entity_id=self.tenant_id,
-                entity_name="Fleet Apps",
-                affected_device_count=int(crash_report.total_crashes),
-                primary_metric="CrashCount",
-                primary_value=crash_report.total_crashes,
-                threshold_exceeded=10,
-                confidence_score=0.8,
-                trend_direction=crash_report.overall_trend,
-                trend_change_percent=crash_report.trend_change_percent,
-                detected_at=datetime.utcnow(),
-                last_updated=datetime.utcnow(),
-            ))
+            insights.append(
+                CustomerInsight(
+                    insight_id=f"app_crashes_{self.tenant_id}_{date.today()}",
+                    category=InsightCategory.APP_CRASH_PATTERN,
+                    severity=InsightSeverity.MEDIUM
+                    if crash_report.total_crashes < 50
+                    else InsightSeverity.HIGH,
+                    headline=f"{crash_report.total_crashes} app crashes in {period_days} days",
+                    impact_statement=f"Average {crash_report.avg_crashes_per_device:.1f} crashes per device",
+                    comparison_context=f"{crash_report.apps_with_crashes} apps affected",
+                    recommended_actions=crash_report.recommendations,
+                    entity_type=EntityType.APP,
+                    entity_id=self.tenant_id,
+                    entity_name="Fleet Apps",
+                    affected_device_count=int(crash_report.total_crashes),
+                    primary_metric="CrashCount",
+                    primary_value=crash_report.total_crashes,
+                    threshold_exceeded=10,
+                    confidence_score=0.8,
+                    trend_direction=crash_report.overall_trend,
+                    trend_change_percent=crash_report.trend_change_percent,
+                    detected_at=datetime.utcnow(),
+                    last_updated=datetime.utcnow(),
+                )
+            )
 
         # App power
         power_report = self.app_analyzer.analyze_app_power_efficiency(period_days)
 
         if power_report and power_report.apps_with_power_issues > 0:
-            insights.append(CustomerInsight(
-                insight_id=f"app_power_{self.tenant_id}_{date.today()}",
-                category=InsightCategory.APP_POWER_DRAIN,
-                severity=InsightSeverity.MEDIUM,
-                headline=f"{power_report.apps_with_power_issues} apps have power efficiency issues",
-                impact_statement=f"Apps consuming {power_report.total_battery_drain_from_apps:.0f}% of battery",
-                comparison_context=f"{power_report.total_apps_analyzed} apps analyzed",
-                recommended_actions=power_report.recommendations,
-                entity_type=EntityType.APP,
-                entity_id=self.tenant_id,
-                entity_name="Fleet Apps",
-                affected_device_count=power_report.apps_with_power_issues,
-                primary_metric="AppDrainPercent",
-                primary_value=power_report.total_battery_drain_from_apps,
-                threshold_exceeded=50,
-                confidence_score=0.7,
-                trend_direction="stable",
-                trend_change_percent=None,
-                detected_at=datetime.utcnow(),
-                last_updated=datetime.utcnow(),
-            ))
+            insights.append(
+                CustomerInsight(
+                    insight_id=f"app_power_{self.tenant_id}_{date.today()}",
+                    category=InsightCategory.APP_POWER_DRAIN,
+                    severity=InsightSeverity.MEDIUM,
+                    headline=f"{power_report.apps_with_power_issues} apps have power efficiency issues",
+                    impact_statement=f"Apps consuming {power_report.total_battery_drain_from_apps:.0f}% of battery",
+                    comparison_context=f"{power_report.total_apps_analyzed} apps analyzed",
+                    recommended_actions=power_report.recommendations,
+                    entity_type=EntityType.APP,
+                    entity_id=self.tenant_id,
+                    entity_name="Fleet Apps",
+                    affected_device_count=power_report.apps_with_power_issues,
+                    primary_metric="AppDrainPercent",
+                    primary_value=power_report.total_battery_drain_from_apps,
+                    threshold_exceeded=50,
+                    confidence_score=0.7,
+                    trend_direction="stable",
+                    trend_change_percent=None,
+                    detected_at=datetime.utcnow(),
+                    last_updated=datetime.utcnow(),
+                )
+            )
 
         return insights
 
@@ -856,27 +878,29 @@ class InsightGenerator:
             drops = self.abuse_analyzer.analyze_drops(period_days, "location", location.location_id)
 
             if drops and drops.avg_drops_per_device > 2:
-                insights.append(CustomerInsight(
-                    insight_id=f"location_drops_{location.location_id}_{date.today()}",
-                    category=InsightCategory.LOCATION_ANOMALY_CLUSTER,
-                    severity=InsightSeverity.MEDIUM,
-                    headline=f"{location.location_name} has elevated device issues",
-                    impact_statement=f"{drops.devices_with_excessive_drops} devices with problems",
-                    comparison_context=f"Average {drops.avg_drops_per_device:.1f} drops per device",
-                    recommended_actions=drops.recommendations,
-                    entity_type=EntityType.LOCATION,
-                    entity_id=location.location_id,
-                    entity_name=location.location_name,
-                    affected_device_count=drops.devices_with_excessive_drops,
-                    primary_metric="LocationIssueRate",
-                    primary_value=drops.avg_drops_per_device,
-                    threshold_exceeded=2,
-                    confidence_score=0.7,
-                    trend_direction=drops.trend_direction,
-                    trend_change_percent=drops.trend_change_percent,
-                    detected_at=datetime.utcnow(),
-                    last_updated=datetime.utcnow(),
-                ))
+                insights.append(
+                    CustomerInsight(
+                        insight_id=f"location_drops_{location.location_id}_{date.today()}",
+                        category=InsightCategory.LOCATION_ANOMALY_CLUSTER,
+                        severity=InsightSeverity.MEDIUM,
+                        headline=f"{location.location_name} has elevated device issues",
+                        impact_statement=f"{drops.devices_with_excessive_drops} devices with problems",
+                        comparison_context=f"Average {drops.avg_drops_per_device:.1f} drops per device",
+                        recommended_actions=drops.recommendations,
+                        entity_type=EntityType.LOCATION,
+                        entity_id=location.location_id,
+                        entity_name=location.location_name,
+                        affected_device_count=drops.devices_with_excessive_drops,
+                        primary_metric="LocationIssueRate",
+                        primary_value=drops.avg_drops_per_device,
+                        threshold_exceeded=2,
+                        confidence_score=0.7,
+                        trend_direction=drops.trend_direction,
+                        trend_change_percent=drops.trend_change_percent,
+                        detected_at=datetime.utcnow(),
+                        last_updated=datetime.utcnow(),
+                    )
+                )
 
         return insights
 
@@ -1065,7 +1089,7 @@ class InsightGenerator:
             severity=device.severity,
             headline=device.description,
             impact_statement=f"At {location_name}",
-            comparison_context=f"Top {100-device.vs_fleet_drop_percentile}% worst in fleet",
+            comparison_context=f"Top {100 - device.vs_fleet_drop_percentile}% worst in fleet",
             recommended_actions=device.recommendations,
             entity_type=EntityType.DEVICE,
             entity_id=str(device.device_id),
@@ -1091,7 +1115,9 @@ class InsightGenerator:
         recs = []
 
         if shift_readiness and shift_readiness.get("readiness_percentage", 100) < 80:
-            recs.append("Improve shift readiness by ensuring devices are fully charged before shift start")
+            recs.append(
+                "Improve shift readiness by ensuring devices are fully charged before shift start"
+            )
 
         if top_issues:
             top_category = top_issues[0][0]

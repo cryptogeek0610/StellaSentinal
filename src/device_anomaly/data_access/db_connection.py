@@ -28,16 +28,18 @@ def _with_retry(
         except OperationalError as e:
             last_error = e
             if attempt < max_retries - 1:
-                delay = base_delay * (2 ** attempt)
+                delay = base_delay * (2**attempt)
                 logger.warning(
                     "Database connection attempt %d/%d failed: %s. Retrying in %.1fs...",
-                    attempt + 1, max_retries, str(e)[:100], delay
+                    attempt + 1,
+                    max_retries,
+                    str(e)[:100],
+                    delay,
                 )
                 time.sleep(delay)
             else:
                 logger.error(
-                    "Database connection failed after %d attempts: %s",
-                    max_retries, str(e)
+                    "Database connection failed after %d attempts: %s", max_retries, str(e)
                 )
     raise last_error
 
@@ -110,10 +112,12 @@ def create_dw_engine() -> Engine:
                     pool_timeout=settings.connect_timeout,
                     connect_args=_build_connect_args(settings),
                 )
+
                 # Log connection events for debugging
                 @event.listens_for(_DW_ENGINE, "connect")
                 def on_dw_connect(dbapi_conn, connection_record):
                     logger.debug("DW database connection established")
+
                 try:
                     from device_anomaly.observability.db_metrics import (
                         instrument_engine as instrument_db_metrics,
@@ -177,10 +181,12 @@ def create_mc_engine() -> Engine:
                     pool_timeout=settings.connect_timeout,
                     connect_args=_build_connect_args(settings),
                 )
+
                 # Log connection events for debugging
                 @event.listens_for(_MC_ENGINE, "connect")
                 def on_mc_connect(dbapi_conn, connection_record):
                     logger.debug("MC database connection established")
+
                 try:
                     from device_anomaly.observability.db_metrics import (
                         instrument_engine as instrument_db_metrics,

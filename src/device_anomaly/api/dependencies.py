@@ -1,4 +1,5 @@
 """FastAPI dependencies for database sessions and repositories."""
+
 from __future__ import annotations
 
 import logging
@@ -90,18 +91,21 @@ def get_backend_db() -> Generator[Session, None, None]:
 def get_anomaly_repository(session: Session):
     """Create an AnomalyRepository for the given session."""
     from device_anomaly.db.repositories import AnomalyRepository
+
     return AnomalyRepository(session)
 
 
 def get_baseline_repository(session: Session):
     """Create a BaselineRepository for the given session."""
     from device_anomaly.db.repositories import BaselineRepository
+
     return BaselineRepository(session)
 
 
 def get_device_repository(session: Session):
     """Create a DeviceRepository for the given session."""
     from device_anomaly.db.repositories import DeviceRepository
+
     return DeviceRepository(session)
 
 
@@ -189,6 +193,7 @@ def get_current_user() -> RequestUser:
 
 def require_role(allowed_roles: Sequence[str]):
     """Dependency factory enforcing role-based access control."""
+
     def _dependency() -> RequestUser:
         user = get_user_context()
         if user.user_id is None and _require_auth:

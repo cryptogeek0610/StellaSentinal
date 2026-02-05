@@ -6,6 +6,7 @@ on device telemetry data. The architecture uses:
 - Reparameterization trick for latent space sampling
 - Configurable hidden dimensions and latent size
 """
+
 from __future__ import annotations
 
 import torch
@@ -175,10 +176,7 @@ class VAE(nn.Module):
         h = self.decoder(z)
         return self.output_layer(h)
 
-    def forward(
-        self,
-        x: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Forward pass through the VAE.
 
         Args:

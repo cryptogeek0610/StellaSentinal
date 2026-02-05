@@ -17,6 +17,7 @@ Production-Safe Design:
 - Row counts are approximations from sys.partitions (no table scans)
 - Allowlist filtering respects settings.xsight_table_allowlist / mc_table_allowlist
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -42,6 +43,7 @@ _IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 class SourceDatabase(StrEnum):
     """Source database identifiers."""
+
     XSIGHT = "xsight"
     MOBICONTROL = "mobicontrol"
 
@@ -49,6 +51,7 @@ class SourceDatabase(StrEnum):
 @dataclass
 class ColumnInfo:
     """Column metadata from INFORMATION_SCHEMA."""
+
     name: str
     data_type: str
     max_length: int | None = None
@@ -58,15 +61,31 @@ class ColumnInfo:
     @property
     def is_numeric(self) -> bool:
         """Check if column is numeric type."""
-        numeric_types = {"int", "bigint", "smallint", "tinyint", "decimal",
-                        "numeric", "float", "real", "money", "smallmoney"}
+        numeric_types = {
+            "int",
+            "bigint",
+            "smallint",
+            "tinyint",
+            "decimal",
+            "numeric",
+            "float",
+            "real",
+            "money",
+            "smallmoney",
+        }
         return self.data_type.lower() in numeric_types
 
     @property
     def is_datetime(self) -> bool:
         """Check if column is datetime type."""
-        datetime_types = {"datetime", "datetime2", "date", "time",
-                         "datetimeoffset", "smalldatetime"}
+        datetime_types = {
+            "datetime",
+            "datetime2",
+            "date",
+            "time",
+            "datetimeoffset",
+            "smalldatetime",
+        }
         return self.data_type.lower() in datetime_types
 
     @property
@@ -79,6 +98,7 @@ class ColumnInfo:
 @dataclass
 class TableInfo:
     """Table/View metadata with schema information."""
+
     name: str
     schema_name: str = "dbo"
     table_type: str = "BASE TABLE"  # or "VIEW"
@@ -121,8 +141,7 @@ class TableInfo:
             data["source_db"] = SourceDatabase(data["source_db"])
         if "columns" in data:
             data["columns"] = [
-                ColumnInfo(**c) if isinstance(c, dict) else c
-                for c in data["columns"]
+                ColumnInfo(**c) if isinstance(c, dict) else c for c in data["columns"]
             ]
         return cls(**data)
 
@@ -130,6 +149,7 @@ class TableInfo:
 @dataclass
 class DatabaseSchema:
     """Complete schema for a database."""
+
     database_name: str
     source_db: SourceDatabase
     tables: dict[str, TableInfo] = field(default_factory=dict)
@@ -169,10 +189,10 @@ HIGH_VALUE_PATTERNS = {
     SourceDatabase.XSIGHT: {
         # Primary telemetry tables (cs_* prefix)
         "patterns": [
-            r"^cs_.*",           # All cs_* telemetry tables
-            r"^sb_.*",           # Smart battery tables
-            r"^vw_mc.*",         # MobiControl views
-            r"^vw_Device.*",     # Device views
+            r"^cs_.*",  # All cs_* telemetry tables
+            r"^sb_.*",  # Smart battery tables
+            r"^vw_mc.*",  # MobiControl views
+            r"^vw_Device.*",  # Device views
         ],
         # Explicit high-value tables
         "explicit": {
@@ -192,16 +212,22 @@ HIGH_VALUE_PATTERNS = {
         },
         # Tables to exclude (time-sliced views, staging, etc.)
         "exclude_suffixes": [
-            "_Last7", "_Last30", "_LastWeek", "_LastMonth",
-            "_Today", "_Yesterday", "_staging", "_temp"
+            "_Last7",
+            "_Last30",
+            "_LastWeek",
+            "_LastMonth",
+            "_Today",
+            "_Yesterday",
+            "_staging",
+            "_temp",
         ],
     },
     SourceDatabase.MOBICONTROL: {
         "patterns": [
-            r"^DeviceStat.*",     # Time-series device stats
-            r"^Device.*",        # Device tables
-            r"^Alert.*",         # Alert tables
-            r"^Event.*",         # Event tables
+            r"^DeviceStat.*",  # Time-series device stats
+            r"^Device.*",  # Device tables
+            r"^Alert.*",  # Alert tables
+            r"^Event.*",  # Event tables
         ],
         "explicit": {
             "DeviceStatInt",
@@ -228,11 +254,20 @@ HIGH_VALUE_PATTERNS = {
 # Known timestamp columns for each database
 TIMESTAMP_COLUMNS = {
     SourceDatabase.XSIGHT: [
-        "CollectedDate", "CollectedTime", "EventTime", "Timestamp", "ReadingTime"
+        "CollectedDate",
+        "CollectedTime",
+        "EventTime",
+        "Timestamp",
+        "ReadingTime",
     ],
     SourceDatabase.MOBICONTROL: [
-        "ServerDateTime", "TimeStamp", "DateTime", "CollectedDate",
-        "LastCheckInTime", "SetDateTime", "ModifiedTime"
+        "ServerDateTime",
+        "TimeStamp",
+        "DateTime",
+        "CollectedDate",
+        "LastCheckInTime",
+        "SetDateTime",
+        "ModifiedTime",
     ],
 }
 
@@ -397,16 +432,15 @@ def _get_table_row_counts(engine: Engine, limit: int = 1000) -> dict[str, int]:
     try:
         with engine.connect() as conn:
             result = conn.execute(query)
-            return {
-                f"{row[0]}.{row[1]}": int(row[2])
-                for row in result.fetchall()
-            }
+            return {f"{row[0]}.{row[1]}": int(row[2]) for row in result.fetchall()}
     except Exception as e:
         logger.warning(f"Failed to get row counts: {e}")
         return {}
 
 
-def _get_table_columns(engine: Engine, table_name: str, schema_name: str = "dbo") -> list[ColumnInfo]:
+def _get_table_columns(
+    engine: Engine, table_name: str, schema_name: str = "dbo"
+) -> list[ColumnInfo]:
     """Get column metadata for a specific table."""
     if not _validate_identifier(table_name) or not _validate_identifier(schema_name):
         logger.warning(f"Invalid identifier: {schema_name}.{table_name}")
@@ -427,10 +461,7 @@ def _get_table_columns(engine: Engine, table_name: str, schema_name: str = "dbo"
 
     try:
         with engine.connect() as conn:
-            result = conn.execute(
-                query,
-                {"table_name": table_name, "schema_name": schema_name}
-            )
+            result = conn.execute(query, {"table_name": table_name, "schema_name": schema_name})
             return [
                 ColumnInfo(
                     name=row[0],
@@ -447,8 +478,7 @@ def _get_table_columns(engine: Engine, table_name: str, schema_name: str = "dbo"
 
 
 def _identify_time_columns(
-    columns: list[ColumnInfo],
-    source_db: SourceDatabase
+    columns: list[ColumnInfo], source_db: SourceDatabase
 ) -> tuple[bool, str | None]:
     """Identify if table has timestamp column and which one."""
     known_ts_cols = TIMESTAMP_COLUMNS.get(source_db, [])
@@ -474,11 +504,7 @@ def _identify_device_columns(columns: list[ColumnInfo]) -> tuple[bool, str | Non
     return False, None
 
 
-def _is_high_value_table(
-    table_name: str,
-    source_db: SourceDatabase,
-    row_count: int = 0
-) -> bool:
+def _is_high_value_table(table_name: str, source_db: SourceDatabase, row_count: int = 0) -> bool:
     """Determine if table is high-value based on patterns and heuristics."""
     config = HIGH_VALUE_PATTERNS.get(source_db, {})
 
@@ -508,6 +534,7 @@ def _calculate_priority_score(table_info: TableInfo) -> float:
     # Base score from row count (log scale)
     if table_info.row_count > 0:
         import math
+
         score += math.log10(table_info.row_count + 1) * 10
 
     # Bonus for time-series capability
@@ -687,9 +714,11 @@ def discover_xsight_schema(
     """
     if engine is None:
         from device_anomaly.data_access.db_connection import create_dw_engine
+
         engine = create_dw_engine()
 
     from device_anomaly.config.settings import get_settings
+
     settings = get_settings()
 
     return discover_database_schema(
@@ -719,9 +748,11 @@ def discover_mobicontrol_schema(
     """
     if engine is None:
         from device_anomaly.data_access.db_connection import create_mc_engine
+
         engine = create_mc_engine()
 
     from device_anomaly.config.settings import get_settings
+
     settings = get_settings()
 
     return discover_database_schema(
@@ -756,10 +787,7 @@ def get_high_value_tables(
     else:
         schema = discover_mobicontrol_schema(engine=engine)
 
-    tables = [
-        t for t in schema.high_value_tables
-        if t.row_count >= min_rows
-    ]
+    tables = [t for t in schema.high_value_tables if t.row_count >= min_rows]
 
     if require_time_series:
         tables = [t for t in tables if t.is_time_series]
@@ -794,6 +822,7 @@ def get_curated_table_list(
         List of table names
     """
     from device_anomaly.config.settings import get_settings
+
     settings = get_settings()
 
     # Check if allowlist is configured - if so, use it exclusively
@@ -831,6 +860,7 @@ def invalidate_schema_cache(source_db: SourceDatabase | None = None) -> None:
     """Invalidate cached schemas."""
     if source_db:
         from device_anomaly.config.settings import get_settings
+
         settings = get_settings()
         if source_db == SourceDatabase.XSIGHT:
             _schema_cache.invalidate(f"{source_db.value}_{settings.dw.database}")
@@ -882,7 +912,8 @@ def discover_training_tables(
         try:
             schema = discover_xsight_schema(use_cache=True)
             xsight_tables = [
-                t for t in schema.high_value_tables
+                t
+                for t in schema.high_value_tables
                 if t.row_count >= min_rows
                 and t.has_device_id
                 and (not require_time_series or t.has_timestamp)
@@ -906,7 +937,8 @@ def discover_training_tables(
         try:
             schema = discover_mobicontrol_schema(use_cache=True)
             mc_tables = [
-                t for t in schema.high_value_tables
+                t
+                for t in schema.high_value_tables
                 if t.row_count >= min_rows
                 and t.has_device_id
                 and (not require_time_series or t.has_timestamp)
@@ -996,6 +1028,7 @@ def log_startup_schema_summary(
         Dictionary with schema summary statistics
     """
     from device_anomaly.config.settings import get_settings
+
     settings = get_settings()
 
     summary: dict[str, Any] = {

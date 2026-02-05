@@ -3,6 +3,7 @@
 Provides fleet security compliance, device risk assessment,
 encryption status, security trend analytics, and PATH-based grouping.
 """
+
 from __future__ import annotations
 
 import logging
@@ -24,8 +25,10 @@ router = APIRouter(prefix="/security", tags=["security-posture"])
 # Response Models
 # ============================================================================
 
+
 class DeviceSecurityResponse(BaseModel):
     """Individual device security status."""
+
     device_id: int
     device_name: str
     device_path: str | None = Field(default=None, description="Full hierarchical path")
@@ -42,6 +45,7 @@ class DeviceSecurityResponse(BaseModel):
 
 class ComplianceBreakdownResponse(BaseModel):
     """Compliance category breakdown."""
+
     category: str
     compliant: int
     non_compliant: int
@@ -51,6 +55,7 @@ class ComplianceBreakdownResponse(BaseModel):
 
 class SecurityTrendResponse(BaseModel):
     """Security trend data point."""
+
     date: str
     score: float
     compliant_pct: float
@@ -58,6 +63,7 @@ class SecurityTrendResponse(BaseModel):
 
 class SecuritySummaryResponse(BaseModel):
     """Fleet security posture summary."""
+
     tenant_id: str
     fleet_security_score: float = Field(description="Overall fleet security score 0-100")
     total_devices: int
@@ -76,17 +82,20 @@ class SecuritySummaryResponse(BaseModel):
 
 class DeviceListResponse(BaseModel):
     """List of devices with security status."""
+
     devices: list[DeviceSecurityResponse]
     total_count: int
 
 
 class ComplianceListResponse(BaseModel):
     """Compliance breakdown by category."""
+
     categories: list[ComplianceBreakdownResponse]
 
 
 class TrendListResponse(BaseModel):
     """Security trend data."""
+
     trends: list[SecurityTrendResponse]
     period_days: int
 
@@ -95,8 +104,10 @@ class TrendListResponse(BaseModel):
 # PATH-Based Response Models
 # ============================================================================
 
+
 class PathNodeResponse(BaseModel):
     """A node in the PATH hierarchy tree."""
+
     path_id: str
     path_name: str
     full_path: str
@@ -112,6 +123,7 @@ class PathNodeResponse(BaseModel):
 
 class PathHierarchyResponse(BaseModel):
     """PATH hierarchy with security metrics."""
+
     tenant_id: str
     hierarchy: list[PathNodeResponse]
     total_paths: int
@@ -121,6 +133,7 @@ class PathHierarchyResponse(BaseModel):
 
 class PathSecuritySummaryResponse(BaseModel):
     """Security summary for a specific PATH."""
+
     path: str
     path_name: str
     device_count: int
@@ -138,6 +151,7 @@ class PathSecuritySummaryResponse(BaseModel):
 
 class PathSecurityResponse(BaseModel):
     """Security summaries grouped by PATH."""
+
     tenant_id: str
     summaries: list[PathSecuritySummaryResponse]
     selected_path: str | None = None
@@ -147,6 +161,7 @@ class PathSecurityResponse(BaseModel):
 
 class RiskClusterResponse(BaseModel):
     """A cluster of devices with similar security violations."""
+
     cluster_id: str
     cluster_name: str
     violation_type: str
@@ -161,6 +176,7 @@ class RiskClusterResponse(BaseModel):
 
 class RiskClustersResponse(BaseModel):
     """Collection of risk clusters."""
+
     tenant_id: str
     clusters: list[RiskClusterResponse]
     total_devices_affected: int
@@ -170,6 +186,7 @@ class RiskClustersResponse(BaseModel):
 
 class PathComparisonItemResponse(BaseModel):
     """Comparison data for a single PATH."""
+
     path: str
     path_name: str
     security_score: float
@@ -183,6 +200,7 @@ class PathComparisonItemResponse(BaseModel):
 
 class PathComparisonResponse(BaseModel):
     """Comparison results across multiple PATHs."""
+
     tenant_id: str
     paths: list[PathComparisonItemResponse]
     fleet_average_score: float
@@ -194,6 +212,7 @@ class PathComparisonResponse(BaseModel):
 
 class TemporalClusterResponse(BaseModel):
     """Devices with correlated security issues appearing around the same time."""
+
     cluster_id: str
     cluster_name: str
     issue_appeared_at: datetime
@@ -206,6 +225,7 @@ class TemporalClusterResponse(BaseModel):
 
 class TemporalClustersResponse(BaseModel):
     """Collection of temporal correlation clusters."""
+
     tenant_id: str
     clusters: list[TemporalClusterResponse]
     window_hours: int
@@ -229,7 +249,9 @@ MOCK_PATHS = [
 ]
 
 
-def _generate_mock_devices(count: int = 25, with_paths: bool = True) -> list[DeviceSecurityResponse]:
+def _generate_mock_devices(
+    count: int = 25, with_paths: bool = True
+) -> list[DeviceSecurityResponse]:
     """Generate mock device security data with optional PATH assignment."""
     random.seed(42)
     devices = []
@@ -243,17 +265,17 @@ def _generate_mock_devices(count: int = 25, with_paths: bool = True) -> list[Dev
 
         violations = []
         if is_rooted:
-            violations.append('Device is rooted')
+            violations.append("Device is rooted")
         if not is_encrypted:
-            violations.append('Storage not encrypted')
+            violations.append("Storage not encrypted")
         if not has_passcode:
-            violations.append('No passcode set')
+            violations.append("No passcode set")
         if usb_debugging:
-            violations.append('USB debugging enabled')
+            violations.append("USB debugging enabled")
         if dev_mode:
-            violations.append('Developer mode enabled')
+            violations.append("Developer mode enabled")
         if patch_age > 60:
-            violations.append(f'Security patch {patch_age} days old')
+            violations.append(f"Security patch {patch_age} days old")
 
         score = 100.0
         if is_rooted:
@@ -269,42 +291,44 @@ def _generate_mock_devices(count: int = 25, with_paths: bool = True) -> list[Dev
         if patch_age > 60:
             score -= min(20, patch_age / 3)
 
-        risk_level = 'low'
+        risk_level = "low"
         if score < 50:
-            risk_level = 'critical'
+            risk_level = "critical"
         elif score < 70:
-            risk_level = 'high'
+            risk_level = "high"
         elif score < 85:
-            risk_level = 'medium'
+            risk_level = "medium"
 
         device_path = MOCK_PATHS[i % len(MOCK_PATHS)] if with_paths else None
 
-        devices.append(DeviceSecurityResponse(
-            device_id=1000 + i,
-            device_name=f"Device-{str(i + 1).zfill(3)}",
-            device_path=device_path,
-            security_score=max(0, score),
-            is_encrypted=is_encrypted,
-            is_rooted=is_rooted,
-            has_passcode=has_passcode,
-            patch_age_days=patch_age,
-            usb_debugging=usb_debugging,
-            developer_mode=dev_mode,
-            risk_level=risk_level,
-            violations=violations,
-        ))
+        devices.append(
+            DeviceSecurityResponse(
+                device_id=1000 + i,
+                device_name=f"Device-{str(i + 1).zfill(3)}",
+                device_path=device_path,
+                security_score=max(0, score),
+                is_encrypted=is_encrypted,
+                is_rooted=is_rooted,
+                has_passcode=has_passcode,
+                patch_age_days=patch_age,
+                usb_debugging=usb_debugging,
+                developer_mode=dev_mode,
+                risk_level=risk_level,
+                violations=violations,
+            )
+        )
     return sorted(devices, key=lambda d: d.security_score)
 
 
 def _generate_mock_compliance() -> list[ComplianceBreakdownResponse]:
     """Generate mock compliance breakdown."""
     data = [
-        ('Encryption', 438, 12),
-        ('Passcode', 445, 5),
-        ('Patch Level', 405, 45),
-        ('Root Status', 442, 8),
-        ('Developer Mode', 419, 31),
-        ('USB Debugging', 427, 23),
+        ("Encryption", 438, 12),
+        ("Passcode", 445, 5),
+        ("Patch Level", 405, 45),
+        ("Root Status", 442, 8),
+        ("Developer Mode", 419, 31),
+        ("USB Debugging", 427, 23),
     ]
     return [
         ComplianceBreakdownResponse(
@@ -324,7 +348,7 @@ def _generate_mock_trends(days: int = 30) -> list[SecurityTrendResponse]:
     today = datetime.now(UTC)
     return [
         SecurityTrendResponse(
-            date=(today - timedelta(days=days - 1 - i)).strftime('%Y-%m-%d'),
+            date=(today - timedelta(days=days - 1 - i)).strftime("%Y-%m-%d"),
             score=65 + random.random() * 15 + (i * 0.2),
             compliant_pct=80 + random.random() * 10 + (i * 0.1),
         )
@@ -348,11 +372,11 @@ def _generate_mock_summary(tenant_id: str) -> SecuritySummaryResponse:
         developer_mode_enabled=31,
         no_passcode_devices=5,
         recommendations=[
-            'Enforce encryption on 12 remaining unencrypted devices',
-            'Investigate 8 rooted devices for potential security compromise',
-            'Push security patches to 45 devices with outdated patches (>60 days)',
-            'Disable developer mode on 31 devices in production environment',
-            'Enforce passcode policy on 5 non-compliant devices',
+            "Enforce encryption on 12 remaining unencrypted devices",
+            "Investigate 8 rooted devices for potential security compromise",
+            "Push security patches to 45 devices with outdated patches (>60 days)",
+            "Disable developer mode on 31 devices in production environment",
+            "Enforce passcode policy on 5 non-compliant devices",
         ],
     )
 
@@ -623,17 +647,19 @@ def _generate_mock_path_comparison(
         if path in path_data:
             score, count, compliant, rooted, unencrypted, outdated = path_data[path]
             path_name = path.split(" / ")[-1]
-            comparisons.append(PathComparisonItemResponse(
-                path=path,
-                path_name=path_name,
-                security_score=score,
-                device_count=count,
-                compliant_pct=compliant,
-                rooted_count=rooted,
-                unencrypted_count=unencrypted,
-                outdated_patch_count=outdated,
-                delta_from_fleet=round(score - fleet_avg, 1),
-            ))
+            comparisons.append(
+                PathComparisonItemResponse(
+                    path=path,
+                    path_name=path_name,
+                    security_score=score,
+                    device_count=count,
+                    compliant_pct=compliant,
+                    rooted_count=rooted,
+                    unencrypted_count=unencrypted,
+                    outdated_patch_count=outdated,
+                    delta_from_fleet=round(score - fleet_avg, 1),
+                )
+            )
 
     comparisons.sort(key=lambda c: c.security_score, reverse=True)
 
@@ -712,6 +738,7 @@ def _generate_mock_temporal_clusters(
 # API Endpoints
 # ============================================================================
 
+
 @router.get("/summary", response_model=SecuritySummaryResponse)
 async def get_security_summary(
     tenant_id: str = Depends(get_tenant_id),
@@ -724,7 +751,9 @@ async def get_security_summary(
     # Real implementation would load from:
     # - DevInfo security columns (IsEncrypted, IsRooted, HasPasscode, etc.)
     # - SecurityFeatureBuilder for composite scores
-    logger.info("Security summary requested for tenant %s (live mode, no data available)", tenant_id)
+    logger.info(
+        "Security summary requested for tenant %s (live mode, no data available)", tenant_id
+    )
     # Return empty summary in live mode when no real data is available
     return SecuritySummaryResponse(
         tenant_id=tenant_id,
@@ -773,7 +802,9 @@ async def get_compliance_breakdown(
         return ComplianceListResponse(categories=_generate_mock_compliance())
 
     # Real implementation would aggregate DevInfo security columns by category
-    logger.info("Compliance breakdown requested for tenant %s (live mode, no data available)", tenant_id)
+    logger.info(
+        "Compliance breakdown requested for tenant %s (live mode, no data available)", tenant_id
+    )
     return ComplianceListResponse(categories=[])
 
 
@@ -788,7 +819,11 @@ async def get_security_trends(
         return TrendListResponse(trends=_generate_mock_trends(period_days), period_days=period_days)
 
     # Real implementation would query historical security snapshots
-    logger.info("Security trends requested for tenant %s, period %d days (live mode, no data available)", tenant_id, period_days)
+    logger.info(
+        "Security trends requested for tenant %s, period %d days (live mode, no data available)",
+        tenant_id,
+        period_days,
+    )
     return TrendListResponse(trends=[], period_days=period_days)
 
 
@@ -801,11 +836,11 @@ async def get_at_risk_devices(
     """Get devices with highest security risk."""
     if mock_mode:
         devices = _generate_mock_devices(limit)
-        at_risk = [d for d in devices if d.risk_level in ('high', 'critical')]
+        at_risk = [d for d in devices if d.risk_level in ("high", "critical")]
         return {
             "at_risk_devices": at_risk[:limit],
             "total_at_risk": len(at_risk),
-            "critical_count": len([d for d in at_risk if d.risk_level == 'critical']),
+            "critical_count": len([d for d in at_risk if d.risk_level == "critical"]),
         }
 
     # TODO: Query devices sorted by security score ascending
@@ -816,6 +851,7 @@ async def get_at_risk_devices(
 # ============================================================================
 # PATH-Based Endpoints
 # ============================================================================
+
 
 @router.get("/paths", response_model=PathHierarchyResponse)
 async def get_security_path_hierarchy(
@@ -874,21 +910,23 @@ async def get_security_by_path(
         def flatten(nodes: list[PathNodeResponse], current_depth: int = 0):
             for node in nodes:
                 if current_depth <= depth:
-                    summaries.append(PathSecuritySummaryResponse(
-                        path=node.full_path,
-                        path_name=node.path_name,
-                        device_count=node.device_count,
-                        security_score=node.security_score,
-                        compliant_count=node.compliant_count,
-                        at_risk_count=node.at_risk_count,
-                        critical_count=node.critical_count,
-                        rooted_count=0,  # Not tracked at node level in mock
-                        unencrypted_count=0,
-                        no_passcode_count=0,
-                        outdated_patch_count=0,
-                        usb_debugging_count=0,
-                        developer_mode_count=0,
-                    ))
+                    summaries.append(
+                        PathSecuritySummaryResponse(
+                            path=node.full_path,
+                            path_name=node.path_name,
+                            device_count=node.device_count,
+                            security_score=node.security_score,
+                            compliant_count=node.compliant_count,
+                            at_risk_count=node.at_risk_count,
+                            critical_count=node.critical_count,
+                            rooted_count=0,  # Not tracked at node level in mock
+                            unencrypted_count=0,
+                            no_passcode_count=0,
+                            outdated_patch_count=0,
+                            usb_debugging_count=0,
+                            developer_mode_count=0,
+                        )
+                    )
                     if node.children:
                         flatten(node.children, current_depth + 1)
 
@@ -919,8 +957,7 @@ async def get_security_risk_clusters(
     tenant_id: str = Depends(get_tenant_id),
     mock_mode: bool = Depends(get_mock_mode),
     violation_types: str | None = Query(
-        default=None,
-        description="Comma-separated violation types to filter"
+        default=None, description="Comma-separated violation types to filter"
     ),
 ):
     """
@@ -949,10 +986,7 @@ async def get_security_risk_clusters(
 async def compare_security_by_path(
     tenant_id: str = Depends(get_tenant_id),
     mock_mode: bool = Depends(get_mock_mode),
-    paths: str = Query(
-        ...,
-        description="Comma-separated paths to compare"
-    ),
+    paths: str = Query(..., description="Comma-separated paths to compare"),
 ):
     """
     Compare security posture across multiple PATHs.
@@ -987,10 +1021,7 @@ async def get_temporal_security_clusters(
     tenant_id: str = Depends(get_tenant_id),
     mock_mode: bool = Depends(get_mock_mode),
     window_hours: int = Query(
-        default=72,
-        ge=24,
-        le=168,
-        description="Time window in hours for correlation"
+        default=72, ge=24, le=168, description="Time window in hours for correlation"
     ),
 ):
     """
@@ -1003,7 +1034,9 @@ async def get_temporal_security_clusters(
         return _generate_mock_temporal_clusters(tenant_id, window_hours)
 
     # TODO: Use SecurityGrouper to find real temporal correlations
-    logger.info("Temporal clusters requested for tenant %s, window %d hours", tenant_id, window_hours)
+    logger.info(
+        "Temporal clusters requested for tenant %s, window %d hours", tenant_id, window_hours
+    )
     return TemporalClustersResponse(
         tenant_id=tenant_id,
         clusters=[],

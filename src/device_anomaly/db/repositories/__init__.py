@@ -13,6 +13,7 @@ Example:
         repo = AnomalyRepository(session)
         anomalies = repo.get_by_tenant('tenant-1', severity='high')
 """
+
 from device_anomaly.db.repositories.anomaly_repo import MAX_PAGE_SIZE, AnomalyRepository
 from device_anomaly.db.repositories.base import BaseRepository
 from device_anomaly.db.repositories.baseline_repo import BaselineRepository

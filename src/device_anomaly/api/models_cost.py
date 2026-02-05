@@ -1,4 +1,5 @@
 """Pydantic models for Cost Intelligence API requests and responses."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -11,6 +12,7 @@ from pydantic import BaseModel, Field
 # =============================================================================
 # ENUMERATIONS
 # =============================================================================
+
 
 class CostCategory(StrEnum):
     """Cost category classification."""
@@ -71,6 +73,7 @@ class AlertThresholdType(StrEnum):
 # BASE MODEL CONFIGURATION
 # =============================================================================
 
+
 class CostBaseModel(BaseModel):
     """Base model for cost payloads with consistent Decimal serialization."""
 
@@ -81,15 +84,24 @@ class CostBaseModel(BaseModel):
 # HARDWARE COST MODELS
 # =============================================================================
 
+
 class HardwareCostBase(CostBaseModel):
     """Base model for hardware cost entries."""
 
-    device_model: str = Field(..., min_length=1, max_length=255, description="Device model identifier")
+    device_model: str = Field(
+        ..., min_length=1, max_length=255, description="Device model identifier"
+    )
     purchase_cost: Decimal = Field(..., ge=0, description="Purchase cost in dollars")
-    replacement_cost: Decimal | None = Field(None, ge=0, description="Replacement cost if different")
+    replacement_cost: Decimal | None = Field(
+        None, ge=0, description="Replacement cost if different"
+    )
     repair_cost_avg: Decimal | None = Field(None, ge=0, description="Average repair cost")
-    depreciation_months: int | None = Field(36, ge=1, le=120, description="Depreciation period in months")
-    residual_value_percent: int | None = Field(0, ge=0, le=100, description="Residual value as percentage")
+    depreciation_months: int | None = Field(
+        36, ge=1, le=120, description="Depreciation period in months"
+    )
+    residual_value_percent: int | None = Field(
+        0, ge=0, le=100, description="Residual value as percentage"
+    )
     warranty_months: int | None = Field(None, ge=0, le=120, description="Warranty period in months")
     currency_code: str = Field("USD", max_length=3, description="ISO 4217 currency code")
     notes: str | None = Field(None, max_length=2000, description="Additional notes")
@@ -120,7 +132,9 @@ class HardwareCostResponse(HardwareCostBase):
     id: int
     tenant_id: str
     device_count: int = Field(0, description="Number of devices using this model")
-    total_fleet_value: Decimal = Field(default=Decimal(0), description="Total value of devices with this model")
+    total_fleet_value: Decimal = Field(
+        default=Decimal(0), description="Total value of devices with this model"
+    )
     valid_from: datetime
     valid_to: datetime | None = None
     created_at: datetime
@@ -157,6 +171,7 @@ class DeviceModelsResponse(CostBaseModel):
 # =============================================================================
 # OPERATIONAL COST MODELS
 # =============================================================================
+
 
 class OperationalCostBase(CostBaseModel):
     """Base model for operational cost entries."""
@@ -225,6 +240,7 @@ class OperationalCostListResponse(CostBaseModel):
 # COST SUMMARY MODELS
 # =============================================================================
 
+
 class CategoryCostSummary(CostBaseModel):
     """Cost summary for a single category."""
 
@@ -261,8 +277,12 @@ class CostSummaryResponse(CostBaseModel):
     by_device_model: list[DeviceModelCostSummary]
 
     # Trends
-    cost_trend_30d: float | None = Field(None, description="Percentage change in costs over 30 days")
-    anomaly_cost_trend_30d: float | None = Field(None, description="Percentage change in anomaly costs")
+    cost_trend_30d: float | None = Field(
+        None, description="Percentage change in costs over 30 days"
+    )
+    anomaly_cost_trend_30d: float | None = Field(
+        None, description="Percentage change in anomaly costs"
+    )
 
     # Metadata
     calculated_at: datetime
@@ -273,6 +293,7 @@ class CostSummaryResponse(CostBaseModel):
 # =============================================================================
 # ANOMALY IMPACT MODELS
 # =============================================================================
+
 
 class ImpactComponent(CostBaseModel):
     """Single component of financial impact."""
@@ -325,8 +346,7 @@ class AnomalyImpactResponse(CostBaseModel):
 
     # Configuration status
     using_defaults: bool = Field(
-        default=True,
-        description="True if using system defaults instead of user-configured costs"
+        default=True, description="True if using system defaults instead of user-configured costs"
     )
 
     calculated_at: datetime
@@ -373,7 +393,9 @@ class DeviceImpactResponse(CostBaseModel):
     recent_anomalies: list[AnomalyImpactResponse] = Field(default_factory=list)
 
     # Historical trend
-    monthly_impact_trend: dict[str, Decimal] = Field(default_factory=dict, description="Last 12 months impact")
+    monthly_impact_trend: dict[str, Decimal] = Field(
+        default_factory=dict, description="Last 12 months impact"
+    )
 
     # Recommendations
     cost_saving_recommendations: list[str] = Field(default_factory=list)
@@ -382,6 +404,7 @@ class DeviceImpactResponse(CostBaseModel):
 # =============================================================================
 # COST HISTORY / AUDIT MODELS
 # =============================================================================
+
 
 class CostChangeEntry(CostBaseModel):
     """Single entry in cost change history."""
@@ -424,6 +447,7 @@ class CostHistoryResponse(CostBaseModel):
 # FINANCIAL IMPACT FOR INSIGHTS
 # =============================================================================
 
+
 class CostBreakdownItem(CostBaseModel):
     """A single item in a cost breakdown."""
 
@@ -457,6 +481,7 @@ class FinancialImpactSummary(CostBaseModel):
 # =============================================================================
 # BATTERY FORECASTING MODELS
 # =============================================================================
+
 
 class BatteryForecastEntry(CostBaseModel):
     """Battery replacement forecast for a device model."""
@@ -493,6 +518,7 @@ class BatteryForecastResponse(CostBaseModel):
 # =============================================================================
 # COST ALERT MODELS
 # =============================================================================
+
 
 class CostAlertBase(CostBaseModel):
     """Base model for cost alerts."""
@@ -548,6 +574,7 @@ class CostAlertListResponse(CostBaseModel):
 # =============================================================================
 # NFF SUMMARY MODELS
 # =============================================================================
+
 
 class NFFByDeviceModel(CostBaseModel):
     """NFF summary grouped by device model."""

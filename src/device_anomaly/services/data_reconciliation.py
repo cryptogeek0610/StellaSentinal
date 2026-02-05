@@ -7,6 +7,7 @@ Monitors and reports on data quality between XSight and MobiControl:
 - Missing data patterns
 - Temporal alignment gaps
 """
+
 from __future__ import annotations
 
 import logging
@@ -154,8 +155,14 @@ class DataReconciliationService:
             mobicontrol_df = pd.DataFrame(columns=["DeviceId", "LastCheckInTime"])
 
         # Get device sets from each source
-        xsight_devices = set(xsight_df["DeviceId"].unique()) if "DeviceId" in xsight_df.columns else set()
-        mc_devices = set(mobicontrol_df["DeviceId"].unique()) if "DeviceId" in mobicontrol_df.columns else set()
+        xsight_devices = (
+            set(xsight_df["DeviceId"].unique()) if "DeviceId" in xsight_df.columns else set()
+        )
+        mc_devices = (
+            set(mobicontrol_df["DeviceId"].unique())
+            if "DeviceId" in mobicontrol_df.columns
+            else set()
+        )
 
         # Compute set operations
         matched = xsight_devices & mc_devices
@@ -246,7 +253,9 @@ class DataReconciliationService:
                 source_name="XSight DW",
                 latest_timestamp=latest,
                 staleness_hours=round(staleness, 1),
-                device_count=xsight_df["DeviceId"].nunique() if "DeviceId" in xsight_df.columns else 0,
+                device_count=xsight_df["DeviceId"].nunique()
+                if "DeviceId" in xsight_df.columns
+                else 0,
                 record_count=len(xsight_df),
                 status=status,
             )
@@ -266,7 +275,9 @@ class DataReconciliationService:
                 source_name="MobiControl",
                 latest_timestamp=latest,
                 staleness_hours=round(staleness, 1),
-                device_count=mobicontrol_df["DeviceId"].nunique() if "DeviceId" in mobicontrol_df.columns else 0,
+                device_count=mobicontrol_df["DeviceId"].nunique()
+                if "DeviceId" in mobicontrol_df.columns
+                else 0,
                 record_count=len(mobicontrol_df),
                 status=status,
             )
@@ -306,8 +317,14 @@ class DataReconciliationService:
         if xsight_df is None or mobicontrol_df is None:
             return []
 
-        xsight_devices = set(xsight_df["DeviceId"].unique()) if "DeviceId" in xsight_df.columns else set()
-        mc_devices = set(mobicontrol_df["DeviceId"].unique()) if "DeviceId" in mobicontrol_df.columns else set()
+        xsight_devices = (
+            set(xsight_df["DeviceId"].unique()) if "DeviceId" in xsight_df.columns else set()
+        )
+        mc_devices = (
+            set(mobicontrol_df["DeviceId"].unique())
+            if "DeviceId" in mobicontrol_df.columns
+            else set()
+        )
 
         missing_devices = []
 
@@ -315,28 +332,48 @@ class DataReconciliationService:
             # Devices in MC but not in XSight
             missing_ids = mc_devices - xsight_devices
             for device_id in list(missing_ids)[:limit]:
-                device_row = mobicontrol_df[mobicontrol_df["DeviceId"] == device_id].iloc[0] if device_id in mobicontrol_df["DeviceId"].values else {}
+                device_row = (
+                    mobicontrol_df[mobicontrol_df["DeviceId"] == device_id].iloc[0]
+                    if device_id in mobicontrol_df["DeviceId"].values
+                    else {}
+                )
 
-                missing_devices.append(MissingDevice(
-                    device_id=int(device_id),
-                    present_in="mobicontrol",
-                    missing_from="xsight",
-                    last_seen=device_row.get("LastCheckInTime") if isinstance(device_row, dict) else getattr(device_row, "LastCheckInTime", None),
-                    device_name=device_row.get("DevName") if isinstance(device_row, dict) else getattr(device_row, "DevName", None),
-                    device_model=device_row.get("ModelId") if isinstance(device_row, dict) else getattr(device_row, "ModelId", None),
-                ))
+                missing_devices.append(
+                    MissingDevice(
+                        device_id=int(device_id),
+                        present_in="mobicontrol",
+                        missing_from="xsight",
+                        last_seen=device_row.get("LastCheckInTime")
+                        if isinstance(device_row, dict)
+                        else getattr(device_row, "LastCheckInTime", None),
+                        device_name=device_row.get("DevName")
+                        if isinstance(device_row, dict)
+                        else getattr(device_row, "DevName", None),
+                        device_model=device_row.get("ModelId")
+                        if isinstance(device_row, dict)
+                        else getattr(device_row, "ModelId", None),
+                    )
+                )
         else:
             # Devices in XSight but not in MC
             missing_ids = xsight_devices - mc_devices
             for device_id in list(missing_ids)[:limit]:
-                device_row = xsight_df[xsight_df["DeviceId"] == device_id].iloc[0] if device_id in xsight_df["DeviceId"].values else {}
+                device_row = (
+                    xsight_df[xsight_df["DeviceId"] == device_id].iloc[0]
+                    if device_id in xsight_df["DeviceId"].values
+                    else {}
+                )
 
-                missing_devices.append(MissingDevice(
-                    device_id=int(device_id),
-                    present_in="xsight",
-                    missing_from="mobicontrol",
-                    last_seen=device_row.get("Timestamp") if isinstance(device_row, dict) else getattr(device_row, "Timestamp", None),
-                ))
+                missing_devices.append(
+                    MissingDevice(
+                        device_id=int(device_id),
+                        present_in="xsight",
+                        missing_from="mobicontrol",
+                        last_seen=device_row.get("Timestamp")
+                        if isinstance(device_row, dict)
+                        else getattr(device_row, "Timestamp", None),
+                    )
+                )
 
         return missing_devices
 
@@ -469,12 +506,16 @@ class DataReconciliationService:
         recommendations = []
 
         if match_rate < self.match_rate_critical:
-            issues.append(f"Critical: Device match rate is {match_rate:.1%} (below {self.match_rate_critical:.0%})")
+            issues.append(
+                f"Critical: Device match rate is {match_rate:.1%} (below {self.match_rate_critical:.0%})"
+            )
             recommendations.append(
                 "Urgent: Investigate data collection gaps. Check device enrollment and sync status."
             )
         elif match_rate < self.match_rate_warning:
-            issues.append(f"Warning: Device match rate is {match_rate:.1%} (below {self.match_rate_warning:.0%})")
+            issues.append(
+                f"Warning: Device match rate is {match_rate:.1%} (below {self.match_rate_warning:.0%})"
+            )
             recommendations.append(
                 "Review unmatched devices - may indicate enrollment issues or data collection gaps."
             )
@@ -569,5 +610,9 @@ def get_data_quality_summary() -> dict[str, Any]:
         "xsight_staleness_hours": report.xsight_staleness_hours,
         "mobicontrol_staleness_hours": report.mobicontrol_staleness_hours,
         "issues_count": len(report.issues),
-        "status": "healthy" if report.quality_grade in ("A", "B") else "warning" if report.quality_grade == "C" else "critical",
+        "status": "healthy"
+        if report.quality_grade in ("A", "B")
+        else "warning"
+        if report.quality_grade == "C"
+        else "critical",
     }

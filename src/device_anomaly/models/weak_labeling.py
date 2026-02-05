@@ -7,6 +7,7 @@ This module generates pseudo-labels when ground truth is unavailable:
 - Temporal consistency (repeated anomalies)
 - Cross-device correlation patterns
 """
+
 from __future__ import annotations
 
 import logging
@@ -174,14 +175,16 @@ class WeakLabelGenerator:
             label: Label to assign (-1=anomaly, 1=normal)
             confidence: Confidence level for this rule
         """
-        self._heuristic_rules.append({
-            "name": name,
-            "column": column,
-            "op": op,
-            "threshold": threshold,
-            "label": label,
-            "confidence": confidence,
-        })
+        self._heuristic_rules.append(
+            {
+                "name": name,
+                "column": column,
+                "op": op,
+                "threshold": threshold,
+                "label": label,
+                "confidence": confidence,
+            }
+        )
 
     def generate_heuristic_labels(
         self,
@@ -235,7 +238,7 @@ class WeakLabelGenerator:
             # Track matched rules
             matched = df.loc[mask, "heuristic_rules_matched"]
             df.loc[mask, "heuristic_rules_matched"] = matched.apply(
-                lambda x: f"{x},{rule['name']}" if x else rule['name']
+                lambda x: f"{x},{rule['name']}" if x else rule["name"]
             )
 
         return df
@@ -263,7 +266,9 @@ class WeakLabelGenerator:
             raise ValueError("Scores length must match dataframe length")
 
         # Percentile-based thresholds
-        anomaly_threshold = np.percentile(scores, 100 * (1 - self.config.anomaly_confidence_threshold))
+        anomaly_threshold = np.percentile(
+            scores, 100 * (1 - self.config.anomaly_confidence_threshold)
+        )
         normal_threshold = np.percentile(scores, 100 * self.config.normal_confidence_threshold)
 
         df[score_col] = scores
@@ -330,16 +335,19 @@ class WeakLabelGenerator:
 
             # Rolling sum of anomalies
             consecutive_count = is_anomaly.rolling(
-                window=self.config.min_consecutive_days,
-                min_periods=1
+                window=self.config.min_consecutive_days, min_periods=1
             ).sum()
 
             # Mark as confident anomaly if consistently flagged
             consistent_mask = consecutive_count >= self.config.min_consecutive_days
 
             device_mask = df["DeviceId"] == device_id
-            df.loc[device_mask & consistent_mask.values, "temporal_label"] = self.config.anomaly_label
-            df.loc[device_mask & consistent_mask.values, "temporal_confidence"] = self.config.temporal_weight
+            df.loc[device_mask & consistent_mask.values, "temporal_label"] = (
+                self.config.anomaly_label
+            )
+            df.loc[device_mask & consistent_mask.values, "temporal_confidence"] = (
+                self.config.temporal_weight
+            )
 
         df = df.drop(columns=["date"], errors="ignore")
         return df
@@ -441,14 +449,8 @@ class WeakLabelGenerator:
         conf_matrix = df[existing_confs].values if existing_confs else np.ones_like(label_matrix)
 
         # Calculate weighted vote for anomaly
-        anomaly_votes = np.sum(
-            (label_matrix == self.config.anomaly_label) * conf_matrix,
-            axis=1
-        )
-        normal_votes = np.sum(
-            (label_matrix == self.config.normal_label) * conf_matrix,
-            axis=1
-        )
+        anomaly_votes = np.sum((label_matrix == self.config.anomaly_label) * conf_matrix, axis=1)
+        normal_votes = np.sum((label_matrix == self.config.normal_label) * conf_matrix, axis=1)
         total_confidence = np.sum(conf_matrix, axis=1) + 1e-6
 
         # Assign final label based on weighted majority

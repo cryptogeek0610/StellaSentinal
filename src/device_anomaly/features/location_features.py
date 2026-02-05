@@ -7,6 +7,7 @@ This module transforms GPS and WiFi location data into ML features including:
 - WiFi coverage analysis (AP hopping, signal gaps)
 - Geographic entropy (randomness of movement patterns)
 """
+
 from __future__ import annotations
 
 import logging
@@ -108,7 +109,9 @@ class LocationFeatureBuilder:
 
     def _has_signal_data(self, df: pd.DataFrame) -> bool:
         """Check if signal strength data is available."""
-        return any(col in df.columns for col in ["SignalStrength", "AvgSignalStrength", "RssiSignal"])
+        return any(
+            col in df.columns for col in ["SignalStrength", "AvgSignalStrength", "RssiSignal"]
+        )
 
     def _has_wifi_data(self, df: pd.DataFrame) -> bool:
         """Check if WiFi SSID/AP data is available."""
@@ -128,10 +131,10 @@ class LocationFeatureBuilder:
 
         # Filter valid coordinate pairs
         valid_mask = (
-            df["Latitude"].notna() &
-            df["Longitude"].notna() &
-            df["prev_lat"].notna() &
-            df["prev_lon"].notna()
+            df["Latitude"].notna()
+            & df["Longitude"].notna()
+            & df["prev_lat"].notna()
+            & df["prev_lon"].notna()
         )
 
         df["point_distance_km"] = np.nan
@@ -147,7 +150,9 @@ class LocationFeatureBuilder:
         if "Timestamp" in df.columns:
             df["date"] = pd.to_datetime(df["Timestamp"]).dt.date
 
-            daily_distance = df.groupby(["DeviceId", "date"])["point_distance_km"].sum().reset_index()
+            daily_distance = (
+                df.groupby(["DeviceId", "date"])["point_distance_km"].sum().reset_index()
+            )
             daily_distance.columns = ["DeviceId", "date", "daily_distance_km"]
 
             df = df.merge(daily_distance, on=["DeviceId", "date"], how="left")

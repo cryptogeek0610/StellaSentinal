@@ -237,7 +237,9 @@ class DeviceAbuseAnalyzer:
             DropAnalysisReport with drop analysis
         """
         # Get device data with drops
-        device_data = self._get_device_abuse_data(period_days, entity_id if group_by == "location" else None)
+        device_data = self._get_device_abuse_data(
+            period_days, entity_id if group_by == "location" else None
+        )
 
         if device_data.empty:
             return self._empty_drop_report(group_by, entity_id, period_days)
@@ -253,13 +255,19 @@ class DeviceAbuseAnalyzer:
         )
 
         # Find devices with excessive drops
-        device_totals = device_data.groupby("device_id").agg({
-            "drop_count": "sum",
-            "location_id": "first",
-            "user_id": "first",
-            "cohort_id": "first",
-            "device_name": "first",
-        }).reset_index()
+        device_totals = (
+            device_data.groupby("device_id")
+            .agg(
+                {
+                    "drop_count": "sum",
+                    "location_id": "first",
+                    "user_id": "first",
+                    "cohort_id": "first",
+                    "device_name": "first",
+                }
+            )
+            .reset_index()
+        )
 
         excessive_mask = device_totals["drop_count"] > drop_threshold
         excessive_count = excessive_mask.sum()
@@ -267,10 +275,12 @@ class DeviceAbuseAnalyzer:
         # Group by location
         by_location = {}
         if "location_id" in device_data.columns:
-            loc_agg = device_data.groupby("location_id").agg({
-                "drop_count": "sum",
-                "device_id": "nunique",
-            })
+            loc_agg = device_data.groupby("location_id").agg(
+                {
+                    "drop_count": "sum",
+                    "device_id": "nunique",
+                }
+            )
             for loc_id, row in loc_agg.iterrows():
                 if pd.notna(loc_id):
                     rate = row["drop_count"] / row["device_id"] / period_days * 7  # Per week
@@ -279,10 +289,12 @@ class DeviceAbuseAnalyzer:
         # Group by user
         by_user = {}
         if "user_id" in device_data.columns:
-            user_agg = device_data.groupby("user_id").agg({
-                "drop_count": "sum",
-                "device_id": "nunique",
-            })
+            user_agg = device_data.groupby("user_id").agg(
+                {
+                    "drop_count": "sum",
+                    "device_id": "nunique",
+                }
+            )
             for user_id, row in user_agg.iterrows():
                 if pd.notna(user_id):
                     rate = row["drop_count"] / row["device_id"] / period_days * 7
@@ -291,10 +303,12 @@ class DeviceAbuseAnalyzer:
         # Group by cohort
         by_cohort = {}
         if "cohort_id" in device_data.columns:
-            cohort_agg = device_data.groupby("cohort_id").agg({
-                "drop_count": "sum",
-                "device_id": "nunique",
-            })
+            cohort_agg = device_data.groupby("cohort_id").agg(
+                {
+                    "drop_count": "sum",
+                    "device_id": "nunique",
+                }
+            )
             for cohort_id, row in cohort_agg.iterrows():
                 if pd.notna(cohort_id):
                     rate = row["drop_count"] / row["device_id"] / period_days * 7
@@ -351,7 +365,9 @@ class DeviceAbuseAnalyzer:
         Returns:
             RebootAnalysisReport with reboot analysis
         """
-        device_data = self._get_device_abuse_data(period_days, entity_id if group_by == "location" else None)
+        device_data = self._get_device_abuse_data(
+            period_days, entity_id if group_by == "location" else None
+        )
 
         if device_data.empty:
             return self._empty_reboot_report(group_by, entity_id, period_days)
@@ -366,14 +382,20 @@ class DeviceAbuseAnalyzer:
             device_data, "reboot_count", self.EXCESSIVE_REBOOTS_THRESHOLD
         )
 
-        device_totals = device_data.groupby("device_id").agg({
-            "reboot_count": "sum",
-            "crash_count": "sum",
-            "location_id": "first",
-            "user_id": "first",
-            "cohort_id": "first",
-            "device_name": "first",
-        }).reset_index()
+        device_totals = (
+            device_data.groupby("device_id")
+            .agg(
+                {
+                    "reboot_count": "sum",
+                    "crash_count": "sum",
+                    "location_id": "first",
+                    "user_id": "first",
+                    "cohort_id": "first",
+                    "device_name": "first",
+                }
+            )
+            .reset_index()
+        )
 
         excessive_mask = device_totals["reboot_count"] > reboot_threshold
         excessive_count = excessive_mask.sum()
@@ -383,12 +405,21 @@ class DeviceAbuseAnalyzer:
         if total_reboots > 0:
             # Estimate crash-induced reboots (simplified: if crashes > reboots/2, they're related)
             devices_with_crashes = device_totals[device_totals["crash_count"] > 0]
-            crash_induced = min(100, (len(devices_with_crashes) / len(device_totals) * 100) if len(device_totals) > 0 else 0)
+            crash_induced = min(
+                100,
+                (len(devices_with_crashes) / len(device_totals) * 100)
+                if len(device_totals) > 0
+                else 0,
+            )
 
         # Group by entity
-        by_location = self._group_metric_by_entity(device_data, "reboot_count", "location_id", period_days)
+        by_location = self._group_metric_by_entity(
+            device_data, "reboot_count", "location_id", period_days
+        )
         by_user = self._group_metric_by_entity(device_data, "reboot_count", "user_id", period_days)
-        by_cohort = self._group_metric_by_entity(device_data, "reboot_count", "cohort_id", period_days)
+        by_cohort = self._group_metric_by_entity(
+            device_data, "reboot_count", "cohort_id", period_days
+        )
 
         # Worst devices and cohorts
         worst_devices = self._get_worst_reboot_devices(device_totals, device_data, period_days)
@@ -454,16 +485,22 @@ class DeviceAbuseAnalyzer:
         fleet_avg_crashes = device_data.groupby("device_id")["crash_count"].sum().mean()
 
         # Group by cohort and calculate metrics
-        cohort_agg = device_data.groupby("cohort_id").agg({
-            "device_id": "nunique",
-            "drop_count": "sum",
-            "reboot_count": "sum",
-            "crash_count": "sum",
-            "manufacturer": "first",
-            "model": "first",
-            "os_version": "first",
-            "firmware_version": "first",
-        }).reset_index()
+        cohort_agg = (
+            device_data.groupby("cohort_id")
+            .agg(
+                {
+                    "device_id": "nunique",
+                    "drop_count": "sum",
+                    "reboot_count": "sum",
+                    "crash_count": "sum",
+                    "manufacturer": "first",
+                    "model": "first",
+                    "os_version": "first",
+                    "firmware_version": "first",
+                }
+            )
+            .reset_index()
+        )
 
         cohort_agg["avg_drops"] = cohort_agg["drop_count"] / cohort_agg["device_id"]
         cohort_agg["avg_reboots"] = cohort_agg["reboot_count"] / cohort_agg["device_id"]
@@ -480,8 +517,12 @@ class DeviceAbuseAnalyzer:
 
             # Calculate how much worse than fleet average
             drop_multiplier = row["avg_drops"] / fleet_avg_drops if fleet_avg_drops > 0 else 1
-            reboot_multiplier = row["avg_reboots"] / fleet_avg_reboots if fleet_avg_reboots > 0 else 1
-            crash_multiplier = row["avg_crashes"] / fleet_avg_crashes if fleet_avg_crashes > 0 else 1
+            reboot_multiplier = (
+                row["avg_reboots"] / fleet_avg_reboots if fleet_avg_reboots > 0 else 1
+            )
+            crash_multiplier = (
+                row["avg_crashes"] / fleet_avg_crashes if fleet_avg_crashes > 0 else 1
+            )
 
             max_multiplier = max(drop_multiplier, reboot_multiplier, crash_multiplier)
 
@@ -511,31 +552,35 @@ class DeviceAbuseAnalyzer:
                 # Calculate issue rate (% of devices with any issue)
                 # Simplified: if above threshold = has issue
                 issue_rate = (
-                    row["avg_drops"] > self.EXCESSIVE_DROPS_THRESHOLD or
-                     row["avg_reboots"] > self.EXCESSIVE_REBOOTS_THRESHOLD
+                    row["avg_drops"] > self.EXCESSIVE_DROPS_THRESHOLD
+                    or row["avg_reboots"] > self.EXCESSIVE_REBOOTS_THRESHOLD
                 )
 
-                problem_combinations.append(ProblemCombination(
-                    cohort_id=cohort_id,
-                    manufacturer=manufacturer,
-                    model=model,
-                    os_version=os_version,
-                    firmware_version=firmware,
-                    device_count=int(row["device_id"]),
-                    issue_rate=float(issue_rate),
-                    avg_drops_per_device=float(row["avg_drops"]),
-                    avg_reboots_per_device=float(row["avg_reboots"]),
-                    avg_crashes_per_device=float(row["avg_crashes"]),
-                    vs_fleet_issue_rate=float(max_multiplier),
-                    is_statistically_significant=row["device_id"] >= self.MIN_COHORT_SIZE,
-                    primary_issue=primary_issue,
-                    severity=severity,
-                    description=(
-                        f"{manufacturer} {model} on {os_version} has {max_multiplier:.1f}x "
-                        f"the fleet average {primary_issue}"
-                    ),
-                    recommendations=self._get_cohort_recommendations(primary_issue, firmware is not None),
-                ))
+                problem_combinations.append(
+                    ProblemCombination(
+                        cohort_id=cohort_id,
+                        manufacturer=manufacturer,
+                        model=model,
+                        os_version=os_version,
+                        firmware_version=firmware,
+                        device_count=int(row["device_id"]),
+                        issue_rate=float(issue_rate),
+                        avg_drops_per_device=float(row["avg_drops"]),
+                        avg_reboots_per_device=float(row["avg_reboots"]),
+                        avg_crashes_per_device=float(row["avg_crashes"]),
+                        vs_fleet_issue_rate=float(max_multiplier),
+                        is_statistically_significant=row["device_id"] >= self.MIN_COHORT_SIZE,
+                        primary_issue=primary_issue,
+                        severity=severity,
+                        description=(
+                            f"{manufacturer} {model} on {os_version} has {max_multiplier:.1f}x "
+                            f"the fleet average {primary_issue}"
+                        ),
+                        recommendations=self._get_cohort_recommendations(
+                            primary_issue, firmware is not None
+                        ),
+                    )
+                )
 
         # Sort by severity
         problem_combinations.sort(key=lambda x: x.vs_fleet_issue_rate, reverse=True)
@@ -544,24 +589,34 @@ class DeviceAbuseAnalyzer:
         devices_in_problems = sum(p.device_count for p in problem_combinations)
 
         # Worst manufacturers
-        mfg_agg = cohort_agg.groupby("manufacturer").agg({
-            "drop_count": "sum",
-            "reboot_count": "sum",
-            "device_id": "sum",
-        })
-        mfg_agg["issue_rate"] = (mfg_agg["drop_count"] + mfg_agg["reboot_count"]) / mfg_agg["device_id"]
-        worst_mfg = [(str(mfg), float(rate)) for mfg, rate in
-                     mfg_agg["issue_rate"].sort_values(ascending=False).head(5).items()]
+        mfg_agg = cohort_agg.groupby("manufacturer").agg(
+            {
+                "drop_count": "sum",
+                "reboot_count": "sum",
+                "device_id": "sum",
+            }
+        )
+        mfg_agg["issue_rate"] = (mfg_agg["drop_count"] + mfg_agg["reboot_count"]) / mfg_agg[
+            "device_id"
+        ]
+        worst_mfg = [
+            (str(mfg), float(rate))
+            for mfg, rate in mfg_agg["issue_rate"].sort_values(ascending=False).head(5).items()
+        ]
 
         # Worst OS versions
-        os_agg = cohort_agg.groupby("os_version").agg({
-            "drop_count": "sum",
-            "reboot_count": "sum",
-            "device_id": "sum",
-        })
+        os_agg = cohort_agg.groupby("os_version").agg(
+            {
+                "drop_count": "sum",
+                "reboot_count": "sum",
+                "device_id": "sum",
+            }
+        )
         os_agg["issue_rate"] = (os_agg["drop_count"] + os_agg["reboot_count"]) / os_agg["device_id"]
-        worst_os = [(str(os_v), float(rate)) for os_v, rate in
-                    os_agg["issue_rate"].sort_values(ascending=False).head(5).items()]
+        worst_os = [
+            (str(os_v), float(rate))
+            for os_v, rate in os_agg["issue_rate"].sort_values(ascending=False).head(5).items()
+        ]
 
         recommendations = self._generate_combination_recommendations(problem_combinations)
 
@@ -608,8 +663,12 @@ class DeviceAbuseAnalyzer:
         all_drops = device_data.groupby("device_id")["drop_count"].sum()
         all_reboots = device_data.groupby("device_id")["reboot_count"].sum()
 
-        drop_percentile = (all_drops < drops).sum() / len(all_drops) * 100 if len(all_drops) > 0 else 50
-        reboot_percentile = (all_reboots < reboots).sum() / len(all_reboots) * 100 if len(all_reboots) > 0 else 50
+        drop_percentile = (
+            (all_drops < drops).sum() / len(all_drops) * 100 if len(all_drops) > 0 else 50
+        )
+        reboot_percentile = (
+            (all_reboots < reboots).sum() / len(all_reboots) * 100 if len(all_reboots) > 0 else 50
+        )
 
         # Abuse score (0-100)
         abuse_score = (drop_percentile + reboot_percentile) / 2
@@ -664,7 +723,9 @@ class DeviceAbuseAnalyzer:
                 if location_id and metadata.get("location_id") != location_id:
                     continue
 
-                features = json.loads(feature.feature_values_json) if feature.feature_values_json else {}
+                features = (
+                    json.loads(feature.feature_values_json) if feature.feature_values_json else {}
+                )
 
                 # Build cohort ID
                 manufacturer = metadata.get("Manufacturer", "Unknown")
@@ -678,25 +739,27 @@ class DeviceAbuseAnalyzer:
                 if reboot_count > 0:
                     has_reboot_data = True
 
-                records.append({
-                    "device_id": feature.device_id,
-                    "device_name": metadata.get("device_name"),
-                    "computed_at": feature.computed_at,
-                    "location_id": metadata.get("location_id"),
-                    "user_id": metadata.get("user_id"),
-                    "user_name": metadata.get("user_name"),  # For by-user analysis
-                    "user_email": metadata.get("user_email"),  # For by-user analysis
-                    "cohort_id": cohort_id,
-                    "manufacturer": manufacturer,
-                    "model": model,
-                    "os_version": os_version,
-                    "firmware_version": firmware,
-                    "drop_count": features.get("TotalDropCnt", 0),
-                    "reboot_count": reboot_count,
-                    "crash_count": features.get("CrashCount", 0),
-                    "consecutive_reboot_count": features.get("consecutive_reboot_count", 0),
-                    "has_boot_loop_pattern": features.get("has_boot_loop_pattern", False),
-                })
+                records.append(
+                    {
+                        "device_id": feature.device_id,
+                        "device_name": metadata.get("device_name"),
+                        "computed_at": feature.computed_at,
+                        "location_id": metadata.get("location_id"),
+                        "user_id": metadata.get("user_id"),
+                        "user_name": metadata.get("user_name"),  # For by-user analysis
+                        "user_email": metadata.get("user_email"),  # For by-user analysis
+                        "cohort_id": cohort_id,
+                        "manufacturer": manufacturer,
+                        "model": model,
+                        "os_version": os_version,
+                        "firmware_version": firmware,
+                        "drop_count": features.get("TotalDropCnt", 0),
+                        "reboot_count": reboot_count,
+                        "crash_count": features.get("CrashCount", 0),
+                        "consecutive_reboot_count": features.get("consecutive_reboot_count", 0),
+                        "has_boot_loop_pattern": features.get("has_boot_loop_pattern", False),
+                    }
+                )
             except (json.JSONDecodeError, TypeError):
                 continue
 
@@ -734,10 +797,12 @@ class DeviceAbuseAnalyzer:
                 return df
 
             # Merge reboot data
-            reboot_df = reboot_df.rename(columns={
-                "DeviceId": "device_id",
-                "reboot_count": "mc_reboot_count",
-            })
+            reboot_df = reboot_df.rename(
+                columns={
+                    "DeviceId": "device_id",
+                    "reboot_count": "mc_reboot_count",
+                }
+            )
 
             df = df.merge(
                 reboot_df[["device_id", "mc_reboot_count", "consecutive_reboot_count"]],
@@ -861,13 +926,19 @@ class DeviceAbuseAnalyzer:
             }
 
         # Aggregate by user
-        user_agg = with_user.groupby("user_id").agg({
-            "drop_count": "sum",
-            "reboot_count": "sum",
-            "device_id": "nunique",
-            "user_name": "first",
-            "user_email": "first",
-        }).reset_index()
+        user_agg = (
+            with_user.groupby("user_id")
+            .agg(
+                {
+                    "drop_count": "sum",
+                    "reboot_count": "sum",
+                    "device_id": "nunique",
+                    "user_name": "first",
+                    "user_email": "first",
+                }
+            )
+            .reset_index()
+        )
 
         user_agg["drops_per_device"] = user_agg["drop_count"] / user_agg["device_id"]
         user_agg["drops_per_day"] = user_agg["drop_count"] / period_days
@@ -884,20 +955,26 @@ class DeviceAbuseAnalyzer:
 
         worst_users = []
         for _, row in worst.iterrows():
-            multiplier = row["drops_per_device"] / fleet_avg_drops_per_device if fleet_avg_drops_per_device > 0 else 1
+            multiplier = (
+                row["drops_per_device"] / fleet_avg_drops_per_device
+                if fleet_avg_drops_per_device > 0
+                else 1
+            )
 
-            worst_users.append({
-                "user_id": str(row["user_id"]),
-                "user_name": row["user_name"],
-                "user_email": row["user_email"],
-                "total_drops": int(row["drop_count"]),
-                "total_reboots": int(row["reboot_count"]),
-                "device_count": int(row["device_id"]),
-                "drops_per_device": round(float(row["drops_per_device"]), 2),
-                "drops_per_day": round(float(row["drops_per_day"]), 2),
-                "vs_fleet_multiplier": round(float(multiplier), 2),
-                "is_excessive": bool(row["is_excessive"]),
-            })
+            worst_users.append(
+                {
+                    "user_id": str(row["user_id"]),
+                    "user_name": row["user_name"],
+                    "user_email": row["user_email"],
+                    "total_drops": int(row["drop_count"]),
+                    "total_reboots": int(row["reboot_count"]),
+                    "device_count": int(row["device_id"]),
+                    "drops_per_device": round(float(row["drops_per_device"]), 2),
+                    "drops_per_day": round(float(row["drops_per_day"]), 2),
+                    "vs_fleet_multiplier": round(float(multiplier), 2),
+                    "is_excessive": bool(row["is_excessive"]),
+                }
+            )
 
         # Generate recommendations
         recommendations = []
@@ -970,14 +1047,20 @@ class DeviceAbuseAnalyzer:
             }
 
         # Aggregate by user
-        user_agg = with_user.groupby("user_id").agg({
-            "reboot_count": "sum",
-            "crash_count": "sum",
-            "drop_count": "sum",
-            "device_id": "nunique",
-            "user_name": "first",
-            "user_email": "first",
-        }).reset_index()
+        user_agg = (
+            with_user.groupby("user_id")
+            .agg(
+                {
+                    "reboot_count": "sum",
+                    "crash_count": "sum",
+                    "drop_count": "sum",
+                    "device_id": "nunique",
+                    "user_name": "first",
+                    "user_email": "first",
+                }
+            )
+            .reset_index()
+        )
 
         user_agg["reboots_per_device"] = user_agg["reboot_count"] / user_agg["device_id"]
         fleet_avg_reboots = user_agg["reboots_per_device"].mean()
@@ -989,19 +1072,23 @@ class DeviceAbuseAnalyzer:
 
         worst_users = []
         for _, row in worst.iterrows():
-            multiplier = row["reboots_per_device"] / fleet_avg_reboots if fleet_avg_reboots > 0 else 1
+            multiplier = (
+                row["reboots_per_device"] / fleet_avg_reboots if fleet_avg_reboots > 0 else 1
+            )
 
-            worst_users.append({
-                "user_id": str(row["user_id"]),
-                "user_name": row["user_name"],
-                "user_email": row["user_email"],
-                "total_reboots": int(row["reboot_count"]),
-                "total_crashes": int(row["crash_count"]),
-                "device_count": int(row["device_id"]),
-                "reboots_per_device": round(float(row["reboots_per_device"]), 2),
-                "vs_fleet_multiplier": round(float(multiplier), 2),
-                "is_excessive": bool(row["is_excessive"]),
-            })
+            worst_users.append(
+                {
+                    "user_id": str(row["user_id"]),
+                    "user_name": row["user_name"],
+                    "user_email": row["user_email"],
+                    "total_reboots": int(row["reboot_count"]),
+                    "total_crashes": int(row["crash_count"]),
+                    "device_count": int(row["device_id"]),
+                    "reboots_per_device": round(float(row["reboots_per_device"]), 2),
+                    "vs_fleet_multiplier": round(float(multiplier), 2),
+                    "is_excessive": bool(row["is_excessive"]),
+                }
+            )
 
         recommendations = []
         if excessive_users > 0:
@@ -1051,10 +1138,12 @@ class DeviceAbuseAnalyzer:
         if entity_col not in data.columns:
             return result
 
-        agg = data.groupby(entity_col).agg({
-            metric_col: "sum",
-            "device_id": "nunique",
-        })
+        agg = data.groupby(entity_col).agg(
+            {
+                metric_col: "sum",
+                "device_id": "nunique",
+            }
+        )
 
         for entity_id, row in agg.iterrows():
             if pd.notna(entity_id):
@@ -1079,7 +1168,11 @@ class DeviceAbuseAnalyzer:
 
         # Calculate fleet statistics for percentiles
         all_drops = device_totals["drop_count"]
-        all_reboots = device_totals["reboot_count"] if "reboot_count" in device_totals.columns else pd.Series([0])
+        all_reboots = (
+            device_totals["reboot_count"]
+            if "reboot_count" in device_totals.columns
+            else pd.Series([0])
+        )
 
         indicators = []
         for _, row in worst.iterrows():
@@ -1087,11 +1180,20 @@ class DeviceAbuseAnalyzer:
             reboots = row.get("reboot_count", 0)
 
             # Percentiles
-            drop_pct = int((all_drops < drops).sum() / len(all_drops) * 100) if len(all_drops) > 0 else 50
-            reboot_pct = int((all_reboots < reboots).sum() / len(all_reboots) * 100) if len(all_reboots) > 0 else 50
+            drop_pct = (
+                int((all_drops < drops).sum() / len(all_drops) * 100) if len(all_drops) > 0 else 50
+            )
+            reboot_pct = (
+                int((all_reboots < reboots).sum() / len(all_reboots) * 100)
+                if len(all_reboots) > 0
+                else 50
+            )
 
             # Determine abuse type
-            if drops > self.EXCESSIVE_DROPS_THRESHOLD and reboots > self.EXCESSIVE_REBOOTS_THRESHOLD:
+            if (
+                drops > self.EXCESSIVE_DROPS_THRESHOLD
+                and reboots > self.EXCESSIVE_REBOOTS_THRESHOLD
+            ):
                 abuse_type = AbuseType.COMBINED_ABUSE
             else:
                 abuse_type = AbuseType.EXCESSIVE_DROPS
@@ -1104,25 +1206,30 @@ class DeviceAbuseAnalyzer:
             else:
                 severity = InsightSeverity.MEDIUM
 
-            indicators.append(DeviceAbuseIndicator(
-                device_id=int(row["device_id"]),
-                device_name=row.get("device_name"),
-                abuse_type=abuse_type,
-                drop_count=int(drops),
-                drop_rate_per_day=float(drops / period_days),
-                reboot_count=int(reboots),
-                reboot_rate_per_day=float(reboots / period_days),
-                crash_count=0,
-                vs_fleet_drop_percentile=drop_pct,
-                vs_fleet_reboot_percentile=reboot_pct,
-                vs_cohort_multiplier=1.0,  # Would need cohort data
-                assigned_user=row.get("user_id"),
-                assigned_location=row.get("location_id"),
-                device_cohort=row.get("cohort_id", "Unknown"),
-                severity=severity,
-                description=f"{drops} drops in {period_days} days (top {100-drop_pct}% worst)",
-                recommendations=["Investigate physical handling", "Check device case/protection"],
-            ))
+            indicators.append(
+                DeviceAbuseIndicator(
+                    device_id=int(row["device_id"]),
+                    device_name=row.get("device_name"),
+                    abuse_type=abuse_type,
+                    drop_count=int(drops),
+                    drop_rate_per_day=float(drops / period_days),
+                    reboot_count=int(reboots),
+                    reboot_rate_per_day=float(reboots / period_days),
+                    crash_count=0,
+                    vs_fleet_drop_percentile=drop_pct,
+                    vs_fleet_reboot_percentile=reboot_pct,
+                    vs_cohort_multiplier=1.0,  # Would need cohort data
+                    assigned_user=row.get("user_id"),
+                    assigned_location=row.get("location_id"),
+                    device_cohort=row.get("cohort_id", "Unknown"),
+                    severity=severity,
+                    description=f"{drops} drops in {period_days} days (top {100 - drop_pct}% worst)",
+                    recommendations=[
+                        "Investigate physical handling",
+                        "Check device case/protection",
+                    ],
+                )
+            )
 
         return indicators
 
@@ -1140,7 +1247,9 @@ class DeviceAbuseAnalyzer:
         worst = device_totals.nlargest(limit, "reboot_count")
 
         all_reboots = device_totals["reboot_count"]
-        all_drops = device_totals["drop_count"] if "drop_count" in device_totals.columns else pd.Series([0])
+        all_drops = (
+            device_totals["drop_count"] if "drop_count" in device_totals.columns else pd.Series([0])
+        )
 
         indicators = []
         for _, row in worst.iterrows():
@@ -1148,8 +1257,14 @@ class DeviceAbuseAnalyzer:
             crashes = row.get("crash_count", 0)
             drops = row.get("drop_count", 0)
 
-            reboot_pct = int((all_reboots < reboots).sum() / len(all_reboots) * 100) if len(all_reboots) > 0 else 50
-            drop_pct = int((all_drops < drops).sum() / len(all_drops) * 100) if len(all_drops) > 0 else 50
+            reboot_pct = (
+                int((all_reboots < reboots).sum() / len(all_reboots) * 100)
+                if len(all_reboots) > 0
+                else 50
+            )
+            drop_pct = (
+                int((all_drops < drops).sum() / len(all_drops) * 100) if len(all_drops) > 0 else 50
+            )
 
             # Determine if crash-related
             if crashes > reboots / 2:
@@ -1164,28 +1279,31 @@ class DeviceAbuseAnalyzer:
             else:
                 severity = InsightSeverity.MEDIUM
 
-            indicators.append(DeviceAbuseIndicator(
-                device_id=int(row["device_id"]),
-                device_name=row.get("device_name"),
-                abuse_type=abuse_type,
-                drop_count=int(drops),
-                drop_rate_per_day=float(drops / period_days),
-                reboot_count=int(reboots),
-                reboot_rate_per_day=float(reboots / period_days),
-                crash_count=int(crashes),
-                vs_fleet_drop_percentile=drop_pct,
-                vs_fleet_reboot_percentile=reboot_pct,
-                vs_cohort_multiplier=1.0,
-                assigned_user=row.get("user_id"),
-                assigned_location=row.get("location_id"),
-                device_cohort=row.get("cohort_id", "Unknown"),
-                severity=severity,
-                description=f"{reboots} reboots in {period_days} days (top {100-reboot_pct}% worst)",
-                recommendations=(
-                    ["Check for app crashes", "Consider factory reset"] if abuse_type == AbuseType.CRASH_RELATED_REBOOTS
-                    else ["Check for hardware issues", "Verify firmware version"]
-                ),
-            ))
+            indicators.append(
+                DeviceAbuseIndicator(
+                    device_id=int(row["device_id"]),
+                    device_name=row.get("device_name"),
+                    abuse_type=abuse_type,
+                    drop_count=int(drops),
+                    drop_rate_per_day=float(drops / period_days),
+                    reboot_count=int(reboots),
+                    reboot_rate_per_day=float(reboots / period_days),
+                    crash_count=int(crashes),
+                    vs_fleet_drop_percentile=drop_pct,
+                    vs_fleet_reboot_percentile=reboot_pct,
+                    vs_cohort_multiplier=1.0,
+                    assigned_user=row.get("user_id"),
+                    assigned_location=row.get("location_id"),
+                    device_cohort=row.get("cohort_id", "Unknown"),
+                    severity=severity,
+                    description=f"{reboots} reboots in {period_days} days (top {100 - reboot_pct}% worst)",
+                    recommendations=(
+                        ["Check for app crashes", "Consider factory reset"]
+                        if abuse_type == AbuseType.CRASH_RELATED_REBOOTS
+                        else ["Check for hardware issues", "Verify firmware version"]
+                    ),
+                )
+            )
 
         return indicators
 
@@ -1226,7 +1344,7 @@ class DeviceAbuseAnalyzer:
 
         if excessive_count > total_devices * 0.1:
             recs.append(
-                f"{excessive_count} devices ({excessive_count/total_devices*100:.0f}%) have excessive drops. "
+                f"{excessive_count} devices ({excessive_count / total_devices * 100:.0f}%) have excessive drops. "
                 "Consider fleet-wide protective case review."
             )
 
@@ -1299,7 +1417,9 @@ class DeviceAbuseAnalyzer:
 
         for os_v, count in os_issues.items():
             if count >= 2:
-                recs.append(f"OS version '{os_v}' appears in {count} problem combinations. Consider OS update.")
+                recs.append(
+                    f"OS version '{os_v}' appears in {count} problem combinations. Consider OS update."
+                )
 
         return recs
 

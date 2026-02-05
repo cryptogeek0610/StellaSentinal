@@ -87,7 +87,11 @@ def resolve_model_artifacts(models_dir: Path | None = None) -> ModelArtifactLoca
         except Exception:
             metadata = None
 
-    return ModelArtifactLocation(model_dir=model_dir, metadata_path=metadata_path if metadata_path.exists() else None, metadata=metadata)
+    return ModelArtifactLocation(
+        model_dir=model_dir,
+        metadata_path=metadata_path if metadata_path.exists() else None,
+        metadata=metadata,
+    )
 
 
 def resolve_artifact_path(model_dir: Path, artifact_path: str | None) -> Path | None:

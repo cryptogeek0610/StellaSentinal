@@ -9,6 +9,7 @@ Instead of dashboards showing data, this service:
 
 "The best interface is no interface" - delete the need for users to hunt for problems.
 """
+
 from __future__ import annotations
 
 import logging
@@ -23,9 +24,10 @@ logger = logging.getLogger(__name__)
 
 class IssueCategory(StrEnum):
     """Categories that matter to the business, not technical silos."""
+
     PRODUCTIVITY_LOSS = "productivity_loss"  # Devices not working = people not working
-    SECURITY_RISK = "security_risk"          # Exposure to breach/compliance failure
-    COST_WASTE = "cost_waste"                # Money being burned unnecessarily
+    SECURITY_RISK = "security_risk"  # Exposure to breach/compliance failure
+    COST_WASTE = "cost_waste"  # Money being burned unnecessarily
     IMPENDING_FAILURE = "impending_failure"  # About to break, fix before it does
 
 
@@ -40,6 +42,7 @@ class RemediationStatus(StrEnum):
 @dataclass
 class BusinessImpact:
     """Quantify the actual cost of not fixing this."""
+
     affected_devices: int
     affected_users: int
     hourly_cost: float  # $ per hour this continues
@@ -54,6 +57,7 @@ class BusinessImpact:
 @dataclass
 class Remediation:
     """What to do about it."""
+
     action_type: str  # "push_policy", "send_alert", "schedule_replacement", etc.
     description: str
     automated: bool  # Can we just do it?
@@ -65,6 +69,7 @@ class Remediation:
 @dataclass
 class DetectedIssue:
     """A problem that needs fixing."""
+
     id: str
     category: IssueCategory
     title: str  # "12 devices have USB debugging enabled"
@@ -186,50 +191,54 @@ class ProactiveResolver:
         # Example: USB debugging enabled
         usb_debug_count = self._query_usb_debugging_enabled(tenant_id)
         if usb_debug_count > 0:
-            issues.append(DetectedIssue(
-                id=f"sec_usb_debug_{tenant_id}",
-                category=IssueCategory.SECURITY_RISK,
-                title=f"{usb_debug_count} devices have USB debugging enabled",
-                root_cause="Developer/test devices not returned to production config",
-                impact=BusinessImpact(
-                    affected_devices=usb_debug_count,
-                    affected_users=usb_debug_count,
-                    hourly_cost=usb_debug_count * 2.0,  # $2/device/hr risk cost
-                    risk_multiplier=5.0,  # High risk - data exfiltration possible
-                ),
-                remediation=Remediation(
-                    action_type="push_policy",
-                    description="Push 'Disable USB Debugging' policy via MobiControl",
-                    automated=True,
-                    estimated_fix_time_minutes=5,
-                    success_probability=0.95,
-                    parameters={"policy_id": "disable_usb_debug"},
-                ),
-            ))
+            issues.append(
+                DetectedIssue(
+                    id=f"sec_usb_debug_{tenant_id}",
+                    category=IssueCategory.SECURITY_RISK,
+                    title=f"{usb_debug_count} devices have USB debugging enabled",
+                    root_cause="Developer/test devices not returned to production config",
+                    impact=BusinessImpact(
+                        affected_devices=usb_debug_count,
+                        affected_users=usb_debug_count,
+                        hourly_cost=usb_debug_count * 2.0,  # $2/device/hr risk cost
+                        risk_multiplier=5.0,  # High risk - data exfiltration possible
+                    ),
+                    remediation=Remediation(
+                        action_type="push_policy",
+                        description="Push 'Disable USB Debugging' policy via MobiControl",
+                        automated=True,
+                        estimated_fix_time_minutes=5,
+                        success_probability=0.95,
+                        parameters={"policy_id": "disable_usb_debug"},
+                    ),
+                )
+            )
 
         # Unencrypted devices
         unencrypted = self._query_unencrypted_devices(tenant_id)
         if unencrypted > 0:
-            issues.append(DetectedIssue(
-                id=f"sec_unencrypted_{tenant_id}",
-                category=IssueCategory.SECURITY_RISK,
-                title=f"{unencrypted} devices lack encryption",
-                root_cause="Devices enrolled before encryption policy, or policy not enforced",
-                impact=BusinessImpact(
-                    affected_devices=unencrypted,
-                    affected_users=unencrypted,
-                    hourly_cost=unencrypted * 10.0,  # High compliance risk
-                    risk_multiplier=10.0,  # Critical - data breach risk
-                ),
-                remediation=Remediation(
-                    action_type="push_policy",
-                    description="Force encryption via MDM policy",
-                    automated=True,
-                    estimated_fix_time_minutes=30,  # Encryption takes time
-                    success_probability=0.85,
-                    parameters={"policy_id": "enforce_encryption"},
-                ),
-            ))
+            issues.append(
+                DetectedIssue(
+                    id=f"sec_unencrypted_{tenant_id}",
+                    category=IssueCategory.SECURITY_RISK,
+                    title=f"{unencrypted} devices lack encryption",
+                    root_cause="Devices enrolled before encryption policy, or policy not enforced",
+                    impact=BusinessImpact(
+                        affected_devices=unencrypted,
+                        affected_users=unencrypted,
+                        hourly_cost=unencrypted * 10.0,  # High compliance risk
+                        risk_multiplier=10.0,  # Critical - data breach risk
+                    ),
+                    remediation=Remediation(
+                        action_type="push_policy",
+                        description="Force encryption via MDM policy",
+                        automated=True,
+                        estimated_fix_time_minutes=30,  # Encryption takes time
+                        success_probability=0.85,
+                        parameters={"policy_id": "enforce_encryption"},
+                    ),
+                )
+            )
 
         return issues
 
@@ -239,27 +248,29 @@ class ProactiveResolver:
 
         dead_zones = self._query_network_dead_zones(tenant_id)
         for zone in dead_zones:
-            issues.append(DetectedIssue(
-                id=f"net_deadzone_{zone['location_id']}",
-                category=IssueCategory.PRODUCTIVITY_LOSS,
-                title=f"Dead zone at {zone['location_name']}: {zone['device_count']} devices affected",
-                root_cause=f"WiFi signal strength avg {zone['avg_signal']} dBm (needs >-70 dBm)",
-                impact=BusinessImpact(
-                    affected_devices=zone['device_count'],
-                    affected_users=zone['device_count'],
-                    hourly_cost=zone['device_count'] * 25.0,  # Lost productivity
-                    risk_multiplier=1.5,
-                ),
-                remediation=Remediation(
-                    action_type="infrastructure_ticket",
-                    description=f"Add WiFi AP at {zone['location_name']}",
-                    automated=False,  # Requires physical install
-                    estimated_fix_time_minutes=240,
-                    success_probability=0.9,
-                    parameters={"location": zone['location_name']},
-                ),
-                device_ids=zone.get('device_ids', []),
-            ))
+            issues.append(
+                DetectedIssue(
+                    id=f"net_deadzone_{zone['location_id']}",
+                    category=IssueCategory.PRODUCTIVITY_LOSS,
+                    title=f"Dead zone at {zone['location_name']}: {zone['device_count']} devices affected",
+                    root_cause=f"WiFi signal strength avg {zone['avg_signal']} dBm (needs >-70 dBm)",
+                    impact=BusinessImpact(
+                        affected_devices=zone["device_count"],
+                        affected_users=zone["device_count"],
+                        hourly_cost=zone["device_count"] * 25.0,  # Lost productivity
+                        risk_multiplier=1.5,
+                    ),
+                    remediation=Remediation(
+                        action_type="infrastructure_ticket",
+                        description=f"Add WiFi AP at {zone['location_name']}",
+                        automated=False,  # Requires physical install
+                        estimated_fix_time_minutes=240,
+                        success_probability=0.9,
+                        parameters={"location": zone["location_name"]},
+                    ),
+                    device_ids=zone.get("device_ids", []),
+                )
+            )
 
         return issues
 
@@ -269,27 +280,29 @@ class ProactiveResolver:
 
         failing_batteries = self._query_degraded_batteries(tenant_id)
         if failing_batteries:
-            issues.append(DetectedIssue(
-                id=f"hw_battery_{tenant_id}",
-                category=IssueCategory.IMPENDING_FAILURE,
-                title=f"{len(failing_batteries)} devices need battery replacement",
-                root_cause="Battery capacity <60% of original, avg age 18+ months",
-                impact=BusinessImpact(
-                    affected_devices=len(failing_batteries),
-                    affected_users=len(failing_batteries),
-                    hourly_cost=len(failing_batteries) * 5.0,
-                    risk_multiplier=2.0,  # Will fail during shift
-                ),
-                remediation=Remediation(
-                    action_type="schedule_replacement",
-                    description="Schedule battery replacements before failure",
-                    automated=False,
-                    estimated_fix_time_minutes=30,  # Per device
-                    success_probability=0.99,
-                    parameters={"device_ids": failing_batteries},
-                ),
-                device_ids=failing_batteries,
-            ))
+            issues.append(
+                DetectedIssue(
+                    id=f"hw_battery_{tenant_id}",
+                    category=IssueCategory.IMPENDING_FAILURE,
+                    title=f"{len(failing_batteries)} devices need battery replacement",
+                    root_cause="Battery capacity <60% of original, avg age 18+ months",
+                    impact=BusinessImpact(
+                        affected_devices=len(failing_batteries),
+                        affected_users=len(failing_batteries),
+                        hourly_cost=len(failing_batteries) * 5.0,
+                        risk_multiplier=2.0,  # Will fail during shift
+                    ),
+                    remediation=Remediation(
+                        action_type="schedule_replacement",
+                        description="Schedule battery replacements before failure",
+                        automated=False,
+                        estimated_fix_time_minutes=30,  # Per device
+                        success_probability=0.99,
+                        parameters={"device_ids": failing_batteries},
+                    ),
+                    device_ids=failing_batteries,
+                )
+            )
 
         return issues
 
@@ -299,27 +312,29 @@ class ProactiveResolver:
 
         low_storage = self._query_low_storage_devices(tenant_id)
         if low_storage:
-            issues.append(DetectedIssue(
-                id=f"hw_storage_{tenant_id}",
-                category=IssueCategory.IMPENDING_FAILURE,
-                title=f"{len(low_storage)} devices critically low on storage (<10%)",
-                root_cause="Cache buildup, app data growth, or user files",
-                impact=BusinessImpact(
-                    affected_devices=len(low_storage),
-                    affected_users=len(low_storage),
-                    hourly_cost=len(low_storage) * 15.0,  # Apps will crash
-                    risk_multiplier=3.0,
-                ),
-                remediation=Remediation(
-                    action_type="remote_action",
-                    description="Clear app cache and temp files remotely",
-                    automated=True,
-                    estimated_fix_time_minutes=10,
-                    success_probability=0.8,
-                    parameters={"action": "clear_cache"},
-                ),
-                device_ids=low_storage,
-            ))
+            issues.append(
+                DetectedIssue(
+                    id=f"hw_storage_{tenant_id}",
+                    category=IssueCategory.IMPENDING_FAILURE,
+                    title=f"{len(low_storage)} devices critically low on storage (<10%)",
+                    root_cause="Cache buildup, app data growth, or user files",
+                    impact=BusinessImpact(
+                        affected_devices=len(low_storage),
+                        affected_users=len(low_storage),
+                        hourly_cost=len(low_storage) * 15.0,  # Apps will crash
+                        risk_multiplier=3.0,
+                    ),
+                    remediation=Remediation(
+                        action_type="remote_action",
+                        description="Clear app cache and temp files remotely",
+                        automated=True,
+                        estimated_fix_time_minutes=10,
+                        success_probability=0.8,
+                        parameters={"action": "clear_cache"},
+                    ),
+                    device_ids=low_storage,
+                )
+            )
 
         return issues
 
@@ -334,27 +349,29 @@ class ProactiveResolver:
 
         data_abusers = self._query_data_usage_anomalies(tenant_id)
         for device in data_abusers:
-            issues.append(DetectedIssue(
-                id=f"cost_data_{device['device_id']}",
-                category=IssueCategory.COST_WASTE,
-                title=f"Device {device['device_name']} using {device['data_gb']:.1f}GB/month (10x fleet avg)",
-                root_cause=f"App '{device['top_app']}' consuming {device['top_app_pct']:.0f}% of data",
-                impact=BusinessImpact(
-                    affected_devices=1,
-                    affected_users=1,
-                    hourly_cost=device['excess_cost'] / 720,  # Monthly to hourly
-                    risk_multiplier=1.0,
-                ),
-                remediation=Remediation(
-                    action_type="user_notification",
-                    description=f"Notify user and restrict background data for {device['top_app']}",
-                    automated=True,
-                    estimated_fix_time_minutes=1,
-                    success_probability=0.7,
-                    parameters={"device_id": device['device_id'], "app": device['top_app']},
-                ),
-                device_ids=[device['device_id']],
-            ))
+            issues.append(
+                DetectedIssue(
+                    id=f"cost_data_{device['device_id']}",
+                    category=IssueCategory.COST_WASTE,
+                    title=f"Device {device['device_name']} using {device['data_gb']:.1f}GB/month (10x fleet avg)",
+                    root_cause=f"App '{device['top_app']}' consuming {device['top_app_pct']:.0f}% of data",
+                    impact=BusinessImpact(
+                        affected_devices=1,
+                        affected_users=1,
+                        hourly_cost=device["excess_cost"] / 720,  # Monthly to hourly
+                        risk_multiplier=1.0,
+                    ),
+                    remediation=Remediation(
+                        action_type="user_notification",
+                        description=f"Notify user and restrict background data for {device['top_app']}",
+                        automated=True,
+                        estimated_fix_time_minutes=1,
+                        success_probability=0.7,
+                        parameters={"device_id": device["device_id"], "app": device["top_app"]},
+                    ),
+                    device_ids=[device["device_id"]],
+                )
+            )
 
         return issues
 

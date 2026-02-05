@@ -12,6 +12,7 @@ Tables queried:
 - cs_BatteryAppDrain: Per-app battery consumption
 - cs_Heatmap: RF signal strength and connectivity metrics
 """
+
 import logging
 from collections.abc import Iterable
 
@@ -598,6 +599,7 @@ def discover_all_dw_columns(tables: list[str] | None = None) -> dict[str, list[s
     if tables is None:
         # Dynamically discover tables
         from device_anomaly.data_access.data_profiler import discover_dw_tables
+
         tables = discover_dw_tables()
 
     result = {}

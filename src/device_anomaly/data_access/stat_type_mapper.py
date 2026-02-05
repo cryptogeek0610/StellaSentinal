@@ -12,6 +12,7 @@ Known StatType codes (MobiControl standard):
 - 5: AvailableRAM
 - etc.
 """
+
 from __future__ import annotations
 
 import logging
