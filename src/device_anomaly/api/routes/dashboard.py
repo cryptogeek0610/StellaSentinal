@@ -1487,7 +1487,7 @@ def get_location_heatmap(
     # 5. Calculate baselines (historical averages or configured baselines)
     # 6. Count anomalies per location
 
-    locations: List[LocationDataResponse] = []
+    locations: list[LocationDataResponse] = []
 
     # Placeholder: Return empty list for now
     # When custom attributes are available, this will be populated with actual data

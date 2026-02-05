@@ -18,6 +18,8 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
+from device_anomaly.streaming.telemetry_stream import TelemetryBuffer
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/streaming", tags=["streaming"])
