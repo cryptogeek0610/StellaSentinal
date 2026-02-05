@@ -217,23 +217,48 @@ def generate_alert_id(timestamp: str, message: str) -> str:
     return f"alert_{hashlib.sha256(content.encode()).hexdigest()[:12]}"
 
 
-def get_redis_client() -> redis.Redis:
-    """Get Redis client."""
+_redis_client: redis.Redis | None = None
+_redis_available: bool = True
+
+
+def get_redis_client() -> redis.Redis | None:
+    """Get Redis client with connection validation and graceful degradation.
+
+    Returns None if Redis is unavailable instead of raising.
+    """
+    global _redis_client, _redis_available
     import os
 
+    if not _redis_available:
+        return None
+
+    if _redis_client is not None:
+        return _redis_client
+
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-    return redis.from_url(redis_url, decode_responses=True)
+    try:
+        client = redis.from_url(redis_url, decode_responses=True, socket_timeout=5)
+        client.ping()
+        _redis_client = client
+        logger.info("Redis client initialized for automation routes")
+        return _redis_client
+    except Exception as e:
+        logger.warning("Redis unavailable for automation routes: %s", e)
+        _redis_available = False
+        return None
 
 
 def get_scheduler_config() -> dict[str, Any]:
     """Get current scheduler configuration from Redis."""
     try:
         client = get_redis_client()
+        if client is None:
+            return {}
         data = client.get("scheduler:config")
         if data:
             return json.loads(data)
     except Exception as e:
-        logger.warning(f"Failed to get scheduler config: {e}")
+        logger.warning("Failed to get scheduler config: %s", e)
     return {}
 
 
@@ -241,9 +266,15 @@ def save_scheduler_config(config: dict[str, Any]) -> None:
     """Save scheduler configuration to Redis."""
     try:
         client = get_redis_client()
+        if client is None:
+            raise HTTPException(
+                status_code=503, detail="Redis unavailable — cannot save configuration"
+            )
         client.set("scheduler:config", json.dumps(config))
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Failed to save scheduler config: {e}")
+        logger.error("Failed to save scheduler config: %s", e)
         raise HTTPException(status_code=500, detail="Failed to save configuration")
 
 
@@ -269,6 +300,8 @@ def get_scheduler_status() -> dict[str, Any]:
 
     try:
         client = get_redis_client()
+        if client is None:
+            return default_status
         data = client.get("scheduler:status")
         if data:
             parsed = json.loads(data)

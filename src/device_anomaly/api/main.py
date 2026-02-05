@@ -322,6 +322,7 @@ def readiness():
         "api": True,
         "results_db": False,
         "backend_db": False,
+        "redis": False,
         "llm": False,
         "qdrant": False,
     }
@@ -347,6 +348,18 @@ def readiness():
         checks["backend_db"] = db.test_connection()
     except Exception as e:
         logger.warning("Backend database health check failed: %s", e)
+
+    # Check Redis
+    try:
+        import redis as redis_lib
+
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+        r = redis_lib.from_url(redis_url, socket_timeout=2)
+        r.ping()
+        r.close()
+        checks["redis"] = True
+    except Exception as e:
+        logger.debug("Redis health check failed: %s", e)
 
     # Check LLM service - optional (OpenAI-compatible API)
     try:
