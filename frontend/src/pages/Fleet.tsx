@@ -90,31 +90,25 @@ function Fleet() {
     return groupData?.locations.find(g => g.id === selectedGroup);
   }, [groupData, selectedGroup]);
 
-  // Aggregate status counts from the fetched filtered list (computed but not currently displayed)
-  // const statusCounts = useMemo(() => {
-  //   const counts = { critical: 0, warning: 0, healthy: 0, total: 0 };
-  //   devices.forEach((d) => {
-  //     const status = d.status.toLowerCase() as keyof typeof counts;
-  //     if (counts[status] !== undefined) {
-  //       counts[status]++;
-  //     } else {
-  //       if (d.anomaly_count > 0) counts.warning++;
-  //       else counts.healthy++;
-  //     }
-  //     counts.total++;
-  //   });
-  //   return counts;
-  // }, [devices]);
-
   if (isLoadingDevices && !devicesResponse) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-center">
-          <div className="relative w-16 h-16 mx-auto mb-4">
-            <div className="absolute inset-0 rounded-full border-2 border-amber-500/20"></div>
-            <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-amber-500 animate-spin"></div>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="h-7 w-40 bg-slate-700/50 rounded animate-pulse" />
+            <div className="h-4 w-64 bg-slate-800/50 rounded animate-pulse mt-2" />
           </div>
-          <p className="text-slate-400 font-mono text-sm">Loading fleet data...</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Card key={i} className="p-4">
+              <div className="space-y-3">
+                <div className="h-5 w-32 bg-slate-700/50 rounded animate-pulse" />
+                <div className="h-4 w-full bg-slate-800/50 rounded animate-pulse" />
+                <div className="h-4 w-3/4 bg-slate-800/50 rounded animate-pulse" />
+              </div>
+            </Card>
+          ))}
         </div>
       </div>
     );

@@ -10,7 +10,7 @@ function AnomalyList() {
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [deviceIdFilter, setDeviceIdFilter] = useState<string>('');
 
-  const { data, isLoading, error } = useAnomalies({
+  const { data, isLoading, error, refetch } = useAnomalies({
     page,
     page_size: 50,
     status: statusFilter || undefined,
@@ -46,14 +46,24 @@ function AnomalyList() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-center">
-          <div className="relative w-16 h-16 mx-auto mb-4">
-            <div className="absolute inset-0 rounded-full border-2 border-cyber-blue/20"></div>
-            <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-cyber-blue animate-spin"></div>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="h-7 w-56 bg-slate-700/50 rounded animate-pulse" />
+            <div className="h-4 w-72 bg-slate-800/50 rounded animate-pulse mt-2" />
           </div>
-          <p className="text-slate-400 font-mono text-sm">Loading devices...</p>
         </div>
+        <Card noPadding>
+          <div className="p-4 space-y-3">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-4">
+                <div className="h-4 w-16 bg-slate-700/50 rounded animate-pulse" />
+                <div className="h-4 flex-1 bg-slate-800/50 rounded animate-pulse" />
+                <div className="h-4 w-24 bg-slate-700/50 rounded animate-pulse" />
+              </div>
+            ))}
+          </div>
+        </Card>
       </div>
     );
   }
@@ -61,13 +71,22 @@ function AnomalyList() {
   if (error) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="text-center">
+        <div className="text-center max-w-md">
           <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-cyber-red/20 flex items-center justify-center">
             <svg className="w-8 h-8 text-cyber-red" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
           </div>
-          <p className="text-cyber-red font-medium">Error loading devices</p>
+          <p className="text-cyber-red font-medium mb-1">Failed to load anomaly data</p>
+          <p className="text-slate-500 text-sm mb-4">
+            {error instanceof Error ? error.message : 'An unexpected error occurred. Check your connection and try again.'}
+          </p>
+          <button
+            onClick={() => refetch()}
+            className="px-4 py-2 text-sm font-medium rounded-lg bg-cyber-blue/20 text-cyber-blue hover:bg-cyber-blue/30 transition-colors"
+          >
+            Try Again
+          </button>
         </div>
       </div>
     );
