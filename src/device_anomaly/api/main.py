@@ -34,7 +34,6 @@ from device_anomaly.api.routes import (
     llm_settings,
     location_intelligence,
     network,
-    scranton_bridge,
     security,
     setup,
     streaming,
@@ -296,7 +295,6 @@ app.include_router(data_quality.router, prefix="/api")
 app.include_router(network.router, prefix="/api")
 app.include_router(security.router, prefix="/api")
 app.include_router(action_center.router, prefix="/api")
-app.include_router(scranton_bridge.router, prefix="/api")
 
 
 @app.get("/")
