@@ -3,743 +3,727 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#3b82f6">
     <title>Scranton Mission Control</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                fontFamily: { sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'] },
+                borderRadius: { DEFAULT: '0.625rem' },
+                colors: {
+                    surface: { DEFAULT: '#09090b', 1: '#111113', 2: '#18181b', 3: '#1e1e22', 4: '#27272a' },
+                    border: { DEFAULT: 'rgba(255,255,255,0.08)', hover: 'rgba(255,255,255,0.16)' },
+                },
+            }
+        }
+    };
+    </script>
     <style>
-        .squircle { border-radius: 24px; }
-        .glass { background: rgba(28, 28, 30, 0.7); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
-        .watercooler-msg { border-left: 2px solid #3b82f6; padding-left: 12px; margin-bottom: 12px; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        :root {
+            --radius: 0.625rem;
+            --sidebar-w: 260px;
+            --chart-1: #3b82f6;
+            --chart-2: #10b981;
+            --chart-3: #f97316;
+            --chart-4: #ec4899;
+            --chart-5: #a855f7;
+        }
+        *, *::before, *::after { box-sizing: border-box; }
+        body { background: #09090b; }
+
+        /* Sidebar */
+        .sidebar {
+            width: var(--sidebar-w);
+            min-height: 100vh;
+            border-right: 1px solid rgba(255,255,255,0.06);
+            transition: transform 0.25s cubic-bezier(0.4,0,0.2,1), opacity 0.2s;
+        }
+        @media (max-width: 1023px) {
+            .sidebar { position: fixed; top: 0; left: 0; z-index: 50; transform: translateX(-100%); opacity: 0; }
+            .sidebar.open { transform: translateX(0); opacity: 1; }
+            .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 40; }
+            .sidebar-overlay.open { display: block; }
+        }
+        @media (min-width: 1024px) {
+            .sidebar-overlay { display: none !important; }
+        }
+
+        /* Nav item */
+        .nav-item {
+            display: flex; align-items: center; gap: 0.75rem;
+            padding: 0.5rem 0.75rem; border-radius: var(--radius);
+            font-size: 0.875rem; font-weight: 500; color: #a1a1aa;
+            transition: background 0.15s, color 0.15s;
+            cursor: pointer;
+        }
+        .nav-item:hover, .nav-item.active { background: rgba(255,255,255,0.06); color: #fafafa; }
+        .nav-item.active { font-weight: 600; }
+
+        /* Progress circle */
+        .progress-ring { transition: stroke-dashoffset 0.35s ease; }
 
         /* Skip link */
-        .skip-link {
-            position: absolute;
-            top: -100%;
-            left: 0;
-            z-index: 100;
-            padding: 0.75rem 1.5rem;
-            background: #2563eb;
-            color: #fff;
-            font-weight: 600;
-            border-radius: 0 0 8px 0;
-            transition: top 0.2s;
-        }
-        .skip-link:focus {
-            top: 0;
-        }
+        .skip-link { position: absolute; top: -100%; left: 0; z-index: 100; padding: 0.75rem 1.5rem; background: #2563eb; color: #fff; font-weight: 600; border-radius: 0 0 var(--radius) 0; transition: top 0.2s; }
+        .skip-link:focus { top: 0; }
 
-        /* Pulse animation for status dot */
-        @keyframes pulse-dot {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.6; transform: scale(1.3); }
-        }
-        .pulse-dot {
-            animation: pulse-dot 2s ease-in-out infinite;
-        }
+        /* Pulse */
+        @keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.4)} }
+        .pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
 
-        /* Skeleton loading shimmer */
-        @keyframes shimmer {
-            0% { background-position: -400px 0; }
-            100% { background-position: 400px 0; }
-        }
-        .skeleton {
-            background: linear-gradient(90deg, #1c1c1e 25%, #2a2a2e 50%, #1c1c1e 75%);
-            background-size: 800px 100%;
-            animation: shimmer 1.5s ease-in-out infinite;
-            border-radius: 8px;
-        }
+        /* Skeleton */
+        @keyframes shimmer { 0%{background-position:-400px 0} 100%{background-position:400px 0} }
+        .skeleton { background: linear-gradient(90deg,#18181b 25%,#27272a 50%,#18181b 75%); background-size: 800px 100%; animation: shimmer 1.5s ease-in-out infinite; border-radius: var(--radius); }
 
-        /* Modal backdrop */
-        .modal-backdrop {
-            background: rgba(0, 0, 0, 0.6);
-            backdrop-filter: blur(4px);
-            -webkit-backdrop-filter: blur(4px);
-        }
+        /* Modal */
+        .modal-backdrop { background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
 
-        /* Smooth transitions on cards */
-        .card-hover {
-            transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+        /* Card hover */
+        .card { border: 1px solid rgba(255,255,255,0.06); border-radius: var(--radius); transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s; }
+        .card:hover { border-color: rgba(255,255,255,0.14); transform: translateY(-1px); box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+
+        /* Filter chip */
+        .filter-chip {
+            font-size: 0.8125rem; font-weight: 500; padding: 0.375rem 0.75rem;
+            border-radius: 9999px; border: 1px solid rgba(255,255,255,0.08);
+            color: #a1a1aa; background: transparent;
+            transition: all 0.15s; cursor: pointer;
         }
-        .card-hover:hover {
-            border-color: rgba(255, 255, 255, 0.2);
-            transform: translateY(-1px);
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
-        }
+        .filter-chip:hover { border-color: rgba(255,255,255,0.16); color: #e4e4e7; }
+        .filter-chip.active { background: #fafafa; color: #09090b; border-color: transparent; font-weight: 600; }
+        .filter-chip .count { font-size: 0.6875rem; opacity: 0.7; margin-left: 0.25rem; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
     </style>
 </head>
-<body class="bg-black text-white font-sans antialiased min-h-screen">
+<body class="text-white font-sans antialiased min-h-screen flex">
 
-    <!-- Skip to main content -->
-    <a href="#main-content" class="skip-link focus:ring-2 focus:ring-blue-500 focus:outline-none">
-        Skip to main content
-    </a>
+    <a href="#main-content" class="skip-link focus:ring-2 focus:ring-blue-500 focus:outline-none">Skip to main content</a>
 
-    <div class="max-w-6xl mx-auto p-4 sm:p-6 lg:p-10">
+    <!-- Sidebar Overlay (mobile) -->
+    <div id="sidebar-overlay" class="sidebar-overlay" aria-hidden="true"></div>
 
-        <!-- Header -->
-        <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 sm:mb-12">
-            <div class="flex items-center gap-4">
-                <div class="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center font-bold text-sm" aria-hidden="true">MC</div>
-                <h1 class="text-xl sm:text-2xl font-bold tracking-tight">Scranton Mission Control</h1>
+    <!-- ═══════════ SIDEBAR ═══════════ -->
+    <aside id="sidebar" class="sidebar bg-surface-1 flex flex-col" aria-label="Main navigation">
+
+        <!-- Workspace header -->
+        <div class="p-4 flex items-center gap-3 border-b border-white/[0.06]">
+            <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-xs font-bold shrink-0" aria-hidden="true">MC</div>
+            <div class="min-w-0">
+                <p class="text-sm font-semibold truncate">Scranton Digital</p>
+                <p class="text-[11px] text-zinc-500">Mission Control</p>
             </div>
-            <div class="flex items-center gap-4 text-xs font-bold uppercase tracking-widest text-slate-500" role="status" aria-live="polite">
-                <span id="specialist-count">-- Active Specialists</span>
-                <span class="w-2 h-2 bg-green-500 rounded-full pulse-dot" aria-label="System online"></span>
+        </div>
+
+        <!-- Search -->
+        <div class="px-3 pt-4 pb-2">
+            <button id="search-trigger" class="w-full flex items-center gap-2 px-3 py-2 rounded-[var(--radius)] bg-surface-2 text-zinc-500 text-sm hover:bg-surface-3 transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none" aria-label="Search">
+                <svg class="w-4 h-4 shrink-0" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                <span class="flex-1 text-left">Search...</span>
+                <kbd class="text-[10px] bg-surface-3 px-1.5 py-0.5 rounded font-mono text-zinc-600">&#8984;K</kbd>
+            </button>
+        </div>
+
+        <!-- Navigation -->
+        <nav class="flex-1 overflow-y-auto px-3 py-2 space-y-0.5" aria-label="Primary">
+            <button class="nav-item active w-full text-left" data-nav="dashboard" aria-current="page">
+                <svg class="w-4 h-4 shrink-0" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                Dashboard
+            </button>
+            <button class="nav-item w-full text-left" data-nav="board">
+                <svg class="w-4 h-4 shrink-0" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                Project Board
+                <span id="nav-board-badge" class="ml-auto text-[11px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-full font-semibold">0</span>
+            </button>
+            <button class="nav-item w-full text-left" data-nav="watercooler">
+                <svg class="w-4 h-4 shrink-0" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a2 2 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"/></svg>
+                Watercooler
+                <span id="nav-wc-badge" class="ml-auto text-[11px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full font-semibold">0</span>
+            </button>
+            <button class="nav-item w-full text-left" data-nav="squad">
+                <svg class="w-4 h-4 shrink-0" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+                The Squad
+            </button>
+        </nav>
+
+        <!-- Active Agents with Progress -->
+        <div class="px-3 py-3 border-t border-white/[0.06]">
+            <p class="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider px-3 mb-2">Active Agents</p>
+            <div id="sidebar-agents" class="space-y-1">
+                <!-- Rendered by JS -->
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="p-3 border-t border-white/[0.06] flex items-center gap-3">
+            <div class="w-7 h-7 rounded-full bg-cyan-600 flex items-center justify-center text-[10px] font-bold shrink-0" aria-hidden="true">M</div>
+            <div class="min-w-0 flex-1">
+                <p class="text-xs font-medium truncate">Michael</p>
+                <p class="text-[10px] text-zinc-500">Lead Agent</p>
+            </div>
+            <div id="health-dot" class="w-2 h-2 rounded-full bg-zinc-600" title="Checking health..."></div>
+        </div>
+    </aside>
+
+    <!-- ═══════════ MAIN CONTENT ═══════════ -->
+    <div class="flex-1 min-w-0 flex flex-col">
+
+        <!-- Top bar (mobile hamburger + title) -->
+        <header class="flex items-center gap-3 p-4 lg:px-8 lg:py-5 border-b border-white/[0.06]">
+            <button id="sidebar-toggle" class="lg:hidden p-1.5 rounded-lg hover:bg-surface-3 transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none" aria-label="Toggle navigation">
+                <svg class="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+            </button>
+            <div class="flex-1 min-w-0">
+                <h1 id="page-title" class="text-lg font-semibold truncate">Dashboard</h1>
+                <p id="page-subtitle" class="text-xs text-zinc-500 mt-0.5">Overview of your workforce and projects</p>
+            </div>
+            <div class="flex items-center gap-3" role="status" aria-live="polite">
+                <span id="specialist-count" class="text-xs font-medium text-zinc-500 hidden sm:inline">--</span>
+                <span class="w-2 h-2 bg-emerald-500 rounded-full pulse-dot" aria-label="System online"></span>
             </div>
         </header>
 
         <!-- Error Banner -->
-        <div id="error-banner" class="hidden mb-6" role="alert">
-            <div class="bg-red-900/50 border border-red-500/30 text-red-200 px-4 py-3 squircle flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div class="flex items-center gap-3">
-                    <svg class="w-5 h-5 flex-shrink-0" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/>
-                    </svg>
-                    <span id="error-message" class="text-sm">Failed to load dashboard data.</span>
+        <div id="error-banner" class="hidden px-4 lg:px-8 pt-4" role="alert">
+            <div class="bg-red-950/60 border border-red-500/20 text-red-200 px-4 py-3 rounded-[var(--radius)] flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2 text-sm">
+                    <svg class="w-4 h-4 shrink-0" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+                    <span id="error-message">Failed to load data.</span>
                 </div>
-                <button
-                    id="retry-btn"
-                    class="text-sm font-semibold text-red-300 hover:text-white px-3 py-1 border border-red-500/30 rounded-lg transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                    aria-label="Retry loading dashboard data"
-                >
-                    Retry
-                </button>
+                <button id="retry-btn" class="text-xs font-semibold text-red-300 hover:text-white px-3 py-1 border border-red-500/20 rounded-lg transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none">Retry</button>
             </div>
         </div>
 
-        <!-- Main Content -->
-        <main id="main-content" class="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 lg:gap-10">
+        <!-- Scrollable content area -->
+        <main id="main-content" class="flex-1 overflow-y-auto p-4 lg:p-8 space-y-8">
 
-            <!-- Kanban Board -->
-            <section class="lg:col-span-8 space-y-6 sm:space-y-8" aria-labelledby="kanban-heading">
-                <div class="flex items-center justify-between">
-                    <h2 id="kanban-heading" class="text-lg sm:text-xl font-bold">Project Board</h2>
-                    <button
-                        id="new-task-btn"
-                        class="text-blue-500 text-sm font-semibold hover:text-blue-400 transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none rounded px-2 py-1"
-                        aria-label="Create a new task"
-                    >
-                        + New Task
-                    </button>
-                </div>
-
-                <!-- Kanban Loading Skeleton -->
-                <div id="kanban-skeleton" class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                    <div class="bg-[#1C1C1E] p-6 squircle border border-white/5">
-                        <div class="skeleton h-4 w-20 mb-4"></div>
-                        <div class="skeleton h-5 w-3/4 mb-6"></div>
-                        <div class="skeleton h-4 w-1/2"></div>
+            <!-- ──── DASHBOARD VIEW ──── -->
+            <div id="view-dashboard">
+                <!-- Stats row -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+                    <div class="card bg-surface-2 p-4">
+                        <p class="text-[11px] text-zinc-500 font-medium uppercase tracking-wide mb-1">Agents</p>
+                        <p id="stat-agents" class="text-2xl font-bold">--</p>
                     </div>
-                    <div class="bg-[#1C1C1E] p-6 squircle border border-white/5">
-                        <div class="skeleton h-4 w-20 mb-4"></div>
-                        <div class="skeleton h-5 w-3/4 mb-6"></div>
-                        <div class="skeleton h-4 w-1/2"></div>
+                    <div class="card bg-surface-2 p-4">
+                        <p class="text-[11px] text-zinc-500 font-medium uppercase tracking-wide mb-1">Tasks</p>
+                        <p id="stat-tasks" class="text-2xl font-bold">--</p>
+                    </div>
+                    <div class="card bg-surface-2 p-4">
+                        <p class="text-[11px] text-zinc-500 font-medium uppercase tracking-wide mb-1">In Progress</p>
+                        <p id="stat-progress" class="text-2xl font-bold text-blue-400">--</p>
+                    </div>
+                    <div class="card bg-surface-2 p-4">
+                        <p class="text-[11px] text-zinc-500 font-medium uppercase tracking-wide mb-1">Messages</p>
+                        <p id="stat-messages" class="text-2xl font-bold text-emerald-400">--</p>
                     </div>
                 </div>
 
-                <!-- Kanban Cards Container -->
-                <div id="kanban-cards" class="hidden" role="status" aria-live="polite">
-                    <!-- Dynamic cards rendered here -->
-                </div>
-
-                <!-- Kanban Empty State -->
-                <div id="kanban-empty" class="hidden">
-                    <div class="bg-[#1C1C1E] p-8 sm:p-12 squircle border border-white/5 text-center">
-                        <svg class="w-12 h-12 mx-auto text-slate-600 mb-4" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-                        </svg>
-                        <p class="text-slate-500 text-sm font-medium">No tasks yet</p>
-                        <p class="text-slate-600 text-xs mt-1">Click "+ New Task" to get started.</p>
-                    </div>
-                </div>
-            </section>
-
-            <!-- The Watercooler -->
-            <section class="lg:col-span-4" aria-labelledby="watercooler-heading">
-                <div class="glass p-5 sm:p-8 squircle border border-white/10 shadow-2xl">
-                    <h2 id="watercooler-heading" class="text-base sm:text-lg font-bold mb-6 sm:mb-8 flex items-center gap-2">
-                        <svg class="w-5 h-5 text-blue-500" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"/>
-                        </svg>
-                        Workforce Watercooler
-                    </h2>
-
-                    <!-- Watercooler Loading Skeleton -->
-                    <div id="watercooler-skeleton" class="space-y-4">
-                        <div class="border-l-2 border-slate-700 pl-3">
-                            <div class="skeleton h-3 w-16 mb-2"></div>
-                            <div class="skeleton h-3 w-full mb-1"></div>
-                            <div class="skeleton h-3 w-3/4"></div>
+                <!-- Recent tasks + watercooler side by side -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <section class="lg:col-span-8" aria-labelledby="recent-heading">
+                        <div class="flex items-center justify-between mb-4">
+                            <h2 id="recent-heading" class="text-sm font-semibold text-zinc-400">Recent Tasks</h2>
+                            <button id="dash-new-task" class="text-xs text-blue-400 hover:text-blue-300 font-medium transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none rounded px-1 py-0.5">+ New Task</button>
                         </div>
-                        <div class="border-l-2 border-slate-700 pl-3">
-                            <div class="skeleton h-3 w-16 mb-2"></div>
-                            <div class="skeleton h-3 w-full mb-1"></div>
-                            <div class="skeleton h-3 w-2/3"></div>
+                        <div id="dash-tasks-skeleton" class="space-y-2">
+                            <div class="card bg-surface-2 p-4"><div class="skeleton h-4 w-3/4"></div></div>
+                            <div class="card bg-surface-2 p-4"><div class="skeleton h-4 w-1/2"></div></div>
+                            <div class="card bg-surface-2 p-4"><div class="skeleton h-4 w-2/3"></div></div>
                         </div>
-                        <div class="border-l-2 border-slate-700 pl-3">
-                            <div class="skeleton h-3 w-16 mb-2"></div>
-                            <div class="skeleton h-3 w-full mb-1"></div>
-                            <div class="skeleton h-3 w-1/2"></div>
+                        <div id="dash-tasks" class="hidden space-y-2" role="list"></div>
+                        <div id="dash-tasks-empty" class="hidden card bg-surface-2 p-8 text-center">
+                            <p class="text-sm text-zinc-500">No tasks yet. Create one to get started.</p>
                         </div>
-                    </div>
+                    </section>
+                    <section class="lg:col-span-4" aria-labelledby="recent-wc-heading">
+                        <h2 id="recent-wc-heading" class="text-sm font-semibold text-zinc-400 mb-4">Watercooler</h2>
+                        <div class="card bg-surface-2 p-4 space-y-4 max-h-80 overflow-y-auto">
+                            <div id="dash-wc-skeleton" class="space-y-3">
+                                <div><div class="skeleton h-3 w-16 mb-1"></div><div class="skeleton h-3 w-full"></div></div>
+                                <div><div class="skeleton h-3 w-16 mb-1"></div><div class="skeleton h-3 w-3/4"></div></div>
+                            </div>
+                            <div id="dash-wc" class="hidden space-y-3 text-[13px]"></div>
+                            <div id="dash-wc-empty" class="hidden text-center py-4">
+                                <p class="text-xs text-zinc-500">The watercooler is quiet...</p>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
 
-                    <!-- Watercooler Messages Container -->
-                    <div id="watercooler-messages" class="hidden space-y-5 text-[13px] leading-relaxed" role="status" aria-live="polite">
-                        <!-- Dynamic messages rendered here -->
+            <!-- ──── PROJECT BOARD VIEW ──── -->
+            <div id="view-board" class="hidden">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
+                    <div id="board-filters" class="flex flex-wrap gap-2" role="radiogroup" aria-label="Filter tasks by status">
+                        <button class="filter-chip active" data-filter="all" role="radio" aria-checked="true">All <span class="count" id="filter-count-all">0</span></button>
+                        <button class="filter-chip" data-filter="Triage" role="radio" aria-checked="false">Triage <span class="count" id="filter-count-triage">0</span></button>
+                        <button class="filter-chip" data-filter="In Progress" role="radio" aria-checked="false">In Progress <span class="count" id="filter-count-ip">0</span></button>
+                        <button class="filter-chip" data-filter="Done" role="radio" aria-checked="false">Done <span class="count" id="filter-count-done">0</span></button>
                     </div>
+                    <button id="board-new-task" class="text-sm text-blue-400 hover:text-blue-300 font-semibold transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none rounded px-2 py-1">+ New Task</button>
+                </div>
+                <div id="board-skeleton" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    <div class="card bg-surface-2 p-5"><div class="skeleton h-4 w-20 mb-3"></div><div class="skeleton h-5 w-3/4 mb-5"></div><div class="skeleton h-4 w-1/2"></div></div>
+                    <div class="card bg-surface-2 p-5"><div class="skeleton h-4 w-20 mb-3"></div><div class="skeleton h-5 w-3/4 mb-5"></div><div class="skeleton h-4 w-1/2"></div></div>
+                </div>
+                <div id="board-cards" class="hidden grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" role="list"></div>
+                <div id="board-empty" class="hidden card bg-surface-2 p-12 text-center">
+                    <svg class="w-12 h-12 mx-auto text-zinc-700 mb-4" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                    <p class="text-sm text-zinc-500 font-medium">No tasks yet</p>
+                    <p class="text-xs text-zinc-600 mt-1">Click "+ New Task" to get started.</p>
+                </div>
+            </div>
 
-                    <!-- Watercooler Empty State -->
-                    <div id="watercooler-empty" class="hidden text-center py-6">
-                        <svg class="w-10 h-10 mx-auto text-slate-600 mb-3" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
-                        </svg>
-                        <p class="text-slate-500 text-sm font-medium">The watercooler is quiet...</p>
-                        <p class="text-slate-600 text-xs mt-1">Be the first to say something.</p>
+            <!-- ──── WATERCOOLER VIEW ──── -->
+            <div id="view-watercooler" class="hidden">
+                <div class="max-w-2xl">
+                    <div id="wc-skeleton" class="space-y-4 mb-6">
+                        <div class="flex gap-3"><div class="skeleton w-8 h-8 rounded-full shrink-0"></div><div class="flex-1"><div class="skeleton h-3 w-24 mb-2"></div><div class="skeleton h-12 w-full rounded-[var(--radius)]"></div></div></div>
+                        <div class="flex gap-3"><div class="skeleton w-8 h-8 rounded-full shrink-0"></div><div class="flex-1"><div class="skeleton h-3 w-20 mb-2"></div><div class="skeleton h-10 w-3/4 rounded-[var(--radius)]"></div></div></div>
                     </div>
-
-                    <!-- Watercooler Input -->
-                    <div id="watercooler-input" class="hidden mt-6 pt-6 border-t border-white/10">
-                        <label for="wc-agent-select" class="sr-only">Select agent</label>
-                        <select
-                            id="wc-agent-select"
-                            class="w-full bg-[#1C1C1E] text-white text-sm rounded-lg px-3 py-2 mb-3 border border-white/10 focus:ring-2 focus:ring-blue-500 focus:outline-none appearance-none"
-                            aria-label="Select agent to post as"
-                        >
-                            <option value="">Post as...</option>
-                        </select>
-                        <div class="flex gap-2">
+                    <div id="wc-messages" class="hidden space-y-4 mb-6" role="log" aria-live="polite"></div>
+                    <div id="wc-empty" class="hidden card bg-surface-2 p-8 text-center mb-6">
+                        <svg class="w-10 h-10 mx-auto text-zinc-700 mb-3" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+                        <p class="text-sm text-zinc-500">The watercooler is quiet...</p>
+                    </div>
+                    <!-- Compose -->
+                    <div id="wc-compose" class="hidden card bg-surface-2 p-4">
+                        <div class="flex gap-3">
+                            <label for="wc-agent-select" class="sr-only">Post as agent</label>
+                            <select id="wc-agent-select" class="bg-surface-3 text-sm rounded-[var(--radius)] px-3 py-2 border border-white/[0.08] text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" aria-label="Select agent">
+                                <option value="">Post as...</option>
+                            </select>
                             <label for="wc-message-input" class="sr-only">Message</label>
-                            <input
-                                id="wc-message-input"
-                                type="text"
-                                placeholder="Type a message..."
-                                maxlength="500"
-                                class="flex-1 bg-[#1C1C1E] text-white text-sm rounded-lg px-3 py-2 border border-white/10 placeholder-slate-600 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                                aria-label="Watercooler message"
-                            />
-                            <button
-                                id="wc-send-btn"
-                                class="bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed"
-                                aria-label="Send watercooler message"
-                                disabled
-                            >
-                                Send
-                            </button>
+                            <input id="wc-message-input" type="text" placeholder="Type a message..." maxlength="500" class="flex-1 min-w-0 bg-surface-3 text-sm rounded-[var(--radius)] px-3 py-2 border border-white/[0.08] text-white placeholder-zinc-600 focus:ring-2 focus:ring-blue-500 focus:outline-none" aria-label="Message" />
+                            <button id="wc-send-btn" disabled class="bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-semibold px-4 py-2 rounded-[var(--radius)] transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none" aria-label="Send message">Send</button>
                         </div>
                     </div>
                 </div>
-            </section>
+            </div>
 
-            <!-- Agent Roster -->
-            <section class="lg:col-span-12" aria-labelledby="roster-heading">
-                <h2 id="roster-heading" class="text-lg sm:text-xl font-bold mb-6">The Squad</h2>
-
-                <!-- Roster Loading Skeleton -->
-                <div id="roster-skeleton" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-4">
-                    <div class="bg-[#1C1C1E] p-4 squircle border border-white/5 text-center">
-                        <div class="skeleton w-10 h-10 rounded-full mx-auto mb-3"></div>
-                        <div class="skeleton h-3 w-12 mx-auto mb-2"></div>
-                        <div class="skeleton h-2 w-16 mx-auto"></div>
-                    </div>
-                    <div class="bg-[#1C1C1E] p-4 squircle border border-white/5 text-center">
-                        <div class="skeleton w-10 h-10 rounded-full mx-auto mb-3"></div>
-                        <div class="skeleton h-3 w-12 mx-auto mb-2"></div>
-                        <div class="skeleton h-2 w-16 mx-auto"></div>
-                    </div>
-                    <div class="bg-[#1C1C1E] p-4 squircle border border-white/5 text-center">
-                        <div class="skeleton w-10 h-10 rounded-full mx-auto mb-3"></div>
-                        <div class="skeleton h-3 w-12 mx-auto mb-2"></div>
-                        <div class="skeleton h-2 w-16 mx-auto"></div>
-                    </div>
-                    <div class="bg-[#1C1C1E] p-4 squircle border border-white/5 text-center">
-                        <div class="skeleton w-10 h-10 rounded-full mx-auto mb-3"></div>
-                        <div class="skeleton h-3 w-12 mx-auto mb-2"></div>
-                        <div class="skeleton h-2 w-16 mx-auto"></div>
-                    </div>
+            <!-- ──── SQUAD VIEW ──── -->
+            <div id="view-squad" class="hidden">
+                <div id="squad-skeleton" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    <div class="card bg-surface-2 p-5 text-center"><div class="skeleton w-12 h-12 rounded-full mx-auto mb-3"></div><div class="skeleton h-4 w-20 mx-auto mb-2"></div><div class="skeleton h-3 w-28 mx-auto"></div></div>
+                    <div class="card bg-surface-2 p-5 text-center"><div class="skeleton w-12 h-12 rounded-full mx-auto mb-3"></div><div class="skeleton h-4 w-20 mx-auto mb-2"></div><div class="skeleton h-3 w-28 mx-auto"></div></div>
+                    <div class="card bg-surface-2 p-5 text-center"><div class="skeleton w-12 h-12 rounded-full mx-auto mb-3"></div><div class="skeleton h-4 w-20 mx-auto mb-2"></div><div class="skeleton h-3 w-28 mx-auto"></div></div>
                 </div>
+                <div id="squad-cards" class="hidden grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4" role="list"></div>
+            </div>
 
-                <!-- Roster Cards Container -->
-                <div id="roster-cards" class="hidden" role="status" aria-live="polite">
-                    <!-- Dynamic agent cards rendered here -->
-                </div>
-            </section>
         </main>
-
-        <!-- Footer -->
-        <footer class="mt-12 sm:mt-16 pt-6 border-t border-white/5 text-center">
-            <p class="text-xs text-slate-600">Scranton Digital &mdash; Mission Control Dashboard</p>
-        </footer>
     </div>
 
-    <!-- New Task Modal -->
+    <!-- ──── NEW TASK MODAL ──── -->
     <div id="task-modal" class="fixed inset-0 z-50 hidden items-center justify-center modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-        <div class="bg-[#1C1C1E] border border-white/10 squircle p-6 sm:p-8 w-full max-w-md mx-4 shadow-2xl" role="document">
-            <div class="flex justify-between items-center mb-6">
-                <h3 id="modal-title" class="text-lg font-bold">New Task</h3>
-                <button
-                    id="modal-close-btn"
-                    class="text-slate-500 hover:text-white transition-colors p-1 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                    aria-label="Close dialog"
-                >
-                    <svg class="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                </button>
+        <div class="bg-surface-2 border border-white/[0.08] rounded-[var(--radius)] p-6 w-full max-w-md mx-4 shadow-2xl" role="document">
+            <div class="flex justify-between items-center mb-5">
+                <h3 id="modal-title" class="text-base font-semibold">New Task</h3>
+                <button id="modal-close-btn" class="text-zinc-500 hover:text-white p-1 rounded transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none" aria-label="Close"><svg class="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg></button>
             </div>
             <form id="task-form" class="space-y-4" novalidate>
                 <div>
-                    <label for="task-title" class="block text-sm font-medium text-slate-400 mb-1">Title</label>
-                    <input
-                        id="task-title"
-                        type="text"
-                        required
-                        maxlength="200"
-                        placeholder="What needs to be done?"
-                        class="w-full bg-black/50 text-white text-sm rounded-lg px-3 py-2.5 border border-white/10 placeholder-slate-600 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                    />
+                    <label for="task-title" class="block text-xs font-medium text-zinc-400 mb-1.5">Title</label>
+                    <input id="task-title" type="text" required maxlength="200" placeholder="What needs to be done?" class="w-full bg-surface-3 text-sm rounded-[var(--radius)] px-3 py-2.5 border border-white/[0.08] text-white placeholder-zinc-600 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label for="task-project" class="block text-xs font-medium text-zinc-400 mb-1.5">Project</label>
+                        <select id="task-project" required class="w-full bg-surface-3 text-sm rounded-[var(--radius)] px-3 py-2.5 border border-white/[0.08] text-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                            <option value="">Select...</option>
+                            <option value="SAAP PLUS">SAAP PLUS</option>
+                            <option value="TRADING">TRADING</option>
+                            <option value="INFRA">INFRA</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="task-status" class="block text-xs font-medium text-zinc-400 mb-1.5">Status</label>
+                        <select id="task-status" required class="w-full bg-surface-3 text-sm rounded-[var(--radius)] px-3 py-2.5 border border-white/[0.08] text-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                            <option value="Triage">Triage</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Done">Done</option>
+                        </select>
+                    </div>
                 </div>
                 <div>
-                    <label for="task-project" class="block text-sm font-medium text-slate-400 mb-1">Project</label>
-                    <select
-                        id="task-project"
-                        required
-                        class="w-full bg-black/50 text-white text-sm rounded-lg px-3 py-2.5 border border-white/10 focus:ring-2 focus:ring-blue-500 focus:outline-none appearance-none"
-                    >
-                        <option value="">Select project...</option>
-                        <option value="SAAP PLUS">SAAP PLUS</option>
-                        <option value="TRADING">TRADING</option>
-                        <option value="INFRA">INFRA</option>
-                    </select>
-                </div>
-                <div>
-                    <label for="task-status" class="block text-sm font-medium text-slate-400 mb-1">Status</label>
-                    <select
-                        id="task-status"
-                        required
-                        class="w-full bg-black/50 text-white text-sm rounded-lg px-3 py-2.5 border border-white/10 focus:ring-2 focus:ring-blue-500 focus:outline-none appearance-none"
-                    >
-                        <option value="Triage">Triage</option>
-                        <option value="In Progress">In Progress</option>
-                        <option value="Done">Done</option>
-                    </select>
-                </div>
-                <div>
-                    <label for="task-owner" class="block text-sm font-medium text-slate-400 mb-1">Owner</label>
-                    <select
-                        id="task-owner"
-                        required
-                        class="w-full bg-black/50 text-white text-sm rounded-lg px-3 py-2.5 border border-white/10 focus:ring-2 focus:ring-blue-500 focus:outline-none appearance-none"
-                    >
+                    <label for="task-owner" class="block text-xs font-medium text-zinc-400 mb-1.5">Owner</label>
+                    <select id="task-owner" required class="w-full bg-surface-3 text-sm rounded-[var(--radius)] px-3 py-2.5 border border-white/[0.08] text-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
                         <option value="">Assign to...</option>
                     </select>
                 </div>
-                <div class="flex gap-3 pt-2">
-                    <button
-                        type="button"
-                        id="modal-cancel-btn"
-                        class="flex-1 text-sm font-medium text-slate-400 hover:text-white py-2.5 rounded-lg border border-white/10 transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        type="submit"
-                        id="modal-submit-btn"
-                        class="flex-1 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 py-2.5 rounded-lg transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                        Create Task
-                    </button>
+                <div class="flex gap-3 pt-1">
+                    <button type="button" id="modal-cancel-btn" class="flex-1 text-sm font-medium text-zinc-400 hover:text-white py-2.5 rounded-[var(--radius)] border border-white/[0.08] transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none">Cancel</button>
+                    <button type="submit" id="modal-submit-btn" class="flex-1 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 py-2.5 rounded-[var(--radius)] transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed">Create Task</button>
                 </div>
             </form>
         </div>
     </div>
 
+    <!-- ═══════════ JAVASCRIPT ═══════════ -->
     <script>
     (function () {
         'use strict';
 
-        // ── Configuration ──────────────────────────────────────────
-        const API_BASE = window.location.origin;
-        const REFRESH_INTERVAL_MS = 30000;
+        const API = window.location.origin;
+        const REFRESH = 30000;
 
-        // Agent avatar color palette (consistent by ID)
+        // ── Color system ─────────────────────────────────────────────
         const AGENT_COLORS = {
-            jim:    { bg: 'bg-blue-500',    text: 'text-blue-400',    border: '#3b82f6' },
-            dwight: { bg: 'bg-orange-500',  text: 'text-orange-400',  border: '#f97316' },
-            pam:    { bg: 'bg-pink-500',    text: 'text-pink-400',    border: '#ec4899' },
-            kevin:  { bg: 'bg-purple-500',  text: 'text-purple-400',  border: '#a855f7' },
-            angela: { bg: 'bg-yellow-500',  text: 'text-yellow-400',  border: '#eab308' },
-            ryan:   { bg: 'bg-emerald-500', text: 'text-emerald-400', border: '#10b981' },
-            kelly:  { bg: 'bg-red-500',     text: 'text-red-400',     border: '#ef4444' },
-            michael:{ bg: 'bg-cyan-500',    text: 'text-cyan-400',    border: '#06b6d4' }
+            jim:     { bg: 'bg-blue-500',    text: 'text-blue-400',    hex: '#3b82f6' },
+            dwight:  { bg: 'bg-orange-500',  text: 'text-orange-400',  hex: '#f97316' },
+            pam:     { bg: 'bg-pink-500',    text: 'text-pink-400',    hex: '#ec4899' },
+            kevin:   { bg: 'bg-violet-500',  text: 'text-violet-400',  hex: '#8b5cf6' },
+            angela:  { bg: 'bg-amber-500',   text: 'text-amber-400',   hex: '#f59e0b' },
+            ryan:    { bg: 'bg-emerald-500', text: 'text-emerald-400', hex: '#10b981' },
+            kelly:   { bg: 'bg-rose-500',    text: 'text-rose-400',    hex: '#f43f5e' },
+            michael: { bg: 'bg-cyan-500',    text: 'text-cyan-400',    hex: '#06b6d4' },
         };
-
         const PROJECT_COLORS = {
-            'SAAP PLUS': { text: 'text-blue-400',   bg: 'bg-blue-400/10' },
-            'TRADING':   { text: 'text-orange-400',  bg: 'bg-orange-400/10' },
-            'INFRA':     { text: 'text-emerald-400', bg: 'bg-emerald-400/10' }
+            'SAAP PLUS': { text: 'text-blue-400',    bg: 'bg-blue-500/10' },
+            'TRADING':   { text: 'text-orange-400',   bg: 'bg-orange-500/10' },
+            'INFRA':     { text: 'text-emerald-400',  bg: 'bg-emerald-500/10' },
+        };
+        const STATUS_COLORS = {
+            'Triage':      'bg-amber-500/10 text-amber-400',
+            'In Progress': 'bg-blue-500/10 text-blue-400',
+            'Done':        'bg-emerald-500/10 text-emerald-400',
+            'todo':        'bg-zinc-500/10 text-zinc-400',
         };
 
-        function getAgentColor(agentId) {
-            return AGENT_COLORS[agentId] || { bg: 'bg-slate-500', text: 'text-slate-400', border: '#64748b' };
+        function agentColor(id) { return AGENT_COLORS[id] || { bg: 'bg-zinc-500', text: 'text-zinc-400', hex: '#71717a' }; }
+        function projColor(p) { return PROJECT_COLORS[p] || { text: 'text-zinc-400', bg: 'bg-zinc-500/10' }; }
+        function statusColor(s) { return STATUS_COLORS[s] || 'bg-zinc-500/10 text-zinc-400'; }
+
+        // ── State ────────────────────────────────────────────────────
+        let agents = [], kanban = [], watercooler = [], currentView = 'dashboard', activeFilter = 'all', refreshTimer = null;
+
+        // ── DOM ──────────────────────────────────────────────────────
+        const $ = (s) => document.getElementById(s);
+        const $$ = (s) => document.querySelectorAll(s);
+
+        // ── Progress Circle SVG ──────────────────────────────────────
+        function progressCircleSVG(pct, color, size) {
+            size = size || 18;
+            var sw = 2, r = Math.floor((size - sw) / 2), cx = size / 2, cy = size / 2;
+            var c = 2 * Math.PI * r, off = c * (1 - pct / 100);
+            return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '" aria-hidden="true">' +
+                '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="' + sw + '"/>' +
+                '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + color + '" stroke-width="' + sw + '" stroke-linecap="round" stroke-dasharray="' + c + '" stroke-dashoffset="' + off + '" transform="rotate(-90 ' + cx + ' ' + cy + ')" class="progress-ring"/>' +
+                '</svg>';
         }
 
-        function getProjectColor(project) {
-            return PROJECT_COLORS[project] || { text: 'text-slate-400', bg: 'bg-slate-400/10' };
+        // ── API ──────────────────────────────────────────────────────
+        async function get(ep) { var r = await fetch(API + ep); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }
+        async function post(ep, body) { var r = await fetch(API + ep, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }
+
+        // ── HTML escape ──────────────────────────────────────────────
+        function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.appendChild(document.createTextNode(s)); return d.innerHTML; }
+
+        // ── Sidebar agents with progress circles ─────────────────────
+        function renderSidebarAgents() {
+            var el = $('sidebar-agents');
+            if (!agents.length) { el.innerHTML = '<p class="text-xs text-zinc-600 px-3">No agents</p>'; return; }
+            // Compute "task load" per agent (random-ish based on kanban)
+            el.innerHTML = agents.slice(0, 5).map(function(a) {
+                var c = agentColor(a.id);
+                var taskCount = kanban.filter(function(t) { return t.owner === a.name || t.owner === a.id; }).length;
+                var pct = Math.min(taskCount * 25, 100);
+                return '<div class="flex items-center gap-2.5 px-3 py-1.5 rounded-[var(--radius)] hover:bg-white/[0.04] transition-colors cursor-default">' +
+                    progressCircleSVG(pct, c.hex, 18) +
+                    '<span class="text-[13px] text-zinc-300 truncate flex-1">' + esc(a.name) + '</span>' +
+                    (taskCount > 0 ? '<span class="text-[10px] text-zinc-600">' + taskCount + '</span>' : '') +
+                    '</div>';
+            }).join('');
         }
 
-        // ── State ──────────────────────────────────────────────────
-        let agents = [];
-        let kanbanItems = [];
-        let watercoolerMessages = [];
-        let refreshTimer = null;
+        // ── Dashboard view ───────────────────────────────────────────
+        function renderDashboard() {
+            $('stat-agents').textContent = agents.length;
+            $('stat-tasks').textContent = kanban.length;
+            $('stat-progress').textContent = kanban.filter(function(t) { return t.status === 'In Progress'; }).length;
+            $('stat-messages').textContent = watercooler.length;
 
-        // ── DOM References ─────────────────────────────────────────
-        const specialistCount   = document.getElementById('specialist-count');
-        const errorBanner       = document.getElementById('error-banner');
-        const errorMessage      = document.getElementById('error-message');
-        const retryBtn          = document.getElementById('retry-btn');
+            // Recent tasks (last 5)
+            $('dash-tasks-skeleton').classList.add('hidden');
+            var recent = kanban.slice(-5).reverse();
+            if (recent.length) {
+                $('dash-tasks-empty').classList.add('hidden');
+                $('dash-tasks').classList.remove('hidden');
+                $('dash-tasks').innerHTML = recent.map(function(t) {
+                    var pc = projColor(t.project);
+                    var sc = statusColor(t.status);
+                    return '<div class="card bg-surface-2 p-4 flex items-center gap-3" role="listitem">' +
+                        '<span class="text-[10px] font-bold ' + pc.text + ' ' + pc.bg + ' px-2 py-0.5 rounded-full uppercase shrink-0">' + esc(t.project) + '</span>' +
+                        '<span class="text-sm flex-1 truncate">' + esc(t.title) + '</span>' +
+                        '<span class="text-[10px] font-medium ' + sc + ' px-2 py-0.5 rounded-full shrink-0">' + esc(t.status) + '</span>' +
+                        '</div>';
+                }).join('');
+            } else {
+                $('dash-tasks').classList.add('hidden');
+                $('dash-tasks-empty').classList.remove('hidden');
+            }
 
-        const kanbanSkeleton    = document.getElementById('kanban-skeleton');
-        const kanbanCards       = document.getElementById('kanban-cards');
-        const kanbanEmpty       = document.getElementById('kanban-empty');
-
-        const wcSkeleton        = document.getElementById('watercooler-skeleton');
-        const wcMessages        = document.getElementById('watercooler-messages');
-        const wcEmpty           = document.getElementById('watercooler-empty');
-        const wcInput           = document.getElementById('watercooler-input');
-        const wcAgentSelect     = document.getElementById('wc-agent-select');
-        const wcMessageInput    = document.getElementById('wc-message-input');
-        const wcSendBtn         = document.getElementById('wc-send-btn');
-
-        const rosterSkeleton    = document.getElementById('roster-skeleton');
-        const rosterCards       = document.getElementById('roster-cards');
-
-        const newTaskBtn        = document.getElementById('new-task-btn');
-        const taskModal         = document.getElementById('task-modal');
-        const modalCloseBtn     = document.getElementById('modal-close-btn');
-        const modalCancelBtn    = document.getElementById('modal-cancel-btn');
-        const taskForm          = document.getElementById('task-form');
-        const taskTitle         = document.getElementById('task-title');
-        const taskOwner         = document.getElementById('task-owner');
-        const modalSubmitBtn    = document.getElementById('modal-submit-btn');
-
-        // ── API Helpers ────────────────────────────────────────────
-        async function fetchJSON(endpoint) {
-            const res = await fetch(API_BASE + endpoint);
-            if (!res.ok) throw new Error(`HTTP ${res.status} on ${endpoint}`);
-            return res.json();
+            // Recent watercooler
+            $('dash-wc-skeleton').classList.add('hidden');
+            var recentWc = watercooler.slice(-4).reverse();
+            if (recentWc.length) {
+                $('dash-wc-empty').classList.add('hidden');
+                $('dash-wc').classList.remove('hidden');
+                $('dash-wc').innerHTML = recentWc.map(function(m) {
+                    var ag = agents.find(function(a) { return a.id === m.agent_id; });
+                    var name = ag ? ag.name : m.agent_id;
+                    var c = agentColor(ag ? ag.id : '');
+                    return '<div><span class="' + c.text + ' font-semibold text-xs">' + esc(name) + ':</span> <span class="text-zinc-400 text-xs">' + esc(m.message) + '</span></div>';
+                }).join('');
+            } else {
+                $('dash-wc').classList.add('hidden');
+                $('dash-wc-empty').classList.remove('hidden');
+            }
         }
 
-        async function postJSON(endpoint, body) {
-            const res = await fetch(API_BASE + endpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
+        // ── Board view ───────────────────────────────────────────────
+        function renderBoard() {
+            $('board-skeleton').classList.add('hidden');
+            var filtered = activeFilter === 'all' ? kanban : kanban.filter(function(t) { return t.status === activeFilter; });
+
+            // Update filter counts
+            $('filter-count-all').textContent = kanban.length;
+            $('filter-count-triage').textContent = kanban.filter(function(t) { return t.status === 'Triage'; }).length;
+            $('filter-count-ip').textContent = kanban.filter(function(t) { return t.status === 'In Progress'; }).length;
+            $('filter-count-done').textContent = kanban.filter(function(t) { return t.status === 'Done'; }).length;
+
+            if (filtered.length) {
+                $('board-empty').classList.add('hidden');
+                $('board-cards').classList.remove('hidden');
+                $('board-cards').innerHTML = filtered.map(function(t) {
+                    var pc = projColor(t.project);
+                    var sc = statusColor(t.status);
+                    var ownerAgent = agents.find(function(a) { return a.name === t.owner || a.id === t.owner; });
+                    var ownerName = ownerAgent ? ownerAgent.name : (t.owner || 'Unassigned');
+                    var ownerId = ownerAgent ? ownerAgent.id : '';
+                    var c = agentColor(ownerId);
+                    return '<article class="card bg-surface-2 p-5" role="listitem">' +
+                        '<div class="flex items-center justify-between mb-3">' +
+                        '<span class="text-[10px] font-bold ' + pc.text + ' ' + pc.bg + ' px-2 py-0.5 rounded-full uppercase">' + esc(t.project) + '</span>' +
+                        '<span class="text-[10px] font-medium ' + sc + ' px-2 py-0.5 rounded-full">' + esc(t.status) + '</span>' +
+                        '</div>' +
+                        '<h3 class="text-sm font-semibold mb-4 leading-snug">' + esc(t.title) + '</h3>' +
+                        '<div class="flex items-center gap-2">' +
+                        '<div class="w-6 h-6 rounded-full ' + c.bg + ' flex items-center justify-center text-[10px] font-bold text-white shrink-0" aria-hidden="true">' + ownerName.charAt(0) + '</div>' +
+                        '<span class="text-xs text-zinc-500 truncate">' + esc(ownerName) + '</span>' +
+                        '</div></article>';
+                }).join('');
+            } else {
+                $('board-cards').classList.add('hidden');
+                $('board-empty').classList.remove('hidden');
+            }
+        }
+
+        // ── Watercooler view ─────────────────────────────────────────
+        function renderWatercooler() {
+            $('wc-skeleton').classList.add('hidden');
+            $('wc-compose').classList.remove('hidden');
+            if (watercooler.length) {
+                $('wc-empty').classList.add('hidden');
+                $('wc-messages').classList.remove('hidden');
+                $('wc-messages').innerHTML = watercooler.slice().reverse().map(function(m) {
+                    var ag = agents.find(function(a) { return a.id === m.agent_id; });
+                    var name = ag ? ag.name : m.agent_id;
+                    var c = agentColor(ag ? ag.id : '');
+                    return '<div class="flex gap-3">' +
+                        '<div class="w-8 h-8 rounded-full ' + c.bg + ' flex items-center justify-center text-[11px] font-bold text-white shrink-0 mt-0.5">' + name.charAt(0) + '</div>' +
+                        '<div class="min-w-0 flex-1">' +
+                        '<p class="text-xs font-semibold ' + c.text + ' mb-0.5">' + esc(name) + '</p>' +
+                        '<div class="bg-surface-3 rounded-[var(--radius)] px-3 py-2 text-[13px] text-zinc-300 leading-relaxed">' + esc(m.message) + '</div>' +
+                        '</div></div>';
+                }).join('');
+            } else {
+                $('wc-messages').classList.add('hidden');
+                $('wc-empty').classList.remove('hidden');
+            }
+        }
+
+        // ── Squad view ───────────────────────────────────────────────
+        function renderSquad() {
+            $('squad-skeleton').classList.add('hidden');
+            $('squad-cards').classList.remove('hidden');
+            $('squad-cards').innerHTML = agents.map(function(a) {
+                var c = agentColor(a.id);
+                var taskCount = kanban.filter(function(t) { return t.owner === a.name || t.owner === a.id; }).length;
+                var pct = Math.min(taskCount * 25, 100);
+                return '<article class="card bg-surface-2 p-5 text-center" role="listitem">' +
+                    '<div class="w-12 h-12 rounded-full ' + c.bg + ' flex items-center justify-center text-base font-bold text-white mx-auto mb-3">' + a.name.charAt(0) + '</div>' +
+                    '<p class="text-sm font-semibold">' + esc(a.name) + '</p>' +
+                    '<p class="text-[11px] text-zinc-500 mt-0.5 leading-tight">' + esc(a.role) + '</p>' +
+                    '<div class="flex items-center justify-center gap-2 mt-3">' +
+                    progressCircleSVG(pct, c.hex, 20) +
+                    '<span class="text-[11px] text-zinc-600">' + taskCount + ' task' + (taskCount !== 1 ? 's' : '') + '</span>' +
+                    '</div>' +
+                    '<p class="text-[10px] text-zinc-600 mt-2 leading-snug">' + esc(a.specialty) + '</p>' +
+                    '</article>';
+            }).join('');
+        }
+
+        // ── Dropdowns ────────────────────────────────────────────────
+        function populateDropdowns() {
+            $('task-owner').innerHTML = '<option value="">Assign to...</option>' + agents.map(function(a) {
+                return '<option value="' + esc(a.name) + '">' + esc(a.name) + '</option>';
+            }).join('');
+            $('wc-agent-select').innerHTML = '<option value="">Post as...</option>' + agents.map(function(a) {
+                return '<option value="' + esc(a.id) + '">' + esc(a.name) + '</option>';
+            }).join('');
+        }
+
+        // ── Navigation ───────────────────────────────────────────────
+        var viewTitles = {
+            dashboard:   { title: 'Dashboard', subtitle: 'Overview of your workforce and projects' },
+            board:       { title: 'Project Board', subtitle: 'Manage tasks across projects' },
+            watercooler: { title: 'Watercooler', subtitle: 'Team conversations and updates' },
+            squad:       { title: 'The Squad', subtitle: 'Your Scranton Digital workforce' },
+        };
+
+        function switchView(view) {
+            currentView = view;
+            ['dashboard', 'board', 'watercooler', 'squad'].forEach(function(v) {
+                var el = $('view-' + v);
+                if (el) el.classList.toggle('hidden', v !== view);
             });
-            if (!res.ok) throw new Error(`HTTP ${res.status} on POST ${endpoint}`);
-            return res.json();
+            $$('[data-nav]').forEach(function(btn) {
+                var isActive = btn.dataset.nav === view;
+                btn.classList.toggle('active', isActive);
+                btn.setAttribute('aria-current', isActive ? 'page' : 'false');
+            });
+            var vt = viewTitles[view] || viewTitles.dashboard;
+            $('page-title').textContent = vt.title;
+            $('page-subtitle').textContent = vt.subtitle;
+            renderCurrentView();
         }
 
-        // ── Rendering ──────────────────────────────────────────────
-
-        function renderKanban(items) {
-            kanbanSkeleton.classList.add('hidden');
-
-            if (!items || items.length === 0) {
-                kanbanCards.classList.add('hidden');
-                kanbanEmpty.classList.remove('hidden');
-                return;
-            }
-
-            kanbanEmpty.classList.add('hidden');
-            kanbanCards.classList.remove('hidden');
-
-            const html = items.map(function (task) {
-                const projColor = getProjectColor(task.project);
-                const ownerAgent = agents.find(function (a) { return a.name === task.owner || a.id === task.owner; });
-                const ownerId = ownerAgent ? ownerAgent.id : '';
-                const ownerName = ownerAgent ? ownerAgent.name : (task.owner || 'Unassigned');
-                const ownerInitial = ownerName.charAt(0).toUpperCase();
-                const color = getAgentColor(ownerId);
-
-                return `
-                    <article class="bg-[#1C1C1E] p-5 sm:p-6 squircle border border-white/5 shadow-xl card-hover">
-                        <div class="flex justify-between items-start mb-4">
-                            <span class="text-[11px] font-bold ${projColor.text} ${projColor.bg} px-2 py-0.5 rounded-full uppercase tracking-wide">${escapeHtml(task.project || '')}</span>
-                            <span class="text-[11px] text-slate-500 font-medium">${escapeHtml(task.status || '')}</span>
-                        </div>
-                        <h3 class="font-semibold text-sm sm:text-base mb-5 leading-snug">${escapeHtml(task.title || '')}</h3>
-                        <div class="flex items-center gap-3">
-                            <div class="w-6 h-6 rounded-full ${color.bg} flex items-center justify-center text-[10px] font-bold text-white" aria-hidden="true">${ownerInitial}</div>
-                            <span class="text-xs text-slate-400">Owner: ${escapeHtml(ownerName)}</span>
-                        </div>
-                    </article>
-                `;
-            }).join('');
-
-            kanbanCards.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">${html}</div>`;
+        function renderCurrentView() {
+            renderSidebarAgents();
+            if (currentView === 'dashboard') renderDashboard();
+            else if (currentView === 'board') renderBoard();
+            else if (currentView === 'watercooler') renderWatercooler();
+            else if (currentView === 'squad') renderSquad();
         }
 
-        function renderWatercooler(messages) {
-            wcSkeleton.classList.add('hidden');
-            wcInput.classList.remove('hidden');
-
-            if (!messages || messages.length === 0) {
-                wcMessages.classList.add('hidden');
-                wcEmpty.classList.remove('hidden');
-                return;
-            }
-
-            wcEmpty.classList.add('hidden');
-            wcMessages.classList.remove('hidden');
-
-            const html = messages.map(function (msg) {
-                const agentObj = agents.find(function (a) { return a.id === msg.agent_id || a.name === msg.agent_id; });
-                const agentName = agentObj ? agentObj.name : (msg.agent_id || 'Unknown');
-                const agentId = agentObj ? agentObj.id : '';
-                const color = getAgentColor(agentId);
-
-                return `
-                    <div class="watercooler-msg" style="border-color: ${color.border};">
-                        <p class="${color.text} font-bold mb-1 text-sm">${escapeHtml(agentName)}:</p>
-                        <p class="text-slate-300 italic">"${escapeHtml(msg.message || '')}"</p>
-                    </div>
-                `;
-            }).join('');
-
-            wcMessages.innerHTML = html;
-        }
-
-        function renderRoster(agentList) {
-            rosterSkeleton.classList.add('hidden');
-
-            if (!agentList || agentList.length === 0) {
-                rosterCards.classList.add('hidden');
-                return;
-            }
-
-            rosterCards.classList.remove('hidden');
-
-            const html = agentList.map(function (agent) {
-                const color = getAgentColor(agent.id);
-                const initial = agent.name.charAt(0).toUpperCase();
-
-                return `
-                    <article class="bg-[#1C1C1E] p-4 squircle border border-white/5 text-center card-hover">
-                        <div class="w-10 h-10 rounded-full ${color.bg} flex items-center justify-center text-sm font-bold text-white mx-auto mb-3" aria-hidden="true">${initial}</div>
-                        <p class="text-sm font-semibold truncate">${escapeHtml(agent.name)}</p>
-                        <p class="text-[11px] text-slate-500 mt-1 leading-tight">${escapeHtml(agent.role)}</p>
-                    </article>
-                `;
-            }).join('');
-
-            rosterCards.innerHTML = `<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-4">${html}</div>`;
-        }
-
-        function populateAgentDropdowns(agentList) {
-            // Task owner dropdown
-            const ownerOpts = agentList.map(function (a) {
-                return `<option value="${escapeHtml(a.name)}">${escapeHtml(a.name)} &mdash; ${escapeHtml(a.role)}</option>`;
-            }).join('');
-            taskOwner.innerHTML = '<option value="">Assign to...</option>' + ownerOpts;
-
-            // Watercooler agent dropdown
-            const wcOpts = agentList.map(function (a) {
-                return `<option value="${escapeHtml(a.id)}">${escapeHtml(a.name)}</option>`;
-            }).join('');
-            wcAgentSelect.innerHTML = '<option value="">Post as...</option>' + wcOpts;
-        }
-
-        function updateSpecialistCount(count) {
-            specialistCount.textContent = count + ' Active Specialist' + (count !== 1 ? 's' : '');
-        }
-
-        // ── Error Handling ─────────────────────────────────────────
-        function showError(msg) {
-            errorMessage.textContent = msg || 'Failed to load dashboard data.';
-            errorBanner.classList.remove('hidden');
-        }
-
-        function hideError() {
-            errorBanner.classList.add('hidden');
-        }
-
-        // ── Data Loading ───────────────────────────────────────────
-        async function loadDashboard() {
+        // ── Load data ────────────────────────────────────────────────
+        async function loadData() {
             try {
-                const data = await fetchJSON('/api/workforce');
-
+                var data = await get('/api/workforce');
                 agents = data.agents || [];
-                kanbanItems = data.kanban || [];
-                watercoolerMessages = data.watercooler || [];
+                kanban = data.kanban || [];
+                watercooler = data.watercooler || [];
 
-                hideError();
-                updateSpecialistCount(agents.length);
-                populateAgentDropdowns(agents);
-                renderKanban(kanbanItems);
-                renderWatercooler(watercoolerMessages);
-                renderRoster(agents);
+                $('error-banner').classList.add('hidden');
+                $('specialist-count').textContent = agents.length + ' agent' + (agents.length !== 1 ? 's' : '');
+                $('nav-board-badge').textContent = kanban.length;
+                $('nav-wc-badge').textContent = watercooler.length;
+                populateDropdowns();
+                renderCurrentView();
+
+                // Health check
+                try {
+                    await get('/api/health');
+                    $('health-dot').className = 'w-2 h-2 rounded-full bg-emerald-500 pulse-dot';
+                    $('health-dot').title = 'API healthy';
+                } catch (e) {
+                    $('health-dot').className = 'w-2 h-2 rounded-full bg-red-500';
+                    $('health-dot').title = 'API unreachable';
+                }
             } catch (err) {
-                console.error('Dashboard load failed:', err);
-                showError('Could not connect to Mission Control API. Is the backend running?');
-
-                // Hide skeletons even on error so the page does not look stuck
-                kanbanSkeleton.classList.add('hidden');
-                wcSkeleton.classList.add('hidden');
-                rosterSkeleton.classList.add('hidden');
-                kanbanEmpty.classList.remove('hidden');
-                wcEmpty.classList.remove('hidden');
-                wcInput.classList.remove('hidden');
+                console.error('Load failed:', err);
+                $('error-message').textContent = 'Could not connect to Mission Control API.';
+                $('error-banner').classList.remove('hidden');
+                // Hide all skeletons
+                $$('.skeleton').forEach(function(s) { s.closest('[id$="-skeleton"]') && s.closest('[id$="-skeleton"]').classList.add('hidden'); });
             }
         }
 
-        function startAutoRefresh() {
-            if (refreshTimer) clearInterval(refreshTimer);
-            refreshTimer = setInterval(loadDashboard, REFRESH_INTERVAL_MS);
-        }
-
-        // ── Modal Controls ─────────────────────────────────────────
-        function openModal() {
-            taskModal.classList.remove('hidden');
-            taskModal.classList.add('flex');
-            taskTitle.focus();
-            document.body.style.overflow = 'hidden';
-        }
-
-        function closeModal() {
-            taskModal.classList.add('hidden');
-            taskModal.classList.remove('flex');
-            taskForm.reset();
-            document.body.style.overflow = '';
-            newTaskBtn.focus();
-        }
-
-        // ── Watercooler Send Logic ─────────────────────────────────
-        function updateSendBtnState() {
-            const hasAgent = wcAgentSelect.value !== '';
-            const hasMsg = wcMessageInput.value.trim() !== '';
-            wcSendBtn.disabled = !(hasAgent && hasMsg);
-        }
-
-        async function sendWatercoolerMessage() {
-            const agentId = wcAgentSelect.value;
-            const message = wcMessageInput.value.trim();
-            if (!agentId || !message) return;
-
-            wcSendBtn.disabled = true;
-            wcSendBtn.textContent = '...';
-
-            try {
-                await postJSON('/api/watercooler', { agent_id: agentId, message: message });
-                wcMessageInput.value = '';
-                wcAgentSelect.value = '';
-                await loadDashboard();
-            } catch (err) {
-                console.error('Send message failed:', err);
-                showError('Failed to send watercooler message.');
-            } finally {
-                wcSendBtn.textContent = 'Send';
-                updateSendBtnState();
-            }
-        }
-
-        // ── Task Creation Logic ────────────────────────────────────
-        async function createTask(e) {
-            e.preventDefault();
-
-            const title   = taskTitle.value.trim();
-            const project = document.getElementById('task-project').value;
-            const status  = document.getElementById('task-status').value;
-            const owner   = taskOwner.value;
-
-            if (!title || !project || !owner) {
-                // Simple inline validation: highlight missing fields
-                if (!title) taskTitle.classList.add('border-red-500');
-                if (!project) document.getElementById('task-project').classList.add('border-red-500');
-                if (!owner) taskOwner.classList.add('border-red-500');
-                return;
-            }
-
-            modalSubmitBtn.disabled = true;
-            modalSubmitBtn.textContent = 'Creating...';
-
-            try {
-                await postJSON('/api/kanban', {
-                    title: title,
-                    status: status,
-                    owner: owner,
-                    project: project
-                });
-                closeModal();
-                await loadDashboard();
-            } catch (err) {
-                console.error('Create task failed:', err);
-                showError('Failed to create task.');
-            } finally {
-                modalSubmitBtn.disabled = false;
-                modalSubmitBtn.textContent = 'Create Task';
-            }
-        }
-
-        // ── Utility ────────────────────────────────────────────────
-        function escapeHtml(str) {
-            if (!str) return '';
-            var div = document.createElement('div');
-            div.appendChild(document.createTextNode(str));
-            return div.innerHTML;
-        }
-
-        // ── Event Listeners ────────────────────────────────────────
-        retryBtn.addEventListener('click', function () {
-            hideError();
-            kanbanSkeleton.classList.remove('hidden');
-            wcSkeleton.classList.remove('hidden');
-            rosterSkeleton.classList.remove('hidden');
-            kanbanCards.classList.add('hidden');
-            kanbanEmpty.classList.add('hidden');
-            wcMessages.classList.add('hidden');
-            wcEmpty.classList.add('hidden');
-            rosterCards.classList.add('hidden');
-            loadDashboard();
+        // ── Sidebar toggle (mobile) ──────────────────────────────────
+        $('sidebar-toggle').addEventListener('click', function() {
+            $('sidebar').classList.toggle('open');
+            $('sidebar-overlay').classList.toggle('open');
+        });
+        $('sidebar-overlay').addEventListener('click', function() {
+            $('sidebar').classList.remove('open');
+            $('sidebar-overlay').classList.remove('open');
         });
 
-        newTaskBtn.addEventListener('click', openModal);
-        modalCloseBtn.addEventListener('click', closeModal);
-        modalCancelBtn.addEventListener('click', closeModal);
-
-        // Close modal on backdrop click
-        taskModal.addEventListener('click', function (e) {
-            if (e.target === taskModal) closeModal();
-        });
-
-        // Close modal on Escape
-        document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape' && !taskModal.classList.contains('hidden')) {
-                closeModal();
-            }
-        });
-
-        // Remove red border on input focus (validation feedback)
-        taskForm.querySelectorAll('input, select').forEach(function (el) {
-            el.addEventListener('focus', function () {
-                el.classList.remove('border-red-500');
+        // ── Nav clicks ───────────────────────────────────────────────
+        $$('[data-nav]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                switchView(btn.dataset.nav);
+                $('sidebar').classList.remove('open');
+                $('sidebar-overlay').classList.remove('open');
             });
         });
 
-        taskForm.addEventListener('submit', createTask);
-
-        // Watercooler controls
-        wcAgentSelect.addEventListener('change', updateSendBtnState);
-        wcMessageInput.addEventListener('input', updateSendBtnState);
-        wcMessageInput.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter' && !wcSendBtn.disabled) {
-                sendWatercoolerMessage();
-            }
+        // ── Filter chips ─────────────────────────────────────────────
+        $$('#board-filters .filter-chip').forEach(function(chip) {
+            chip.addEventListener('click', function() {
+                activeFilter = chip.dataset.filter;
+                $$('#board-filters .filter-chip').forEach(function(c) {
+                    var isActive = c === chip;
+                    c.classList.toggle('active', isActive);
+                    c.setAttribute('aria-checked', isActive);
+                });
+                renderBoard();
+            });
         });
-        wcSendBtn.addEventListener('click', sendWatercoolerMessage);
 
-        // ── Init ───────────────────────────────────────────────────
-        loadDashboard();
-        startAutoRefresh();
+        // ── Modal ────────────────────────────────────────────────────
+        function openModal() { $('task-modal').classList.remove('hidden'); $('task-modal').classList.add('flex'); $('task-title').focus(); document.body.style.overflow = 'hidden'; }
+        function closeModal() { $('task-modal').classList.add('hidden'); $('task-modal').classList.remove('flex'); $('task-form').reset(); document.body.style.overflow = ''; }
+
+        $('dash-new-task').addEventListener('click', openModal);
+        $('board-new-task').addEventListener('click', openModal);
+        $('modal-close-btn').addEventListener('click', closeModal);
+        $('modal-cancel-btn').addEventListener('click', closeModal);
+        $('task-modal').addEventListener('click', function(e) { if (e.target === $('task-modal')) closeModal(); });
+        document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && !$('task-modal').classList.contains('hidden')) closeModal(); });
+
+        $('task-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            var title = $('task-title').value.trim(), project = $('task-project').value, status = $('task-status').value, owner = $('task-owner').value;
+            if (!title || !project || !owner) return;
+            $('modal-submit-btn').disabled = true; $('modal-submit-btn').textContent = 'Creating...';
+            try { await post('/api/kanban', { title: title, status: status, owner: owner, project: project }); closeModal(); await loadData(); }
+            catch (err) { $('error-message').textContent = 'Failed to create task.'; $('error-banner').classList.remove('hidden'); }
+            finally { $('modal-submit-btn').disabled = false; $('modal-submit-btn').textContent = 'Create Task'; }
+        });
+
+        // ── Watercooler send ─────────────────────────────────────────
+        function updateSendBtn() { $('wc-send-btn').disabled = !($('wc-agent-select').value && $('wc-message-input').value.trim()); }
+        $('wc-agent-select').addEventListener('change', updateSendBtn);
+        $('wc-message-input').addEventListener('input', updateSendBtn);
+
+        async function sendMsg() {
+            var aid = $('wc-agent-select').value, msg = $('wc-message-input').value.trim();
+            if (!aid || !msg) return;
+            $('wc-send-btn').disabled = true; $('wc-send-btn').textContent = '...';
+            try { await post('/api/watercooler', { agent_id: aid, message: msg }); $('wc-message-input').value = ''; $('wc-agent-select').value = ''; await loadData(); }
+            catch (err) { $('error-message').textContent = 'Failed to send message.'; $('error-banner').classList.remove('hidden'); }
+            finally { $('wc-send-btn').textContent = 'Send'; updateSendBtn(); }
+        }
+        $('wc-send-btn').addEventListener('click', sendMsg);
+        $('wc-message-input').addEventListener('keydown', function(e) { if (e.key === 'Enter' && !$('wc-send-btn').disabled) sendMsg(); });
+
+        // ── Retry ────────────────────────────────────────────────────
+        $('retry-btn').addEventListener('click', function() { $('error-banner').classList.add('hidden'); loadData(); });
+
+        // ── Keyboard shortcut (Cmd+K) ────────────────────────────────
+        document.addEventListener('keydown', function(e) { if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); /* future: open search */ } });
+
+        // ── Init ─────────────────────────────────────────────────────
+        loadData();
+        refreshTimer = setInterval(loadData, REFRESH);
     })();
     </script>
 
