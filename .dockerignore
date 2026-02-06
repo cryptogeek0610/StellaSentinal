@@ -1,0 +1,44 @@
+# Version control
+.git
+.gitignore
+
+# Python caches
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Virtual environments
+.venv
+venv
+env
+
+# Environment secrets
+.env
+
+# Tests (not needed in production image)
+tests/
+pytest.ini
+
+# Documentation (except README)
+AUDIT-REPORT.md
+FEATURE-PROPOSALS.md
+UI-IMPROVEMENTS.md
+TEST-REPORT.md
+IMPROVEMENT-PLAN.md
+
+# CI/CD
+.github
+
+# Docker files (avoid recursive copy)
+Dockerfile
+docker-compose.yml
+
+# Editor / OS artifacts
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store

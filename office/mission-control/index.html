@@ -7,80 +7,741 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .squircle { border-radius: 24px; }
-        .glass { background: rgba(28, 28, 30, 0.7); backdrop-filter: blur(20px); }
+        .glass { background: rgba(28, 28, 30, 0.7); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
         .watercooler-msg { border-left: 2px solid #3b82f6; padding-left: 12px; margin-bottom: 12px; }
+
+        /* Skip link */
+        .skip-link {
+            position: absolute;
+            top: -100%;
+            left: 0;
+            z-index: 100;
+            padding: 0.75rem 1.5rem;
+            background: #2563eb;
+            color: #fff;
+            font-weight: 600;
+            border-radius: 0 0 8px 0;
+            transition: top 0.2s;
+        }
+        .skip-link:focus {
+            top: 0;
+        }
+
+        /* Pulse animation for status dot */
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.3); }
+        }
+        .pulse-dot {
+            animation: pulse-dot 2s ease-in-out infinite;
+        }
+
+        /* Skeleton loading shimmer */
+        @keyframes shimmer {
+            0% { background-position: -400px 0; }
+            100% { background-position: 400px 0; }
+        }
+        .skeleton {
+            background: linear-gradient(90deg, #1c1c1e 25%, #2a2a2e 50%, #1c1c1e 75%);
+            background-size: 800px 100%;
+            animation: shimmer 1.5s ease-in-out infinite;
+            border-radius: 8px;
+        }
+
+        /* Modal backdrop */
+        .modal-backdrop {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+        }
+
+        /* Smooth transitions on cards */
+        .card-hover {
+            transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .card-hover:hover {
+            border-color: rgba(255, 255, 255, 0.2);
+            transform: translateY(-1px);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+        }
     </style>
 </head>
-<body class="bg-black text-white p-10 font-sans antialiased">
-    <div class="max-w-6xl mx-auto">
-        <header class="flex justify-between items-center mb-12">
+<body class="bg-black text-white font-sans antialiased min-h-screen">
+
+    <!-- Skip to main content -->
+    <a href="#main-content" class="skip-link focus:ring-2 focus:ring-blue-500 focus:outline-none">
+        Skip to main content
+    </a>
+
+    <div class="max-w-6xl mx-auto p-4 sm:p-6 lg:p-10">
+
+        <!-- Header -->
+        <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 sm:mb-12">
             <div class="flex items-center gap-4">
-                <div class="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center font-bold">MC</div>
-                <h1 class="text-2xl font-bold tracking-tight">Scranton Mission Control</h1>
+                <div class="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center font-bold text-sm" aria-hidden="true">MC</div>
+                <h1 class="text-xl sm:text-2xl font-bold tracking-tight">Scranton Mission Control</h1>
             </div>
-            <div class="flex items-center gap-4 text-xs font-bold uppercase tracking-widest text-slate-500">
-                <span id="specialist-count">14 Active Specialists</span>
-                <span class="w-2 h-2 bg-green-500 rounded-full"></span>
+            <div class="flex items-center gap-4 text-xs font-bold uppercase tracking-widest text-slate-500" role="status" aria-live="polite">
+                <span id="specialist-count">-- Active Specialists</span>
+                <span class="w-2 h-2 bg-green-500 rounded-full pulse-dot" aria-label="System online"></span>
             </div>
         </header>
 
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-10">
-            <!-- Kanban Board -->
-            <div class="lg:col-span-8 space-y-8">
-                <div class="flex items-center justify-between">
-                    <h2 class="text-xl font-bold">Project Board</h2>
-                    <button class="text-blue-500 text-sm font-semibold">+ New Task</button>
+        <!-- Error Banner -->
+        <div id="error-banner" class="hidden mb-6" role="alert">
+            <div class="bg-red-900/50 border border-red-500/30 text-red-200 px-4 py-3 squircle flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                    <svg class="w-5 h-5 flex-shrink-0" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                    </svg>
+                    <span id="error-message" class="text-sm">Failed to load dashboard data.</span>
                 </div>
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="bg-[#1C1C1E] p-6 squircle border border-white/5 shadow-xl">
-                        <div class="flex justify-between items-start mb-4">
-                            <span class="text-[10px] font-bold text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded-full uppercase">SAAP PLUS</span>
-                            <span class="text-[10px] text-slate-500">In Progress</span>
-                        </div>
-                        <h3 class="font-semibold mb-6">Finalize Apple-Style Dashboard Layout</h3>
-                        <div class="flex items-center gap-3">
-                            <div class="w-6 h-6 rounded-full bg-pink-500 flex items-center justify-center text-[10px] font-bold">P</div>
-                            <span class="text-xs text-slate-400">Owner: Pam</span>
-                        </div>
-                    </div>
-
-                    <div class="bg-[#1C1C1E] p-6 squircle border border-white/5 shadow-xl">
-                        <div class="flex justify-between items-start mb-4">
-                            <span class="text-[10px] font-bold text-orange-400 bg-orange-400/10 px-2 py-0.5 rounded-full uppercase">TRADING</span>
-                            <span class="text-[10px] text-slate-500">Triage</span>
-                        </div>
-                        <h3 class="font-semibold mb-6">Optimize CatBoost Regression Weights</h3>
-                        <div class="flex items-center gap-3">
-                            <div class="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-[10px] font-bold">K</div>
-                            <span class="text-xs text-slate-400">Owner: Kevin</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- The Watercooler -->
-            <div class="lg:col-span-4 glass p-8 squircle border border-white/10 shadow-2xl">
-                <h2 class="text-lg font-bold mb-8 flex items-center gap-2">
-                    <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"></path></svg>
-                    Workforce Watercooler
-                </h2>
-                <div class="space-y-6 text-[13px] leading-relaxed">
-                    <div class="watercooler-msg">
-                        <p class="text-orange-400 font-bold mb-1">Dwight:</p>
-                        <p class="text-slate-300 italic">"I've identified 14 thermal warnings in the sandbox. Kevin, can you check the battery prediction model? It might be lagging."</p>
-                    </div>
-                    <div class="watercooler-msg" style="border-color: #3b82f6;">
-                        <p class="text-blue-400 font-bold mb-1">Kevin:</p>
-                        <p class="text-slate-300 italic">"Already on it. Retraining the CatBoost model with the new high-temp telemetry now. Alpha looks promising."</p>
-                    </div>
-                    <div class="watercooler-msg" style="border-color: #ec4899;">
-                        <p class="text-pink-400 font-bold mb-1">Pam:</p>
-                        <p class="text-slate-300 italic">"UI updated to v2.3 with the new glass sidebar. It's ready for a visual audit by the boss."</p>
-                    </div>
-                </div>
+                <button
+                    id="retry-btn"
+                    class="text-sm font-semibold text-red-300 hover:text-white px-3 py-1 border border-red-500/30 rounded-lg transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    aria-label="Retry loading dashboard data"
+                >
+                    Retry
+                </button>
             </div>
         </div>
+
+        <!-- Main Content -->
+        <main id="main-content" class="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 lg:gap-10">
+
+            <!-- Kanban Board -->
+            <section class="lg:col-span-8 space-y-6 sm:space-y-8" aria-labelledby="kanban-heading">
+                <div class="flex items-center justify-between">
+                    <h2 id="kanban-heading" class="text-lg sm:text-xl font-bold">Project Board</h2>
+                    <button
+                        id="new-task-btn"
+                        class="text-blue-500 text-sm font-semibold hover:text-blue-400 transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none rounded px-2 py-1"
+                        aria-label="Create a new task"
+                    >
+                        + New Task
+                    </button>
+                </div>
+
+                <!-- Kanban Loading Skeleton -->
+                <div id="kanban-skeleton" class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                    <div class="bg-[#1C1C1E] p-6 squircle border border-white/5">
+                        <div class="skeleton h-4 w-20 mb-4"></div>
+                        <div class="skeleton h-5 w-3/4 mb-6"></div>
+                        <div class="skeleton h-4 w-1/2"></div>
+                    </div>
+                    <div class="bg-[#1C1C1E] p-6 squircle border border-white/5">
+                        <div class="skeleton h-4 w-20 mb-4"></div>
+                        <div class="skeleton h-5 w-3/4 mb-6"></div>
+                        <div class="skeleton h-4 w-1/2"></div>
+                    </div>
+                </div>
+
+                <!-- Kanban Cards Container -->
+                <div id="kanban-cards" class="hidden" role="status" aria-live="polite">
+                    <!-- Dynamic cards rendered here -->
+                </div>
+
+                <!-- Kanban Empty State -->
+                <div id="kanban-empty" class="hidden">
+                    <div class="bg-[#1C1C1E] p-8 sm:p-12 squircle border border-white/5 text-center">
+                        <svg class="w-12 h-12 mx-auto text-slate-600 mb-4" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                        </svg>
+                        <p class="text-slate-500 text-sm font-medium">No tasks yet</p>
+                        <p class="text-slate-600 text-xs mt-1">Click "+ New Task" to get started.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- The Watercooler -->
+            <section class="lg:col-span-4" aria-labelledby="watercooler-heading">
+                <div class="glass p-5 sm:p-8 squircle border border-white/10 shadow-2xl">
+                    <h2 id="watercooler-heading" class="text-base sm:text-lg font-bold mb-6 sm:mb-8 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-blue-500" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"/>
+                        </svg>
+                        Workforce Watercooler
+                    </h2>
+
+                    <!-- Watercooler Loading Skeleton -->
+                    <div id="watercooler-skeleton" class="space-y-4">
+                        <div class="border-l-2 border-slate-700 pl-3">
+                            <div class="skeleton h-3 w-16 mb-2"></div>
+                            <div class="skeleton h-3 w-full mb-1"></div>
+                            <div class="skeleton h-3 w-3/4"></div>
+                        </div>
+                        <div class="border-l-2 border-slate-700 pl-3">
+                            <div class="skeleton h-3 w-16 mb-2"></div>
+                            <div class="skeleton h-3 w-full mb-1"></div>
+                            <div class="skeleton h-3 w-2/3"></div>
+                        </div>
+                        <div class="border-l-2 border-slate-700 pl-3">
+                            <div class="skeleton h-3 w-16 mb-2"></div>
+                            <div class="skeleton h-3 w-full mb-1"></div>
+                            <div class="skeleton h-3 w-1/2"></div>
+                        </div>
+                    </div>
+
+                    <!-- Watercooler Messages Container -->
+                    <div id="watercooler-messages" class="hidden space-y-5 text-[13px] leading-relaxed" role="status" aria-live="polite">
+                        <!-- Dynamic messages rendered here -->
+                    </div>
+
+                    <!-- Watercooler Empty State -->
+                    <div id="watercooler-empty" class="hidden text-center py-6">
+                        <svg class="w-10 h-10 mx-auto text-slate-600 mb-3" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                        </svg>
+                        <p class="text-slate-500 text-sm font-medium">The watercooler is quiet...</p>
+                        <p class="text-slate-600 text-xs mt-1">Be the first to say something.</p>
+                    </div>
+
+                    <!-- Watercooler Input -->
+                    <div id="watercooler-input" class="hidden mt-6 pt-6 border-t border-white/10">
+                        <label for="wc-agent-select" class="sr-only">Select agent</label>
+                        <select
+                            id="wc-agent-select"
+                            class="w-full bg-[#1C1C1E] text-white text-sm rounded-lg px-3 py-2 mb-3 border border-white/10 focus:ring-2 focus:ring-blue-500 focus:outline-none appearance-none"
+                            aria-label="Select agent to post as"
+                        >
+                            <option value="">Post as...</option>
+                        </select>
+                        <div class="flex gap-2">
+                            <label for="wc-message-input" class="sr-only">Message</label>
+                            <input
+                                id="wc-message-input"
+                                type="text"
+                                placeholder="Type a message..."
+                                maxlength="500"
+                                class="flex-1 bg-[#1C1C1E] text-white text-sm rounded-lg px-3 py-2 border border-white/10 placeholder-slate-600 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                aria-label="Watercooler message"
+                            />
+                            <button
+                                id="wc-send-btn"
+                                class="bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed"
+                                aria-label="Send watercooler message"
+                                disabled
+                            >
+                                Send
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Agent Roster -->
+            <section class="lg:col-span-12" aria-labelledby="roster-heading">
+                <h2 id="roster-heading" class="text-lg sm:text-xl font-bold mb-6">The Squad</h2>
+
+                <!-- Roster Loading Skeleton -->
+                <div id="roster-skeleton" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-4">
+                    <div class="bg-[#1C1C1E] p-4 squircle border border-white/5 text-center">
+                        <div class="skeleton w-10 h-10 rounded-full mx-auto mb-3"></div>
+                        <div class="skeleton h-3 w-12 mx-auto mb-2"></div>
+                        <div class="skeleton h-2 w-16 mx-auto"></div>
+                    </div>
+                    <div class="bg-[#1C1C1E] p-4 squircle border border-white/5 text-center">
+                        <div class="skeleton w-10 h-10 rounded-full mx-auto mb-3"></div>
+                        <div class="skeleton h-3 w-12 mx-auto mb-2"></div>
+                        <div class="skeleton h-2 w-16 mx-auto"></div>
+                    </div>
+                    <div class="bg-[#1C1C1E] p-4 squircle border border-white/5 text-center">
+                        <div class="skeleton w-10 h-10 rounded-full mx-auto mb-3"></div>
+                        <div class="skeleton h-3 w-12 mx-auto mb-2"></div>
+                        <div class="skeleton h-2 w-16 mx-auto"></div>
+                    </div>
+                    <div class="bg-[#1C1C1E] p-4 squircle border border-white/5 text-center">
+                        <div class="skeleton w-10 h-10 rounded-full mx-auto mb-3"></div>
+                        <div class="skeleton h-3 w-12 mx-auto mb-2"></div>
+                        <div class="skeleton h-2 w-16 mx-auto"></div>
+                    </div>
+                </div>
+
+                <!-- Roster Cards Container -->
+                <div id="roster-cards" class="hidden" role="status" aria-live="polite">
+                    <!-- Dynamic agent cards rendered here -->
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="mt-12 sm:mt-16 pt-6 border-t border-white/5 text-center">
+            <p class="text-xs text-slate-600">Scranton Digital &mdash; Mission Control Dashboard</p>
+        </footer>
     </div>
+
+    <!-- New Task Modal -->
+    <div id="task-modal" class="fixed inset-0 z-50 hidden items-center justify-center modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <div class="bg-[#1C1C1E] border border-white/10 squircle p-6 sm:p-8 w-full max-w-md mx-4 shadow-2xl" role="document">
+            <div class="flex justify-between items-center mb-6">
+                <h3 id="modal-title" class="text-lg font-bold">New Task</h3>
+                <button
+                    id="modal-close-btn"
+                    class="text-slate-500 hover:text-white transition-colors p-1 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    aria-label="Close dialog"
+                >
+                    <svg class="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <form id="task-form" class="space-y-4" novalidate>
+                <div>
+                    <label for="task-title" class="block text-sm font-medium text-slate-400 mb-1">Title</label>
+                    <input
+                        id="task-title"
+                        type="text"
+                        required
+                        maxlength="200"
+                        placeholder="What needs to be done?"
+                        class="w-full bg-black/50 text-white text-sm rounded-lg px-3 py-2.5 border border-white/10 placeholder-slate-600 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    />
+                </div>
+                <div>
+                    <label for="task-project" class="block text-sm font-medium text-slate-400 mb-1">Project</label>
+                    <select
+                        id="task-project"
+                        required
+                        class="w-full bg-black/50 text-white text-sm rounded-lg px-3 py-2.5 border border-white/10 focus:ring-2 focus:ring-blue-500 focus:outline-none appearance-none"
+                    >
+                        <option value="">Select project...</option>
+                        <option value="SAAP PLUS">SAAP PLUS</option>
+                        <option value="TRADING">TRADING</option>
+                        <option value="INFRA">INFRA</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="task-status" class="block text-sm font-medium text-slate-400 mb-1">Status</label>
+                    <select
+                        id="task-status"
+                        required
+                        class="w-full bg-black/50 text-white text-sm rounded-lg px-3 py-2.5 border border-white/10 focus:ring-2 focus:ring-blue-500 focus:outline-none appearance-none"
+                    >
+                        <option value="Triage">Triage</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="Done">Done</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="task-owner" class="block text-sm font-medium text-slate-400 mb-1">Owner</label>
+                    <select
+                        id="task-owner"
+                        required
+                        class="w-full bg-black/50 text-white text-sm rounded-lg px-3 py-2.5 border border-white/10 focus:ring-2 focus:ring-blue-500 focus:outline-none appearance-none"
+                    >
+                        <option value="">Assign to...</option>
+                    </select>
+                </div>
+                <div class="flex gap-3 pt-2">
+                    <button
+                        type="button"
+                        id="modal-cancel-btn"
+                        class="flex-1 text-sm font-medium text-slate-400 hover:text-white py-2.5 rounded-lg border border-white/10 transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="submit"
+                        id="modal-submit-btn"
+                        class="flex-1 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 py-2.5 rounded-lg transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                        Create Task
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+    (function () {
+        'use strict';
+
+        // ── Configuration ──────────────────────────────────────────
+        const API_BASE = window.location.origin;
+        const REFRESH_INTERVAL_MS = 30000;
+
+        // Agent avatar color palette (consistent by ID)
+        const AGENT_COLORS = {
+            jim:    { bg: 'bg-blue-500',    text: 'text-blue-400',    border: '#3b82f6' },
+            dwight: { bg: 'bg-orange-500',  text: 'text-orange-400',  border: '#f97316' },
+            pam:    { bg: 'bg-pink-500',    text: 'text-pink-400',    border: '#ec4899' },
+            kevin:  { bg: 'bg-purple-500',  text: 'text-purple-400',  border: '#a855f7' },
+            angela: { bg: 'bg-yellow-500',  text: 'text-yellow-400',  border: '#eab308' },
+            ryan:   { bg: 'bg-emerald-500', text: 'text-emerald-400', border: '#10b981' },
+            kelly:  { bg: 'bg-red-500',     text: 'text-red-400',     border: '#ef4444' },
+            michael:{ bg: 'bg-cyan-500',    text: 'text-cyan-400',    border: '#06b6d4' }
+        };
+
+        const PROJECT_COLORS = {
+            'SAAP PLUS': { text: 'text-blue-400',   bg: 'bg-blue-400/10' },
+            'TRADING':   { text: 'text-orange-400',  bg: 'bg-orange-400/10' },
+            'INFRA':     { text: 'text-emerald-400', bg: 'bg-emerald-400/10' }
+        };
+
+        function getAgentColor(agentId) {
+            return AGENT_COLORS[agentId] || { bg: 'bg-slate-500', text: 'text-slate-400', border: '#64748b' };
+        }
+
+        function getProjectColor(project) {
+            return PROJECT_COLORS[project] || { text: 'text-slate-400', bg: 'bg-slate-400/10' };
+        }
+
+        // ── State ──────────────────────────────────────────────────
+        let agents = [];
+        let kanbanItems = [];
+        let watercoolerMessages = [];
+        let refreshTimer = null;
+
+        // ── DOM References ─────────────────────────────────────────
+        const specialistCount   = document.getElementById('specialist-count');
+        const errorBanner       = document.getElementById('error-banner');
+        const errorMessage      = document.getElementById('error-message');
+        const retryBtn          = document.getElementById('retry-btn');
+
+        const kanbanSkeleton    = document.getElementById('kanban-skeleton');
+        const kanbanCards       = document.getElementById('kanban-cards');
+        const kanbanEmpty       = document.getElementById('kanban-empty');
+
+        const wcSkeleton        = document.getElementById('watercooler-skeleton');
+        const wcMessages        = document.getElementById('watercooler-messages');
+        const wcEmpty           = document.getElementById('watercooler-empty');
+        const wcInput           = document.getElementById('watercooler-input');
+        const wcAgentSelect     = document.getElementById('wc-agent-select');
+        const wcMessageInput    = document.getElementById('wc-message-input');
+        const wcSendBtn         = document.getElementById('wc-send-btn');
+
+        const rosterSkeleton    = document.getElementById('roster-skeleton');
+        const rosterCards       = document.getElementById('roster-cards');
+
+        const newTaskBtn        = document.getElementById('new-task-btn');
+        const taskModal         = document.getElementById('task-modal');
+        const modalCloseBtn     = document.getElementById('modal-close-btn');
+        const modalCancelBtn    = document.getElementById('modal-cancel-btn');
+        const taskForm          = document.getElementById('task-form');
+        const taskTitle         = document.getElementById('task-title');
+        const taskOwner         = document.getElementById('task-owner');
+        const modalSubmitBtn    = document.getElementById('modal-submit-btn');
+
+        // ── API Helpers ────────────────────────────────────────────
+        async function fetchJSON(endpoint) {
+            const res = await fetch(API_BASE + endpoint);
+            if (!res.ok) throw new Error(`HTTP ${res.status} on ${endpoint}`);
+            return res.json();
+        }
+
+        async function postJSON(endpoint, body) {
+            const res = await fetch(API_BASE + endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status} on POST ${endpoint}`);
+            return res.json();
+        }
+
+        // ── Rendering ──────────────────────────────────────────────
+
+        function renderKanban(items) {
+            kanbanSkeleton.classList.add('hidden');
+
+            if (!items || items.length === 0) {
+                kanbanCards.classList.add('hidden');
+                kanbanEmpty.classList.remove('hidden');
+                return;
+            }
+
+            kanbanEmpty.classList.add('hidden');
+            kanbanCards.classList.remove('hidden');
+
+            const html = items.map(function (task) {
+                const projColor = getProjectColor(task.project);
+                const ownerAgent = agents.find(function (a) { return a.name === task.owner || a.id === task.owner; });
+                const ownerId = ownerAgent ? ownerAgent.id : '';
+                const ownerName = ownerAgent ? ownerAgent.name : (task.owner || 'Unassigned');
+                const ownerInitial = ownerName.charAt(0).toUpperCase();
+                const color = getAgentColor(ownerId);
+
+                return `
+                    <article class="bg-[#1C1C1E] p-5 sm:p-6 squircle border border-white/5 shadow-xl card-hover">
+                        <div class="flex justify-between items-start mb-4">
+                            <span class="text-[11px] font-bold ${projColor.text} ${projColor.bg} px-2 py-0.5 rounded-full uppercase tracking-wide">${escapeHtml(task.project || '')}</span>
+                            <span class="text-[11px] text-slate-500 font-medium">${escapeHtml(task.status || '')}</span>
+                        </div>
+                        <h3 class="font-semibold text-sm sm:text-base mb-5 leading-snug">${escapeHtml(task.title || '')}</h3>
+                        <div class="flex items-center gap-3">
+                            <div class="w-6 h-6 rounded-full ${color.bg} flex items-center justify-center text-[10px] font-bold text-white" aria-hidden="true">${ownerInitial}</div>
+                            <span class="text-xs text-slate-400">Owner: ${escapeHtml(ownerName)}</span>
+                        </div>
+                    </article>
+                `;
+            }).join('');
+
+            kanbanCards.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">${html}</div>`;
+        }
+
+        function renderWatercooler(messages) {
+            wcSkeleton.classList.add('hidden');
+            wcInput.classList.remove('hidden');
+
+            if (!messages || messages.length === 0) {
+                wcMessages.classList.add('hidden');
+                wcEmpty.classList.remove('hidden');
+                return;
+            }
+
+            wcEmpty.classList.add('hidden');
+            wcMessages.classList.remove('hidden');
+
+            const html = messages.map(function (msg) {
+                const agentObj = agents.find(function (a) { return a.id === msg.agent_id || a.name === msg.agent_id; });
+                const agentName = agentObj ? agentObj.name : (msg.agent_id || 'Unknown');
+                const agentId = agentObj ? agentObj.id : '';
+                const color = getAgentColor(agentId);
+
+                return `
+                    <div class="watercooler-msg" style="border-color: ${color.border};">
+                        <p class="${color.text} font-bold mb-1 text-sm">${escapeHtml(agentName)}:</p>
+                        <p class="text-slate-300 italic">"${escapeHtml(msg.message || '')}"</p>
+                    </div>
+                `;
+            }).join('');
+
+            wcMessages.innerHTML = html;
+        }
+
+        function renderRoster(agentList) {
+            rosterSkeleton.classList.add('hidden');
+
+            if (!agentList || agentList.length === 0) {
+                rosterCards.classList.add('hidden');
+                return;
+            }
+
+            rosterCards.classList.remove('hidden');
+
+            const html = agentList.map(function (agent) {
+                const color = getAgentColor(agent.id);
+                const initial = agent.name.charAt(0).toUpperCase();
+
+                return `
+                    <article class="bg-[#1C1C1E] p-4 squircle border border-white/5 text-center card-hover">
+                        <div class="w-10 h-10 rounded-full ${color.bg} flex items-center justify-center text-sm font-bold text-white mx-auto mb-3" aria-hidden="true">${initial}</div>
+                        <p class="text-sm font-semibold truncate">${escapeHtml(agent.name)}</p>
+                        <p class="text-[11px] text-slate-500 mt-1 leading-tight">${escapeHtml(agent.role)}</p>
+                    </article>
+                `;
+            }).join('');
+
+            rosterCards.innerHTML = `<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-4">${html}</div>`;
+        }
+
+        function populateAgentDropdowns(agentList) {
+            // Task owner dropdown
+            const ownerOpts = agentList.map(function (a) {
+                return `<option value="${escapeHtml(a.name)}">${escapeHtml(a.name)} &mdash; ${escapeHtml(a.role)}</option>`;
+            }).join('');
+            taskOwner.innerHTML = '<option value="">Assign to...</option>' + ownerOpts;
+
+            // Watercooler agent dropdown
+            const wcOpts = agentList.map(function (a) {
+                return `<option value="${escapeHtml(a.id)}">${escapeHtml(a.name)}</option>`;
+            }).join('');
+            wcAgentSelect.innerHTML = '<option value="">Post as...</option>' + wcOpts;
+        }
+
+        function updateSpecialistCount(count) {
+            specialistCount.textContent = count + ' Active Specialist' + (count !== 1 ? 's' : '');
+        }
+
+        // ── Error Handling ─────────────────────────────────────────
+        function showError(msg) {
+            errorMessage.textContent = msg || 'Failed to load dashboard data.';
+            errorBanner.classList.remove('hidden');
+        }
+
+        function hideError() {
+            errorBanner.classList.add('hidden');
+        }
+
+        // ── Data Loading ───────────────────────────────────────────
+        async function loadDashboard() {
+            try {
+                const data = await fetchJSON('/api/workforce');
+
+                agents = data.agents || [];
+                kanbanItems = data.kanban || [];
+                watercoolerMessages = data.watercooler || [];
+
+                hideError();
+                updateSpecialistCount(agents.length);
+                populateAgentDropdowns(agents);
+                renderKanban(kanbanItems);
+                renderWatercooler(watercoolerMessages);
+                renderRoster(agents);
+            } catch (err) {
+                console.error('Dashboard load failed:', err);
+                showError('Could not connect to Mission Control API. Is the backend running?');
+
+                // Hide skeletons even on error so the page does not look stuck
+                kanbanSkeleton.classList.add('hidden');
+                wcSkeleton.classList.add('hidden');
+                rosterSkeleton.classList.add('hidden');
+                kanbanEmpty.classList.remove('hidden');
+                wcEmpty.classList.remove('hidden');
+                wcInput.classList.remove('hidden');
+            }
+        }
+
+        function startAutoRefresh() {
+            if (refreshTimer) clearInterval(refreshTimer);
+            refreshTimer = setInterval(loadDashboard, REFRESH_INTERVAL_MS);
+        }
+
+        // ── Modal Controls ─────────────────────────────────────────
+        function openModal() {
+            taskModal.classList.remove('hidden');
+            taskModal.classList.add('flex');
+            taskTitle.focus();
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal() {
+            taskModal.classList.add('hidden');
+            taskModal.classList.remove('flex');
+            taskForm.reset();
+            document.body.style.overflow = '';
+            newTaskBtn.focus();
+        }
+
+        // ── Watercooler Send Logic ─────────────────────────────────
+        function updateSendBtnState() {
+            const hasAgent = wcAgentSelect.value !== '';
+            const hasMsg = wcMessageInput.value.trim() !== '';
+            wcSendBtn.disabled = !(hasAgent && hasMsg);
+        }
+
+        async function sendWatercoolerMessage() {
+            const agentId = wcAgentSelect.value;
+            const message = wcMessageInput.value.trim();
+            if (!agentId || !message) return;
+
+            wcSendBtn.disabled = true;
+            wcSendBtn.textContent = '...';
+
+            try {
+                await postJSON('/api/watercooler', { agent_id: agentId, message: message });
+                wcMessageInput.value = '';
+                wcAgentSelect.value = '';
+                await loadDashboard();
+            } catch (err) {
+                console.error('Send message failed:', err);
+                showError('Failed to send watercooler message.');
+            } finally {
+                wcSendBtn.textContent = 'Send';
+                updateSendBtnState();
+            }
+        }
+
+        // ── Task Creation Logic ────────────────────────────────────
+        async function createTask(e) {
+            e.preventDefault();
+
+            const title   = taskTitle.value.trim();
+            const project = document.getElementById('task-project').value;
+            const status  = document.getElementById('task-status').value;
+            const owner   = taskOwner.value;
+
+            if (!title || !project || !owner) {
+                // Simple inline validation: highlight missing fields
+                if (!title) taskTitle.classList.add('border-red-500');
+                if (!project) document.getElementById('task-project').classList.add('border-red-500');
+                if (!owner) taskOwner.classList.add('border-red-500');
+                return;
+            }
+
+            modalSubmitBtn.disabled = true;
+            modalSubmitBtn.textContent = 'Creating...';
+
+            try {
+                await postJSON('/api/kanban', {
+                    title: title,
+                    status: status,
+                    owner: owner,
+                    project: project
+                });
+                closeModal();
+                await loadDashboard();
+            } catch (err) {
+                console.error('Create task failed:', err);
+                showError('Failed to create task.');
+            } finally {
+                modalSubmitBtn.disabled = false;
+                modalSubmitBtn.textContent = 'Create Task';
+            }
+        }
+
+        // ── Utility ────────────────────────────────────────────────
+        function escapeHtml(str) {
+            if (!str) return '';
+            var div = document.createElement('div');
+            div.appendChild(document.createTextNode(str));
+            return div.innerHTML;
+        }
+
+        // ── Event Listeners ────────────────────────────────────────
+        retryBtn.addEventListener('click', function () {
+            hideError();
+            kanbanSkeleton.classList.remove('hidden');
+            wcSkeleton.classList.remove('hidden');
+            rosterSkeleton.classList.remove('hidden');
+            kanbanCards.classList.add('hidden');
+            kanbanEmpty.classList.add('hidden');
+            wcMessages.classList.add('hidden');
+            wcEmpty.classList.add('hidden');
+            rosterCards.classList.add('hidden');
+            loadDashboard();
+        });
+
+        newTaskBtn.addEventListener('click', openModal);
+        modalCloseBtn.addEventListener('click', closeModal);
+        modalCancelBtn.addEventListener('click', closeModal);
+
+        // Close modal on backdrop click
+        taskModal.addEventListener('click', function (e) {
+            if (e.target === taskModal) closeModal();
+        });
+
+        // Close modal on Escape
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && !taskModal.classList.contains('hidden')) {
+                closeModal();
+            }
+        });
+
+        // Remove red border on input focus (validation feedback)
+        taskForm.querySelectorAll('input, select').forEach(function (el) {
+            el.addEventListener('focus', function () {
+                el.classList.remove('border-red-500');
+            });
+        });
+
+        taskForm.addEventListener('submit', createTask);
+
+        // Watercooler controls
+        wcAgentSelect.addEventListener('change', updateSendBtnState);
+        wcMessageInput.addEventListener('input', updateSendBtnState);
+        wcMessageInput.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' && !wcSendBtn.disabled) {
+                sendWatercoolerMessage();
+            }
+        });
+        wcSendBtn.addEventListener('click', sendWatercoolerMessage);
+
+        // ── Init ───────────────────────────────────────────────────
+        loadDashboard();
+        startAutoRefresh();
+    })();
+    </script>
+
 </body>
 </html>
